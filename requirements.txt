@@ -1,0 +1,13 @@
+Flask==3.0.0
+yt-dlp>=2023.11.16
+imageio-ffmpeg>=0.4.9
+waitress
+yt-dlp
+shazamio
+imageio-ffmpeg
+openai-whisper
+opencv-python
+gallery-dl
+google-genai
+pillow
+fal-client

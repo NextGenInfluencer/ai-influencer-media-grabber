@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Airi Workspace</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        serif: ['Playfair Display', 'serif'],
+                    },
+                    colors: {
+                        airi: {
+                            bg: '#0a0a0c',
+                            card: '#121214',
+                            border: '#27272a',
+                            pink: '#f472b6',
+                            textMuted: '#a1a1aa'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap');
+        
+        body { font-family: 'Inter', sans-serif; background-color: #080809; color: #fff; }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
+
+        .glass-panel {
+            background: rgba(18, 18, 20, 0.6);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(39, 39, 42, 0.5);
+        }
+
+        .glass-input {
+            background: rgba(9, 9, 11, 0.4);
+            border: 1px solid rgba(39, 39, 42, 0.5);
+            transition: all 0.3s ease;
+        }
+        .glass-input:focus {
+            background: rgba(9, 9, 11, 0.8);
+            border-color: #f472b6;
+            box-shadow: 0 0 15px rgba(244, 114, 182, 0.1);
+            outline: none;
+        }
+
+        /* Subtle glow effects */
+        .glow-pink { box-shadow: 0 0 20px rgba(244, 114, 182, 0.15); }
+        
+        .history-card:hover .play-icon { opacity: 1; transform: scale(1); }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden">
+
+    <!-- Left Sidebar: Main Controls -->
+    <div class="w-full md:w-[420px] h-full flex flex-col bg-[#0c0c0e] border-r border-zinc-800 z-10 relative shadow-2xl">
+        <div class="p-6 border-b border-zinc-800">
+            <h1 class="text-2xl font-black text-white tracking-wide uppercase flex items-center">
+                <i class="fa-solid fa-video text-pink-500 mr-3"></i> Airi Studio
+            </h1>
+        </div>
+        
+        <div class="flex border-b border-zinc-800 bg-[#0c0c0e]">
+            <button id="tab-downloader" onclick="switchTab('downloader')" class="flex-1 py-3 text-[10px] font-bold uppercase tracking-widest text-pink-500 border-b-2 border-pink-500 transition">Studio</button>
+            <button id="tab-converter" onclick="switchTab('converter')" class="flex-1 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-500 border-b-2 border-transparent hover:text-zinc-300 transition">Media Tools</button>
+            <button id="tab-gallery" onclick="switchTab('gallery')" class="flex-1 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-500 border-b-2 border-transparent hover:text-zinc-300 transition">Gallery</button>
+        </div>
+
+        <div id="section-downloader" class="flex-1 overflow-y-auto p-6 scroll-smooth">
+            <form id="downloadForm" class="space-y-8">
+                <!-- Video URLs -->
+                <div class="space-y-3">
+                    <label class="block text-[11px] font-bold text-zinc-400 uppercase tracking-widest"><span class="text-pink-500 mr-1">01.</span> Video URLs</label>
+                    <textarea id="url" name="url" rows="3" class="w-full px-4 py-3 bg-[#080809] border border-zinc-800 rounded-2xl text-sm text-zinc-300 focus:outline-none focus:border-pink-500 focus:ring-1 focus:ring-pink-500 transition shadow-inner placeholder-zinc-700 resize-none" placeholder="https://www.tiktok.com/@..."></textarea>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <!-- Auth Select -->
+                    <div class="space-y-3">
+                        <label class="block text-[11px] font-bold text-zinc-400 uppercase tracking-widest">Auth</label>
+                        <div class="relative">
+                            <select id="browser" name="browser" class="w-full px-4 py-3 bg-[#080809] border border-zinc-800 rounded-xl text-xs font-medium text-zinc-300 focus:outline-none focus:border-zinc-500 appearance-none shadow-inner cursor-pointer">
+                                <option value="none">Anonymous</option>
+                                <option value="chrome">Chrome</option>
+                                <option value="firefox">Firefox</option>
+                                <option value="edge">Edge</option>
+                                <option value="safari">Safari</option>
+                            </select>
+                            <div class="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
+                                <i class="fa-solid fa-chevron-down text-zinc-600 text-xs"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Custom Path -->
+                    <div class="space-y-3">
+                        <label class="block text-[11px] font-bold text-zinc-400 uppercase tracking-widest">Path</label>
+                        <div class="relative cursor-pointer group" onclick="document.getElementById('path').focus()">
+                            <input type="text" id="path" name="path" class="w-full px-4 py-3 bg-[#080809] border border-zinc-800 rounded-xl text-xs font-medium text-zinc-300 focus:outline-none focus:border-zinc-500 shadow-inner group-hover:border-zinc-700 transition" placeholder="Auto... (Click to browse)">
+                            <div class="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none opacity-50 group-hover:opacity-100 transition">
+                                <i class="fa-solid fa-folder-open text-zinc-500"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Processing Options -->
+                <div class="pt-4 border-t border-zinc-800">
+                    <label class="block text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-3"><span class="text-pink-500 mr-1">02.</span> Processing Options</label>
+                    <div class="space-y-2">
+                        <label class="flex items-center space-x-2 text-xs text-zinc-300 cursor-pointer" title="Re-encodes downloaded videos to standard mp4/h264 to ensure they work in Kling and other AI tools.">
+                            <input type="checkbox" id="forceH264" class="form-checkbox text-pink-500 rounded border-zinc-700 bg-zinc-900 focus:ring-pink-500 focus:ring-offset-zinc-950" checked>
+                            <span>Force Standard Encoding (H.264)</span>
+                        </label>
+                        <div class="grid grid-cols-2 gap-2 mt-2">
+                            <label class="flex items-center space-x-2 text-xs text-zinc-300 cursor-pointer">
+                                <input type="checkbox" id="extractFrame" class="form-checkbox text-pink-500 rounded border-zinc-700 bg-zinc-900 focus:ring-pink-500 focus:ring-offset-zinc-950" checked>
+                                <span>Extract First Frame</span>
+                            </label>
+                            <label class="flex items-center space-x-2 text-xs text-zinc-300 cursor-pointer">
+                                <input type="checkbox" id="identifySong" class="form-checkbox text-pink-500 rounded border-zinc-700 bg-zinc-900 focus:ring-pink-500 focus:ring-offset-zinc-950" checked>
+                                <span>Identify Song & Meta</span>
+                            </label>
+                            <label class="flex items-center space-x-2 text-xs text-zinc-300 cursor-pointer">
+                                <input type="checkbox" id="transcribeAudio" class="form-checkbox text-pink-500 rounded border-zinc-700 bg-zinc-900 focus:ring-pink-500 focus:ring-offset-zinc-950" checked>
+                                <span>Transcribe Audio</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filename (Hidden) -->
+                <input type="hidden" id="filename" name="filename" placeholder="%(title)s.%(ext)s">
+            </form>
+        </div>
+
+        <div id="section-converter" class="hidden p-6 flex-1 overflow-y-auto">
+            <form id="converterForm" class="space-y-8">
+                <!-- Media File Input -->
+                <div class="space-y-3">
+                    <label class="block text-[11px] font-bold text-zinc-400 uppercase tracking-widest"><span class="text-purple-500 mr-1">01.</span> Select Media</label>
+                    <input type="file" id="mediaFile" name="file" class="w-full text-sm text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-zinc-800 file:text-white hover:file:bg-zinc-700 transition cursor-pointer" accept="video/*,audio/*,image/*">
+                </div>
+
+                <!-- Trim Options -->
+                <div id="trimmerContainer" class="space-y-3 hidden">
+                    <label class="block text-[11px] font-bold text-zinc-400 uppercase tracking-widest"><span class="text-purple-500 mr-1"></span> Trim Video (Optional)</label>
+                    
+                    <div class="bg-[#080809] border border-zinc-800 rounded-xl p-3 shadow-inner">
+                        <video id="videoPreview" class="w-full rounded-lg mb-3 bg-black max-h-[150px] object-contain" controls></video>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-[10px] text-zinc-500 mb-1">Start Time (HH:MM:SS)</label>
+                                <div class="flex items-center space-x-2">
+                                    <input type="text" id="trimStart" placeholder="00:00:00" class="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded text-xs text-white text-center focus:border-purple-500 focus:outline-none">
+                                    <button type="button" onclick="setTime('start')" class="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-white rounded text-[10px] transition"><i class="fa-solid fa-location-crosshairs"></i></button>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] text-zinc-500 mb-1">End Time (HH:MM:SS)</label>
+                                <div class="flex items-center space-x-2">
+                                    <input type="text" id="trimEnd" placeholder="00:00:00" class="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded text-xs text-white text-center focus:border-purple-500 focus:outline-none">
+                                    <button type="button" onclick="setTime('end')" class="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-white rounded text-[10px] transition"><i class="fa-solid fa-location-crosshairs"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Processing Options -->
+                <div class="space-y-3">
+                    <label class="block text-[11px] font-bold text-zinc-400 uppercase tracking-widest"><span class="text-purple-500 mr-1">02.</span> Tools</label>
+                    
+                    <div class="grid grid-cols-1 gap-4 bg-[#080809] p-4 rounded-xl border border-zinc-800 shadow-inner">
+                        
+                        <div class="space-y-2">
+                            <label class="block text-[10px] font-bold text-zinc-500 uppercase">Crop / Resize</label>
+                            <select id="convResize" name="resize" class="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-zinc-300 focus:outline-none focus:border-purple-500 appearance-none">
+                                <option value="none">Original Size</option>
+                                <optgroup label="Vertical (TikTok/IG)" id="grp-resize-916">
+                                    <option value="crop_9_16">Crop to 9:16 (Fill)</option>
+                                    <option value="pad_9_16">Pad to 9:16 (Fit)</option>
+                                </optgroup>
+                                <optgroup label="Horizontal (YouTube)" id="grp-resize-169">
+                                    <option value="crop_16_9">Crop to 16:9 (Fill)</option>
+                                    <option value="pad_16_9">Pad to 16:9 (Fit)</option>
+                                </optgroup>
+                            </select>
+                        </div>
+                        
+                        <!-- Auto-Crop Checkbox -->
+                        <div class="space-y-2">
+                            <label class="flex items-center space-x-2 text-xs text-zinc-300 cursor-pointer" title="Automatically detect faces/subjects to keep them in frame when cropping.">
+                                <input type="checkbox" id="convAutoCrop" class="form-checkbox text-purple-500 rounded border-zinc-700 bg-zinc-900 focus:ring-purple-500 focus:ring-offset-zinc-950">
+                                <span>Smart Auto-Crop (Detect Subject)</span>
+                            </label>
+                        </div>
+
+                        <div class="space-y-2">
+                            <label class="block text-[10px] font-bold text-zinc-500 uppercase mt-2">Format</label>
+                            <select id="convFormat" name="format" class="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-zinc-300 focus:outline-none focus:border-purple-500 appearance-none">
+                                <optgroup label="Video" id="grp-fmt-video">
+                                    <option value="mp4">MP4 (H.264)</option>
+                                    <option value="gif">GIF</option>
+                                </optgroup>
+                                <optgroup label="Audio" id="grp-fmt-audio">
+                                    <option value="mp3">MP3 Audio</option>
+                                    <option value="wav">WAV Audio</option>
+                                </optgroup>
+                                <optgroup label="Images" id="grp-fmt-image">
+                                    <option value="frames">Extract All Frames</option>
+                                    <option value="png">PNG</option>
+                                    <option value="jpg">JPG</option>
+                                </optgroup>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="convStatusContainer" class="hidden">
+                    <div class="flex items-center justify-between text-xs mb-2">
+                        <span id="convStatusText" class="text-zinc-400 font-bold uppercase tracking-widest text-[10px]">Processing...</span>
+                        <i id="convStatusIcon" class="fa-solid fa-circle-notch fa-spin text-purple-500"></i>
+                    </div>
+                    <div class="w-full bg-zinc-900 rounded-full h-1">
+                        <div id="convProgressBar" class="bg-purple-500 h-1 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                </div>
+
+            </form>
+        </div>
+
+        <!-- Submit Buttons Container -->
+        <div class="p-6 bg-[#0c0c0e] border-t border-zinc-800">
+            <button type="submit" form="downloadForm" id="submitBtn" class="w-full py-4 bg-pink-500 hover:bg-pink-400 text-white text-xs font-black uppercase tracking-[0.2em] rounded-xl transition-all shadow-[0_0_20px_rgba(244,114,182,0.3)] flex justify-center items-center group">
+                <i class="fa-solid fa-bolt mr-2 group-hover:animate-pulse"></i> Generate
+            </button>
+            <button type="submit" form="converterForm" id="convSubmitBtn" style="display: none;" class="w-full py-4 bg-purple-500 hover:bg-purple-400 text-white text-xs font-black uppercase tracking-[0.2em] rounded-xl transition-all shadow-[0_0_20px_rgba(168,85,247,0.3)] flex justify-center items-center">
+                <i class="fa-solid fa-hammer mr-2"></i> Convert Media
+            </button>
+        </div>
+    </div>
+
+    <div id="section-gallery" class="hidden flex-1 overflow-y-auto">
+        <div class="sticky top-0 bg-[#0c0c0e] z-10 p-4 border-b border-zinc-800">
+            <select id="galleryFilter" class="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white focus:outline-none" onchange="loadGallery()">
+                <option value="All">All Folders</option>
+                <option value="YouTube">YouTube</option>
+                <option value="Instagram">Instagram</option>
+                <option value="TikTok">TikTok</option>
+                <option value="Twitter">Twitter</option>
+                <option value="Conversions">Conversions</option>
+                <option value="Other">Other</option>
+            </select>
+        </div>
+        <div id="galleryGrid" class="grid grid-cols-2 md:grid-cols-3 gap-2 p-4">
+        </div>
+    </div>
+
+    <!-- Right Workspace: Task Queue -->
+    <div class="flex-1 bg-airi-bg relative overflow-hidden flex flex-col">
+        <!-- Top Gradient -->
+        <div class="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-black/40 to-transparent pointer-events-none z-0"></div>
+
+        <div class="p-8 z-10 flex flex-col h-full">
+            <h2 class="text-sm font-black text-white tracking-[0.15em] uppercase mb-6 flex items-center">
+                <i class="fa-solid fa-list-check text-pink-500 mr-3"></i> Task Queue
+            </h2>
+
+            <!-- Queue Container -->
+            <div id="queueContainer" class="flex-1 overflow-y-auto space-y-3 pr-2 scroll-smooth">
+                <!-- Tasks will be prepended here -->
+            </div>
+        </div>
+    </div>
+    
+    <!-- Scripts -->
+    <script>
+        // Higgsfield-like History Fetcher (Mocked out if not needed, but kept for compat)
+        async function fetchHistory() {
+            try {
+                const res = await fetch('/api/history');
+                const data = await res.json();
+                // renderHistory(data);
+            } catch (err) {
+                console.error("Failed to load history", err);
+            }
+        }
+
+        // setInterval(fetchHistory, 10000);
+
+        function switchTab(tab) {
+            ['downloader', 'converter', 'gallery'].forEach(t => {
+                const isTab = t === tab;
+                const el = document.getElementById('section-' + t);
+                if (el) el.classList.toggle('hidden', !isTab);
+                const tb = document.getElementById('tab-' + t);
+                if (tb) tb.className = isTab 
+                    ? 'flex-1 py-3 text-[10px] font-bold uppercase tracking-widest text-pink-500 border-b-2 border-pink-500 transition'
+                    : 'flex-1 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-500 border-b-2 border-transparent hover:text-zinc-300 transition';
+            });
+            
+            document.getElementById('submitBtn').style.display = tab === 'downloader' ? 'flex' : 'none';
+            const convSubmit = document.getElementById('convSubmitBtn');
+            if (convSubmit) convSubmit.style.display = tab === 'converter' ? 'flex' : 'none';
+            
+            if (tab === 'gallery') loadGallery();
+        }
+        
+        async function loadGallery() {
+            const filter = document.getElementById('galleryFilter').value;
+            const res = await fetch('/api/gallery');
+            const data = await res.json();
+            const grid = document.getElementById('galleryGrid');
+            if(!grid) return;
+            grid.innerHTML = '';
+            
+            data.forEach(item => {
+                if (filter !== 'All' && item.folder !== filter) return;
+                const url = '/api/media/' + encodeURIComponent(item.folder) + '/' + encodeURIComponent(item.name);
+                const el = document.createElement('div');
+                el.className = 'relative aspect-[9/16] rounded-xl overflow-hidden border border-zinc-800 bg-black group';
+                
+                if (item.type === 'video') {
+                    el.innerHTML = `<video src="${url}" class="w-full h-full object-cover" controls preload="metadata"></video>`;
+                } else if (item.type === 'image') {
+                    el.innerHTML = `<img src="${url}" class="w-full h-full object-cover" />`;
+                } else {
+                    el.innerHTML = `<div class="w-full h-full flex items-center justify-center text-xs text-zinc-500 break-all p-2 text-center bg-zinc-900">${item.name}</div>
+                    <audio src="${url}" controls class="absolute bottom-0 left-0 w-full h-10"></audio>`;
+                }
+                
+                const label = document.createElement('div');
+                label.className = 'absolute top-0 left-0 w-full p-2 bg-gradient-to-b from-black/80 to-transparent text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity truncate';
+                label.textContent = item.name;
+                el.appendChild(label);
+                
+                grid.appendChild(el);
+            });
+        }
+
+        // Downloader JS
+        let previewTimeout = null;
+        const processedUrls = new Set();
+        
+        document.getElementById('url').addEventListener('input', (e) => {
+            clearTimeout(previewTimeout);
+            const urlsRaw = e.target.value;
+            const urls = urlsRaw.split('\n').map(u => u.trim()).filter(u => u && u.startsWith('http'));
+            
+            if (urls.length === 0) return;
+            
+            const queueContainer = document.getElementById('queueContainer');
+            
+            previewTimeout = setTimeout(() => {
+                urls.forEach(async (url) => {
+                    if (processedUrls.has(url)) return;
+                    processedUrls.add(url);
+                    
+                    const previewId = 'preview-' + generateUUID();
+                    const previewCard = document.createElement('div');
+                    previewCard.id = previewId;
+                    previewCard.className = 'px-6 py-4 rounded-[20px] bg-[#080809] border border-zinc-800 shadow-inner transition-all flex items-center space-x-4 animate-pulse';
+                    previewCard.innerHTML = `
+                        <div class="w-24 h-16 bg-zinc-800 rounded-lg"></div>
+                        <div class="flex-1 space-y-2">
+                            <div class="h-3 bg-zinc-800 rounded w-3/4"></div>
+                            <div class="h-2 bg-zinc-800 rounded w-1/2"></div>
+                        </div>
+                    `;
+                    queueContainer.prepend(previewCard);
+                    
+                    try {
+                        const res = await fetch('/api/preview', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ url })
+                        });
+                        const data = await res.json();
+                        
+                        const actualCard = document.getElementById(previewId);
+                        if (!actualCard) return;
+                        actualCard.classList.remove('animate-pulse');
+                        
+                        if (data.error) {
+                            actualCard.innerHTML = `
+                                <div class="w-24 h-16 bg-zinc-900 flex items-center justify-center rounded-lg">
+                                    <i class="fa-solid fa-triangle-exclamation text-zinc-600"></i>
+                                </div>
+                                <div class="flex-1 overflow-hidden">
+                                    <div class="text-[10px] font-bold text-red-400 truncate">Preview Failed</div>
+                                    <div class="text-[10px] text-zinc-500 truncate mt-1">${url}</div>
+                                </div>
+                            `;
+                            return;
+                        }
+                        
+                        let durationStr = '';
+                        if (data.duration) {
+                            const m = Math.floor(data.duration / 60);
+                            const s = data.duration % 60;
+                            durationStr = `${m}:${s.toString().padStart(2, '0')}`;
+                        }
+                        
+                        actualCard.innerHTML = `
+                            <div class="relative w-24 h-16 bg-zinc-900 rounded-lg overflow-hidden shrink-0">
+                                ${data.thumbnail ? `<img src="${data.thumbnail}" class="w-full h-full object-cover" />` : '<div class="w-full h-full flex items-center justify-center"><i class="fa-solid fa-video text-zinc-600"></i></div>'}
+                                ${durationStr ? `<div class="absolute bottom-1 right-1 bg-black/80 px-1 py-0.5 rounded text-[8px] text-white font-mono">${durationStr}</div>` : ''}
+                            </div>
+                            <div class="flex-1 overflow-hidden pr-4">
+                                <div class="text-xs font-bold text-zinc-200 truncate">${data.title}</div>
+                                <div class="text-[10px] text-zinc-400 truncate mt-1"><i class="fa-solid fa-user text-pink-500 mr-1"></i> ${data.uploader || 'Unknown'}</div>
+                                <div class="text-[9px] font-mono text-zinc-600 truncate mt-1">${url}</div>
+                            </div>
+                            <div class="shrink-0">
+                                <button onclick="document.getElementById('${previewId}').remove()" class="text-zinc-600 hover:text-zinc-400 transition">
+                                    <i class="fa-solid fa-xmark"></i>
+                                </button>
+                            </div>
+                        `;
+                    } catch (err) {
+                        const actualCard = document.getElementById(previewId);
+                        if (actualCard) actualCard.remove();
+                    }
+                });
+            }, 500);
+        });
+
+        function generateUUID() {
+            return Math.random().toString(36).substring(2) + Date.now().toString(36);
+        }
+
+        const activeDownloads = {};
+        const downloadQueue = [];
+        let isQueueRunning = false;
+
+        async function cancelDownload(taskId) {
+            if (activeDownloads[taskId]) {
+                activeDownloads[taskId].abort();
+                delete activeDownloads[taskId];
+            } else {
+                const queuedTask = downloadQueue.find(t => t.taskId === taskId);
+                if(queuedTask) {
+                    queuedTask.cancelled = true;
+                }
+            }
+            try {
+                await fetch(`/api/cancel/${taskId}`, { method: 'POST' });
+            } catch(e) {}
+            const row = document.getElementById(`task-${taskId}`);
+            if(row) {
+                const status = row.querySelector('.task-status');
+                status.textContent = 'Cancelled by user';
+                status.className = 'task-status text-[10px] font-bold uppercase tracking-widest text-red-500 mt-2 block';
+                row.querySelector('.task-icon').className = 'task-icon fa-solid fa-circle-xmark text-red-500';
+                row.querySelector('.task-progress').className = 'task-progress bg-red-500 h-1 rounded-full transition-all duration-300';
+                const stopBtn = row.querySelector('.task-stop');
+                if(stopBtn) stopBtn.remove();
+            }
+        }
+
+        async function handleSSEStream(response, taskId, row, controller, stopBtn, statusText, statusIcon, progressBar) {
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let finished = false;
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                
+                const chunk = decoder.decode(value);
+                const lines = chunk.split('\n\n');
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const data = JSON.parse(line.substring(6));
+
+                            if (data.error) {
+                                statusText.textContent = 'Error: ' + data.error;
+                                statusText.className = 'task-status text-[10px] font-bold uppercase tracking-widest text-red-500 mt-2 block';
+                                statusIcon.className = 'task-icon fa-solid fa-circle-xmark text-red-500';
+                                progressBar.className = 'task-progress bg-red-500 h-1 rounded-full transition-all duration-300';
+                                if(stopBtn) stopBtn.remove();
+                                finished = true;
+                                break;
+                            }
+
+                            if (data.status) {
+                                statusText.textContent = data.status;
+                                if (data.status.includes('%')) {
+                                    const pctMatch = data.status.match(/(\d+\.?\d*)%/);
+                                    if (pctMatch) progressBar.style.width = pctMatch[1] + '%';
+                                }
+                                if (data.done) {
+                                    statusText.className = 'task-status text-[10px] font-bold uppercase tracking-widest text-emerald-400 mt-2 block';
+                                    statusIcon.className = 'task-icon fa-solid fa-circle-check text-emerald-500';
+                                    progressBar.style.width = '100%';
+                                    progressBar.className = 'task-progress bg-emerald-500 h-1 rounded-full transition-all duration-300';
+                                    if(stopBtn) stopBtn.remove();
+                                    finished = true;
+                                    break;
+                                }
+                            }
+                        } catch (e) {}
+                    }
+                }
+                if (finished) break;
+            }
+        }
+
+        async function processQueue() {
+            if (isQueueRunning || downloadQueue.length === 0) return;
+            isQueueRunning = true;
+
+            while (downloadQueue.length > 0) {
+                const task = downloadQueue.shift();
+                if (task.cancelled) continue;
+
+                const { url, path, filename, browser, taskId, row, processing_options } = task;
+                
+                const statusText = row.querySelector('.task-status');
+                const statusIcon = row.querySelector('.task-icon');
+                const progressBar = row.querySelector('.task-progress');
+                const stopBtn = row.querySelector('.task-stop');
+                
+                statusText.textContent = 'Starting...';
+                statusText.className = 'task-status text-[10px] font-bold uppercase tracking-widest text-pink-400 mt-2 block';
+                statusIcon.className = 'task-icon fa-solid fa-circle-notch fa-spin text-zinc-500';
+
+                const controller = new AbortController();
+                activeDownloads[taskId] = controller;
+
+                try {
+                    const response = await fetch('/api/download', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ url, path, filename, browser, task_id: taskId, ai_swap: processing_options }),
+                        signal: controller.signal
+                    });
+
+                    await handleSSEStream(response, taskId, row, controller, stopBtn, statusText, statusIcon, progressBar);
+                } catch(err) {
+                    if(err.name !== 'AbortError') {
+                        statusText.textContent = 'Connection Error';
+                        statusText.className = 'task-status text-[10px] font-bold uppercase tracking-widest text-red-500 mt-2 block';
+                        statusIcon.className = 'task-icon fa-solid fa-circle-xmark text-red-500';
+                        if(stopBtn) stopBtn.remove();
+                    }
+                } finally {
+                    delete activeDownloads[taskId];
+                }
+                
+                await new Promise(r => setTimeout(r, 2000));
+            }
+            
+            isQueueRunning = false;
+        }
+
+        document.getElementById('downloadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const urlsRaw = document.getElementById('url').value;
+            const path = document.getElementById('path').value;
+            const filename = document.getElementById('filename').value;
+            const browser = document.getElementById('browser').value;
+            
+            const processing_options = {
+                forceH264: document.getElementById('forceH264').checked,
+                enableThumbnail: document.getElementById('extractFrame').checked,
+                enableSongMeta: document.getElementById('identifySong').checked,
+                enableTranscription: document.getElementById('transcribeAudio').checked
+            };
+
+            const urls = urlsRaw.split('\n').map(u => u.trim()).filter(u => u);
+            if(urls.length === 0) return;
+
+            document.getElementById('url').value = '';
+            const queueContainer = document.getElementById('queueContainer');
+
+            urls.forEach(url => {
+                const taskId = generateUUID();
+                
+                const row = document.createElement('div');
+                row.id = `task-${taskId}`;
+                row.className = "px-6 py-4 rounded-[20px] bg-[#080809] border border-zinc-800 shadow-inner flex items-center justify-between transition-all";
+                row.innerHTML = `
+                    <div class="flex-1 overflow-hidden pr-6">
+                        <div class="text-[10px] font-bold text-zinc-300 truncate" title="${url}">${url}</div>
+                        <div class="task-status text-[10px] font-bold uppercase tracking-widest text-zinc-500 mt-2 block">Waiting in queue...</div>
+                        <div class="w-full bg-zinc-900 rounded-full h-1 mt-3">
+                            <div class="task-progress bg-pink-500 h-1 rounded-full transition-all duration-300" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <i class="task-icon fa-solid fa-clock text-zinc-600"></i>
+                        <button onclick="cancelDownload('${taskId}')" type="button" class="task-stop text-zinc-600 hover:text-red-500 transition px-2">
+                            <i class="fa-solid fa-xmark text-lg"></i>
+                        </button>
+                    </div>
+                `;
+                queueContainer.prepend(row);
+                downloadQueue.push({ url, path, filename, browser, taskId, row, cancelled: false, processing_options });
+            });
+
+            processQueue();
+        });
+
+        // Converter JS
+        document.getElementById('mediaFile').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const ext = file.name.split('.').pop().toLowerCase();
+            const isVideo = ['mp4', 'mov', 'mkv', 'avi', 'webm', 'ts', 'flv'].includes(ext);
+            const isAudio = ['mp3', 'wav', 'flac', 'm4a', 'ogg', 'aac', 'wma'].includes(ext);
+            const isImage = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'].includes(ext);
+
+            const grpResize916 = document.getElementById('grp-resize-916');
+            const grpResize169 = document.getElementById('grp-resize-169');
+            const grpFmtVideo = document.getElementById('grp-fmt-video');
+            const grpFmtAudio = document.getElementById('grp-fmt-audio');
+            const grpFmtImage = document.getElementById('grp-fmt-image');
+
+            [grpResize916, grpResize169, grpFmtVideo, grpFmtAudio, grpFmtImage].forEach(grp => {
+                grp.disabled = false;
+                grp.hidden = false;
+            });
+
+            if (isAudio) {
+                [grpResize916, grpResize169, grpFmtVideo, grpFmtImage].forEach(grp => {
+                    grp.disabled = true;
+                    grp.hidden = true;
+                });
+                document.getElementById('convFormat').value = 'mp3';
+            } else if (isImage && ext !== 'gif') {
+                [grpFmtAudio, grpFmtVideo].forEach(grp => {
+                    grp.disabled = true;
+                    grp.hidden = true;
+                });
+                document.getElementById('convFormat').value = 'png';
+            } else {
+                document.getElementById('convFormat').value = 'mp4';
+            }
+
+            // Trimmer logic for single video file
+            if (e.target.files.length === 1 && isVideo) {
+                const videoPreview = document.getElementById('videoPreview');
+                const trimmerContainer = document.getElementById('trimmerContainer');
+                
+                const url = URL.createObjectURL(file);
+                videoPreview.src = url;
+                trimmerContainer.classList.remove('hidden');
+            } else {
+                document.getElementById('trimmerContainer').classList.add('hidden');
+            }
+        });
+
+        function formatTime(seconds) {
+            const h = Math.floor(seconds / 3600).toString().padStart(2, '0');
+            const m = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
+            const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+            const ms = Math.floor((seconds % 1) * 1000).toString().padStart(3, '0');
+            return `${h}:${m}:${s}.${ms}`;
+        }
+
+        function setTime(type) {
+            const videoPreview = document.getElementById('videoPreview');
+            if (type === 'start') {
+                document.getElementById('trimStart').value = formatTime(videoPreview.currentTime);
+            } else {
+                document.getElementById('trimEnd').value = formatTime(videoPreview.currentTime);
+            }
+        }
+
+        document.getElementById('converterForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const fileInput = document.getElementById('mediaFile');
+            const convResize = document.getElementById('convResize').value;
+            const convFormat = document.getElementById('convFormat').value;
+
+            if (!fileInput.files.length) {
+                alert("Please select a file first.");
+                return;
+            }
+
+            const submitBtn = document.getElementById('convSubmitBtn');
+            submitBtn.disabled = true;
+            submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+            const statusContainer = document.getElementById('convStatusContainer');
+            const statusText = document.getElementById('convStatusText');
+            const statusIcon = document.getElementById('convStatusIcon');
+            const progressBar = document.getElementById('convProgressBar');
+
+            statusContainer.classList.remove('hidden');
+            statusText.textContent = 'Uploading & Processing... (This may take a moment)';
+            statusText.className = 'text-[10px] font-bold uppercase tracking-widest text-pink-400';
+            statusIcon.className = 'fa-solid fa-circle-notch fa-spin text-pink-500';
+            progressBar.style.width = '0%';
+            progressBar.className = 'bg-white h-1 rounded-full transition-all duration-300';
+
+            const formData = new FormData();
+            for (let i = 0; i < fileInput.files.length; i++) {
+                formData.append('files', fileInput.files[i]);
+            }
+            formData.append('resize', convResize);
+            formData.append('format', convFormat);
+            formData.append('autocrop', document.getElementById('convAutoCrop').checked);
+            
+            formData.append('trimStart', document.getElementById('trimStart').value);
+            formData.append('trimEnd', document.getElementById('trimEnd').value);
+
+            try {
+                const response = await fetch('/api/convert', { method: 'POST', body: formData });
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n\n');
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.substring(6));
+
+                                if (data.error) {
+                                    statusText.textContent = "Error: " + data.error;
+                                    statusText.className = 'text-[10px] font-bold uppercase tracking-widest text-red-500';
+                                    statusIcon.className = 'fa-solid fa-circle-xmark text-red-500';
+                                    progressBar.className = 'bg-red-500 h-1 rounded-full transition-all duration-300';
+                                    submitBtn.disabled = false;
+                                    submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                                    return;
+                                }
+
+                                if (data.status) {
+                                    statusText.textContent = data.status;
+                                }
+
+                                if (data.done) {
+                                    if (data.error) {
+                                        progressBar.style.width = "100%";
+                                        statusText.textContent = data.status || 'Conversions Complete!';
+                                        statusText.className = 'text-[10px] font-bold uppercase tracking-widest text-white';
+                                        statusIcon.className = 'fa-solid fa-check text-white';
+                                        progressBar.className = 'bg-white h-1 rounded-full transition-all duration-300';
+                                        submitBtn.disabled = false;
+                                        submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                                    }
+                                }
+                            } catch (e) {
+                                console.error('Error parsing SSE json', e, line);
+                            }
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error(err);
+                statusText.textContent = 'Connection Error';
+                statusText.className = 'text-[10px] font-bold uppercase tracking-widest text-red-500';
+                statusIcon.className = 'fa-solid fa-circle-xmark text-red-500';
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        });
+    </script>
+</body>
+</html>
