@@ -8,16 +8,25 @@
 
 Whether you're building a massive reference folder of TikTok trends, extracting music from Instagram Reels, pulling perfectly-framed thumbnails for YouTube shorts, or prepping videos for AI generation tools like Kling—this grabber automates the entire workflow in just a few clicks. It's safe, blazing fast, completely private, and incredibly powerful.
 
-## ? Features
+## ✨ Features
 
-- **Universal Downloader**: Paste links from almost any social media platform to download instantly.
-- **Smart Queue System**: Paste multiple links at once. The app will process them in the background.
-- **Live Previews**: See exactly what you are about to download before generating it.
-- **Auto-Transcription**: Automatically uses AI to generate text transcripts from downloaded videos.
-- **Song Identification**: Automatically runs Shazam on downloaded videos to identify the music.
-- **First Frame Extraction**: Automatically extracts the first frame of the video as an image.
-- **Kling / AI Tool Compatibility**: Optionally forces strict H.264 standard encoding on downloaded videos so they never crash in AI generation tools like Kling.
-- **Media Converter Tool**: A built-in suite to crop, resize, trim, and convert videos to various formats (GIF, MP3, MP4, PNG frames).
+### 📥 Ultimate Download Engine
+- **Platform Support:** Flawlessly downloads videos from TikTok, YouTube, Twitter, and more.
+- **Instagram Master:** Easily rip entire Instagram profiles, Reels, and multi-photo Carousels.
+- **Dual-Engine Auto-Fallback:** Uses `yt-dlp` for heavy lifting, and instantly falls back to `gallery-dl` to capture tricky photo carousels.
+- **Metadata Extraction:** Automatically pulls post captions, titles, and descriptions and saves them as text files alongside your media.
+- **Smart Queue System:** Paste multiple links at once. The app processes them all sequentially in the background.
+
+### 🤖 AI Processing & Tweaks
+- **Auto-Transcription:** Uses local AI (Whisper) to automatically generate text transcripts from downloaded videos.
+- **Song Identification:** Runs Shazam on downloaded videos to automatically identify background music.
+- **First Frame Extraction:** Automatically extracts the perfectly-framed first thumbnail of a video as an image.
+- **Kling / AI Tool Compatibility:** Optionally forces strict `H.264` / `mp4` standard encoding on all downloads so they never crash or artifact in AI video generators like Kling.
+
+### 🛠️ Media Tools Converter
+A dedicated second tab in the app featuring a full offline media editing suite:
+- **Convert:** Instantly convert videos to GIF, MP3, MP4, or PNG frames.
+- **Edit:** Crop dimensions, resize resolutions, and trim video lengths without opening Premiere.
 
 ---
 
