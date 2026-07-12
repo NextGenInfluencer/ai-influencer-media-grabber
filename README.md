@@ -31,9 +31,7 @@ If you already have Python installed, you can skip this step!
 1. **Download Python (Version 3.10 or newer)** from the official website:
    👉 [Click here to download Python](https://www.python.org/downloads/)
 2. Open the downloaded installer.
-3. ⚠️ **CRITICAL STEP**: At the very bottom of the installer window, you **MUST** check the box that says **"Add python.exe to PATH"** before clicking Install. If you don't check this box, the app will not work!
-   *(It looks like this:)*
-   <br><img src="./python_path.png" width="400" alt="Add Python to PATH Checkbox" />
+3. ⚠️ **CRITICAL STEP**: When the installer opens, look at the **very bottom of the first window**. You **MUST** check the small box that says **"Add python.exe to PATH"** before clicking Install. If you don't check this box, the app will not work!
 4. Click "Install Now" and let it finish.
 
 ### 🚀 Step 2: Download & Run Airi Studio
