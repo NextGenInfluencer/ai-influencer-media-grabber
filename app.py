@@ -3,7 +3,7 @@ import re
 import sys
 import subprocess
 import threading
-from flask import Flask, render_template, request, jsonify, Response, send_file
+from flask import Flask, render_template, request, jsonify, Response, send_file, send_from_directory
 import queue
 import json
 import imageio_ffmpeg
@@ -260,7 +260,7 @@ def convert_media():
                     subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                     
                     # Cleanup temp for this file immediately
-                    try: shutil.rmtree(temp_dir) 
+                    try: os.remove(input_path) 
                     except: pass
                     
                 except Exception as e:
@@ -652,7 +652,7 @@ def list_gallery():
 
 @app.route('/api/media/<folder>/<filename>')
 def serve_media(folder, filename):
-    base_dir = r"E:\media_toolikt_saves"
+    base_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "downloads")
     safe_folder = os.path.basename(folder)
     return send_from_directory(os.path.join(base_dir, safe_folder), filename)
 
