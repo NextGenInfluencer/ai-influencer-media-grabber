@@ -1,6 +1,6 @@
 @echo off
 echo ==============================================
-echo Local Video Downloader - Startup Script
+echo AI Influencer Media Grabber - Startup Script
 echo ==============================================
 
 if not exist ".venv" (
