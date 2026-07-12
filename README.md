@@ -21,12 +21,18 @@ A powerful, all-in-one local video toolkit for downloading, converting, and proc
 
 If you don't know how to use the command line, don't worry! Running this app is incredibly simple.
 
-### Prerequisites
-You only need to install one thing on your computer first: **Python**.
-- Download Python here: [https://www.python.org/downloads/](https://www.python.org/downloads/)
-- **IMPORTANT**: When installing Python, make sure you check the box that says **"Add python.exe to PATH"** at the bottom of the installer!
+### 🛠️ Step 1: Install Python (Prerequisite)
+If you already have Python installed, you can skip this step!
 
-### Installation
+1. **Download Python (Version 3.10 or newer)** from the official website:
+   👉 [Click here to download Python](https://www.python.org/downloads/)
+2. Open the downloaded installer.
+3. ⚠️ **CRITICAL STEP**: At the very bottom of the installer window, you **MUST** check the box that says **"Add python.exe to PATH"** before clicking Install. If you don't check this box, the app will not work!
+   *(It looks like this:)*
+   <br><img src="https://datatofish.com/wp-content/uploads/2018/10/0001_add_Python_to_Path.png" width="400" alt="Add Python to PATH Checkbox" />
+4. Click "Install Now" and let it finish.
+
+### 🚀 Step 2: Download & Run Airi Studio
 1. Go to the top of this GitHub page and click the green **"<> Code"** button.
 2. Click **"Download ZIP"**.
 3. Once downloaded, **Extract/Unzip** the folder anywhere on your computer (like your Desktop).
