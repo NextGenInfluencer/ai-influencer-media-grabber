@@ -33,7 +33,7 @@ If you already have Python installed, you can skip this step!
 2. Open the downloaded installer.
 3. ⚠️ **CRITICAL STEP**: At the very bottom of the installer window, you **MUST** check the box that says **"Add python.exe to PATH"** before clicking Install. If you don't check this box, the app will not work!
    *(It looks like this:)*
-   <br><img src="https://datatofish.com/wp-content/uploads/2018/10/0001_add_Python_to_Path.png" width="400" alt="Add Python to PATH Checkbox" />
+   <br><img src="./python_path.png" width="400" alt="Add Python to PATH Checkbox" />
 4. Click "Install Now" and let it finish.
 
 ### 🚀 Step 2: Download & Run Airi Studio
