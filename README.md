@@ -1,8 +1,12 @@
-# ?? Airi Studio Video Downloader & Converter
-
-A powerful, all-in-one local video toolkit for downloading, converting, and processing media from platforms like YouTube, TikTok, Instagram, and more!
+# 🎥 Airi Studio Video Downloader & Converter
 
 ![UI Preview](https://img.shields.io/badge/UI-Airi_Studio-f472b6?style=for-the-badge)
+
+## 🌟 What is Airi Studio?
+
+**Airi Studio** is your ultimate, all-in-one desktop toolkit for social media content creators, video editors, and AI artists. Instead of relying on sketchy, ad-filled websites to download videos or convert files, Airi Studio runs **100% locally on your computer** with a beautiful, modern interface.
+
+Whether you're building a massive reference folder of TikTok trends, extracting music from Instagram Reels, pulling perfectly-framed thumbnails for YouTube shorts, or prepping videos for AI generation tools like Kling—Airi Studio automates the entire workflow in just a few clicks. It's safe, blazing fast, completely private, and incredibly powerful.
 
 ## ? Features
 
