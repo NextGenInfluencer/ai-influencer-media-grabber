@@ -159,7 +159,7 @@ def convert_media():
     if not files or files[0].filename == '':
         return jsonify({"error": "No selected file"}), 400
         
-    output_dir = r"E:\media_toolikt_saves\Conversions"
+    output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "downloads", "Conversions")
     os.makedirs(output_dir, exist_ok=True)
     
     # Save files synchronously before background thread
@@ -338,7 +338,7 @@ def download_video():
         return jsonify({"error": "URL is required"}), 400
         
     if not output_path or not output_path.strip():
-        output_path = r"E:\media_toolikt_saves"
+        output_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "downloads")
         
     url_lower = url.lower()
     if 'youtube.com' in url_lower or 'youtu.be' in url_lower:
@@ -624,8 +624,8 @@ def download_video():
     return Response(generate(), mimetype='text/event-stream')
 
 @app.route('/api/gallery', methods=['GET'])
-def get_gallery():
-    base_dir = r"E:\media_toolikt_saves"
+def list_gallery():
+    base_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "downloads")
     folders = ['YouTube', 'Instagram', 'TikTok', 'Twitter', 'Other', 'Conversions']
     
     media = []
