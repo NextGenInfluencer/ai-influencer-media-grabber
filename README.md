@@ -53,6 +53,6 @@ If you already have Python installed, you can skip this step!
 ### That's it! 🎉
 The `run.bat` script is fully automated. It will download everything it needs, install all the requirements, and instantly pop open the beautiful Airi Studio interface in your web browser. 
 
-*Note: By default, all of your downloaded videos and conversions will be saved automatically inside a new `downloads` folder right next to the `run.bat` file!*
+*Note: By default, all of your downloaded videos, photos, and converted media will be neatly saved in your `Documents/Media Grabber` folder!*
 
 *Note: The very first time you run it, it might take a few minutes to download the AI models and setup the environment. Every time after that, it will launch instantly!*

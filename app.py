@@ -159,7 +159,7 @@ def convert_media():
     if not files or files[0].filename == '':
         return jsonify({"error": "No selected file"}), 400
         
-    output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "downloads", "Conversions")
+    output_dir = os.path.join(os.path.expanduser("~"), "Documents", "Media Grabber", "Conversions")
     os.makedirs(output_dir, exist_ok=True)
     
     # Save files synchronously before background thread
@@ -338,7 +338,7 @@ def download_video():
         return jsonify({"error": "URL is required"}), 400
         
     if not output_path or not output_path.strip():
-        output_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "downloads")
+        output_path = os.path.join(os.path.expanduser("~"), "Documents", "Media Grabber")
         
     url_lower = url.lower()
     if 'youtube.com' in url_lower or 'youtu.be' in url_lower:
@@ -637,7 +637,7 @@ def browse_folder():
 
 @app.route('/api/gallery', methods=['GET'])
 def list_gallery():
-    base_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "downloads")
+    base_dir = os.path.join(os.path.expanduser("~"), "Documents", "Media Grabber")
     folders = ['YouTube', 'Instagram', 'TikTok', 'Twitter', 'Other', 'Conversions']
     
     media = []
@@ -664,7 +664,7 @@ def list_gallery():
 
 @app.route('/api/media/<folder>/<filename>')
 def serve_media(folder, filename):
-    base_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "downloads")
+    base_dir = os.path.join(os.path.expanduser("~"), "Documents", "Media Grabber")
     safe_folder = os.path.basename(folder)
     return send_from_directory(os.path.join(base_dir, safe_folder), filename)
 
