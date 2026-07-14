@@ -566,7 +566,7 @@
                     const response = await fetch('/api/download', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ url, path, filename, browser, task_id: taskId, ai_swap: processing_options }),
+                        body: JSON.stringify({ url, path, filename, browser, task_id: taskId, processing_options: processing_options }),
                         signal: controller.signal
                     });
 
