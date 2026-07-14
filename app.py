@@ -364,7 +364,7 @@ def download_video():
         yield f"data: {json.dumps({'status': 'Fetching metadata...'})}\n\n"
         
         ydl_opts = {
-            'format': 'bestvideo+bestaudio/best',
+            'format': 'bestvideo+bestaudio/best' if processing_options.get('forceH264') else 'bestvideo[vcodec^=avc]+bestaudio[acodec^=mp4a]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best',
             'merge_output_format': 'mp4',
             'outtmpl': os.path.join(output_path, '%(playlist_title,uploader)s', '%(playlist_index|)s%(playlist_index& - |)s%(title)s_%(id)s.%(ext)s'),
             'quiet': True,
@@ -423,7 +423,25 @@ def download_video():
                 try:
                     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                         try:
-                            info = ydl.extract_info(url, download=True)
+                            # Pre-flight check for file collisions to add (1) to filename
+                            info_dict = ydl.extract_info(url, download=False)
+                            if info_dict:
+                                temp_final = ydl.prepare_filename(info_dict)
+                                base, ext = os.path.splitext(temp_final)
+                                if os.path.exists(temp_final) or os.path.exists(base + ".mp4"):
+                                    orig_base = base
+                                    c = 1
+                                    while os.path.exists(f"{orig_base} ({c}){ext}") or os.path.exists(f"{orig_base} ({c}).mp4"):
+                                        c += 1
+                                    
+                                    local_opts = ydl_opts.copy()
+                                    local_opts['outtmpl'] = f"{orig_base} ({c}).%(ext)s"
+                                    with yt_dlp.YoutubeDL(local_opts) as local_ydl:
+                                        info = local_ydl.extract_info(url, download=True)
+                                else:
+                                    info = ydl.extract_info(url, download=True)
+                            else:
+                                info = ydl.extract_info(url, download=True)
                         except Exception as e:
                             err_msg = str(e)
                             err_msg = re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', err_msg)
@@ -604,7 +622,7 @@ def download_video():
                                     ffmpeg_h264_cmd = [
                                         imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-i", final_path,
                                         "-c:v", "libx264", "-preset", "fast", "-crf", "23",
-                                        "-c:a", "aac", "-movflags", "+faststart", temp_h264
+                                        "-c:a", "aac", "-pix_fmt", "yuv420p", "-movflags", "+faststart", temp_h264
                                     ]
                                     subprocess.run(ffmpeg_h264_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                                     if os.path.exists(temp_h264):
