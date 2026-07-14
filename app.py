@@ -416,6 +416,7 @@ def download_video():
         def run_dl():
             total = len(urls)
             failed_count = 0
+            last_final_path = None
             for idx, url in enumerate(urls, 1):
                 prefix = f"[{idx}/{total}] " if total > 1 else ""
                 q.put({"status": f"{prefix}Starting download..."})
@@ -501,6 +502,7 @@ def download_video():
                             base, _ = os.path.splitext(final_path)
                             if not os.path.exists(final_path) and os.path.exists(base + ".mp4"):
                                 final_path = base + ".mp4"
+                            last_final_path = final_path
                                 
                             # Extract first frame
                             if os.path.exists(final_path) and processing_options.get('enableThumbnail', True):
@@ -614,9 +616,9 @@ def download_video():
                     
             
             if failed_count == 0:
-                q.put({"status": "All Downloads Complete!", "done": True})
+                q.put({"status": "All Downloads Complete!", "done": True, "file_path": last_final_path, "output_path": output_path})
             else:
-                q.put({"status": f"Complete! ({failed_count} failed)", "done": True})
+                q.put({"status": f"Complete! ({failed_count} failed)", "done": True, "file_path": last_final_path, "output_path": output_path})
 
         t = threading.Thread(target=run_dl)
         t.start()
@@ -673,6 +675,26 @@ def serve_media(folder, filename):
     base_dir = os.path.join(os.path.expanduser("~"), "Documents", "Media Grabber")
     safe_folder = os.path.basename(folder)
     return send_from_directory(os.path.join(base_dir, safe_folder), filename)
+
+@app.route('/api/open_folder', methods=['POST'])
+def open_folder():
+    path = request.json.get('path')
+    if not path or not os.path.exists(path):
+        return jsonify({"error": "Path not found"}), 400
+    
+    if os.path.isfile(path):
+        subprocess.run(f'explorer /select,"{os.path.abspath(path)}"')
+    else:
+        os.startfile(os.path.abspath(path))
+    return jsonify({"success": True})
+
+@app.route('/api/preview')
+def preview_file():
+    from flask import send_file
+    path = request.args.get('path')
+    if not path or not os.path.exists(path) or not os.path.isfile(path):
+        return "Not found", 404
+    return send_file(path)
 
 if __name__ == '__main__':
     import webbrowser

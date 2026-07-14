@@ -460,6 +460,18 @@
         function generateUUID() {
             return Math.random().toString(36).substring(2) + Date.now().toString(36);
         }
+        
+        async function openFolder(path) {
+            try {
+                await fetch('/api/open_folder', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: path })
+                });
+            } catch (e) {
+                console.error("Failed to open folder", e);
+            }
+        }
 
         const activeDownloads = {};
         const downloadQueue = [];
@@ -529,6 +541,35 @@
                                     progressBar.style.width = '100%';
                                     progressBar.className = 'task-progress bg-emerald-500 h-1 rounded-full transition-all duration-300';
                                     if(stopBtn) stopBtn.remove();
+                                    
+                                    const actionDiv = document.createElement('div');
+                                    actionDiv.className = 'flex items-center space-x-3 mt-3';
+                                    
+                                    if (data.file_path) {
+                                        const ext = data.file_path.split('.').pop().toLowerCase();
+                                        const isVideo = ['mp4', 'webm', 'mkv', 'avi', 'mov'].includes(ext);
+                                        const previewUrl = `/api/preview?path=${encodeURIComponent(data.file_path)}`;
+                                        
+                                        if (isVideo) {
+                                            actionDiv.innerHTML += `<video src="${previewUrl}" class="h-16 w-24 object-cover rounded-lg bg-black" controls muted></video>`;
+                                        } else {
+                                            actionDiv.innerHTML += `<img src="${previewUrl}" class="h-16 w-24 object-cover rounded-lg bg-black" />`;
+                                        }
+                                    }
+                                    
+                                    const targetPath = data.file_path || data.output_path;
+                                    if (targetPath) {
+                                        actionDiv.innerHTML += `
+                                            <button type="button" onclick="openFolder('${targetPath.replace(/\\/g, '\\\\')}')" class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-white text-[10px] font-bold uppercase tracking-widest rounded-lg transition-colors border border-zinc-700 flex items-center">
+                                                <i class="fa-solid fa-folder-open mr-2"></i> Show in Folder
+                                            </button>
+                                        `;
+                                    }
+                                    
+                                    if (actionDiv.innerHTML) {
+                                        row.querySelector('.flex-1').appendChild(actionDiv);
+                                    }
+                                    
                                     finished = true;
                                     break;
                                 }
