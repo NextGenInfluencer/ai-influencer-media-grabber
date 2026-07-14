@@ -623,6 +623,18 @@ def download_video():
 
     return Response(generate(), mimetype='text/event-stream')
 
+@app.route('/api/browse', methods=['POST'])
+def browse_folder():
+    try:
+        cmd = [sys.executable, "-c", "import tkinter as tk, tkinter.filedialog as fd; root=tk.Tk(); root.withdraw(); root.attributes('-topmost', True); print(fd.askdirectory())"]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        folder = result.stdout.strip()
+        if folder:
+            return jsonify({"path": folder})
+        return jsonify({"error": "No folder selected"}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/gallery', methods=['GET'])
 def list_gallery():
     base_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "downloads")
