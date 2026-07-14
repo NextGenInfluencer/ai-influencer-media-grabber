@@ -433,7 +433,7 @@ def download_video():
                                 import time; time.sleep(4)
                                 continue
                             
-                            if "No video formats found" in err_msg or "Unable to extract data" in err_msg:
+                            if "No video formats found" in err_msg or "Unable to extract data" in err_msg or "HTTP Error 400" in err_msg or "Video info extraction failed" in err_msg:
                                 q.put({"status": f"{prefix}Unsupported by yt-dlp. Downloading via gallery-dl..."})
                                 
                                 gdl_cmd = [sys.executable, "-m", "gallery_dl", "-d", output_path]
