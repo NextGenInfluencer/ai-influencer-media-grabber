@@ -19,6 +19,12 @@ import numpy as np
 # Global dict to store cancel flags for download tasks
 cancel_flags = {}
 
+# Ensure the Documents/Media Grabber folder exists immediately on startup
+DEFAULT_SAVE_DIR = os.path.join(os.path.expanduser("~"), "Documents", "Media Grabber")
+os.makedirs(DEFAULT_SAVE_DIR, exist_ok=True)
+for sub in ['YouTube', 'Instagram', 'TikTok', 'Twitter', 'Other', 'Conversions']:
+    os.makedirs(os.path.join(DEFAULT_SAVE_DIR, sub), exist_ok=True)
+
 # Global dict to store paused AI sessions
 ai_sessions = {}
 
