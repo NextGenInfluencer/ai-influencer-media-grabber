@@ -130,44 +130,68 @@ def cleanup_temp_dir(dir_path):
     except:
         pass
 
-@app.route('/api/select-folder', methods=['GET', 'POST'])
-def select_folder():
+@app.route('/api/list_drives', methods=['GET'])
+def list_drives():
+    """List available drive letters on Windows, or root on Unix."""
+    drives = []
+    if os.name == 'nt':
+        import string
+        for letter in string.ascii_uppercase:
+            drive = f"{letter}:\\"
+            if os.path.exists(drive):
+                drives.append(drive)
+    else:
+        drives = ['/']
+    return jsonify({"drives": drives})
+
+@app.route('/api/list_dirs', methods=['POST'])
+def list_dirs():
+    """List subdirectories of a given path."""
+    data = request.get_json() or {}
+    path = data.get('path', '')
+    if not path:
+        path = os.path.expanduser('~')
+    
     try:
-        import tempfile, os
-        script = """import tkinter as tk
-import tkinter.filedialog as fd
-import ctypes
-
-root = tk.Tk()
-root.withdraw()
-
-def popup():
-    try:
-        hwnd = ctypes.windll.user32.GetParent(root.winfo_id())
-        ctypes.windll.user32.SetForegroundWindow(hwnd)
-    except: pass
-    path = fd.askdirectory(parent=root, title='Select Target Folder')
-    print(path)
-    root.destroy()
-
-root.after(50, popup)
-root.mainloop()
-"""
-        with tempfile.NamedTemporaryFile('w', suffix='.py', delete=False) as f:
-            f.write(script)
-            temp_path = f.name
-        
-        try:
-            result = subprocess.run([sys.executable, temp_path], capture_output=True, text=True)
-            folder = result.stdout.strip()
-        finally:
-            os.remove(temp_path)
-
-        if folder:
-            return jsonify({"path": folder})
-        return jsonify({"error": "No folder selected"}), 400
+        entries = []
+        for entry in sorted(os.scandir(path), key=lambda e: e.name.lower()):
+            if entry.is_dir() and not entry.name.startswith('.'):
+                try:
+                    # Check if we can access it
+                    os.listdir(entry.path)
+                    entries.append({"name": entry.name, "path": entry.path.replace('\\', '/')})
+                except PermissionError:
+                    pass
+        return jsonify({"path": path.replace('\\', '/'), "dirs": entries})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(e), "path": path, "dirs": []}), 200
+
+@app.route('/api/list_files', methods=['POST'])
+def list_files_endpoint():
+    """List media files in a given path."""
+    data = request.get_json() or {}
+    path = data.get('path', '')
+    if not path:
+        path = os.path.expanduser('~')
+    
+    media_exts = {'.mp4', '.mov', '.m4v', '.webm', '.avi', '.mkv', '.jpg', '.png', '.jpeg', '.webp'}
+    try:
+        files = []
+        dirs = []
+        for entry in sorted(os.scandir(path), key=lambda e: (not e.is_dir(), e.name.lower())):
+            if entry.is_dir() and not entry.name.startswith('.'):
+                try:
+                    os.listdir(entry.path)
+                    dirs.append({"name": entry.name, "path": entry.path.replace('\\', '/'), "is_dir": True})
+                except PermissionError:
+                    pass
+            elif entry.is_file():
+                ext = os.path.splitext(entry.name)[1].lower()
+                if ext in media_exts:
+                    files.append({"name": entry.name, "path": entry.path.replace('\\', '/'), "is_dir": False})
+        return jsonify({"path": path.replace('\\', '/'), "entries": dirs + files})
+    except Exception as e:
+        return jsonify({"error": str(e), "path": path, "entries": []}), 200
 
 @app.route('/api/convert', methods=['POST'])
 def convert_media():
@@ -720,83 +744,8 @@ def download_video():
 
     return Response(generate(), mimetype='text/event-stream')
 
-@app.route('/api/browse', methods=['POST'])
-def browse_folder():
-    try:
-        import tempfile, os
-        script = """import tkinter as tk
-import tkinter.filedialog as fd
-import ctypes
 
-root = tk.Tk()
-root.withdraw()
 
-def popup():
-    try:
-        hwnd = ctypes.windll.user32.GetParent(root.winfo_id())
-        ctypes.windll.user32.SetForegroundWindow(hwnd)
-    except: pass
-    path = fd.askdirectory(parent=root, title='Select Target Folder')
-    print(path)
-    root.destroy()
-
-root.after(50, popup)
-root.mainloop()
-"""
-        with tempfile.NamedTemporaryFile('w', suffix='.py', delete=False) as f:
-            f.write(script)
-            temp_path = f.name
-        
-        try:
-            result = subprocess.run([sys.executable, temp_path], capture_output=True, text=True)
-            folder = result.stdout.strip()
-        finally:
-            os.remove(temp_path)
-
-        if folder:
-            return jsonify({"path": folder})
-        return jsonify({"error": "No folder selected"}), 400
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/api/browse_file', methods=['POST'])
-def browse_file():
-    try:
-        import tempfile, os
-        script = """import tkinter as tk
-import tkinter.filedialog as fd
-import ctypes
-
-root = tk.Tk()
-root.withdraw()
-
-def popup():
-    try:
-        hwnd = ctypes.windll.user32.GetParent(root.winfo_id())
-        ctypes.windll.user32.SetForegroundWindow(hwnd)
-    except: pass
-    path = fd.askopenfilename(parent=root, title='Select Media File', filetypes=[('Media Files', '*.mp4 *.mov *.m4v *.webm *.avi *.mkv *.jpg *.png *.jpeg *.webp')])
-    print(path)
-    root.destroy()
-
-root.after(50, popup)
-root.mainloop()
-"""
-        with tempfile.NamedTemporaryFile('w', suffix='.py', delete=False) as f:
-            f.write(script)
-            temp_path = f.name
-        
-        try:
-            result = subprocess.run([sys.executable, temp_path], capture_output=True, text=True)
-            file_path = result.stdout.strip()
-        finally:
-            os.remove(temp_path)
-
-        if file_path:
-            return jsonify({"path": file_path})
-        return jsonify({"error": "No file selected"}), 400
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/gallery', methods=['GET'])
 def list_gallery():
