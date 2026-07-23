@@ -704,19 +704,18 @@ def download_video():
 @app.route('/api/browse', methods=['POST'])
 def browse_folder():
     try:
-        cmd = [
-            sys.executable, "-c",
-            "import tkinter as tk, tkinter.filedialog as fd; "
-            "import ctypes; "
-            "try: ctypes.windll.user32.SetProcessDPIAware() \nexcept: pass; "
-            "root=tk.Tk(); root.withdraw(); "
-            "root.attributes('-topmost', True); "
-            "root.update(); "
-            "path=fd.askdirectory(parent=root, title='Select Target Folder'); "
-            "root.destroy(); print(path)"
-        ]
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        folder = result.stdout.strip()
+        ps_cmd = (
+            "Add-Type -AssemblyName System.Windows.Forms; "
+            "$form = New-Object System.Windows.Forms.Form; "
+            "$form.TopMost = $true; "
+            "$form.ShowInTaskbar = $false; "
+            "$f = New-Object System.Windows.Forms.FolderBrowserDialog; "
+            "$f.Description = 'Select Target Folder'; "
+            "$f.ShowNewFolderButton = $true; "
+            "if ($f.ShowDialog($form) -eq [System.Windows.Forms.DialogResult]::OK) { Write-Output $f.SelectedPath }"
+        )
+        res = subprocess.run(["powershell", "-NoProfile", "-Command", ps_cmd], capture_output=True, text=True)
+        folder = res.stdout.strip()
         if folder:
             return jsonify({"path": folder})
         return jsonify({"error": "No folder selected"}), 400
@@ -726,19 +725,18 @@ def browse_folder():
 @app.route('/api/browse_file', methods=['POST'])
 def browse_file():
     try:
-        cmd = [
-            sys.executable, "-c",
-            "import tkinter as tk, tkinter.filedialog as fd; "
-            "import ctypes; "
-            "try: ctypes.windll.user32.SetProcessDPIAware() \nexcept: pass; "
-            "root=tk.Tk(); root.withdraw(); "
-            "root.attributes('-topmost', True); "
-            "root.update(); "
-            "path=fd.askopenfilename(parent=root, title='Select Media File', filetypes=[('Media Files', '*.mp4 *.mov *.m4v *.webm *.avi *.mkv *.jpg *.png *.jpeg *.webp')]); "
-            "root.destroy(); print(path)"
-        ]
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        file_path = result.stdout.strip()
+        ps_cmd = (
+            "Add-Type -AssemblyName System.Windows.Forms; "
+            "$form = New-Object System.Windows.Forms.Form; "
+            "$form.TopMost = $true; "
+            "$form.ShowInTaskbar = $false; "
+            "$f = New-Object System.Windows.Forms.OpenFileDialog; "
+            "$f.Title = 'Select Target AI Media File'; "
+            "$f.Filter = 'Media Files (*.mp4;*.mov;*.m4v;*.webm;*.avi;*.mkv;*.jpg;*.png;*.jpeg;*.webp)|*.mp4;*.mov;*.m4v;*.webm;*.avi;*.mkv;*.jpg;*.png;*.jpeg;*.webp|All Files (*.*)|*.*'; "
+            "if ($f.ShowDialog($form) -eq [System.Windows.Forms.DialogResult]::OK) { Write-Output $f.FileName }"
+        )
+        res = subprocess.run(["powershell", "-NoProfile", "-Command", ps_cmd], capture_output=True, text=True)
+        file_path = res.stdout.strip()
         if file_path:
             return jsonify({"path": file_path})
         return jsonify({"error": "No file selected"}), 400
