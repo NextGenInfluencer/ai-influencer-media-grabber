@@ -137,15 +137,21 @@ def select_folder():
         script = """import tkinter as tk
 import tkinter.filedialog as fd
 import ctypes
+
 root = tk.Tk()
 root.withdraw()
-try:
-    hwnd = ctypes.windll.user32.GetParent(root.winfo_id())
-    ctypes.windll.user32.SetForegroundWindow(hwnd)
-except: pass
-path = fd.askdirectory(parent=root, title='Select Target Folder')
-print(path)
-root.destroy()
+
+def popup():
+    try:
+        hwnd = ctypes.windll.user32.GetParent(root.winfo_id())
+        ctypes.windll.user32.SetForegroundWindow(hwnd)
+    except: pass
+    path = fd.askdirectory(parent=root, title='Select Target Folder')
+    print(path)
+    root.destroy()
+
+root.after(50, popup)
+root.mainloop()
 """
         with tempfile.NamedTemporaryFile('w', suffix='.py', delete=False) as f:
             f.write(script)
@@ -721,15 +727,21 @@ def browse_folder():
         script = """import tkinter as tk
 import tkinter.filedialog as fd
 import ctypes
+
 root = tk.Tk()
 root.withdraw()
-try:
-    hwnd = ctypes.windll.user32.GetParent(root.winfo_id())
-    ctypes.windll.user32.SetForegroundWindow(hwnd)
-except: pass
-path = fd.askdirectory(parent=root, title='Select Target Folder')
-print(path)
-root.destroy()
+
+def popup():
+    try:
+        hwnd = ctypes.windll.user32.GetParent(root.winfo_id())
+        ctypes.windll.user32.SetForegroundWindow(hwnd)
+    except: pass
+    path = fd.askdirectory(parent=root, title='Select Target Folder')
+    print(path)
+    root.destroy()
+
+root.after(50, popup)
+root.mainloop()
 """
         with tempfile.NamedTemporaryFile('w', suffix='.py', delete=False) as f:
             f.write(script)
@@ -754,15 +766,21 @@ def browse_file():
         script = """import tkinter as tk
 import tkinter.filedialog as fd
 import ctypes
+
 root = tk.Tk()
 root.withdraw()
-try:
-    hwnd = ctypes.windll.user32.GetParent(root.winfo_id())
-    ctypes.windll.user32.SetForegroundWindow(hwnd)
-except: pass
-path = fd.askopenfilename(parent=root, title='Select Media File', filetypes=[('Media Files', '*.mp4 *.mov *.m4v *.webm *.avi *.mkv *.jpg *.png *.jpeg *.webp')])
-print(path)
-root.destroy()
+
+def popup():
+    try:
+        hwnd = ctypes.windll.user32.GetParent(root.winfo_id())
+        ctypes.windll.user32.SetForegroundWindow(hwnd)
+    except: pass
+    path = fd.askopenfilename(parent=root, title='Select Media File', filetypes=[('Media Files', '*.mp4 *.mov *.m4v *.webm *.avi *.mkv *.jpg *.png *.jpeg *.webp')])
+    print(path)
+    root.destroy()
+
+root.after(50, popup)
+root.mainloop()
 """
         with tempfile.NamedTemporaryFile('w', suffix='.py', delete=False) as f:
             f.write(script)
