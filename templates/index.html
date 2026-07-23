@@ -71,13 +71,14 @@
         <div class="p-6 border-b border-zinc-800">
             <h1 class="text-2xl font-black text-white tracking-wide uppercase flex items-center">
                 <i class="fa-solid fa-video text-pink-500 mr-3"></i> AI Influencer Media Grabber 
-                <span class="ml-2 text-[10px] bg-pink-500/20 text-pink-500 px-2 py-0.5 rounded-full align-middle relative -top-1">v1.3</span>
+                <span class="ml-2 text-[10px] bg-pink-500/20 text-pink-500 px-2 py-0.5 rounded-full align-middle relative -top-1">v1.4</span>
             </h1>
         </div>
         
         <div class="flex border-b border-zinc-800 bg-[#0c0c0e]">
             <button id="tab-downloader" onclick="switchTab('downloader')" class="flex-1 py-3 text-[10px] font-bold uppercase tracking-widest text-pink-500 border-b-2 border-pink-500 transition">Studio</button>
             <button id="tab-converter" onclick="switchTab('converter')" class="flex-1 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-500 border-b-2 border-transparent hover:text-zinc-300 transition">Media Tools</button>
+            <button id="tab-cleaner" onclick="switchTab('cleaner')" class="flex-1 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-500 border-b-2 border-transparent hover:text-zinc-300 transition">AI Cleaner</button>
             <button id="tab-gallery" onclick="switchTab('gallery')" class="flex-1 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-500 border-b-2 border-transparent hover:text-zinc-300 transition">Gallery</button>
         </div>
 
@@ -132,6 +133,10 @@
                             <label class="flex items-center space-x-2 text-xs text-zinc-300 cursor-pointer">
                                 <input type="checkbox" id="extractFrame" class="form-checkbox text-pink-500 rounded border-zinc-700 bg-zinc-900 focus:ring-pink-500 focus:ring-offset-zinc-950" checked>
                                 <span>Extract First Frame</span>
+                            </label>
+                            <label class="flex items-center space-x-2 text-xs text-zinc-300 cursor-pointer" title="Scramble pixels and strip AI metadata after download to bypass SynthID.">
+                                <input type="checkbox" id="aiBypass" class="form-checkbox text-pink-500 rounded border-zinc-700 bg-zinc-900 focus:ring-pink-500 focus:ring-offset-zinc-950" checked>
+                                <span>Clean AI Metadata (Bypass)</span>
                             </label>
                             <label class="flex items-center space-x-2 text-xs text-zinc-300 cursor-pointer">
                                 <input type="checkbox" id="identifySong" class="form-checkbox text-pink-500 rounded border-zinc-700 bg-zinc-900 focus:ring-pink-500 focus:ring-offset-zinc-950" checked>
@@ -246,13 +251,43 @@
             </form>
         </div>
 
+        <div id="section-cleaner" class="hidden p-6 flex-1 overflow-y-auto">
+            <form id="cleanerForm" class="space-y-8">
+                <div class="space-y-3">
+                    <label class="block text-[11px] font-bold text-zinc-400 uppercase tracking-widest"><span class="text-pink-500 mr-1">01.</span> Select Target Folder or File</label>
+                    <p class="text-xs text-zinc-500 mb-2">The cleaner will scan this folder (or file) to crop (0.5%), apply noise, and strip all C2PA/AI metadata.</p>
+                    <div class="flex space-x-2">
+                        <div class="relative cursor-pointer group flex-1" onclick="browseCleanerFolder()">
+                            <input type="text" id="cleaner_dir" name="cleaner_dir" class="w-full px-4 py-3 bg-[#080809] border border-zinc-800 rounded-xl text-xs font-medium text-zinc-300 focus:outline-none focus:border-zinc-500 shadow-inner group-hover:border-zinc-700 transition" placeholder="Click to browse for a folder..." readonly>
+                            <div class="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none opacity-50 group-hover:opacity-100 transition">
+                                <i class="fa-solid fa-folder-open text-zinc-500"></i>
+                            </div>
+                        </div>
+                        <button type="button" onclick="browseCleanerFile()" class="px-4 py-3 bg-[#080809] border border-zinc-800 hover:border-zinc-700 rounded-xl text-zinc-400 hover:text-zinc-300 transition" title="Select a single file">
+                            <i class="fa-solid fa-file"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="cleanerTerminal" class="hidden bg-black border border-zinc-800 rounded-xl p-4 font-mono text-[10px] text-green-400 h-64 overflow-y-auto mt-6 shadow-inner whitespace-pre-wrap"></div>
+            </form>
+        </div>
+
         <!-- Submit Buttons Container -->
         <div class="p-6 bg-[#0c0c0e] border-t border-zinc-800">
-            <button type="submit" form="downloadForm" id="submitBtn" class="w-full py-4 bg-pink-500 hover:bg-pink-400 text-white text-xs font-black uppercase tracking-[0.2em] rounded-xl transition-all shadow-[0_0_20px_rgba(244,114,182,0.3)] flex justify-center items-center group">
-                <i class="fa-solid fa-bolt mr-2 group-hover:animate-pulse"></i> Generate
+            <button type="submit" form="downloadForm" id="submitBtn" class="w-full py-4 bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-400 hover:to-purple-500 text-white font-black uppercase tracking-widest text-[11px] rounded-xl shadow-[0_0_20px_rgba(244,114,182,0.3)] transition transform hover:scale-[1.02] flex items-center justify-center space-x-2">
+                <i class="fa-solid fa-cloud-arrow-down text-lg"></i>
+                <span>Download Media</span>
             </button>
-            <button type="submit" form="converterForm" id="convSubmitBtn" style="display: none;" class="w-full py-4 bg-purple-500 hover:bg-purple-400 text-white text-xs font-black uppercase tracking-[0.2em] rounded-xl transition-all shadow-[0_0_20px_rgba(168,85,247,0.3)] flex justify-center items-center">
-                <i class="fa-solid fa-hammer mr-2"></i> Convert Media
+            
+            <button type="submit" form="converterForm" id="convSubmitBtn" class="w-full py-4 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-400 hover:to-indigo-500 text-white font-black uppercase tracking-widest text-[11px] rounded-xl shadow-[0_0_20px_rgba(168,85,247,0.3)] transition transform hover:scale-[1.02] hidden items-center justify-center space-x-2">
+                <i class="fa-solid fa-wand-magic-sparkles text-lg"></i>
+                <span>Convert & Trim File</span>
+            </button>
+
+            <button type="submit" form="cleanerForm" id="cleanerSubmitBtn" class="w-full py-4 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-black uppercase tracking-widest text-[11px] rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.3)] transition transform hover:scale-[1.02] hidden items-center justify-center space-x-2">
+                <i class="fa-solid fa-broom text-lg"></i>
+                <span>Run AI Cleaner</span>
             </button>
         </div>
     </div>
@@ -321,7 +356,7 @@
         // setInterval(fetchHistory, 10000);
 
         function switchTab(tab) {
-            ['downloader', 'converter', 'gallery'].forEach(t => {
+            ['downloader', 'converter', 'cleaner', 'gallery'].forEach(t => {
                 const isTab = t === tab;
                 const el = document.getElementById('section-' + t);
                 if (el) el.classList.toggle('hidden', !isTab);
@@ -332,8 +367,12 @@
             });
             
             document.getElementById('submitBtn').style.display = tab === 'downloader' ? 'flex' : 'none';
+            
             const convSubmit = document.getElementById('convSubmitBtn');
             if (convSubmit) convSubmit.style.display = tab === 'converter' ? 'flex' : 'none';
+
+            const cleanSubmit = document.getElementById('cleanerSubmitBtn');
+            if (cleanSubmit) cleanSubmit.style.display = tab === 'cleaner' ? 'flex' : 'none';
             
             if (tab === 'gallery') loadGallery();
         }
@@ -641,7 +680,8 @@
                 forceH264: document.getElementById('forceH264').checked,
                 enableThumbnail: document.getElementById('extractFrame').checked,
                 enableSongMeta: document.getElementById('identifySong').checked,
-                enableTranscription: document.getElementById('transcribeAudio').checked
+                enableTranscription: document.getElementById('transcribeAudio').checked,
+                aiBypass: document.getElementById('aiBypass').checked
             };
 
             const urls = urlsRaw.split('\n').map(u => u.trim()).filter(u => u);
@@ -840,6 +880,105 @@
             } finally {
                 submitBtn.disabled = false;
                 submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        });
+        async function browseCleanerFolder() {
+            try {
+                const response = await fetch('/api/browse', { method: 'POST' });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.path) {
+                        document.getElementById('cleaner_dir').value = data.path;
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to browse folder", e);
+            }
+        }
+
+        async function browseCleanerFile() {
+            try {
+                const response = await fetch('/api/browse_file', { method: 'POST' });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.path) {
+                        document.getElementById('cleaner_dir').value = data.path;
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to browse file", e);
+            }
+        }
+
+        document.getElementById('cleanerForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const btn = document.getElementById('cleanerSubmitBtn');
+            const terminal = document.getElementById('cleanerTerminal');
+            const logContainer = document.getElementById('cleanerLog');
+            
+            // Get selected directories
+            const cleanerDir = document.getElementById('cleaner_dir').value;
+            if (!cleanerDir) {
+                alert("Please select a target folder to clean.");
+                return;
+            }
+            const targetDirs = [cleanerDir];
+
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-broom fa-bounce text-lg"></i><span>Cleaning Media...</span>';
+            
+            terminal.classList.remove('hidden');
+            logContainer.innerHTML = '';
+
+            try {
+                const response = await fetch('/api/batch_clean', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ target_dirs: targetDirs })
+                });
+
+                if (!response.ok) {
+                    throw new Error("Failed to start batch cleaner.");
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n\n');
+                    
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.substring(6));
+                                if (data.status) {
+                                    const logLine = document.createElement('div');
+                                    logLine.textContent = data.status;
+                                    logContainer.appendChild(logLine);
+                                    terminal.scrollTop = terminal.scrollHeight;
+                                }
+                                if (data.done) {
+                                    break;
+                                }
+                            } catch (e) {
+                                console.error("Error parsing SSE data:", e);
+                            }
+                        }
+                    }
+                }
+            } catch (e) {
+                const errLine = document.createElement('div');
+                errLine.textContent = "[Error] " + e.message;
+                errLine.classList.add('text-red-500');
+                logContainer.appendChild(errLine);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-broom text-lg"></i><span>Run AI Cleaner</span>';
             }
         });
     </script>

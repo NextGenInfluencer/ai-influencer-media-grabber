@@ -627,6 +627,25 @@ def download_video():
                                     subprocess.run(ffmpeg_h264_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                                     if os.path.exists(temp_h264):
                                         os.replace(temp_h264, final_path)
+                                        
+                                # AI Bypass (Clean & Scramble)
+                                if processing_options.get('aiBypass'):
+                                    q.put({"status": f"{prefix}Applying AI Bypass (Scramble & Clean)..."})
+                                    from cleaner import clean_video, clean_photo, backup_file
+                                    
+                                    # Backup first
+                                    backup_file(final_path, DEFAULT_SAVE_DIR)
+                                    
+                                    ext = final_path.split('.')[-1].lower()
+                                    is_vid = ext in ['mp4', 'mov', 'm4v', 'webm', 'avi', 'mkv']
+                                    
+                                    if is_vid:
+                                        success, msg = clean_video(final_path, imageio_ffmpeg.get_ffmpeg_exe())
+                                    else:
+                                        success, msg = clean_photo(final_path)
+                                        
+                                    if not success:
+                                        q.put({"status": f"{prefix}AI Bypass Failed: {msg}"})
                 except Exception as e:
                     error_msg = str(e)
                     error_msg = re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', error_msg)
@@ -658,6 +677,18 @@ def browse_folder():
         if folder:
             return jsonify({"path": folder})
         return jsonify({"error": "No folder selected"}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/browse_file', methods=['POST'])
+def browse_file():
+    try:
+        cmd = [sys.executable, "-c", "import tkinter as tk, tkinter.filedialog as fd; root=tk.Tk(); root.withdraw(); root.attributes('-topmost', True); print(fd.askopenfilename(filetypes=[('Media Files', '*.mp4 *.mov *.m4v *.webm *.avi *.mkv *.jpg *.png *.jpeg *.webp')]))"]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        file_path = result.stdout.strip()
+        if file_path:
+            return jsonify({"path": file_path})
+        return jsonify({"error": "No file selected"}), 400
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -713,6 +744,21 @@ def preview_file():
     if not path or not os.path.exists(path) or not os.path.isfile(path):
         return "Not found", 404
     return send_file(path)
+
+@app.route('/api/batch_clean', methods=['POST'])
+def batch_clean():
+    data = request.json
+    target_dirs = data.get('target_dirs', [])
+    
+    # Use the first target directory as the base for the backup folder, 
+    # or fallback to DEFAULT_SAVE_DIR
+    base_backup_dir = target_dirs[0] if target_dirs else DEFAULT_SAVE_DIR
+    
+    try:
+        from cleaner import run_batch_cleaner
+        return Response(run_batch_cleaner(target_dirs, base_backup_dir), mimetype='text/event-stream')
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     import webbrowser

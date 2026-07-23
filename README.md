@@ -1,6 +1,6 @@
 # 🎥 AI Influencer Media Grabber
 
-![Version 1.3](https://img.shields.io/badge/Version-1.3-blue?style=for-the-badge) ![UI Preview](https://img.shields.io/badge/UI-Airi_Studio-f472b6?style=for-the-badge)
+![Version 1.4](https://img.shields.io/badge/Version-1.4-blue?style=for-the-badge) ![UI Preview](https://img.shields.io/badge/UI-Airi_Studio-f472b6?style=for-the-badge)
 
 ## 🌟 What is the AI Influencer Media Grabber?
 
@@ -22,6 +22,13 @@ Whether you're building a massive reference folder of TikTok trends, extracting 
 - **Song Identification:** Runs Shazam on downloaded videos to automatically identify background music.
 - **First Frame Extraction:** Automatically extracts the perfectly-framed first thumbnail of a video as an image.
 - **Kling / AI Tool Compatibility:** Optionally forces strict `H.264` / `mp4` standard encoding on all downloads so they never crash or artifact in AI video generators like Kling.
+- **Auto-Bypass AI Detection (New!):** Automatically apply a 0.5% edge crop and inject microscopic film grain into downloaded videos and photos to safely destroy invisible SynthID watermarks and strip all `C2PA` metadata, bypassing social media AI filters!
+
+### 🧹 AI Cleaner Batch Processor (New!)
+A dedicated tab to batch-process your existing media folders to strip them of AI watermarks!
+- **Target Folders:** Select an entire folder (or single file) and clean all AI metadata in one click.
+- **Live Terminal:** Watch the Python processing engine rip through your files in a cool hacker-style terminal right in the browser.
+- **Smart Safety:** Every file processed is automatically copied, 100% untouched, into a `backup_unscrambled` folder just in case you ever need the pure original. Files are also logged so they're never double-processed.
 
 ### 🛠️ Media Tools Converter
 A dedicated second tab in the app featuring a full offline media editing suite:
@@ -56,3 +63,17 @@ The `run.bat` script is fully automated. It will download everything it needs, i
 *Note: By default, all of your downloaded videos, photos, and converted media will be neatly saved in your `Documents/Media Grabber` folder!*
 
 *Note: The very first time you run it, it might take a few minutes to download the AI models and setup the environment. Every time after that, it will launch instantly!*
+
+---
+
+## 📜 Changelog
+
+### v1.4 (Current)
+- **New Feature:** `AI Cleaner` Tab added to the main UI. You can now browse for a folder or file to securely scramble pixels and strip metadata in batch!
+- **New Feature:** Auto-Bypass added to the Studio Downloader tab. Instantly bypass AI detectors when downloading media from the web.
+- **Enhancement:** All FFmpeg binaries are fully self-contained using `imageio_ffmpeg` (no more manual installations!).
+- **Safety:** Automatic backup folder generation (`backup_unscrambled`) and duplicate-prevention tracking added.
+- **UI:** Added Live Terminal for the Batch Cleaner utilizing Server-Sent Events (SSE).
+
+### v1.3 
+- Added Media Tools Converter for offline editing, UI refinements, and local audio transcriptions using Whisper AI.
