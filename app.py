@@ -56,10 +56,14 @@ def get_whisper():
         whisper_model = whisper.load_model("base")
     return whisper_model
 
-# Cache the face detection cascade at module level
-_face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+# Cache the face detection cascade globally but initialize lazily
+_face_cascade = None
 
 def get_face_center_x(video_path):
+    global _face_cascade
+    if _face_cascade is None:
+        _face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         return None
