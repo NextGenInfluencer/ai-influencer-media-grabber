@@ -1,6 +1,6 @@
 # 🎥 AI Influencer Media Grabber
 
-![Version 1.4](https://img.shields.io/badge/Version-1.4-blue?style=for-the-badge) ![UI Preview](https://img.shields.io/badge/UI-Airi_Studio-f472b6?style=for-the-badge)
+![Version 1.5](https://img.shields.io/badge/Version-1.5-blue?style=for-the-badge) ![UI Preview](https://img.shields.io/badge/UI-Airi_Studio-f472b6?style=for-the-badge)
 
 ## 🌟 What is the AI Influencer Media Grabber?
 
@@ -63,7 +63,14 @@ The `run.bat` script is fully automated. It will download everything it needs, i
 
 ## 📜 Changelog
 
-### v1.4 (Current)
+### v1.5 (Current)
+- **New Feature:** Replaced buggy native OS dialogs with a sleek, built-in HTML/JS folder and file browser modal.
+- **Enhancement:** Gallery now recursively scans subdirectories (e.g., YouTube playlists).
+- **Enhancement:** yt-dlp auto-updates are now checked daily instead of on every startup, greatly improving launch time.
+- **Optimization:** Waitress server threads increased to 8 to handle multiple concurrent downloads.
+- **Fix:** Fixed asyncio event loop leaks and bare except clauses.
+
+### v1.4
 - **New Feature:** `AI Cleaner` Tab added to the main UI. You can now browse for a folder or file to securely scramble pixels and strip metadata in batch!
 - **New Feature:** Auto-Bypass added to the Studio Downloader tab. Instantly bypass AI detectors when downloading media from the web.
 - **Enhancement:** All FFmpeg binaries are fully self-contained using `imageio_ffmpeg` (no more manual installations!).

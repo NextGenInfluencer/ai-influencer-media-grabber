@@ -100,9 +100,21 @@ app = Flask(__name__)
 # Allow large file uploads (500MB max)
 app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024
 
-# Auto-update yt-dlp on startup
-print("Checking for yt-dlp updates...")
-subprocess.run([sys.executable, "-m", "pip", "install", "-U", "yt-dlp", "-q"])
+# Auto-update yt-dlp once per day
+update_flag_file = os.path.join(DEFAULT_SAVE_DIR, ".last_update")
+should_update = True
+if os.path.exists(update_flag_file):
+    last_update = os.path.getmtime(update_flag_file)
+    if time.time() - last_update < 86400: # 24 hours
+        should_update = False
+
+if should_update:
+    print("Checking for yt-dlp updates...")
+    subprocess.run([sys.executable, "-m", "pip", "install", "-U", "yt-dlp", "-q"])
+    with open(update_flag_file, 'w') as f:
+        f.write(str(time.time()))
+else:
+    print("yt-dlp update check skipped (already checked today).")
 
 import yt_dlp
 
@@ -762,24 +774,31 @@ def list_gallery():
     for folder in folders:
         folder_path = os.path.join(base_dir, folder)
         if os.path.exists(folder_path):
-            for file in os.listdir(folder_path):
-                file_path = os.path.join(folder_path, file)
-                if os.path.isfile(file_path):
-                    ext = os.path.splitext(file)[1].lower()
-                    if ext in ['.mp4', '.mov', '.mkv', '.webm', '.avi', '.jpg', '.jpeg', '.png', '.webp', '.gif', '.mp3']:
-                        media.append({
-                            "name": file,
-                            "folder": folder,
-                            "path": f"{folder}/{file}",
-                            "type": "video" if ext in ['.mp4', '.mov', '.mkv', '.webm', '.avi'] else "audio" if ext == ".mp3" else "image",
-                            "timestamp": os.path.getmtime(file_path),
-                            "size": os.path.getsize(file_path)
-                        })
+            for root, _, files in os.walk(folder_path):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    if os.path.isfile(file_path):
+                        ext = os.path.splitext(file)[1].lower()
+                        if ext in ['.mp4', '.mov', '.mkv', '.webm', '.avi', '.jpg', '.jpeg', '.png', '.webp', '.gif', '.mp3']:
+                            rel_dir = os.path.relpath(root, folder_path)
+                            if rel_dir == '.':
+                                item_path = file
+                            else:
+                                item_path = f"{rel_dir}/{file}".replace('\\', '/')
+                            
+                            media.append({
+                                "name": file,
+                                "folder": folder,
+                                "path": f"{folder}/{item_path}",
+                                "type": "video" if ext in ['.mp4', '.mov', '.mkv', '.webm', '.avi'] else "audio" if ext == ".mp3" else "image",
+                                "timestamp": os.path.getmtime(file_path),
+                                "size": os.path.getsize(file_path)
+                            })
                         
     media.sort(key=lambda x: x['timestamp'], reverse=True)
     return jsonify(media)
 
-@app.route('/api/media/<folder>/<filename>')
+@app.route('/api/media/<folder>/<path:filename>')
 def serve_media(folder, filename):
     base_dir = os.path.join(os.path.expanduser("~"), "Documents", "Media Grabber")
     safe_folder = os.path.basename(folder)
