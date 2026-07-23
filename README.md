@@ -10,30 +10,25 @@ Whether you're building a massive reference folder of TikTok trends, extracting 
 
 ## ✨ Features
 
-### 📥 Ultimate Download Engine
-- **Platform Support:** Flawlessly downloads videos from TikTok, YouTube, Twitter, and more.
-- **Instagram Master:** Easily rip entire Instagram profiles, Reels, and multi-photo Carousels.
-- **Dual-Engine Auto-Fallback:** Uses `yt-dlp` for heavy lifting, and instantly falls back to `gallery-dl` to capture tricky photo carousels.
-- **Metadata Extraction:** Automatically pulls post captions, titles, and descriptions and saves them as text files alongside your media.
-- **Smart Queue System:** Paste multiple links at once. The app processes them all sequentially in the background.
+### 🛡️ AI Cleaner Tab (Flagship Anti-AI Detection Engine)
+The dedicated centerpiece feature designed specifically for AI creators and influencers. Select any local folder or file containing your AI-generated creations (from **Kling AI, Midjourney, Stable Diffusion, Google Nano Banana, Veo, etc.**) to make them look like authentic camera footage:
+- **C2PA & EXIF Stripping:** Automatically removes software manifests, generator tags, and metadata that social media algorithms read at upload time.
+- **SynthID Pixel Scatter:** Shaves 0.5% off image/video edges (shifting the coordinate grid) and injects a microscopic layer of film grain (Gaussian noise). Confuses AI visual classifiers without any loss of visual quality.
+- **Native OS Folder & File Selection:** Choose entire project folders or individual media files via native Windows pickers.
+- **Automatic Safety Backups:** Unmodified source files are preserved automatically in `backup_unscrambled/` before any edits occur.
+- **Deduplication:** Keeps track of processed files in registry text logs so you never waste time double-cleaning media.
 
-### 🤖 AI Processing & Tweaks
-- **Auto-Transcription:** Uses local AI (Whisper) to automatically generate text transcripts from downloaded videos.
-- **Song Identification:** Runs Shazam on downloaded videos to automatically identify background music.
-- **First Frame Extraction:** Automatically extracts the perfectly-framed first thumbnail of a video as an image.
-- **Kling / AI Tool Compatibility:** Optionally forces strict `H.264` / `mp4` standard encoding on all downloads so they never crash or artifact in AI video generators like Kling.
-- **Auto-Bypass AI Detection (New!):** Automatically apply a 0.5% edge crop and inject microscopic film grain into downloaded videos and photos to safely destroy invisible SynthID watermarks and strip all `C2PA` metadata, bypassing social media AI filters!
-
-### 🧹 AI Cleaner Batch Processor (New!)
-A dedicated tab to batch-process your existing media folders to strip them of AI watermarks!
-- **Target Folders:** Select an entire folder (or single file) and clean all AI metadata in one click.
-- **Live Terminal:** Watch the Python processing engine rip through your files in a cool hacker-style terminal right in the browser.
-- **Smart Safety:** Every file processed is automatically copied, 100% untouched, into a `backup_unscrambled` folder just in case you ever need the pure original. Files are also logged so they're never double-processed.
+### 📥 Reference Downloader Engine
+- **Platform Support:** Rips high-quality reference media from TikTok, YouTube, Twitter/X, and more.
+- **Instagram Master:** Easily download Instagram Reels, profile dumps, and multi-photo Carousels.
+- **Dual-Engine Auto-Fallback:** Combines `yt-dlp` and `gallery-dl` for 100% extraction reliability.
+- **Audio Transcription & Shazam:** Runs local AI (Whisper) for text transcripts and Shazam to identify background tracks.
+- **Kling / AI Tool Compatibility:** Forces standard `H.264` MP4 encoding on reference downloads so they import cleanly into AI video generation tools.
 
 ### 🛠️ Media Tools Converter
-A dedicated second tab in the app featuring a full offline media editing suite:
-- **Convert:** Instantly convert videos to GIF, MP3, MP4, or PNG frames.
-- **Edit:** Crop dimensions, resize resolutions, and trim video lengths without opening Premiere.
+A dedicated offline media suite to format and tweak your media:
+- **Convert:** Instantly convert videos to GIF, MP3, MP4, or PNG frame sequences.
+- **Smart Framing:** Crop dimensions, resize resolutions, and trim clip lengths offline.
 
 ---
 

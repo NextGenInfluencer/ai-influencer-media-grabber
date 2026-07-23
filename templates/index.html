@@ -13,11 +13,10 @@
                 extend: {
                     fontFamily: {
                         sans: ['Inter', 'sans-serif'],
-                        serif: ['Playfair Display', 'serif'],
                     },
                     colors: {
                         airi: {
-                            bg: '#0a0a0c',
+                            bg: '#080809',
                             card: '#121214',
                             border: '#27272a',
                             pink: '#f472b6',
@@ -29,302 +28,386 @@
         }
     </script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
         
         body { font-family: 'Inter', sans-serif; background-color: #080809; color: #fff; }
         
-        /* Custom Scrollbar */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 10px; }
         ::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
 
         .glass-panel {
-            background: rgba(18, 18, 20, 0.6);
+            background: rgba(18, 18, 20, 0.7);
             backdrop-filter: blur(16px);
             -webkit-backdrop-filter: blur(16px);
-            border: 1px solid rgba(39, 39, 42, 0.5);
+            border: 1px solid rgba(39, 39, 42, 0.6);
         }
 
-        .glass-input {
-            background: rgba(9, 9, 11, 0.4);
-            border: 1px solid rgba(39, 39, 42, 0.5);
-            transition: all 0.3s ease;
-        }
-        .glass-input:focus {
-            background: rgba(9, 9, 11, 0.8);
-            border-color: #f472b6;
-            box-shadow: 0 0 15px rgba(244, 114, 182, 0.1);
-            outline: none;
-        }
-
-        /* Subtle glow effects */
-        .glow-pink { box-shadow: 0 0 20px rgba(244, 114, 182, 0.15); }
-        
-        .history-card:hover .play-icon { opacity: 1; transform: scale(1); }
+        .glow-pink { box-shadow: 0 0 25px rgba(244, 114, 182, 0.2); }
+        .glow-purple { box-shadow: 0 0 25px rgba(168, 85, 247, 0.2); }
+        .glow-emerald { box-shadow: 0 0 25px rgba(16, 185, 129, 0.2); }
     </style>
 </head>
-<body class="flex h-screen overflow-hidden">
+<body class="flex flex-col h-screen overflow-hidden bg-[#080809]">
 
-    <!-- Left Sidebar: Main Controls -->
-    <div class="w-full md:w-[420px] h-full flex flex-col bg-[#0c0c0e] border-r border-zinc-800 z-10 relative shadow-2xl">
-        <div class="p-6 border-b border-zinc-800">
-            <h1 class="text-2xl font-black text-white tracking-wide uppercase flex items-center">
-                <i class="fa-solid fa-video text-pink-500 mr-3"></i> AI Influencer Media Grabber 
-                <span class="ml-2 text-[10px] bg-pink-500/20 text-pink-500 px-2 py-0.5 rounded-full align-middle relative -top-1">v1.4</span>
-            </h1>
-        </div>
-        
-        <div class="flex border-b border-zinc-800 bg-[#0c0c0e]">
-            <button id="tab-downloader" onclick="switchTab('downloader')" class="flex-1 py-3 text-[10px] font-bold uppercase tracking-widest text-pink-500 border-b-2 border-pink-500 transition">Studio</button>
-            <button id="tab-converter" onclick="switchTab('converter')" class="flex-1 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-500 border-b-2 border-transparent hover:text-zinc-300 transition">Media Tools</button>
-            <button id="tab-cleaner" onclick="switchTab('cleaner')" class="flex-1 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-500 border-b-2 border-transparent hover:text-zinc-300 transition">AI Cleaner</button>
-            <button id="tab-gallery" onclick="switchTab('gallery')" class="flex-1 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-500 border-b-2 border-transparent hover:text-zinc-300 transition">Gallery</button>
-        </div>
-
-        <div id="section-downloader" class="flex-1 overflow-y-auto p-6 scroll-smooth">
-            <form id="downloadForm" class="space-y-8">
-                <!-- Video URLs -->
-                <div class="space-y-3">
-                    <label class="block text-[11px] font-bold text-zinc-400 uppercase tracking-widest"><span class="text-pink-500 mr-1">01.</span> Video URLs</label>
-                    <textarea id="url" name="url" rows="3" class="w-full px-4 py-3 bg-[#080809] border border-zinc-800 rounded-2xl text-sm text-zinc-300 focus:outline-none focus:border-pink-500 focus:ring-1 focus:ring-pink-500 transition shadow-inner placeholder-zinc-700 resize-none" placeholder="https://www.tiktok.com/@..."></textarea>
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <!-- Auth Select -->
-                    <div class="space-y-3">
-                        <label class="block text-[11px] font-bold text-zinc-400 uppercase tracking-widest">Auth</label>
-                        <div class="relative">
-                            <select id="browser" name="browser" class="w-full px-4 py-3 bg-[#080809] border border-zinc-800 rounded-xl text-xs font-medium text-zinc-300 focus:outline-none focus:border-zinc-500 appearance-none shadow-inner cursor-pointer">
-                                <option value="none">Anonymous</option>
-                                <option value="chrome">Chrome</option>
-                                <option value="firefox">Firefox</option>
-                                <option value="edge">Edge</option>
-                                <option value="safari">Safari</option>
-                                <option value="cookies.txt">Cookies.txt file</option>
-                            </select>
-                            <div class="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
-                                <i class="fa-solid fa-chevron-down text-zinc-600 text-xs"></i>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Custom Path -->
-                    <div class="space-y-3">
-                        <label class="block text-[11px] font-bold text-zinc-400 uppercase tracking-widest">Path</label>
-                        <div class="relative cursor-pointer group" onclick="browseFolder()">
-                            <input type="text" id="path" name="path" class="w-full px-4 py-3 bg-[#080809] border border-zinc-800 rounded-xl text-xs font-medium text-zinc-300 focus:outline-none focus:border-zinc-500 shadow-inner group-hover:border-zinc-700 transition" placeholder="Auto... (Click to browse)">
-                            <div class="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none opacity-50 group-hover:opacity-100 transition">
-                                <i class="fa-solid fa-folder-open text-zinc-500"></i>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Processing Options -->
-                <div class="pt-4 border-t border-zinc-800">
-                    <label class="block text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-3"><span class="text-pink-500 mr-1">02.</span> Processing Options</label>
-                    <div class="space-y-2">
-                        <label class="flex items-center space-x-2 text-xs text-zinc-300 cursor-pointer" title="Re-encodes downloaded videos to standard mp4/h264 to ensure they work in Kling and other AI tools.">
-                            <input type="checkbox" id="forceH264" class="form-checkbox text-pink-500 rounded border-zinc-700 bg-zinc-900 focus:ring-pink-500 focus:ring-offset-zinc-950" checked>
-                            <span>Force Standard Encoding (H.264)</span>
-                        </label>
-                        <div class="grid grid-cols-2 gap-2 mt-2">
-                            <label class="flex items-center space-x-2 text-xs text-zinc-300 cursor-pointer">
-                                <input type="checkbox" id="extractFrame" class="form-checkbox text-pink-500 rounded border-zinc-700 bg-zinc-900 focus:ring-pink-500 focus:ring-offset-zinc-950" checked>
-                                <span>Extract First Frame</span>
-                            </label>
-                            <label class="flex items-center space-x-2 text-xs text-zinc-300 cursor-pointer" title="Scramble pixels and strip AI metadata after download to bypass SynthID.">
-                                <input type="checkbox" id="aiBypass" class="form-checkbox text-pink-500 rounded border-zinc-700 bg-zinc-900 focus:ring-pink-500 focus:ring-offset-zinc-950" checked>
-                                <span>Clean AI Metadata (Bypass)</span>
-                            </label>
-                            <label class="flex items-center space-x-2 text-xs text-zinc-300 cursor-pointer">
-                                <input type="checkbox" id="identifySong" class="form-checkbox text-pink-500 rounded border-zinc-700 bg-zinc-900 focus:ring-pink-500 focus:ring-offset-zinc-950" checked>
-                                <span>Identify Song & Meta</span>
-                            </label>
-                            <label class="flex items-center space-x-2 text-xs text-zinc-300 cursor-pointer">
-                                <input type="checkbox" id="transcribeAudio" class="form-checkbox text-pink-500 rounded border-zinc-700 bg-zinc-900 focus:ring-pink-500 focus:ring-offset-zinc-950" checked>
-                                <span>Transcribe Audio</span>
-                            </label>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Filename (Hidden) -->
-                <input type="hidden" id="filename" name="filename" placeholder="%(title)s.%(ext)s">
-            </form>
-        </div>
-
-        <div id="section-converter" class="hidden p-6 flex-1 overflow-y-auto">
-            <form id="converterForm" class="space-y-8">
-                <!-- Media File Input -->
-                <div class="space-y-3">
-                    <label class="block text-[11px] font-bold text-zinc-400 uppercase tracking-widest"><span class="text-purple-500 mr-1">01.</span> Select Media</label>
-                    <input type="file" id="mediaFile" name="file" class="w-full text-sm text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-zinc-800 file:text-white hover:file:bg-zinc-700 transition cursor-pointer" accept="video/*,audio/*,image/*">
-                </div>
-
-                <!-- Trim Options -->
-                <div id="trimmerContainer" class="space-y-3 hidden">
-                    <label class="block text-[11px] font-bold text-zinc-400 uppercase tracking-widest"><span class="text-purple-500 mr-1"></span> Trim Video (Optional)</label>
-                    
-                    <div class="bg-[#080809] border border-zinc-800 rounded-xl p-3 shadow-inner">
-                        <video id="videoPreview" class="w-full rounded-lg mb-3 bg-black max-h-[150px] object-contain" controls></video>
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="block text-[10px] text-zinc-500 mb-1">Start Time (HH:MM:SS)</label>
-                                <div class="flex items-center space-x-2">
-                                    <input type="text" id="trimStart" placeholder="00:00:00" class="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded text-xs text-white text-center focus:border-purple-500 focus:outline-none">
-                                    <button type="button" onclick="setTime('start')" class="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-white rounded text-[10px] transition"><i class="fa-solid fa-location-crosshairs"></i></button>
-                                </div>
-                            </div>
-                            <div>
-                                <label class="block text-[10px] text-zinc-500 mb-1">End Time (HH:MM:SS)</label>
-                                <div class="flex items-center space-x-2">
-                                    <input type="text" id="trimEnd" placeholder="00:00:00" class="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded text-xs text-white text-center focus:border-purple-500 focus:outline-none">
-                                    <button type="button" onclick="setTime('end')" class="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-white rounded text-[10px] transition"><i class="fa-solid fa-location-crosshairs"></i></button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Processing Options -->
-                <div class="space-y-3">
-                    <label class="block text-[11px] font-bold text-zinc-400 uppercase tracking-widest"><span class="text-purple-500 mr-1">02.</span> Tools</label>
-                    
-                    <div class="grid grid-cols-1 gap-4 bg-[#080809] p-4 rounded-xl border border-zinc-800 shadow-inner">
-                        
-                        <div class="space-y-2">
-                            <label class="block text-[10px] font-bold text-zinc-500 uppercase">Crop / Resize</label>
-                            <select id="convResize" name="resize" class="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-zinc-300 focus:outline-none focus:border-purple-500 appearance-none">
-                                <option value="none">Original Size</option>
-                                <optgroup label="Vertical (TikTok/IG)" id="grp-resize-916">
-                                    <option value="crop_9_16">Crop to 9:16 (Fill)</option>
-                                    <option value="pad_9_16">Pad to 9:16 (Fit)</option>
-                                </optgroup>
-                                <optgroup label="Horizontal (YouTube)" id="grp-resize-169">
-                                    <option value="crop_16_9">Crop to 16:9 (Fill)</option>
-                                    <option value="pad_16_9">Pad to 16:9 (Fit)</option>
-                                </optgroup>
-                            </select>
-                        </div>
-                        
-                        <!-- Auto-Crop Checkbox -->
-                        <div class="space-y-2">
-                            <label class="flex items-center space-x-2 text-xs text-zinc-300 cursor-pointer" title="Automatically detect faces/subjects to keep them in frame when cropping.">
-                                <input type="checkbox" id="convAutoCrop" class="form-checkbox text-purple-500 rounded border-zinc-700 bg-zinc-900 focus:ring-purple-500 focus:ring-offset-zinc-950">
-                                <span>Smart Auto-Crop (Detect Subject)</span>
-                            </label>
-                        </div>
-
-                        <div class="space-y-2">
-                            <label class="block text-[10px] font-bold text-zinc-500 uppercase mt-2">Format</label>
-                            <select id="convFormat" name="format" class="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-zinc-300 focus:outline-none focus:border-purple-500 appearance-none">
-                                <optgroup label="Video" id="grp-fmt-video">
-                                    <option value="mp4">MP4 (H.264)</option>
-                                    <option value="gif">GIF</option>
-                                </optgroup>
-                                <optgroup label="Audio" id="grp-fmt-audio">
-                                    <option value="mp3">MP3 Audio</option>
-                                    <option value="wav">WAV Audio</option>
-                                </optgroup>
-                                <optgroup label="Images" id="grp-fmt-image">
-                                    <option value="frames">Extract All Frames</option>
-                                    <option value="png">PNG</option>
-                                    <option value="jpg">JPG</option>
-                                </optgroup>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-                
-                <div id="convStatusContainer" class="hidden">
-                    <div class="flex items-center justify-between text-xs mb-2">
-                        <span id="convStatusText" class="text-zinc-400 font-bold uppercase tracking-widest text-[10px]">Processing...</span>
-                        <i id="convStatusIcon" class="fa-solid fa-circle-notch fa-spin text-purple-500"></i>
-                    </div>
-                    <div class="w-full bg-zinc-900 rounded-full h-1">
-                        <div id="convProgressBar" class="bg-purple-500 h-1 rounded-full transition-all duration-300" style="width: 0%"></div>
-                    </div>
-                </div>
-
-            </form>
-        </div>
-
-        <div id="section-cleaner" class="hidden p-6 flex-1 overflow-y-auto">
-            <form id="cleanerForm" class="space-y-8">
-                <div class="space-y-3">
-                    <label class="block text-[11px] font-bold text-zinc-400 uppercase tracking-widest"><span class="text-pink-500 mr-1">01.</span> Select Target Folder or File</label>
-                    <p class="text-xs text-zinc-500 mb-2">The cleaner will scan this folder (or file) to crop (0.5%), apply noise, and strip all C2PA/AI metadata.</p>
-                    <div class="flex space-x-2">
-                        <div class="relative cursor-pointer group flex-1" onclick="browseCleanerFolder()">
-                            <input type="text" id="cleaner_dir" name="cleaner_dir" class="w-full px-4 py-3 bg-[#080809] border border-zinc-800 rounded-xl text-xs font-medium text-zinc-300 focus:outline-none focus:border-zinc-500 shadow-inner group-hover:border-zinc-700 transition" placeholder="Click to browse for a folder..." readonly>
-                            <div class="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none opacity-50 group-hover:opacity-100 transition">
-                                <i class="fa-solid fa-folder-open text-zinc-500"></i>
-                            </div>
-                        </div>
-                        <button type="button" onclick="browseCleanerFile()" class="px-4 py-3 bg-[#080809] border border-zinc-800 hover:border-zinc-700 rounded-xl text-zinc-400 hover:text-zinc-300 transition" title="Select a single file">
-                            <i class="fa-solid fa-file"></i>
-                        </button>
-                    </div>
-                </div>
-
-                <div id="cleanerTerminal" class="hidden bg-black border border-zinc-800 rounded-xl p-4 font-mono text-[10px] text-green-400 h-64 overflow-y-auto mt-6 shadow-inner whitespace-pre-wrap"></div>
-            </form>
-        </div>
-
-        <!-- Submit Buttons Container -->
-        <div class="p-6 bg-[#0c0c0e] border-t border-zinc-800">
-            <button type="submit" form="downloadForm" id="submitBtn" class="w-full py-4 bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-400 hover:to-purple-500 text-white font-black uppercase tracking-widest text-[11px] rounded-xl shadow-[0_0_20px_rgba(244,114,182,0.3)] transition transform hover:scale-[1.02] flex items-center justify-center space-x-2">
-                <i class="fa-solid fa-cloud-arrow-down text-lg"></i>
-                <span>Download Media</span>
-            </button>
-            
-            <button type="submit" form="converterForm" id="convSubmitBtn" class="w-full py-4 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-400 hover:to-indigo-500 text-white font-black uppercase tracking-widest text-[11px] rounded-xl shadow-[0_0_20px_rgba(168,85,247,0.3)] transition transform hover:scale-[1.02] hidden items-center justify-center space-x-2">
-                <i class="fa-solid fa-wand-magic-sparkles text-lg"></i>
-                <span>Convert & Trim File</span>
-            </button>
-
-            <button type="submit" form="cleanerForm" id="cleanerSubmitBtn" class="w-full py-4 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-black uppercase tracking-widest text-[11px] rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.3)] transition transform hover:scale-[1.02] hidden items-center justify-center space-x-2">
-                <i class="fa-solid fa-broom text-lg"></i>
-                <span>Run AI Cleaner</span>
-            </button>
-        </div>
-    </div>
-
-    <div id="section-gallery" class="hidden flex-1 overflow-y-auto">
-        <div class="sticky top-0 bg-[#0c0c0e] z-10 p-4 border-b border-zinc-800">
-            <select id="galleryFilter" class="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white focus:outline-none" onchange="loadGallery()">
-                <option value="All">All Folders</option>
-                <option value="YouTube">YouTube</option>
-                <option value="Instagram">Instagram</option>
-                <option value="TikTok">TikTok</option>
-                <option value="Twitter">Twitter</option>
-                <option value="Conversions">Conversions</option>
-                <option value="Other">Other</option>
-            </select>
-        </div>
-        <div id="galleryGrid" class="grid grid-cols-2 md:grid-cols-3 gap-2 p-4">
-        </div>
-    </div>
-
-    <!-- Right Workspace: Task Queue -->
-    <div class="flex-1 bg-airi-bg relative overflow-hidden flex flex-col">
-        <!-- Top Gradient -->
-        <div class="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-black/40 to-transparent pointer-events-none z-0"></div>
-
-        <div class="p-8 z-10 flex flex-col h-full">
-            <h2 class="text-sm font-black text-white tracking-[0.15em] uppercase mb-6 flex items-center">
-                <i class="fa-solid fa-list-check text-pink-500 mr-3"></i> Task Queue
-            </h2>
-
-            <!-- Queue Container -->
-            <div id="queueContainer" class="flex-1 overflow-y-auto space-y-3 pr-2 scroll-smooth">
-                <!-- Tasks will be prepended here -->
+    <!-- Top Navigation Header -->
+    <header class="w-full bg-[#0c0c0e] border-b border-zinc-800 px-8 py-3.5 flex items-center justify-between z-20 shrink-0 shadow-lg">
+        <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-pink-500 to-purple-600 flex items-center justify-center shadow-[0_0_15px_rgba(244,114,182,0.4)]">
+                <i class="fa-solid fa-play text-white text-base"></i>
+            </div>
+            <div>
+                <h1 class="text-base font-black text-white tracking-wide uppercase flex items-center">
+                    AI Influencer Media Grabber 
+                    <span class="ml-2 text.8px] font-mono bg-pink-500/20 text-pink-400 px-2 py-0.5 rounded-full align-middle">v1.4</span>
+                </h1>
+                <p class="text-[11px] text-zinc-400 font-medium">Local Media Grabber, Anti-AI Watermark & Converter Suite</p>
             </div>
         </div>
-    </div>
-    
+
+        <!-- Center Tab Navigation Pills -->
+        <div class="flex items-center space-x-2 bg-[#080809] p-1.5 rounded-2xl border border-zinc-800/80 shadow-inner">
+            <button id="tab-downloader" onclick="switchTab('downloader')" class="px-6 py-2 rounded-xl text-xs font-extrabold uppercase tracking-wider text-white bg-gradient-to-r from-pink-500 to-purple-600 shadow-[0_0_15px_rgba(244,114,182,0.3)] transition-all flex items-center">
+                <i class="fa-solid fa-cloud-arrow-down mr-2"></i> Studio
+            </button>
+            <button id="tab-converter" onclick="switchTab('converter')" class="px-6 py-2 rounded-xl text-xs font-bold uppercase tracking-wider text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 transition-all flex items-center">
+                <i class="fa-solid fa-wand-magic-sparkles mr-2"></i> Media Tools
+            </button>
+            <button id="tab-cleaner" onclick="switchTab('cleaner')" class="px-6 py-2 rounded-xl text-xs font-bold uppercase tracking-wider text-zinc-400 hover:text-pink-400 hover:bg-zinc-900 transition-all flex items-center">
+                <i class="fa-solid fa-shield-halved text-pink-500 mr-2 text-xs"></i> AI Cleaner
+            </button>
+            <button id="tab-gallery" onclick="switchTab('gallery')" class="px-6 py-2 rounded-xl text-xs font-bold uppercase tracking-wider text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 transition-all flex items-center">
+                <i class="fa-solid fa-images mr-2"></i> Gallery
+            </button>
+        </div>
+
+        <!-- Right System Status Badge -->
+        <div class="hidden lg:flex items-center space-x-3 text-xs text-zinc-400">
+            <div class="flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-zinc-900/80 border border-zinc-800">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span class="text-[11px] font-bold text-zinc-300">Engine Online (100% Local)</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Widescreen Workspace -->
+    <main class="flex-1 flex overflow-hidden p-6 gap-6 max-w-[1920px] mx-auto w-full">
+
+        <!-- Primary Action Center (65% width) -->
+        <div class="flex-1 lg:max-w-[65%] flex flex-col h-full bg-[#0c0c0e]/90 border border-zinc-800/80 rounded-3xl p-6 shadow-2xl backdrop-blur-xl relative overflow-hidden">
+            
+            <!-- SECTION 1: STUDIO (DOWNLOADER) -->
+            <div id="section-downloader" class="flex-1 overflow-y-auto pr-2 scroll-smooth">
+                <form id="downloadForm" class="space-y-6">
+                    <div class="p-5 rounded-2xl bg-gradient-to-br from-pink-500/10 via-purple-500/5 to-transparent border border-pink-500/20">
+                        <div class="flex items-center space-x-2 text-pink-400 font-extrabold text-xs uppercase tracking-wider mb-1">
+                            <i class="fa-solid fa-bolt"></i>
+                            <span>Multi-Platform Reference Downloader</span>
+                        </div>
+                        <p class="text-xs text-zinc-400">Paste links from TikTok, YouTube, Instagram Reels, Twitter/X, or Pinterest carousels below.</p>
+                    </div>
+
+                    <!-- Video URLs -->
+                    <div class="space-y-2">
+                        <label class="block text-xs font-bold text-zinc-300 uppercase tracking-widest flex items-center justify-between">
+                            <span><span class="text-pink-500 mr-1.5">01.</span> Video or Carousel URLs</span>
+                            <span class="text-[10px] text-zinc-500 font-normal">One link per line for batch downloading</span>
+                        </label>
+                        <textarea id="url" name="url" rows="4" class="w-full px-4 py-3 bg-[#080809] border border-zinc-800 rounded-2xl text-xs text-zinc-200 focus:outline-none focus:border-pink-500 focus:ring-1 focus:ring-pink-500 transition shadow-inner placeholder-zinc-600 resize-none font-mono" placeholder="https://www.tiktok.com/@username/video/...\nhttps://www.instagram.com/reel/..."></textarea>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <!-- Auth Select -->
+                        <div class="space-y-2">
+                            <label class="block text-xs font-bold text-zinc-400 uppercase tracking-widest">Browser Auth (Optional)</label>
+                            <div class="relative">
+                                <select id="browser" name="browser" class="w-full px-4 py-3 bg-[#080809] border border-zinc-800 rounded-xl text-xs font-medium text-zinc-300 focus:outline-none focus:border-pink-500 appearance-none shadow-inner cursor-pointer">
+                                    <option value="none">Anonymous (No Login)</option>
+                                    <option value="chrome">Chrome Browser</option>
+                                    <option value="firefox">Firefox Browser</option>
+                                    <option value="edge">Edge Browser</option>
+                                    <option value="safari">Safari Browser</option>
+                                    <option value="cookies.txt">Custom cookies.txt File</option>
+                                </select>
+                                <div class="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
+                                    <i class="fa-solid fa-chevron-down text-zinc-600 text-xs"></i>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Custom Path -->
+                        <div class="space-y-2">
+                            <label class="block text-xs font-bold text-zinc-400 uppercase tracking-widest">Save Folder</label>
+                            <div class="relative cursor-pointer group" onclick="browseFolder()">
+                                <input type="text" id="path" name="path" class="w-full px-4 py-3 bg-[#080809] border border-zinc-800 rounded-xl text-xs font-medium text-zinc-300 focus:outline-none focus:border-pink-500 shadow-inner group-hover:border-zinc-700 transition" placeholder="Auto... (Documents/Media Grabber)" readonly>
+                                <div class="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none opacity-60 group-hover:opacity-100 transition">
+                                    <i class="fa-solid fa-folder-open text-pink-500"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Processing Options -->
+                    <div class="pt-4 border-t border-zinc-800/80">
+                        <label class="block text-xs font-bold text-zinc-300 uppercase tracking-widest mb-3"><span class="text-pink-500 mr-1.5">02.</span> Processing Options</label>
+                        <div class="space-y-3 bg-[#080809] p-4 rounded-2xl border border-zinc-800/80">
+                            <label class="flex items-center space-x-3 text-xs text-zinc-300 cursor-pointer">
+                                <input type="checkbox" id="forceH264" class="form-checkbox text-pink-500 rounded border-zinc-700 bg-zinc-900 focus:ring-pink-500" checked>
+                                <span class="font-medium">Force Standard H.264 Encoding (Fixes import glitches in Kling & Premiere)</span>
+                            </label>
+                            <div class="grid grid-cols-2 gap-3 pt-2 border-t border-zinc-800/50">
+                                <label class="flex items-center space-x-2.5 text-xs text-zinc-400 cursor-pointer">
+                                    <input type="checkbox" id="extractFrame" class="form-checkbox text-pink-500 rounded border-zinc-700 bg-zinc-900" checked>
+                                    <span>Extract First Frame Image</span>
+                                </label>
+                                <label class="flex items-center space-x-2.5 text-xs text-zinc-400 cursor-pointer">
+                                    <input type="checkbox" id="aiBypass" class="form-checkbox text-pink-500 rounded border-zinc-700 bg-zinc-900" checked>
+                                    <span>Clean AI Metadata (Bypass)</span>
+                                </label>
+                                <label class="flex items-center space-x-2.5 text-xs text-zinc-400 cursor-pointer">
+                                    <input type="checkbox" id="identifySong" class="form-checkbox text-pink-500 rounded border-zinc-700 bg-zinc-900" checked>
+                                    <span>Identify Song (Shazam)</span>
+                                </label>
+                                <label class="flex items-center space-x-2.5 text-xs text-zinc-400 cursor-pointer">
+                                    <input type="checkbox" id="transcribeAudio" class="form-checkbox text-pink-500 rounded border-zinc-700 bg-zinc-900" checked>
+                                    <span>Transcribe Audio (Local Whisper)</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <input type="hidden" id="filename" name="filename" placeholder="%(title)s.%(ext)s">
+                </form>
+            </div>
+
+            <!-- SECTION 2: MEDIA TOOLS (CONVERTER & COMPRESSOR) -->
+            <div id="section-converter" class="hidden flex-1 overflow-y-auto pr-2 scroll-smooth space-y-6">
+                <form id="converterForm" class="space-y-6">
+                    <div class="p-5 rounded-2xl bg-gradient-to-br from-purple-500/10 via-indigo-500/5 to-transparent border border-purple-500/20">
+                        <div class="flex items-center space-x-2 text-purple-400 font-extrabold text-xs uppercase tracking-wider mb-1">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i>
+                            <span>Offline Media Editor & Compression Suite</span>
+                        </div>
+                        <p class="text-xs text-zinc-400">Trim clip lengths, downscale resolutions, reduce MB file sizes, and re-format media without Premiere.</p>
+                    </div>
+
+                    <!-- Media File Input -->
+                    <div class="space-y-2">
+                        <label class="block text-xs font-bold text-zinc-300 uppercase tracking-widest"><span class="text-purple-500 mr-1.5">01.</span> Select Media File</label>
+                        <input type="file" id="mediaFile" name="file" class="w-full text-xs text-zinc-400 file:mr-4 file:py-3 file:px-5 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-purple-500/20 file:text-purple-300 hover:file:bg-purple-500/30 transition cursor-pointer bg-[#080809] border border-zinc-800 rounded-2xl p-2" accept="video/*,audio/*,image/*">
+                    </div>
+
+                    <!-- Trim Options -->
+                    <div id="trimmerContainer" class="space-y-2 hidden">
+                        <label class="block text-xs font-bold text-zinc-300 uppercase tracking-widest"><span class="text-purple-500 mr-1.5">02.</span> Video Trimmer & Preview</label>
+                        <div class="bg-[#080809] border border-zinc-800 rounded-2xl p-4 shadow-inner">
+                            <video id="videoPreview" class="w-full rounded-xl mb-4 bg-black max-h-[220px] object-contain" controls></video>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-[10px] text-zinc-400 font-bold uppercase mb-1">Start Time (HH:MM:SS)</label>
+                                    <div class="flex items-center space-x-2">
+                                        <input type="text" id="trimStart" placeholder="00:00:00" class="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-xs text-white text-center focus:border-purple-500 focus:outline-none">
+                                        <button type="button" onclick="setTime('start')" class="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-xs transition" title="Set current timestamp"><i class="fa-solid fa-location-crosshairs"></i></button>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] text-zinc-400 font-bold uppercase mb-1">End Time (HH:MM:SS)</label>
+                                    <div class="flex items-center space-x-2">
+                                        <input type="text" id="trimEnd" placeholder="00:00:00" class="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-xs text-white text-center focus:border-purple-500 focus:outline-none">
+                                        <button type="button" onclick="setTime('end')" class="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-xs transition" title="Set current timestamp"><i class="fa-solid fa-location-crosshairs"></i></button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Processing Options -->
+                    <div class="space-y-3">
+                        <label class="block text-xs font-bold text-zinc-300 uppercase tracking-widest"><span class="text-purple-500 mr-1.5">03.</span> Crop, Resolution & Compression</label>
+                        
+                        <div class="grid grid-cols-2 gap-4 bg-[#080809] p-4 rounded-2xl border border-zinc-800 shadow-inner">
+                            <!-- Aspect Ratio Crop -->
+                            <div class="space-y-2">
+                                <label class="block text-[10px] font-bold text-zinc-400 uppercase">Crop / Aspect Ratio</label>
+                                <select id="convResize" name="resize" class="w-full px-3 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-zinc-200 focus:outline-none focus:border-purple-500 appearance-none">
+                                    <option value="none">Original Aspect Ratio</option>
+                                    <optgroup label="Vertical (TikTok/IG Reels/Shorts)">
+                                        <option value="crop_9_16">Crop to 9:16 (Fill Screen)</option>
+                                        <option value="pad_9_16">Pad to 9:16 (Letterbox Fit)</option>
+                                    </optgroup>
+                                    <optgroup label="Horizontal (YouTube/TV)">
+                                        <option value="crop_16_9">Crop to 16:9 (Fill Screen)</option>
+                                        <option value="pad_16_9">Pad to 16:9 (Letterbox Fit)</option>
+                                    </optgroup>
+                                    <optgroup label="Square & Feed">
+                                        <option value="crop_1_1">Crop to 1:1 (Square)</option>
+                                        <option value="crop_4_5">Crop to 4:5 (Vertical Feed)</option>
+                                    </optgroup>
+                                </select>
+                            </div>
+
+                            <!-- Resolution & MB Size Compressor -->
+                            <div class="space-y-2">
+                                <label class="block text-[10px] font-bold text-zinc-400 uppercase">File Size & Resolution (Reduce MB)</label>
+                                <select id="convCompress" name="compress" class="w-full px-3 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-zinc-200 focus:outline-none focus:border-purple-500 appearance-none">
+                                    <option value="none">Original Size & Quality (100%)</option>
+                                    <optgroup label="MB File Size Compression">
+                                        <option value="compress_high">Compress MB (~50% Smaller File)</option>
+                                        <option value="compress_web">Compress for Web (~75% Smaller MB)</option>
+                                    </optgroup>
+                                    <optgroup label="Resolution Downscaling">
+                                        <option value="scale_1080p">Downscale to 1080p Full HD</option>
+                                        <option value="scale_720p">Downscale to 720p HD (Compact)</option>
+                                        <option value="scale_480p">Downscale to 480p SD (Smallest MB)</option>
+                                        <option value="scale_50">Scale 50% (Half Dimensions)</option>
+                                    </optgroup>
+                                </select>
+                            </div>
+
+                            <!-- Auto-Crop Checkbox -->
+                            <div class="space-y-2 col-span-2 pt-2 border-t border-zinc-800/60 flex items-center justify-between">
+                                <label class="flex items-center space-x-2 text-xs text-zinc-300 cursor-pointer">
+                                    <input type="checkbox" id="convAutoCrop" class="form-checkbox text-purple-500 rounded border-zinc-700 bg-zinc-900 focus:ring-purple-500">
+                                    <span>Smart Subject Auto-Crop (Keeps Detected Face Centered)</span>
+                                </label>
+                                <div class="w-1/3">
+                                    <select id="convFormat" name="format" class="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-zinc-200 focus:outline-none focus:border-purple-500 appearance-none">
+                                        <optgroup label="Video">
+                                            <option value="mp4">MP4 (H.264)</option>
+                                            <option value="gif">GIF</option>
+                                        </optgroup>
+                                        <optgroup label="Audio">
+                                            <option value="mp3">MP3 Audio</option>
+                                            <option value="wav">WAV Audio</option>
+                                        </optgroup>
+                                        <optgroup label="Images">
+                                            <option value="png">PNG</option>
+                                            <option value="jpg">JPG</option>
+                                        </optgroup>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="convStatusContainer" class="hidden">
+                        <div class="flex items-center justify-between text-xs mb-2">
+                            <span id="convStatusText" class="text-zinc-400 font-bold uppercase tracking-widest text-[10px]">Processing...</span>
+                            <i id="convStatusIcon" class="fa-solid fa-circle-notch fa-spin text-purple-500"></i>
+                        </div>
+                        <div class="w-full bg-zinc-900 rounded-full h-1.5">
+                            <div id="convProgressBar" class="bg-purple-500 h-1.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- SECTION 3: AI CLEANER (ANTI-AI DETECTION ENGINE) -->
+            <div id="section-cleaner" class="hidden flex-1 overflow-y-auto pr-2 scroll-smooth space-y-6">
+                <div class="p-5 rounded-2xl bg-gradient-to-br from-pink-500/10 via-purple-500/5 to-transparent border border-pink-500/30">
+                    <div class="flex items-center space-x-2 text-pink-400 font-extrabold text-xs uppercase tracking-wider mb-1.5">
+                        <i class="fa-solid fa-shield-halved text-sm"></i>
+                        <span>Bypass Social Media AI Detection Scanners</span>
+                    </div>
+                    <p class="text-xs text-zinc-300 leading-relaxed mb-3">
+                        Clean your AI-generated photos & videos (from Kling AI, Midjourney, Stable Diffusion, Nano Banana, Veo) before uploading to Instagram, TikTok, or YouTube Shorts.
+                    </p>
+                    <div class="grid grid-cols-2 gap-2 text-[11px] text-zinc-400">
+                        <div class="flex items-center space-x-2"><i class="fa-solid fa-check text-pink-500 text-xs"></i><span>Strips C2PA, EXIF, & XMP Metadata</span></div>
+                        <div class="flex items-center space-x-2"><i class="fa-solid fa-check text-pink-500 text-xs"></i><span>Shaves 0.5% Edges (Grid Shift)</span></div>
+                        <div class="flex items-center space-x-2"><i class="fa-solid fa-check text-pink-500 text-xs"></i><span>Injects Micro Gaussian Noise (SynthID Scatter)</span></div>
+                        <div class="flex items-center space-x-2"><i class="fa-solid fa-shield text-emerald-400 text-xs"></i><span class="text-emerald-400 font-semibold">Auto-Backups in backup_unscrambled/</span></div>
+                    </div>
+                </div>
+
+                <form id="cleanerForm" class="space-y-6">
+                    <div class="space-y-2">
+                        <label class="block text-xs font-bold text-zinc-300 uppercase tracking-widest"><span class="text-pink-500 mr-1.5">01.</span> Select AI Media Folder or File</label>
+                        <div class="flex space-x-3">
+                            <div class="relative cursor-pointer group flex-1" onclick="browseCleanerFolder()">
+                                <input type="text" id="cleaner_dir" name="cleaner_dir" class="w-full px-4 py-3.5 bg-[#080809] border border-zinc-800 rounded-xl text-xs font-medium text-zinc-300 focus:outline-none focus:border-pink-500 shadow-inner group-hover:border-zinc-700 transition" placeholder="Click to choose folder..." readonly>
+                                <div class="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none opacity-60 group-hover:opacity-100 transition">
+                                    <i class="fa-solid fa-folder-open text-pink-500"></i>
+                                </div>
+                            </div>
+                            <button type="button" onclick="browseCleanerFile()" class="px-5 py-3.5 bg-[#080809] border border-zinc-800 hover:border-pink-500/50 rounded-xl text-zinc-400 hover:text-pink-400 transition flex items-center space-x-2" title="Select a single AI file">
+                                <i class="fa-solid fa-file-video text-pink-500"></i>
+                                <span class="text-xs font-bold">Pick File</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="cleanerTerminal" class="hidden bg-black border border-zinc-800/80 rounded-2xl p-4 font-mono text-[11px] text-emerald-400 h-64 overflow-y-auto shadow-inner whitespace-pre-wrap"></div>
+                </form>
+            </div>
+
+            <!-- SECTION 4: GALLERY -->
+            <div id="section-gallery" class="hidden flex-1 overflow-y-auto space-y-4">
+                <div class="sticky top-0 bg-[#0c0c0e] z-10 py-2 border-b border-zinc-800 flex items-center justify-between">
+                    <span class="text-xs font-bold text-zinc-300 uppercase tracking-wider">Output Gallery</span>
+                    <select id="galleryFilter" class="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white focus:outline-none" onchange="loadGallery()">
+                        <option value="All">All Folders</option>
+                        <option value="YouTube">YouTube</option>
+                        <option value="Instagram">Instagram</option>
+                        <option value="TikTok">TikTok</option>
+                        <option value="Twitter">Twitter</option>
+                        <option value="Conversions">Conversions</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                <div id="galleryGrid" class="grid grid-cols-2 md:grid-cols-3 gap-3 p-1"></div>
+            </div>
+
+            <!-- Action Buttons Footer -->
+            <div class="pt-4 mt-auto border-t border-zinc-800/80">
+                <button type="submit" form="downloadForm" id="submitBtn" class="w-full py-4 bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-400 hover:to-purple-500 text-white font-black uppercase tracking-widest text-xs rounded-2xl shadow-[0_0_20px_rgba(244,114,182,0.3)] transition transform hover:scale-[1.01] flex items-center justify-center space-x-2">
+                    <i class="fa-solid fa-cloud-arrow-down text-base"></i>
+                    <span>Start Downloading Media</span>
+                </button>
+                
+                <button type="submit" form="converterForm" id="convSubmitBtn" class="w-full py-4 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-400 hover:to-indigo-500 text-white font-black uppercase tracking-widest text-xs rounded-2xl shadow-[0_0_20px_rgba(168,85,247,0.3)] transition transform hover:scale-[1.01] hidden items-center justify-center space-x-2">
+                    <i class="fa-solid fa-wand-magic-sparkles text-base"></i>
+                    <span>Convert, Crop & Compress File</span>
+                </button>
+
+                <button type="submit" form="cleanerForm" id="cleanerSubmitBtn" class="w-full py-4 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-black uppercase tracking-widest text-xs rounded-2xl shadow-[0_0_20px_rgba(16,185,129,0.3)] transition transform hover:scale-[1.01] hidden items-center justify-center space-x-2">
+                    <i class="fa-solid fa-broom text-base"></i>
+                    <span>Run Anti-AI Metadata Cleaner</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Right Activity Hub & Task Queue (35% width) -->
+        <div class="hidden lg:flex lg:w-[35%] flex-col h-full bg-[#0c0c0e]/90 border border-zinc-800/80 rounded-3xl p-6 shadow-2xl backdrop-blur-xl relative overflow-hidden">
+            <div class="flex items-center justify-between pb-4 mb-4 border-b border-zinc-800/80">
+                <h2 class="text-xs font-black text-white tracking-[0.15em] uppercase flex items-center">
+                    <i class="fa-solid fa-list-check text-pink-500 mr-2.5"></i> Task Queue & Activity
+                </h2>
+                <button onclick="document.getElementById('queueContainer').innerHTML=''" class="text-[10px] text-zinc-500 hover:text-zinc-300 font-bold uppercase transition">Clear Completed</button>
+            </div>
+
+            <!-- Queue Container -->
+            <div id="queueContainer" class="flex-1 overflow-y-auto space-y-3 pr-1 scroll-smooth">
+                <!-- Helper Welcome Card when no active task -->
+                <div id="emptyQueueNotice" class="p-6 rounded-2xl bg-[#080809] border border-zinc-800/80 text-center space-y-4 my-auto">
+                    <div class="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mx-auto text-pink-500">
+                        <i class="fa-solid fa-layer-group text-lg"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-xs font-bold text-zinc-200">System Ready & Active</h3>
+                        <p class="text-[11px] text-zinc-500 mt-1 leading-relaxed">Task progress, live video previews, and conversion streams will display right here in real-time.</p>
+                    </div>
+                    <div class="pt-3 border-t border-zinc-800/60 text-[10px] text-zinc-400 space-y-2 text-left">
+                        <div class="flex items-center justify-between"><span class="text-zinc-500">Default Save Location:</span><span class="font-mono text-zinc-300">Documents/Media Grabber</span></div>
+                        <div class="flex items-center justify-between"><span class="text-zinc-500">Anti-AI Backups:</span><span class="font-mono text-emerald-400">backup_unscrambled/</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
     <!-- Scripts -->
     <script>
         async function browseFolder() {
@@ -343,27 +426,44 @@
             }
         }
 
-        async function fetchHistory() {
+        async function browseCleanerFolder() {
             try {
-                const res = await fetch('/api/history');
-                const data = await res.json();
-                // renderHistory(data);
-            } catch (err) {
-                console.error("Failed to load history", err);
-            }
+                const response = await fetch('/api/browse', { method: 'POST' });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.path) {
+                        document.getElementById('cleaner_dir').value = data.path;
+                    }
+                }
+            } catch (e) {}
         }
 
-        // setInterval(fetchHistory, 10000);
+        async function browseCleanerFile() {
+            try {
+                const response = await fetch('/api/browse_file', { method: 'POST' });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.path) {
+                        document.getElementById('cleaner_dir').value = data.path;
+                    }
+                }
+            } catch (e) {}
+        }
 
         function switchTab(tab) {
             ['downloader', 'converter', 'cleaner', 'gallery'].forEach(t => {
                 const isTab = t === tab;
                 const el = document.getElementById('section-' + t);
                 if (el) el.classList.toggle('hidden', !isTab);
+                
                 const tb = document.getElementById('tab-' + t);
-                if (tb) tb.className = isTab 
-                    ? 'flex-1 py-3 text-[10px] font-bold uppercase tracking-widest text-pink-500 border-b-2 border-pink-500 transition'
-                    : 'flex-1 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-500 border-b-2 border-transparent hover:text-zinc-300 transition';
+                if (tb) {
+                    if (isTab) {
+                        tb.className = 'px-6 py-2 rounded-xl text-xs font-extrabold uppercase tracking-wider text-white bg-gradient-to-r from-pink-500 to-purple-600 shadow-[0_0_15px_rgba(244,114,182,0.3)] transition-all flex items-center';
+                    } else {
+                        tb.className = 'px-6 py-2 rounded-xl text-xs font-bold uppercase tracking-wider text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 transition-all flex items-center';
+                    }
+                }
             });
             
             document.getElementById('submitBtn').style.display = tab === 'downloader' ? 'flex' : 'none';
@@ -421,6 +521,8 @@
             if (urls.length === 0) return;
             
             const queueContainer = document.getElementById('queueContainer');
+            const notice = document.getElementById('emptyQueueNotice');
+            if (notice) notice.remove();
             
             previewTimeout = setTimeout(() => {
                 urls.forEach(async (url) => {
@@ -430,9 +532,9 @@
                     const previewId = 'preview-' + generateUUID();
                     const previewCard = document.createElement('div');
                     previewCard.id = previewId;
-                    previewCard.className = 'px-6 py-4 rounded-[20px] bg-[#080809] border border-zinc-800 shadow-inner transition-all flex items-center space-x-4 animate-pulse';
+                    previewCard.className = 'px-5 py-4 rounded-2xl bg-[#080809] border border-zinc-800 shadow-inner transition-all flex items-center space-x-4 animate-pulse';
                     previewCard.innerHTML = `
-                        <div class="w-24 h-16 bg-zinc-800 rounded-lg"></div>
+                        <div class="w-24 h-16 bg-zinc-800 rounded-xl"></div>
                         <div class="flex-1 space-y-2">
                             <div class="h-3 bg-zinc-800 rounded w-3/4"></div>
                             <div class="h-2 bg-zinc-800 rounded w-1/2"></div>
@@ -454,7 +556,7 @@
                         
                         if (data.error) {
                             actualCard.innerHTML = `
-                                <div class="w-24 h-16 bg-zinc-900 flex items-center justify-center rounded-lg">
+                                <div class="w-20 h-14 bg-zinc-900 flex items-center justify-center rounded-xl">
                                     <i class="fa-solid fa-triangle-exclamation text-zinc-600"></i>
                                 </div>
                                 <div class="flex-1 overflow-hidden">
@@ -473,14 +575,13 @@
                         }
                         
                         actualCard.innerHTML = `
-                            <div class="relative w-24 h-16 bg-zinc-900 rounded-lg overflow-hidden shrink-0">
+                            <div class="relative w-20 h-14 bg-zinc-900 rounded-xl overflow-hidden shrink-0">
                                 ${data.thumbnail ? `<img src="${data.thumbnail}" class="w-full h-full object-cover" />` : '<div class="w-full h-full flex items-center justify-center"><i class="fa-solid fa-video text-zinc-600"></i></div>'}
                                 ${durationStr ? `<div class="absolute bottom-1 right-1 bg-black/80 px-1 py-0.5 rounded text-[8px] text-white font-mono">${durationStr}</div>` : ''}
                             </div>
-                            <div class="flex-1 overflow-hidden pr-4">
+                            <div class="flex-1 overflow-hidden pr-2">
                                 <div class="text-xs font-bold text-zinc-200 truncate">${data.title}</div>
                                 <div class="text-[10px] text-zinc-400 truncate mt-1"><i class="fa-solid fa-user text-pink-500 mr-1"></i> ${data.uploader || 'Unknown'}</div>
-                                <div class="text-[9px] font-mono text-zinc-600 truncate mt-1">${url}</div>
                             </div>
                             <div class="shrink-0">
                                 <button onclick="document.getElementById('${previewId}').remove()" class="text-zinc-600 hover:text-zinc-400 transition">
@@ -559,280 +660,230 @@
                             const data = JSON.parse(line.substring(6));
 
                             if (data.error) {
-                                statusText.textContent = 'Error: ' + data.error;
+                                statusText.textContent = `Error: ${data.error}`;
                                 statusText.className = 'task-status text-[10px] font-bold uppercase tracking-widest text-red-500 mt-2 block';
-                                statusIcon.className = 'task-icon fa-solid fa-circle-xmark text-red-500';
+                                statusIcon.className = 'task-icon fa-solid fa-circle-exclamation text-red-500';
                                 progressBar.className = 'task-progress bg-red-500 h-1 rounded-full transition-all duration-300';
                                 if(stopBtn) stopBtn.remove();
+                                delete activeDownloads[taskId];
                                 finished = true;
                                 break;
                             }
 
                             if (data.status) {
                                 statusText.textContent = data.status;
-                                if (data.status.includes('%')) {
-                                    const pctMatch = data.status.match(/(\d+\.?\d*)%/);
-                                    if (pctMatch) progressBar.style.width = pctMatch[1] + '%';
-                                }
-                                if (data.done) {
-                                    statusText.className = 'task-status text-[10px] font-bold uppercase tracking-widest text-emerald-400 mt-2 block';
-                                    statusIcon.className = 'task-icon fa-solid fa-circle-check text-emerald-500';
-                                    progressBar.style.width = '100%';
-                                    progressBar.className = 'task-progress bg-emerald-500 h-1 rounded-full transition-all duration-300';
-                                    if(stopBtn) stopBtn.remove();
-                                    
-                                    const actionDiv = document.createElement('div');
-                                    actionDiv.className = 'flex items-center space-x-3 mt-3';
-                                    
-                                    if (data.file_path) {
-                                        const ext = data.file_path.split('.').pop().toLowerCase();
-                                        const isVideo = ['mp4', 'webm', 'mkv', 'avi', 'mov'].includes(ext);
-                                        const previewUrl = `/api/preview?path=${encodeURIComponent(data.file_path)}`;
-                                        
-                                        if (isVideo) {
-                                            actionDiv.innerHTML += `<video src="${previewUrl}" class="h-16 w-24 object-cover rounded-lg bg-black" controls muted></video>`;
-                                        } else {
-                                            actionDiv.innerHTML += `<img src="${previewUrl}" class="h-16 w-24 object-cover rounded-lg bg-black" />`;
-                                        }
-                                    }
-                                    
-                                    const targetPath = data.file_path || data.output_path;
-                                    if (targetPath) {
-                                        actionDiv.innerHTML += `
-                                            <button type="button" onclick="openFolder('${targetPath.replace(/\\/g, '\\\\')}')" class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-white text-[10px] font-bold uppercase tracking-widest rounded-lg transition-colors border border-zinc-700 flex items-center">
-                                                <i class="fa-solid fa-folder-open mr-2"></i> Show in Folder
-                                            </button>
-                                        `;
-                                    }
-                                    
-                                    if (actionDiv.innerHTML) {
-                                        row.querySelector('.flex-1').appendChild(actionDiv);
-                                    }
-                                    
-                                    finished = true;
-                                    break;
+                                const match = data.status.match(/(\d+)%/);
+                                if (match) {
+                                    progressBar.style.width = `${match[1]}%`;
                                 }
                             }
-                        } catch (e) {}
+
+                            if (data.done) {
+                                statusText.textContent = 'Completed!';
+                                statusText.className = 'task-status text-[10px] font-bold uppercase tracking-widest text-emerald-400 mt-2 block';
+                                statusIcon.className = 'task-icon fa-solid fa-circle-check text-emerald-400';
+                                progressBar.style.width = '100%';
+                                progressBar.className = 'task-progress bg-emerald-400 h-1 rounded-full transition-all duration-300';
+                                if(stopBtn) stopBtn.remove();
+                                delete activeDownloads[taskId];
+                                
+                                if (data.filepath) {
+                                    const actionBtn = document.createElement('button');
+                                    actionBtn.className = 'mt-2 text-[10px] text-pink-400 hover:text-pink-300 font-bold uppercase tracking-wider flex items-center space-x-1 transition';
+                                    actionBtn.innerHTML = '<i class="fa-solid fa-folder-open text-xs"></i> <span>Open Folder</span>';
+                                    actionBtn.onclick = () => openFolder(data.filepath);
+                                    row.appendChild(actionBtn);
+                                }
+                                finished = true;
+                                break;
+                            }
+                        } catch (e) {
+                            console.error("SSE parse error", e, line);
+                        }
                     }
                 }
-                if (finished) break;
+            }
+            if(!finished) {
+                delete activeDownloads[taskId];
+            }
+        }
+
+        async function processTask(taskData) {
+            const { taskId, formData } = taskData;
+            const row = document.getElementById(`task-${taskId}`);
+            if (!row) return;
+
+            const controller = new AbortController();
+            activeDownloads[taskId] = controller;
+
+            const statusText = row.querySelector('.task-status');
+            const statusIcon = row.querySelector('.task-icon');
+            const progressBar = row.querySelector('.task-progress');
+            const stopBtn = row.querySelector('.task-stop');
+
+            try {
+                statusText.textContent = 'Starting processing...';
+                statusIcon.className = 'task-icon fa-solid fa-circle-notch fa-spin text-pink-500';
+
+                const response = await fetch('/api/download', {
+                    method: 'POST',
+                    body: formData,
+                    signal: controller.signal
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                await handleSSEStream(response, taskId, row, controller, stopBtn, statusText, statusIcon, progressBar);
+
+            } catch (err) {
+                if (err.name === 'AbortError') {
+                    statusText.textContent = 'Cancelled';
+                    statusText.className = 'task-status text-[10px] font-bold uppercase tracking-widest text-red-500 mt-2 block';
+                    statusIcon.className = 'task-icon fa-solid fa-circle-xmark text-red-500';
+                    progressBar.className = 'task-progress bg-red-500 h-1 rounded-full transition-all duration-300';
+                } else {
+                    statusText.textContent = `Failed: ${err.message}`;
+                    statusText.className = 'task-status text-[10px] font-bold uppercase tracking-widest text-red-500 mt-2 block';
+                    statusIcon.className = 'task-icon fa-solid fa-circle-exclamation text-red-500';
+                    progressBar.className = 'task-progress bg-red-500 h-1 rounded-full transition-all duration-300';
+                }
+                if(stopBtn) stopBtn.remove();
+                delete activeDownloads[taskId];
             }
         }
 
         async function processQueue() {
-            if (isQueueRunning || downloadQueue.length === 0) return;
+            if (isQueueRunning) return;
             isQueueRunning = true;
 
             while (downloadQueue.length > 0) {
-                const task = downloadQueue.shift();
-                if (task.cancelled) continue;
-
-                const { url, path, filename, browser, taskId, row, processing_options } = task;
-                
-                const statusText = row.querySelector('.task-status');
-                const statusIcon = row.querySelector('.task-icon');
-                const progressBar = row.querySelector('.task-progress');
-                const stopBtn = row.querySelector('.task-stop');
-                
-                statusText.textContent = 'Starting...';
-                statusText.className = 'task-status text-[10px] font-bold uppercase tracking-widest text-pink-400 mt-2 block';
-                statusIcon.className = 'task-icon fa-solid fa-circle-notch fa-spin text-zinc-500';
-
-                const controller = new AbortController();
-                activeDownloads[taskId] = controller;
-
-                try {
-                    const response = await fetch('/api/download', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ url, path, filename, browser, task_id: taskId, processing_options: processing_options }),
-                        signal: controller.signal
-                    });
-
-                    await handleSSEStream(response, taskId, row, controller, stopBtn, statusText, statusIcon, progressBar);
-                } catch(err) {
-                    if(err.name !== 'AbortError') {
-                        statusText.textContent = 'Connection Error';
-                        statusText.className = 'task-status text-[10px] font-bold uppercase tracking-widest text-red-500 mt-2 block';
-                        statusIcon.className = 'task-icon fa-solid fa-circle-xmark text-red-500';
-                        if(stopBtn) stopBtn.remove();
-                    }
-                } finally {
-                    delete activeDownloads[taskId];
-                }
-                
-                await new Promise(r => setTimeout(r, 2000));
+                const taskData = downloadQueue.shift();
+                if (taskData.cancelled) continue;
+                await processTask(taskData);
             }
-            
+
             isQueueRunning = false;
         }
 
         document.getElementById('downloadForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+            const urlText = document.getElementById('url').value;
+            const urls = urlText.split('\n').map(u => u.trim()).filter(u => u && u.startsWith('http'));
             
-            const urlsRaw = document.getElementById('url').value;
-            const path = document.getElementById('path').value;
-            const filename = document.getElementById('filename').value;
-            const browser = document.getElementById('browser').value;
-            
-            const processing_options = {
-                forceH264: document.getElementById('forceH264').checked,
-                enableThumbnail: document.getElementById('extractFrame').checked,
-                enableSongMeta: document.getElementById('identifySong').checked,
-                enableTranscription: document.getElementById('transcribeAudio').checked,
-                aiBypass: document.getElementById('aiBypass').checked
-            };
+            if (urls.length === 0) return;
 
-            const urls = urlsRaw.split('\n').map(u => u.trim()).filter(u => u);
-            if(urls.length === 0) return;
+            const baseFormData = new FormData(e.target);
+            baseFormData.set('forceH264', document.getElementById('forceH264').checked);
+            baseFormData.set('extractFrame', document.getElementById('extractFrame').checked);
+            baseFormData.set('aiBypass', document.getElementById('aiBypass').checked);
+            baseFormData.set('identifySong', document.getElementById('identifySong').checked);
+            baseFormData.set('transcribeAudio', document.getElementById('transcribeAudio').checked);
 
-            document.getElementById('url').value = '';
             const queueContainer = document.getElementById('queueContainer');
+            const notice = document.getElementById('emptyQueueNotice');
+            if (notice) notice.remove();
 
-            urls.forEach(url => {
+            urls.forEach(singleUrl => {
                 const taskId = generateUUID();
-                
+                const taskFormData = new FormData();
+                for (let [key, value] of baseFormData.entries()) {
+                    taskFormData.append(key, value);
+                }
+                taskFormData.set('url', singleUrl);
+
                 const row = document.createElement('div');
                 row.id = `task-${taskId}`;
-                row.className = "px-6 py-4 rounded-[20px] bg-[#080809] border border-zinc-800 shadow-inner flex items-center justify-between transition-all";
+                row.className = 'p-4 rounded-2xl bg-[#080809] border border-zinc-800 space-y-2 relative group shadow-inner';
                 row.innerHTML = `
-                    <div class="flex-1 overflow-hidden pr-6">
-                        <div class="text-[10px] font-bold text-zinc-300 truncate" title="${url}">${url}</div>
-                        <div class="task-status text-[10px] font-bold uppercase tracking-widest text-zinc-500 mt-2 block">Waiting in queue...</div>
-                        <div class="w-full bg-zinc-900 rounded-full h-1 mt-3">
-                            <div class="task-progress bg-pink-500 h-1 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-3 overflow-hidden pr-2">
+                            <i class="task-icon fa-solid fa-clock text-zinc-500"></i>
+                            <span class="text-xs font-bold text-zinc-200 truncate">${singleUrl}</span>
                         </div>
-                    </div>
-                    <div class="flex items-center space-x-4">
-                        <i class="task-icon fa-solid fa-clock text-zinc-600"></i>
-                        <button onclick="cancelDownload('${taskId}')" type="button" class="task-stop text-zinc-600 hover:text-red-500 transition px-2">
-                            <i class="fa-solid fa-xmark text-lg"></i>
+                        <button type="button" onclick="cancelDownload('${taskId}')" class="task-stop text-zinc-500 hover:text-red-400 transition text-xs shrink-0" title="Cancel Download">
+                            <i class="fa-solid fa-circle-xmark"></i>
                         </button>
                     </div>
+                    <div class="w-full bg-zinc-900 rounded-full h-1">
+                        <div class="task-progress bg-pink-500 h-1 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                    <span class="task-status text-[10px] font-bold uppercase tracking-widest text-zinc-500 block">Queued</span>
                 `;
                 queueContainer.prepend(row);
-                downloadQueue.push({ url, path, filename, browser, taskId, row, cancelled: false, processing_options });
+
+                downloadQueue.push({ taskId, formData: taskFormData, cancelled: false });
             });
 
+            document.getElementById('url').value = '';
             processQueue();
         });
 
-        // Converter JS
-        document.getElementById('mediaFile').addEventListener('change', function(e) {
+        // Converter Form JS
+        const mediaFileInput = document.getElementById('mediaFile');
+        const trimmerContainer = document.getElementById('trimmerContainer');
+        const videoPreview = document.getElementById('videoPreview');
+
+        mediaFileInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
-            if (!file) return;
-
-            const ext = file.name.split('.').pop().toLowerCase();
-            const isVideo = ['mp4', 'mov', 'mkv', 'avi', 'webm', 'ts', 'flv'].includes(ext);
-            const isAudio = ['mp3', 'wav', 'flac', 'm4a', 'ogg', 'aac', 'wma'].includes(ext);
-            const isImage = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'].includes(ext);
-
-            const grpResize916 = document.getElementById('grp-resize-916');
-            const grpResize169 = document.getElementById('grp-resize-169');
-            const grpFmtVideo = document.getElementById('grp-fmt-video');
-            const grpFmtAudio = document.getElementById('grp-fmt-audio');
-            const grpFmtImage = document.getElementById('grp-fmt-image');
-
-            [grpResize916, grpResize169, grpFmtVideo, grpFmtAudio, grpFmtImage].forEach(grp => {
-                grp.disabled = false;
-                grp.hidden = false;
-            });
-
-            if (isAudio) {
-                [grpResize916, grpResize169, grpFmtVideo, grpFmtImage].forEach(grp => {
-                    grp.disabled = true;
-                    grp.hidden = true;
-                });
-                document.getElementById('convFormat').value = 'mp3';
-            } else if (isImage && ext !== 'gif') {
-                [grpFmtAudio, grpFmtVideo].forEach(grp => {
-                    grp.disabled = true;
-                    grp.hidden = true;
-                });
-                document.getElementById('convFormat').value = 'png';
-            } else {
-                document.getElementById('convFormat').value = 'mp4';
-            }
-
-            // Trimmer logic for single video file
-            if (e.target.files.length === 1 && isVideo) {
-                const videoPreview = document.getElementById('videoPreview');
-                const trimmerContainer = document.getElementById('trimmerContainer');
-                
+            if (file && file.type.startsWith('video/')) {
                 const url = URL.createObjectURL(file);
                 videoPreview.src = url;
                 trimmerContainer.classList.remove('hidden');
             } else {
-                document.getElementById('trimmerContainer').classList.add('hidden');
+                trimmerContainer.classList.add('hidden');
+                videoPreview.src = '';
             }
         });
 
-        function formatTime(seconds) {
-            const h = Math.floor(seconds / 3600).toString().padStart(2, '0');
-            const m = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
-            const s = Math.floor(seconds % 60).toString().padStart(2, '0');
-            const ms = Math.floor((seconds % 1) * 1000).toString().padStart(3, '0');
-            return `${h}:${m}:${s}.${ms}`;
-        }
-
         function setTime(type) {
-            const videoPreview = document.getElementById('videoPreview');
+            const time = videoPreview.currentTime;
+            const hours = Math.floor(time / 3600).toString().padStart(2, '0');
+            const minutes = Math.floor((time % 3600) / 60).toString().padStart(2, '0');
+            const seconds = Math.floor(time % 60).toString().padStart(2, '0');
+            const formatted = `${hours}:${minutes}:${seconds}`;
+
             if (type === 'start') {
-                document.getElementById('trimStart').value = formatTime(videoPreview.currentTime);
+                document.getElementById('trimStart').value = formatted;
             } else {
-                document.getElementById('trimEnd').value = formatTime(videoPreview.currentTime);
+                document.getElementById('trimEnd').value = formatted;
             }
         }
 
         document.getElementById('converterForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+            const formData = new FormData(e.target);
+            formData.set('autocrop', document.getElementById('convAutoCrop').checked);
             
-            const fileInput = document.getElementById('mediaFile');
-            const convResize = document.getElementById('convResize').value;
-            const convFormat = document.getElementById('convFormat').value;
-
-            if (!fileInput.files.length) {
-                alert("Please select a file first.");
-                return;
-            }
-
-            const submitBtn = document.getElementById('convSubmitBtn');
-            submitBtn.disabled = true;
-            submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
-
             const statusContainer = document.getElementById('convStatusContainer');
             const statusText = document.getElementById('convStatusText');
             const statusIcon = document.getElementById('convStatusIcon');
             const progressBar = document.getElementById('convProgressBar');
+            const submitBtn = document.getElementById('convSubmitBtn');
 
             statusContainer.classList.remove('hidden');
-            statusText.textContent = 'Uploading & Processing... (This may take a moment)';
-            statusText.className = 'text-[10px] font-bold uppercase tracking-widest text-pink-400';
-            statusIcon.className = 'fa-solid fa-circle-notch fa-spin text-pink-500';
-            progressBar.style.width = '0%';
-            progressBar.className = 'bg-white h-1 rounded-full transition-all duration-300';
-
-            const formData = new FormData();
-            for (let i = 0; i < fileInput.files.length; i++) {
-                formData.append('files', fileInput.files[i]);
-            }
-            formData.append('resize', convResize);
-            formData.append('format', convFormat);
-            formData.append('autocrop', document.getElementById('convAutoCrop').checked);
-            
-            formData.append('trimStart', document.getElementById('trimStart').value);
-            formData.append('trimEnd', document.getElementById('trimEnd').value);
+            submitBtn.disabled = true;
+            submitBtn.classList.add('opacity-50');
 
             try {
-                const response = await fetch('/api/convert', { method: 'POST', body: formData });
+                const response = await fetch('/api/convert', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(errData.error || 'Conversion failed');
+                }
+
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
 
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
-                    
+
                     const chunk = decoder.decode(value);
                     const lines = chunk.split('\n\n');
 
@@ -842,13 +893,10 @@
                                 const data = JSON.parse(line.substring(6));
 
                                 if (data.error) {
-                                    statusText.textContent = "Error: " + data.error;
-                                    statusText.className = 'text-[10px] font-bold uppercase tracking-widest text-red-500';
-                                    statusIcon.className = 'fa-solid fa-circle-xmark text-red-500';
-                                    progressBar.className = 'bg-red-500 h-1 rounded-full transition-all duration-300';
-                                    submitBtn.disabled = false;
-                                    submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-                                    return;
+                                    statusText.textContent = `Error: ${data.error}`;
+                                    statusText.className = 'text-red-500 font-bold uppercase tracking-widest text-[10px]';
+                                    statusIcon.className = 'fa-solid fa-circle-exclamation text-red-500';
+                                    break;
                                 }
 
                                 if (data.status) {
@@ -856,129 +904,77 @@
                                 }
 
                                 if (data.done) {
-                                    if (data.error) {
-                                        progressBar.style.width = "100%";
-                                        statusText.textContent = data.status || 'Conversions Complete!';
-                                        statusText.className = 'text-[10px] font-bold uppercase tracking-widest text-white';
-                                        statusIcon.className = 'fa-solid fa-check text-white';
-                                        progressBar.className = 'bg-white h-1 rounded-full transition-all duration-300';
-                                        submitBtn.disabled = false;
-                                        submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-                                    }
+                                    statusText.textContent = 'Conversion Completed!';
+                                    statusText.className = 'text-emerald-400 font-bold uppercase tracking-widest text-[10px]';
+                                    statusIcon.className = 'fa-solid fa-circle-check text-emerald-400';
+                                    progressBar.style.width = '100%';
+                                    break;
                                 }
-                            } catch (e) {
-                                console.error('Error parsing SSE json', e, line);
-                            }
+                            } catch (err) {}
                         }
                     }
                 }
             } catch (err) {
-                console.error(err);
-                statusText.textContent = 'Connection Error';
-                statusText.className = 'text-[10px] font-bold uppercase tracking-widest text-red-500';
-                statusIcon.className = 'fa-solid fa-circle-xmark text-red-500';
+                statusText.textContent = `Failed: ${err.message}`;
+                statusText.className = 'text-red-500 font-bold uppercase tracking-widest text-[10px]';
+                statusIcon.className = 'fa-solid fa-circle-exclamation text-red-500';
             } finally {
                 submitBtn.disabled = false;
-                submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                submitBtn.classList.remove('opacity-50');
             }
         });
-        async function browseCleanerFolder() {
-            try {
-                const response = await fetch('/api/browse', { method: 'POST' });
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data.path) {
-                        document.getElementById('cleaner_dir').value = data.path;
-                    }
-                }
-            } catch (e) {
-                console.error("Failed to browse folder", e);
-            }
-        }
 
-        async function browseCleanerFile() {
-            try {
-                const response = await fetch('/api/browse_file', { method: 'POST' });
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data.path) {
-                        document.getElementById('cleaner_dir').value = data.path;
-                    }
-                }
-            } catch (e) {
-                console.error("Failed to browse file", e);
-            }
-        }
-
-        document.getElementById('cleanerForm').addEventListener('submit', async function(e) {
+        // AI Cleaner Form JS
+        document.getElementById('cleanerForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            
-            const btn = document.getElementById('cleanerSubmitBtn');
-            const terminal = document.getElementById('cleanerTerminal');
-            const logContainer = document.getElementById('cleanerLog');
-            
-            // Get selected directories
-            const cleanerDir = document.getElementById('cleaner_dir').value;
-            if (!cleanerDir) {
-                alert("Please select a target folder to clean.");
-                return;
-            }
-            const targetDirs = [cleanerDir];
+            const dir = document.getElementById('cleaner_dir').value;
+            if (!dir) return;
 
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fa-solid fa-broom fa-bounce text-lg"></i><span>Cleaning Media...</span>';
-            
+            const terminal = document.getElementById('cleanerTerminal');
+            const submitBtn = document.getElementById('cleanerSubmitBtn');
             terminal.classList.remove('hidden');
-            logContainer.innerHTML = '';
+            terminal.textContent = 'Initializing Batch Cleaner engine...\n';
+            submitBtn.disabled = true;
+            submitBtn.classList.add('opacity-50');
 
             try {
                 const response = await fetch('/api/batch_clean', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ target_dirs: targetDirs })
+                    body: JSON.stringify({ target_dirs: [dir] })
                 });
 
                 if (!response.ok) {
-                    throw new Error("Failed to start batch cleaner.");
+                    throw new Error('Batch cleaner failed to start');
                 }
 
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
-                
+
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
-                    
+
                     const chunk = decoder.decode(value);
                     const lines = chunk.split('\n\n');
-                    
+
                     for (const line of lines) {
                         if (line.startsWith('data: ')) {
                             try {
                                 const data = JSON.parse(line.substring(6));
                                 if (data.status) {
-                                    const logLine = document.createElement('div');
-                                    logLine.textContent = data.status;
-                                    logContainer.appendChild(logLine);
+                                    terminal.textContent += data.status + '\n';
                                     terminal.scrollTop = terminal.scrollHeight;
                                 }
-                                if (data.done) {
-                                    break;
-                                }
-                            } catch (e) {
-                                console.error("Error parsing SSE data:", e);
-                            }
+                            } catch (err) {}
                         }
                     }
                 }
-            } catch (e) {
-                const errLine = document.createElement('div');
-                errLine.textContent = "[Error] " + e.message;
-                errLine.classList.add('text-red-500');
-                logContainer.appendChild(errLine);
+            } catch (err) {
+                terminal.textContent += `[Error] ${err.message}\n`;
             } finally {
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fa-solid fa-broom text-lg"></i><span>Run AI Cleaner</span>';
+                submitBtn.disabled = false;
+                submitBtn.classList.remove('opacity-50');
             }
         });
     </script>

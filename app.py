@@ -224,20 +224,53 @@ def convert_media():
                 
                 try:
                     vf_filters = []
+                    crf_val = "23" # Default standard quality
                     
+                    # 1. Smart Auto-Crop or Aspect Ratio Crop/Pad
                     if autocrop and format_opt not in ["mp3", "wav"] and input_ext not in [".mp3", ".wav", ".jpg", ".png", ".webp"]:
-                        q.put({"status": f"{prefix}Analyzing face position..."})
+                        q.put({"status": f"{prefix}Analyzing face position for Smart Auto-Crop..."})
                         center_x = get_face_center_x(input_path)
                         if center_x is not None:
-                            # We want a 9:16 crop. So W = H * 9 / 16
-                            # In ffmpeg: crop=ih*9/16:ih:X:0
                             vf_filters.append(f"crop=ih*9/16:ih:{center_x}-ih*9/32:0")
+                        else:
+                            vf_filters.append("crop=ih*9/16:ih")
+                    elif resize and resize != "none" and format_opt not in ["mp3", "wav"]:
+                        if resize == "crop_9_16":
+                            vf_filters.append("crop=ih*9/16:ih")
+                        elif resize == "pad_9_16":
+                            vf_filters.append("scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2")
+                        elif resize == "crop_16_9":
+                            vf_filters.append("crop=iw:iw*9/16")
+                        elif resize == "pad_16_9":
+                            vf_filters.append("scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2")
+                        elif resize == "crop_1_1":
+                            vf_filters.append("crop=min(iw\\,ih):min(iw\\,ih)")
+                        elif resize == "crop_4_5":
+                            vf_filters.append("crop=ih*4/5:ih")
+
+                    # 2. File Size & Resolution Scaling (MB Reduction)
+                    compress_opt = request.form.get('compress')
+                    if compress_opt and compress_opt != "none" and format_opt not in ["mp3", "wav"]:
+                        if compress_opt == "scale_1080p":
+                            vf_filters.append("scale='min(1080,iw)':'min(1920,ih)':force_original_aspect_ratio=decrease")
+                        elif compress_opt == "scale_720p":
+                            vf_filters.append("scale='min(720,iw)':'min(1280,ih)':force_original_aspect_ratio=decrease")
+                            crf_val = "26"
+                        elif compress_opt == "scale_480p":
+                            vf_filters.append("scale='min(480,iw)':'min(854,ih)':force_original_aspect_ratio=decrease")
+                            crf_val = "28"
+                        elif compress_opt == "scale_50":
+                            vf_filters.append("scale=iw*0.5:ih*0.5")
+                            crf_val = "26"
+                        elif compress_opt == "scale_25":
+                            vf_filters.append("scale=iw*0.25:ih*0.25")
+                            crf_val = "28"
+                        elif compress_opt == "compress_high":
+                            crf_val = "28" # ~50% MB size reduction
+                        elif compress_opt == "compress_web":
+                            crf_val = "32" # ~75% MB size reduction (Web/Discord)
                     
-                    if resize and resize != "none":
-                        w, h = resize.split("x")
-                        vf_filters.append(f"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2")
-                    
-                    # Audio formats (ignore resize)
+                    # Audio formats (ignore video filters)
                     if format_opt in ["mp3", "wav"]:
                         if format_opt == "mp3":
                             cmd.extend(["-vn", "-acodec", "libmp3lame", "-q:a", "2"])
@@ -249,9 +282,9 @@ def convert_media():
                             cmd.extend(["-vf", ",".join(vf_filters)])
                             
                         if format_opt in ["mp4", "mkv", "mov", "avi"]:
-                            cmd.extend(["-c:v", "libx264", "-c:a", "aac"])
+                            cmd.extend(["-c:v", "libx264", "-preset", "fast", "-crf", crf_val, "-c:a", "aac", "-pix_fmt", "yuv420p"])
                         elif format_opt == "webm":
-                            cmd.extend(["-c:v", "libvpx", "-c:a", "libvorbis"])
+                            cmd.extend(["-c:v", "libvpx", "-c:a", "libvorbis", "-crf", crf_val])
                         elif format_opt == "gif":
                             cmd.extend(["-r", "15"]) 
                         elif format_opt in ["jpg", "png", "webp"]:
