@@ -66,7 +66,7 @@ def clean_video(file_path, ffmpeg_exe=None):
         if os.path.exists(temp_output):
             try:
                 os.remove(temp_output)
-            except:
+            except Exception:
                 pass
         return False, str(e)
 
@@ -126,7 +126,7 @@ def run_batch_cleaner(target_dirs, base_backup_dir):
             try:
                 with open(path, 'r', encoding='utf-8', errors='replace') as f:
                     return set(line.strip() for line in f if line.strip())
-            except:
+            except Exception:
                 pass
         return set()
 
@@ -135,7 +135,7 @@ def run_batch_cleaner(target_dirs, base_backup_dir):
             os.makedirs(os.path.dirname(path), exist_ok=True)
             with open(path, 'a', encoding='utf-8', errors='replace') as f:
                 f.write(item + '\n')
-        except:
+        except Exception:
             pass
 
     photo_registry = load_registry(registry_file)

@@ -3,6 +3,7 @@ import re
 import sys
 import subprocess
 import threading
+import uuid
 from flask import Flask, render_template, request, jsonify, Response, send_file, send_from_directory
 import queue
 import json
@@ -34,7 +35,7 @@ def load_history():
     if not os.path.exists(HISTORY_FILE): return []
     try:
         with open(HISTORY_FILE, 'r', encoding='utf-8') as f: return json.load(f)
-    except: return []
+    except Exception: return []
 
 def save_history(data):
     with open(HISTORY_FILE, 'w', encoding='utf-8') as f: json.dump(data, f, indent=4)
@@ -55,6 +56,9 @@ def get_whisper():
         whisper_model = whisper.load_model("base")
     return whisper_model
 
+# Cache the face detection cascade at module level
+_face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+
 def get_face_center_x(video_path):
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
@@ -68,7 +72,7 @@ def get_face_center_x(video_path):
         cap.release()
         return None
         
-    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+    face_cascade = _face_cascade
     centers = []
     frame_count = 0
     
@@ -98,7 +102,7 @@ app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024
 
 # Auto-update yt-dlp on startup
 print("Checking for yt-dlp updates...")
-subprocess.run([sys.executable, "-m", "pip", "install", "-U", "yt-dlp"])
+subprocess.run([sys.executable, "-m", "pip", "install", "-U", "yt-dlp", "-q"])
 
 import yt_dlp
 
@@ -110,24 +114,25 @@ def shazam_file(audio_path):
     async def recognize():
         shazam = Shazam()
         return await shazam.recognize(audio_path)
+    loop = asyncio.new_event_loop()
     try:
-        loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         return loop.run_until_complete(recognize())
     except Exception as e:
         print("Shazam error:", e)
         return None
+    finally:
+        loop.close()
 
 @app.route('/')
 def index():
     return render_template('index.html')
 
 def cleanup_temp_dir(dir_path):
-    import time
-    time.sleep(30) # Wait 30 seconds for the file to finish transmitting to the user
+    time.sleep(30)
     try:
         shutil.rmtree(dir_path)
-    except:
+    except Exception:
         pass
 
 @app.route('/api/list_drives', methods=['GET'])
@@ -213,7 +218,7 @@ def convert_media():
     
     # Save files synchronously before background thread
     saved_files = []
-    import uuid
+    # uuid is imported at the top of the file
     shared_temp_dir = tempfile.mkdtemp()
     for f in files:
         if f.filename:
@@ -343,13 +348,13 @@ def convert_media():
                     
                     # Cleanup temp for this file immediately
                     try: os.remove(input_path) 
-                    except: pass
+                    except Exception: pass
                     
                 except Exception as e:
                     failed_count += 1
                     err_msg = str(e)
                     q.put({"status": f"{prefix}Error converting file."})
-                    import time; time.sleep(3)
+                    time.sleep(3)
                     
             if failed_count == 0:
                 q.put({"status": f"Successfully saved to {output_dir}", "done": True})
@@ -525,7 +530,7 @@ def download_video():
                             if "Could not copy Chrome cookie database" in err_msg or "database is locked" in err_msg:
                                 q.put({"status": f"{prefix}Error: Close Chrome entirely to use its cookies!"})
                                 failed_count += 1
-                                import time; time.sleep(4)
+                                time.sleep(4)
                                 continue
                             
                             if "No video formats found" in err_msg or "Unable to extract data" in err_msg or "HTTP Error 400" in err_msg or "Video info extraction failed" in err_msg:
@@ -557,17 +562,17 @@ def download_video():
                                     
                                     if return_code == 0:
                                         q.put({"status": f"{prefix}Successfully downloaded images/profile!"})
-                                        import time; time.sleep(2)
+                                        time.sleep(2)
                                         continue
                                     else:
                                         q.put({"status": f"{prefix}Gallery-DL failed."})
                                         failed_count += 1
-                                        import time; time.sleep(4)
+                                        time.sleep(4)
                                         continue
                                 except Exception as gdl_err:
                                     q.put({"status": f"{prefix}Gallery-DL Error: {str(gdl_err)}"})
                                     failed_count += 1
-                                    import time; time.sleep(4)
+                                    time.sleep(4)
                                     continue
 
                             q.put({"status": f"{prefix}Error: {err_msg}"})
@@ -640,7 +645,7 @@ def download_video():
                                             shazam_artist = shazam_res['track'].get('subtitle')
                                         try:
                                             os.remove(temp_audio)
-                                        except:
+                                        except Exception:
                                             pass
                                             
                                     # Write metadata to files
@@ -688,7 +693,7 @@ def download_video():
                                             print("Whisper error:", e)
                                         try:
                                             os.remove(full_audio)
-                                        except:
+                                        except Exception:
                                             pass
                                             
                                 # Force H.264 Encoding (Fixes AI tool compatibility)
@@ -787,14 +792,14 @@ def open_folder():
         return jsonify({"error": "Path not found"}), 400
     
     if os.path.isfile(path):
-        subprocess.run(f'explorer /select,"{os.path.abspath(path)}"')
+        subprocess.run(['explorer', '/select,', os.path.abspath(path)])
     else:
         os.startfile(os.path.abspath(path))
     return jsonify({"success": True})
 
 @app.route('/api/preview')
 def preview_file():
-    from flask import send_file
+    # send_file is imported at the top of the file
     path = request.args.get('path')
     if not path or not os.path.exists(path) or not os.path.isfile(path):
         return "Not found", 404
@@ -822,4 +827,4 @@ if __name__ == '__main__':
     print("Server running on http://127.0.0.1:5000")
     # Launch browser precisely after the server is ready
     threading.Timer(1.25, lambda: webbrowser.open("http://127.0.0.1:5000")).start()
-    serve(app, host='127.0.0.1', port=5000)
+    serve(app, host='127.0.0.1', port=5000, threads=8)

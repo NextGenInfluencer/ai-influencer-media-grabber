@@ -14,7 +14,7 @@ Whether you're building a massive reference folder of TikTok trends, extracting 
 The dedicated centerpiece feature designed specifically for AI creators and influencers. Select any local folder or file containing your AI-generated creations (from **Kling AI, Midjourney, Stable Diffusion, Google Nano Banana, Veo, etc.**) to make them look like authentic camera footage:
 - **C2PA & EXIF Stripping:** Automatically removes software manifests, generator tags, and metadata that social media algorithms read at upload time.
 - **SynthID Pixel Scatter:** Shaves 0.5% off image/video edges (shifting the coordinate grid) and injects a microscopic layer of film grain (Gaussian noise). Confuses AI visual classifiers without any loss of visual quality.
-- **Native OS Folder & File Selection:** Choose entire project folders or individual media files via native Windows pickers.
+- **Built-in Folder & File Browser:** Choose entire project folders or individual media files via the sleek in-app browser modal — no external processes required.
 - **Automatic Safety Backups:** Unmodified source files are preserved automatically in `backup_unscrambled/` before any edits occur.
 - **Deduplication:** Keeps track of processed files in registry text logs so you never waste time double-cleaning media.
 
