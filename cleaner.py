@@ -109,7 +109,7 @@ def run_batch_cleaner(target_dirs, base_backup_dir):
     total_scrambled = 0
     total_videos = 0
     
-    yield f"data: {{\\"status\\": \\"Starting Batch Cleaner...\"}}\n\n'
+    yield f'data: {{"status": "Starting Batch Cleaner..."}}\n\n'
     
     registry_file = os.path.join(base_backup_dir, "scramble_registry.txt")
     video_registry_file = os.path.join(base_backup_dir, "video_scramble_registry.txt")
@@ -151,7 +151,7 @@ def run_batch_cleaner(target_dirs, base_backup_dir):
             continue
             
         if not os.path.isdir(root_dir):
-            yield f"data: {{\\"status\\": \\"Skipping {root_dir} (not found)\"}}\n\n'
+            yield f'data: {{"status": "Skipping {root_dir} (not found)"}}\n\n'
             continue
             
         for dirpath, dirnames, filenames in os.walk(root_dir):
@@ -176,7 +176,7 @@ def run_batch_cleaner(target_dirs, base_backup_dir):
                 dirs_to_process.append((dirpath, existing_photos, files_to_rename, videos_to_process))
             
     for subdir, existing_photos, files_to_rename, videos_to_process in sorted(dirs_to_process, key=lambda x: x[0].lower()):
-        yield f"data: {{\\"status\\": \\"Processing folder: {subdir}\"}}\n\n'
+        yield f'data: {{"status": "Processing folder: {subdir}"}}\n\n'
         
         # 1. Rename Photos
         used_numbers = set()
@@ -199,7 +199,7 @@ def run_batch_cleaner(target_dirs, base_backup_dir):
                     os.rename(original_path, temp_path)
                     temp_renames.append((temp_path, ext, original_name))
                 except Exception as e:
-                    yield f"data: {{\\"status\\": \\"  [Error] Failed to rename {original_name}: {str(e)}\"}}\n\n'
+                    yield f'data: {{"status": "  [Error] Failed to rename {original_name}: {str(e)}"}}\n\n'
             
             if temp_renames:
                 for idx, (temp_path, ext, original_name) in enumerate(temp_renames):
@@ -208,11 +208,11 @@ def run_batch_cleaner(target_dirs, base_backup_dir):
                     final_path = os.path.join(subdir, final_name)
                     try:
                         os.rename(temp_path, final_path)
-                        yield f"data: {{\\"status\\": \\"  [Renamed] {original_name} -> {final_name}\"}}\n\n'
+                        yield f'data: {{"status": "  [Renamed] {original_name} -> {final_name}"}}\n\n'
                         total_renamed += 1
                         existing_photos.append(final_name)
                     except Exception as e:
-                        yield f"data: {{\\"status\\": \\"  [Error] Final rename failed for {final_name}: {str(e)}\"}}\n\n'
+                        yield f'data: {{"status": "  [Error] Final rename failed for {final_name}: {str(e)}"}}\n\n'
                         
         # 2. Scramble Photos
         for f in existing_photos:
@@ -223,12 +223,12 @@ def run_batch_cleaner(target_dirs, base_backup_dir):
                 if backup_file(norm_path, base_backup_dir):
                     success, msg = clean_photo(norm_path)
                     if success:
-                        yield f"data: {{\\"status\\": \\"  [Cleaned Photo] {f}\"}}\n\n'
+                        yield f'data: {{"status": "  [Cleaned Photo] {f}"}}\n\n'
                         save_registry(registry_file, norm_path)
                         photo_registry.add(norm_path)
                         total_scrambled += 1
                     else:
-                        yield f"data: {{\\"status\\": \\"  [Error] Photo clean failed on {f}: {msg}\"}}\n\n'
+                        yield f'data: {{"status": "  [Error] Photo clean failed on {f}: {msg}"}}\n\n'
                         
         # 3. Process Videos
         for f, ext in videos_to_process:
@@ -236,15 +236,15 @@ def run_batch_cleaner(target_dirs, base_backup_dir):
             norm_path = os.path.normpath(file_path)
             
             if norm_path not in video_registry:
-                if backup_file(norm_path, base_music_dir):
-                    yield f"data: {{\\"status\\": \\"  [Processing Video] {f}...\"}}\n\n'
+                if backup_file(norm_path, base_backup_dir):
+                    yield f'data: {{"status": "  [Processing Video] {f}..."}}\n\n'
                     success, msg = clean_video(norm_path)
                     if success:
-                        yield f"data: {{\\"status\\": \\"  [Cleaned Video] {f}\"}}\n\n'
+                        yield f'data: {{"status": "  [Cleaned Video] {f}"}}\n\n'
                         save_registry(video_registry_file, norm_path)
                         video_registry.add(norm_path)
                         total_videos += 1
                     else:
-                        yield f"data: {{\\"status\\": \\"  [Error] Video clean failed on {f}: {msg}\"}}\n\n'
+                        yield f'data: {{"status": "  [Error] Video clean failed on {f}: {msg}"}}\n\n'
 
-    yield f"data: {{\\"status\\": \\"Batch Cleaner Completed! Renamed: {total_renamed}, Cleaned Photos: {total_scrambled}, Cleaned Videos: {total_videos}.\\", \\"done\": true}}\n\n'
+    yield f'data: {{"status": "Batch Cleaner Completed! Renamed: {total_renamed}, Cleaned Photos: {total_scrambled}, Cleaned Videos: {total_videos}.", "done": true}}\n\n'
