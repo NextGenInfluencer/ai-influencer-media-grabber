@@ -130,23 +130,36 @@ def cleanup_temp_dir(dir_path):
     except:
         pass
 
-@app.route('/api/select-folder', methods=['GET'])
+@app.route('/api/select-folder', methods=['GET', 'POST'])
 def select_folder():
-    # Spawn a completely separate python process to open tkinter safely
-    # without freezing the Flask main thread.
-    script = """
-import tkinter as tk
-from tkinter import filedialog
+    try:
+        import tempfile, os
+        script = """import tkinter as tk
+import tkinter.filedialog as fd
+import ctypes
 root = tk.Tk()
 root.withdraw()
-root.attributes('-topmost', True)
-path = filedialog.askdirectory()
+try:
+    hwnd = ctypes.windll.user32.GetParent(root.winfo_id())
+    ctypes.windll.user32.SetForegroundWindow(hwnd)
+except: pass
+path = fd.askdirectory(parent=root, title='Select Target Folder')
 print(path)
+root.destroy()
 """
-    try:
-        result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True)
-        path = result.stdout.strip()
-        return jsonify({"path": path})
+        with tempfile.NamedTemporaryFile('w', suffix='.py', delete=False) as f:
+            f.write(script)
+            temp_path = f.name
+        
+        try:
+            result = subprocess.run([sys.executable, temp_path], capture_output=True, text=True)
+            folder = result.stdout.strip()
+        finally:
+            os.remove(temp_path)
+
+        if folder:
+            return jsonify({"path": folder})
+        return jsonify({"error": "No folder selected"}), 400
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -704,21 +717,30 @@ def download_video():
 @app.route('/api/browse', methods=['POST'])
 def browse_folder():
     try:
-        cmd = [
-            sys.executable, "-c",
-            "import tkinter as tk, tkinter.filedialog as fd; "
-            "import ctypes; "
-            "try: ctypes.windll.user32.SetProcessDPIAware() \nexcept: pass; "
-            "root = tk.Tk(); root.attributes('-alpha', 0.0); root.attributes('-topmost', True); "
-            "def popup():\n"
-            "    path = fd.askdirectory(parent=root, title='Select Target Folder')\n"
-            "    print(path)\n"
-            "    root.destroy()\n"
-            "root.after(50, popup)\n"
-            "root.mainloop()"
-        ]
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        folder = result.stdout.strip()
+        import tempfile, os
+        script = """import tkinter as tk
+import tkinter.filedialog as fd
+import ctypes
+root = tk.Tk()
+root.withdraw()
+try:
+    hwnd = ctypes.windll.user32.GetParent(root.winfo_id())
+    ctypes.windll.user32.SetForegroundWindow(hwnd)
+except: pass
+path = fd.askdirectory(parent=root, title='Select Target Folder')
+print(path)
+root.destroy()
+"""
+        with tempfile.NamedTemporaryFile('w', suffix='.py', delete=False) as f:
+            f.write(script)
+            temp_path = f.name
+        
+        try:
+            result = subprocess.run([sys.executable, temp_path], capture_output=True, text=True)
+            folder = result.stdout.strip()
+        finally:
+            os.remove(temp_path)
+
         if folder:
             return jsonify({"path": folder})
         return jsonify({"error": "No folder selected"}), 400
@@ -728,21 +750,30 @@ def browse_folder():
 @app.route('/api/browse_file', methods=['POST'])
 def browse_file():
     try:
-        cmd = [
-            sys.executable, "-c",
-            "import tkinter as tk, tkinter.filedialog as fd; "
-            "import ctypes; "
-            "try: ctypes.windll.user32.SetProcessDPIAware() \nexcept: pass; "
-            "root = tk.Tk(); root.attributes('-alpha', 0.0); root.attributes('-topmost', True); "
-            "def popup():\n"
-            "    path = fd.askopenfilename(parent=root, title='Select Media File', filetypes=[('Media Files', '*.mp4 *.mov *.m4v *.webm *.avi *.mkv *.jpg *.png *.jpeg *.webp')])\n"
-            "    print(path)\n"
-            "    root.destroy()\n"
-            "root.after(50, popup)\n"
-            "root.mainloop()"
-        ]
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        file_path = result.stdout.strip()
+        import tempfile, os
+        script = """import tkinter as tk
+import tkinter.filedialog as fd
+import ctypes
+root = tk.Tk()
+root.withdraw()
+try:
+    hwnd = ctypes.windll.user32.GetParent(root.winfo_id())
+    ctypes.windll.user32.SetForegroundWindow(hwnd)
+except: pass
+path = fd.askopenfilename(parent=root, title='Select Media File', filetypes=[('Media Files', '*.mp4 *.mov *.m4v *.webm *.avi *.mkv *.jpg *.png *.jpeg *.webp')])
+print(path)
+root.destroy()
+"""
+        with tempfile.NamedTemporaryFile('w', suffix='.py', delete=False) as f:
+            f.write(script)
+            temp_path = f.name
+        
+        try:
+            result = subprocess.run([sys.executable, temp_path], capture_output=True, text=True)
+            file_path = result.stdout.strip()
+        finally:
+            os.remove(temp_path)
+
         if file_path:
             return jsonify({"path": file_path})
         return jsonify({"error": "No file selected"}), 400
