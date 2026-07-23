@@ -704,7 +704,17 @@ def download_video():
 @app.route('/api/browse', methods=['POST'])
 def browse_folder():
     try:
-        cmd = [sys.executable, "-c", "import tkinter as tk, tkinter.filedialog as fd; root=tk.Tk(); root.withdraw(); root.attributes('-topmost', True); print(fd.askdirectory())"]
+        cmd = [
+            sys.executable, "-c",
+            "import tkinter as tk, tkinter.filedialog as fd; "
+            "import ctypes; "
+            "try: ctypes.windll.user32.SetProcessDPIAware() \nexcept: pass; "
+            "root=tk.Tk(); root.withdraw(); "
+            "root.attributes('-topmost', True); "
+            "root.update(); "
+            "path=fd.askdirectory(parent=root, title='Select Target Folder'); "
+            "root.destroy(); print(path)"
+        ]
         result = subprocess.run(cmd, capture_output=True, text=True)
         folder = result.stdout.strip()
         if folder:
@@ -716,7 +726,17 @@ def browse_folder():
 @app.route('/api/browse_file', methods=['POST'])
 def browse_file():
     try:
-        cmd = [sys.executable, "-c", "import tkinter as tk, tkinter.filedialog as fd; root=tk.Tk(); root.withdraw(); root.attributes('-topmost', True); print(fd.askopenfilename(filetypes=[('Media Files', '*.mp4 *.mov *.m4v *.webm *.avi *.mkv *.jpg *.png *.jpeg *.webp')]))"]
+        cmd = [
+            sys.executable, "-c",
+            "import tkinter as tk, tkinter.filedialog as fd; "
+            "import ctypes; "
+            "try: ctypes.windll.user32.SetProcessDPIAware() \nexcept: pass; "
+            "root=tk.Tk(); root.withdraw(); "
+            "root.attributes('-topmost', True); "
+            "root.update(); "
+            "path=fd.askopenfilename(parent=root, title='Select Media File', filetypes=[('Media Files', '*.mp4 *.mov *.m4v *.webm *.avi *.mkv *.jpg *.png *.jpeg *.webp')]); "
+            "root.destroy(); print(path)"
+        ]
         result = subprocess.run(cmd, capture_output=True, text=True)
         file_path = result.stdout.strip()
         if file_path:
