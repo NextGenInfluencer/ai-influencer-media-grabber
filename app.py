@@ -667,7 +667,7 @@ def download_video():
                                 if processing_options.get('autoExtractPrompt'):
                                     q.put({"status": f"{prefix}Extracting AI Prompt (BLIP)..."})
                                     try:
-                                        from extractor import extract_prompt_from_image
+                                        from ai_prompter import extract_prompt_from_image
                                         target_image = frame_path if os.path.exists(frame_path) else final_path
                                         if os.path.exists(target_image):
                                             prompt_text = extract_prompt_from_image(target_image)
@@ -913,7 +913,7 @@ def extract_prompt():
             return jsonify({"error": f"Video extraction error: {str(e)}"}), 500
             
     try:
-        from extractor import extract_prompt_from_image
+        from ai_prompter import extract_prompt_from_image
         prompt = extract_prompt_from_image(target_image)
         return jsonify({"prompt": prompt})
     except Exception as e:
