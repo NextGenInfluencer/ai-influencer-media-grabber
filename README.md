@@ -47,6 +47,15 @@ A dedicated offline media suite to format and tweak your media:
 
 ---
 
+## 💡 How to use the AI Prompt Extractor
+1. Go to the **Output Gallery** tab to view your downloaded videos and images.
+2. Hover over any video or image card.
+3. Click the shiny **Extract Prompt** button that appears in the overlay menu.
+4. Wait a moment for the AI to analyze the media. (Note: The first time you use this, the app will automatically download the local AI vision model, which may take a minute. Subsequent extractions are instant!)
+5. A popup will appear with your generated prompt, perfectly formatted and ready to be pasted into Midjourney, Kling, or any other AI generator.
+
+---
+
 ## 💻 How to Download & Run (For Beginners)
 
 If you don't know how to use the command line, don't worry! Running this app is incredibly simple.
