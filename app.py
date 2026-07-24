@@ -924,12 +924,13 @@ def preview_file():
 def batch_clean():
     data = request.json
     target_dirs = data.get('target_dirs', [])
+    inject_exif = data.get('inject_exif', False)
     
     output_dir = os.path.join(DEFAULT_SAVE_DIR, "AI Cleaned")
     
     try:
         from cleaner import run_batch_cleaner
-        return Response(run_batch_cleaner(target_dirs, output_dir, is_upload=False), mimetype='text/event-stream')
+        return Response(run_batch_cleaner(target_dirs, output_dir, is_upload=False, inject_exif=inject_exif), mimetype='text/event-stream')
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -941,6 +942,8 @@ def batch_clean_upload():
     files = request.files.getlist('files')
     if not files or not files[0].filename:
         return jsonify({"error": "No selected files"}), 400
+        
+    inject_exif = request.form.get('inject_exif', 'false').lower() == 'true'
         
     from werkzeug.utils import secure_filename
     upload_folder = os.path.join(DEFAULT_SAVE_DIR, "AI Cleaned", f"Uploaded_{int(time.time())}")
@@ -956,7 +959,7 @@ def batch_clean_upload():
             
     try:
         from cleaner import run_batch_cleaner
-        return Response(run_batch_cleaner(uploaded_paths, upload_folder, is_upload=True), mimetype='text/event-stream')
+        return Response(run_batch_cleaner(uploaded_paths, upload_folder, is_upload=True, inject_exif=inject_exif), mimetype='text/event-stream')
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

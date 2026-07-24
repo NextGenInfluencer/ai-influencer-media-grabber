@@ -1130,7 +1130,8 @@
 
                 const response = await fetch('/api/download', {
                     method: 'POST',
-                    body: formData,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(taskData.payload),
                     signal: controller.signal
                 });
 
@@ -1203,11 +1204,22 @@
 
             urls.forEach(singleUrl => {
                 const taskId = generateUUID();
-                const taskFormData = new FormData();
-                for (let [key, value] of baseFormData.entries()) {
-                    taskFormData.append(key, value);
-                }
-                taskFormData.set('url', singleUrl);
+                
+                const payload = {
+                    url: singleUrl,
+                    path: document.getElementById('path').value,
+                    filename: document.getElementById('filename').value,
+                    browser: document.getElementById('browser').value,
+                    task_id: taskId,
+                    processing_options: {
+                        forceH264: document.getElementById('forceH264').checked,
+                        extractFrame: document.getElementById('extractFrame').checked,
+                        aiBypass: document.getElementById('aiBypass').checked,
+                        identifySong: document.getElementById('identifySong').checked,
+                        transcribeAudio: document.getElementById('transcribeAudio').checked,
+                        burn_subtitles: document.getElementById('burnSubtitles').checked
+                    }
+                };
 
                 const row = document.createElement('div');
                 row.id = `task-${taskId}`;
@@ -1229,7 +1241,7 @@
                 `;
                 queueContainer.prepend(row);
 
-                downloadQueue.push({ taskId, formData: taskFormData, cancelled: false });
+                downloadQueue.push({ taskId, payload, cancelled: false });
             });
 
             document.getElementById('url').value = '';
