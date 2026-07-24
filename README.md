@@ -1,6 +1,6 @@
 # 🎥 AI Influencer Media Grabber
 
-![Version 1.5](https://img.shields.io/badge/Version-1.5-blue?style=for-the-badge) ![UI Preview](https://img.shields.io/badge/UI-Airi_Studio-f472b6?style=for-the-badge)
+![Version 1.5](https://img.shields.io/badge/Version-1.5-blue?style=for-the-badge) ![UI Preview](https://img.shields.io/badge/UI-Media_Grabber-f472b6?style=for-the-badge)
 
 ## 🌟 What is the AI Influencer Media Grabber?
 
