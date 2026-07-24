@@ -24,7 +24,7 @@ def should_skip_dir(dir_path):
             return True
     return False
 
-def clean_video(file_path, ffmpeg_exe=None):
+def clean_video(file_path, ffmpeg_exe=None, inject_exif=False):
     if not ffmpeg_exe:
         if imageio_ffmpeg:
             ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
@@ -35,12 +35,24 @@ def clean_video(file_path, ffmpeg_exe=None):
     cmd = [
         ffmpeg_exe, "-y", "-i", file_path,
         "-vf", "crop=in_w*0.995:in_h*0.995,noise=alls=1.2:allf=t+u",
-        "-map_metadata", "-1", "-map_chapters", "-1",
+        "-map_chapters", "-1",
         "-c:v", "libx264", "-crf", "17", "-preset", "fast",
         "-pix_fmt", "yuv420p", "-c:a", "copy",
-        "-movflags", "+faststart",
-        temp_output
+        "-movflags", "+faststart"
     ]
+    
+    if inject_exif:
+        cmd.extend([
+            "-metadata", "creation_time=now",
+            "-metadata", "make=Apple",
+            "-metadata", "model=iPhone 15 Pro",
+            "-metadata", "software=iOS 17.5"
+        ])
+    else:
+        cmd.extend(["-map_metadata", "-1"])
+        
+    cmd.append(temp_output)
+    
     try:
         result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8', errors='replace')
         if result.returncode == 0 and os.path.exists(temp_output) and os.path.getsize(temp_output) > 0:
@@ -59,7 +71,28 @@ def clean_video(file_path, ffmpeg_exe=None):
                 pass
         return False, str(e)
 
-def clean_photo(file_path):
+def get_fake_exif():
+    try:
+        import piexif
+        from datetime import datetime
+        zeroth_ifd = {
+            piexif.ImageIFD.Make: u"Apple",
+            piexif.ImageIFD.Model: u"iPhone 15 Pro",
+            piexif.ImageIFD.Software: u"iOS 17.5",
+            piexif.ImageIFD.DateTime: datetime.now().strftime("%Y:%m:%d %H:%M:%S")
+        }
+        exif_ifd = {
+            piexif.ExifIFD.LensMake: u"Apple",
+            piexif.ExifIFD.LensModel: u"iPhone 15 Pro back camera 24mm f/1.78",
+            piexif.ExifIFD.ISOSpeedRatings: 64,
+            piexif.ExifIFD.FocalLength: (24, 1),
+            piexif.ExifIFD.FNumber: (178, 100)
+        }
+        return piexif.dump({"0th": zeroth_ifd, "Exif": exif_ifd})
+    except ImportError:
+        return None
+
+def clean_photo(file_path, inject_exif=False):
     ext = os.path.splitext(file_path)[1].lower()
     try:
         with Image.open(file_path) as img:
@@ -81,8 +114,13 @@ def clean_photo(file_path):
             clean_arr = np.clip(arr, 0, 255).astype(np.uint8)
             scrambled_img = Image.fromarray(clean_arr)
             
+            exif_bytes = get_fake_exif() if inject_exif else None
+            
             if ext in ('.jpg', '.jpeg'):
-                scrambled_img.save(file_path, 'JPEG', quality=98)
+                if exif_bytes:
+                    scrambled_img.save(file_path, 'JPEG', quality=98, exif=exif_bytes)
+                else:
+                    scrambled_img.save(file_path, 'JPEG', quality=98)
             elif ext == '.png':
                 scrambled_img.save(file_path, 'PNG')
             else:
@@ -97,7 +135,7 @@ def make_sse(status_msg, done=False):
         data["done"] = True
     return "data: " + json.dumps(data) + "\n\n"
 
-def run_batch_cleaner(target_dirs, output_dir, is_upload=False):
+def run_batch_cleaner(target_dirs, output_dir, is_upload=False, inject_exif=False):
     """
     Generator function that yields log messages to stream via SSE.
     If is_upload=False, copies original files into output_dir and processes them there.
@@ -237,7 +275,7 @@ def run_batch_cleaner(target_dirs, output_dir, is_upload=False):
         # Scramble photos
         for orig, target in final_photos:
             if is_upload or os.path.normpath(orig) not in photo_registry:
-                success, msg = clean_photo(target)
+                success, msg = clean_photo(target, inject_exif=inject_exif)
                 if success:
                     yield make_sse(f"  [Cleaned Photo] {os.path.basename(target)}")
                     if not is_upload:
@@ -251,7 +289,7 @@ def run_batch_cleaner(target_dirs, output_dir, is_upload=False):
         for orig, target in videos:
             if is_upload or os.path.normpath(orig) not in video_registry:
                 yield make_sse(f"  [Processing Video] {os.path.basename(target)}...")
-                success, msg = clean_video(target)
+                success, msg = clean_video(target, inject_exif=inject_exif)
                 if success:
                     yield make_sse(f"  [Cleaned Video] {os.path.basename(target)}")
                     if not is_upload:

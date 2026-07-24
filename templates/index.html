@@ -177,6 +177,10 @@
                                     <input type="checkbox" id="transcribeAudio" class="form-checkbox text-pink-500 rounded border-zinc-700 bg-zinc-900" checked>
                                     <span>Transcribe Audio (Local Whisper)</span>
                                 </label>
+                                <label class="flex items-center space-x-2.5 text-xs text-zinc-400 cursor-pointer col-span-2">
+                                    <input type="checkbox" id="burnSubtitles" name="burn_subtitles" class="form-checkbox text-pink-500 rounded border-zinc-700 bg-zinc-900">
+                                    <span>Auto-Burn Subtitles (Whisper AI)</span>
+                                </label>
                             </div>
                         </div>
                     </div>
@@ -251,6 +255,9 @@
                                     <optgroup label="Horizontal (YouTube/TV)">
                                         <option value="crop_16_9">Crop to 16:9 (Fill Screen)</option>
                                         <option value="pad_16_9">Pad to 16:9 (Letterbox Fit)</option>
+                                    </optgroup>
+                                    <optgroup label="Vertical (TikTok/Reels/Shorts)">
+                                        <option value="pad_blur_9_16">Pad 16:9 to 9:16 (Blurred Canvas)</option>
                                     </optgroup>
                                     <optgroup label="Square & Feed">
                                         <option value="crop_1_1">Crop to 1:1 (Square)</option>
@@ -330,6 +337,13 @@
                         <div class="flex items-center space-x-2"><i class="fa-solid fa-check text-pink-500 text-xs"></i><span>Shaves 0.5% Edges (Grid Shift)</span></div>
                         <div class="flex items-center space-x-2"><i class="fa-solid fa-check text-pink-500 text-xs"></i><span>Injects Micro Gaussian Noise (SynthID Scatter)</span></div>
                         <div class="flex items-center space-x-2"><i class="fa-solid fa-shield text-emerald-400 text-xs"></i><span class="text-emerald-400 font-semibold">Non-Destructive (Copies saved to AI Cleaned)</span></div>
+                    </div>
+                    
+                    <div class="mt-3 pt-3 border-t border-pink-500/20">
+                        <label class="flex items-center space-x-2.5 text-[11px] text-zinc-300 cursor-pointer">
+                            <input type="checkbox" id="injectExif" name="inject_exif" class="form-checkbox text-pink-500 rounded border-zinc-700 bg-zinc-900 focus:ring-pink-500">
+                            <span class="font-bold">Inject Fake iPhone 15 Pro Camera Metadata (EXIF)</span>
+                        </label>
                     </div>
                 </div>
 
@@ -755,6 +769,41 @@
                 
                 hoverOverlay.appendChild(topBar);
                 hoverOverlay.appendChild(bottomBar);
+
+                // Add AI Prompt Button
+                const midBar = document.createElement('div');
+                midBar.className = 'pointer-events-auto flex items-center space-x-2 mt-2';
+                const aiBtn = document.createElement('button');
+                aiBtn.className = 'flex-1 py-1.5 bg-zinc-900/90 hover:bg-emerald-500 text-white rounded text-[10px] font-bold uppercase tracking-wider transition shadow-lg backdrop-blur flex items-center justify-center space-x-1';
+                aiBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> <span>Extract Prompt</span>';
+                aiBtn.onclick = async () => {
+                    const originalText = aiBtn.innerHTML;
+                    aiBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>Extracting...</span>';
+                    aiBtn.disabled = true;
+                    try {
+                        const res = await fetch('/api/extract_prompt', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ path: safePath })
+                        });
+                        const result = await res.json();
+                        if (result.prompt) {
+                            promptModal(result.prompt);
+                        } else {
+                            alert('Extraction failed: ' + (result.error || 'Unknown error'));
+                        }
+                    } catch (e) {
+                        alert('Extraction failed: ' + e.message);
+                    } finally {
+                        aiBtn.innerHTML = originalText;
+                        aiBtn.disabled = false;
+                    }
+                };
+                if (item.type === 'video' || item.type === 'image') {
+                    midBar.appendChild(aiBtn);
+                    hoverOverlay.insertBefore(midBar, bottomBar);
+                }
+
                 el.appendChild(hoverOverlay);
                 
                 const label = document.createElement('div');
@@ -839,7 +888,29 @@
             loadHistory();
         }
 
-        // Downloader JS
+        // --- Extracted Prompt Modal ---
+        function promptModal(promptText) {
+            const modal = document.createElement('div');
+            modal.style.cssText = 'position:fixed; inset:0; z-index:10000; background:rgba(0,0,0,0.8); backdrop-filter:blur(8px); display:flex; align-items:center; justify-content:center;';
+            modal.innerHTML = `
+                <div class="bg-[#111113] border border-zinc-800 rounded-2xl w-[min(500px,90vw)] p-6 shadow-2xl">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center space-x-2 text-emerald-400 font-extrabold text-xs uppercase tracking-wider">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i>
+                            <span>Extracted AI Prompt</span>
+                        </div>
+                        <button class="text-zinc-500 hover:text-zinc-300 transition p-1" onclick="this.closest('.fixed').remove()"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <textarea class="w-full h-32 bg-[#080809] border border-zinc-800 rounded-xl p-3 text-xs text-zinc-300 font-mono focus:outline-none focus:border-emerald-500 transition mb-4" readonly>${promptText}</textarea>
+                    <div class="flex space-x-3">
+                        <button class="flex-1 py-3 bg-emerald-500 hover:bg-emerald-400 text-white font-bold uppercase text-[10px] tracking-wider rounded-xl transition" onclick="navigator.clipboard.writeText('${promptText.replace(/'/g, "\\'")}'); this.innerHTML='<i class=\\'fa-solid fa-check\\'></i> Copied!'; setTimeout(() => this.innerHTML='Copy Prompt', 2000);">Copy Prompt</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+
+        // Form Submit for Downloader JS
         let previewTimeout = null;
         const processedUrls = new Set();
         
@@ -1354,11 +1425,14 @@
 
             try {
                 let response;
+                const injectExif = document.getElementById('injectExif').checked;
+                
                 if (files.length > 0) {
                     const formData = new FormData();
                     for(let i=0; i<files.length; i++) {
                         formData.append('files', files[i]);
                     }
+                    formData.append('inject_exif', injectExif);
                     response = await fetch('/api/batch_clean_upload', {
                         method: 'POST',
                         body: formData
@@ -1367,7 +1441,7 @@
                     response = await fetch('/api/batch_clean', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ target_dirs: [dir] })
+                        body: JSON.stringify({ target_dirs: [dir], inject_exif: injectExif })
                     });
                 }
 

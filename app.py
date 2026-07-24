@@ -221,6 +221,7 @@ def convert_media():
     resize = request.form.get('resize')
     format_opt = request.form.get('format')
     autocrop = request.form.get('autocrop') == 'true'
+    burn_subtitles = request.form.get('burn_subtitles') == 'true'
     trim_start = request.form.get('trimStart')
     trim_end = request.form.get('trimEnd')
     
@@ -309,6 +310,8 @@ def convert_media():
                             vf_filters.append("crop=min(iw\\,ih):min(iw\\,ih)")
                         elif resize == "crop_4_5":
                             vf_filters.append("crop=ih*4/5:ih")
+                        elif resize == "pad_blur_9_16":
+                            vf_filters.append("split[original][copy];[copy]scale=-1:1920,crop=1080:1920,boxblur=20:5[bg];[original]scale=1080:1920:force_original_aspect_ratio=decrease[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2")
 
                     # 2. File Size & Resolution Scaling (MB Reduction)
                     compress_opt = request.form.get('compress')
@@ -340,6 +343,36 @@ def convert_media():
                             cmd.extend(["-vn", "-acodec", "pcm_s16le"])
                     else:
                         # Video or Image formats
+                        if burn_subtitles:
+                            q.put({"status": f"{prefix}Generating & Burning Subtitles..."})
+                            temp_audio = os.path.join(shared_temp_dir, f"{uuid.uuid4().hex}.mp3")
+                            temp_srt = os.path.join(shared_temp_dir, f"{uuid.uuid4().hex}.srt")
+                            
+                            audio_cmd = [ffmpeg_exe, "-y", "-i", input_path, "-vn", "-acodec", "libmp3lame", temp_audio]
+                            subprocess.run(audio_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                            
+                            if os.path.exists(temp_audio):
+                                try:
+                                    model = get_whisper()
+                                    result = model.transcribe(temp_audio, verbose=False)
+                                    
+                                    def format_time(seconds):
+                                        m, s = divmod(seconds, 60)
+                                        h, m = divmod(m, 60)
+                                        ms = int((s - int(s)) * 1000)
+                                        return f"{int(h):02d}:{int(m):02d}:{int(s):02d},{ms:03d}"
+                                    
+                                    with open(temp_srt, 'w', encoding='utf-8') as f:
+                                        for i, segment in enumerate(result.get('segments', [])):
+                                            f.write(f"{i + 1}\n")
+                                            f.write(f"{format_time(segment['start'])} --> {format_time(segment['end'])}\n")
+                                            f.write(f"{segment['text'].strip()}\n\n")
+                                            
+                                    srt_escaped = temp_srt.replace('\\', '\\\\').replace(':', '\\:')
+                                    vf_filters.append(f"subtitles='{srt_escaped}':force_style='FontSize=24,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2'")
+                                except Exception as e:
+                                    print("Subtitle error:", e)
+
                         if vf_filters:
                             cmd.extend(["-vf", ",".join(vf_filters)])
                             
@@ -836,6 +869,48 @@ def open_folder():
         subprocess.run(['xdg-open', dir_to_open])
         
     return jsonify({"success": True})
+
+@app.route('/api/extract_prompt', methods=['POST'])
+def extract_prompt():
+    data = request.json
+    path = data.get('path')
+    if not path or not os.path.exists(path):
+        return jsonify({"error": "File not found"}), 404
+        
+    ext = os.path.splitext(path)[1].lower()
+    is_video = ext in ['.mp4', '.mov', '.mkv', '.webm', '.avi']
+    
+    target_image = path
+    temp_frame = None
+    
+    if is_video:
+        temp_frame = os.path.join(tempfile.gettempdir(), f"{uuid.uuid4().hex}.jpg")
+        try:
+            # Extract middle frame
+            subprocess.run([
+                imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-i", path, 
+                "-vf", "select=eq(n\\,0)", "-vframes", "1", temp_frame
+            ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            
+            if os.path.exists(temp_frame):
+                target_image = temp_frame
+            else:
+                return jsonify({"error": "Failed to extract frame from video"}), 500
+        except Exception as e:
+            return jsonify({"error": f"Video extraction error: {str(e)}"}), 500
+            
+    try:
+        from extractor import extract_prompt_from_image
+        prompt = extract_prompt_from_image(target_image)
+        return jsonify({"prompt": prompt})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if temp_frame and os.path.exists(temp_frame):
+            try:
+                os.remove(temp_frame)
+            except:
+                pass
 
 @app.route('/api/preview')
 def preview_file():

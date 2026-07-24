@@ -1,12 +1,12 @@
 # 🎥 AI Influencer Media Grabber
 
-![Version 1.5](https://img.shields.io/badge/Version-1.5-blue?style=for-the-badge) ![UI Preview](https://img.shields.io/badge/UI-Media_Grabber-f472b6?style=for-the-badge)
+![Version 1.6](https://img.shields.io/badge/Version-1.6-blue?style=for-the-badge) ![UI Preview](https://img.shields.io/badge/UI-Media_Grabber-f472b6?style=for-the-badge)
 
 ## 🌟 What is the AI Influencer Media Grabber?
 
 **AI Influencer Media Grabber** is your ultimate, all-in-one desktop toolkit for social media content creators, video editors, and AI artists. Instead of relying on sketchy, ad-filled websites to download videos or convert files, this app runs **100% locally on your computer** with a beautiful, modern interface.
 
-Whether you're building a massive reference folder of TikTok trends, extracting music from Instagram Reels, pulling perfectly-framed thumbnails for YouTube shorts, or prepping videos for AI generation tools like Kling—this grabber automates the entire workflow in just a few clicks. It's safe, blazing fast, completely private, and incredibly powerful.
+Whether you're building a massive reference folder of TikTok trends, extracting music from Instagram Reels, pulling perfectly-framed thumbnails for YouTube shorts, extracting AI prompts, or prepping videos for AI generation tools like Kling—this grabber automates the entire workflow in just a few clicks. It's safe, blazing fast, completely private, and incredibly powerful.
 
 ## 📸 Interface Preview
 
@@ -23,26 +23,31 @@ Whether you're building a massive reference folder of TikTok trends, extracting 
 ### 🛡️ AI Cleaner Tab (Flagship Anti-AI Detection Engine)
 The dedicated centerpiece feature designed specifically for AI creators and influencers. Select any local folder or file containing your AI-generated creations (from **Kling AI, Midjourney, Stable Diffusion, Google Nano Banana, Veo, etc.**) to make them look like authentic camera footage:
 - **C2PA & EXIF Stripping:** Automatically removes software manifests, generator tags, and metadata that social media algorithms read at upload time.
+- **iPhone 15 Pro EXIF Injection:** Optional feature to inject realistic Apple iPhone 15 Pro camera EXIF & device metadata onto scrambled photos and videos.
 - **SynthID Pixel Scatter:** Shaves 0.5% off image/video edges (shifting the coordinate grid) and injects a microscopic layer of film grain (Gaussian noise). Confuses AI visual classifiers without any loss of visual quality.
 - **Built-in Folder & File Browser:** Choose entire project folders or individual media files via the sleek in-app browser modal — no external processes required.
 - **Non-Destructive Editing:** All files are safely copied to the `AI Cleaned` folder before processing. Your original source files remain 100% untouched as their own backups.
 - **Deduplication:** Keeps track of processed files in registry text logs so you never waste time double-cleaning media.
 
+### 🪄 AI Prompt Extractor (Vision Engine)
+- **Image & Video to Prompt:** Extract high-quality AI prompts (formatted for Midjourney & Kling) directly from images or the first frame of videos using local PyTorch vision models (`Salesforce/blip-image-captioning-base`).
+- **Gallery Integration:** Extract prompts directly from any video or image in your Output Gallery with a single click.
+
 ### 📥 Reference Downloader Engine
 - **Platform Support:** Rips high-quality reference media from TikTok, YouTube, Twitter/X, and more.
 - **Instagram Master:** Easily download Instagram Reels, profile dumps, and multi-photo Carousels.
 - **Dual-Engine Auto-Fallback:** Combines `yt-dlp` and `gallery-dl` for 100% extraction reliability.
-- **Audio Transcription & Shazam:** Runs local AI (Whisper) for text transcripts and Shazam to identify background tracks.
+- **Audio Transcription & Subtitles:** Runs local AI (Whisper) for text transcripts, auto-burned subtitles, and Shazam to identify background tracks.
 - **Kling / AI Tool Compatibility:** Forces standard `H.264` MP4 encoding on reference downloads so they import cleanly into AI video generation tools.
 
 ### 🛠️ Media Tools Converter
 A dedicated offline media suite to format and tweak your media:
-- **Convert:** Instantly convert videos to GIF, MP3, MP4, or PNG frame sequences.
-- **Smart Framing:** Crop dimensions, resize resolutions, and trim clip lengths offline.
+- **Convert & Subtitle:** Convert videos to GIF, MP3, MP4, or PNG frame sequences with optional Whisper AI auto-subtitle burning.
+- **Smart Framing & Blurred Padding:** Crop dimensions, resize resolutions, convert 16:9 to 9:16 vertical format with a blurred background canvas, and trim clip lengths offline.
 
 ---
 
-## ?? How to Download & Run (For Beginners)
+## 💻 How to Download & Run (For Beginners)
 
 If you don't know how to use the command line, don't worry! Running this app is incredibly simple.
 
@@ -75,7 +80,14 @@ The startup script is fully automated. It will download everything it needs, ins
 
 ## 📜 Changelog
 
-### v1.5 (Current)
+### v1.6 (Current)
+- **New Feature:** Added **AI Prompt Extractor** powered by local PyTorch Vision models (`BLIP`) to extract Midjourney/Kling prompts from image/video frames in the Output Gallery.
+- **New Feature:** Added **Auto Subtitle Burner** in Media Tools & Downloader powered by local Whisper AI transcription.
+- **New Feature:** Added **Blurred-Background Padding (9:16)** option in Converter to turn horizontal 16:9 videos into vertical 9:16 format with blurred background canvas.
+- **New Feature:** Added **Fake iPhone 15 Pro EXIF Metadata Injector** in AI Cleaner to inject realistic Apple camera metadata into cleaned media.
+- **Enhancement:** Full cross-platform support for **macOS and Linux** with `run.sh` launcher and native file manager integration.
+
+### v1.5
 - **New Feature:** Replaced buggy native OS dialogs with a sleek, built-in HTML/JS folder and file browser modal.
 - **Enhancement:** Gallery now recursively scans subdirectories (e.g., YouTube playlists).
 - **Enhancement:** yt-dlp auto-updates are now checked daily instead of on every startup, greatly improving launch time.
