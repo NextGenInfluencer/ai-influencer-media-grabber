@@ -15,7 +15,7 @@ The dedicated centerpiece feature designed specifically for AI creators and infl
 - **C2PA & EXIF Stripping:** Automatically removes software manifests, generator tags, and metadata that social media algorithms read at upload time.
 - **SynthID Pixel Scatter:** Shaves 0.5% off image/video edges (shifting the coordinate grid) and injects a microscopic layer of film grain (Gaussian noise). Confuses AI visual classifiers without any loss of visual quality.
 - **Built-in Folder & File Browser:** Choose entire project folders or individual media files via the sleek in-app browser modal — no external processes required.
-- **Automatic Safety Backups:** Unmodified source files are preserved automatically in `backup_unscrambled/` before any edits occur.
+- **Non-Destructive Editing:** All files are safely copied to the `AI Cleaned` folder before processing. Your original source files remain 100% untouched as their own backups.
 - **Deduplication:** Keeps track of processed files in registry text logs so you never waste time double-cleaning media.
 
 ### 📥 Reference Downloader Engine
@@ -45,7 +45,7 @@ If you already have Python installed, you can skip this step!
 3. ⚠️ **CRITICAL STEP**: When the installer opens, look at the **very bottom of the first window**. You **MUST** check the small box that says **"Add python.exe to PATH"** before clicking Install. If you don't check this box, the app will not work!
 4. Click "Install Now" and let it finish.
 
-### 🚀 Step 2: Download & Run Airi Studio
+### 🚀 Step 2: Download & Run AI Influencer Media Grabber
 1. Go to the top of this GitHub page and click the green **"<> Code"** button.
 2. Click **"Download ZIP"**.
 3. Once downloaded, **Extract/Unzip** the folder anywhere on your computer (like your Desktop).
@@ -53,7 +53,7 @@ If you already have Python installed, you can skip this step!
 5. *(Optional)* **Double-click** the file named `create_shortcut.bat`! This will place a convenient app icon right on your Desktop so you never have to open this folder again.
 
 ### That's it! 🎉
-The `run.bat` script is fully automated. It will download everything it needs, install all the requirements, and instantly pop open the beautiful Airi Studio interface in your web browser. 
+The `run.bat` script is fully automated. It will download everything it needs, install all the requirements, and instantly pop open the beautiful AI Influencer Media Grabber interface in your web browser. 
 
 *Note: By default, all of your downloaded videos, photos, and converted media will be neatly saved in your `Documents/Media Grabber` folder!*
 
