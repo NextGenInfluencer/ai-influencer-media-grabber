@@ -177,9 +177,13 @@
                                     <input type="checkbox" id="transcribeAudio" class="form-checkbox text-pink-500 rounded border-zinc-700 bg-zinc-900" checked>
                                     <span>Transcribe Audio (Local Whisper)</span>
                                 </label>
-                                <label class="flex items-center space-x-2.5 text-xs text-zinc-400 cursor-pointer col-span-2">
+                                <label class="flex items-center space-x-2.5 text-xs text-zinc-400 cursor-pointer">
                                     <input type="checkbox" id="burnSubtitles" name="burn_subtitles" class="form-checkbox text-pink-500 rounded border-zinc-700 bg-zinc-900">
-                                    <span>Auto-Burn Subtitles (Whisper AI)</span>
+                                    <span>Auto-Burn Subtitles (Whisper)</span>
+                                </label>
+                                <label class="flex items-center space-x-2.5 text-xs text-zinc-400 cursor-pointer">
+                                    <input type="checkbox" id="autoExtractPrompt" class="form-checkbox text-pink-500 rounded border-zinc-700 bg-zinc-900">
+                                    <span>Auto-Extract AI Prompt (.txt)</span>
                                 </label>
                             </div>
                         </div>
@@ -1217,7 +1221,8 @@
                         aiBypass: document.getElementById('aiBypass').checked,
                         identifySong: document.getElementById('identifySong').checked,
                         transcribeAudio: document.getElementById('transcribeAudio').checked,
-                        burn_subtitles: document.getElementById('burnSubtitles').checked
+                        burn_subtitles: document.getElementById('burnSubtitles').checked,
+                        autoExtractPrompt: document.getElementById('autoExtractPrompt').checked
                     }
                 };
 

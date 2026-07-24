@@ -651,7 +651,7 @@ def download_video():
                             last_final_path = final_path
                                 
                             # Extract first frame
-                            if os.path.exists(final_path) and processing_options.get('enableThumbnail', True):
+                            if os.path.exists(final_path) and processing_options.get('extractFrame', True):
                                 q.put({"status": f"{prefix}Extracting frame..."})
                                 frame_path = base + "_first_frame.jpg"
                                 ffmpeg_cmd = [
@@ -664,8 +664,21 @@ def download_video():
                                 ]
                                 subprocess.run(ffmpeg_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                                 
+                                if processing_options.get('autoExtractPrompt'):
+                                    q.put({"status": f"{prefix}Extracting AI Prompt (BLIP)..."})
+                                    try:
+                                        from extractor import extract_prompt_from_image
+                                        target_image = frame_path if os.path.exists(frame_path) else final_path
+                                        if os.path.exists(target_image):
+                                            prompt_text = extract_prompt_from_image(target_image)
+                                            prompt_txt_path = base + "_prompt.txt"
+                                            with open(prompt_txt_path, "w", encoding="utf-8") as f:
+                                                f.write(prompt_text)
+                                    except Exception as e:
+                                        q.put({"status": f"{prefix}Prompt Extraction Error: {str(e)}"})
+                                
                                 # Audio Recognition & Metadata
-                                if processing_options.get('enableSongMeta', True):
+                                if processing_options.get('identifySong', True):
                                     q.put({"status": f"{prefix}Identifying song & metadata..."})
                                     song_txt_path = base + "_song.txt"
                                     temp_audio = base + "_temp_audio.mp3"
@@ -719,7 +732,7 @@ def download_video():
                                             f.write(yt_desc)
                                         
                                 # Transcribe Video (Whisper)
-                                if processing_options.get('enableTranscription', True):
+                                if processing_options.get('transcribeAudio', True):
                                     q.put({"status": f"{prefix}Transcribing speech..."})
                                     transcript_path = base + "_transcript.txt"
                                     full_audio = base + "_full_audio.mp3"
