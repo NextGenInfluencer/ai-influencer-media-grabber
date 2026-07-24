@@ -43,10 +43,17 @@ def extract_prompt_from_image(image_path):
             num_beams=4,
             repetition_penalty=1.5
         )
-        detailed_caption = processor.decode(out_desc[0], skip_special_tokens=True)
+        # Post-process caption to make it a character template
+        # The AI usually starts with something like "a highly detailed... shot of a young woman"
+        # We will keep the AI's description but append the Kling 3.0 motion control details.
         
-        # Format as a high-quality AI prompt
-        prompt = f"{detailed_caption}, 8k resolution, cinematic lighting, masterpiece --ar 9:16"
+        # Format as a high-quality Kling 3.0 template
+        prompt = (
+            f"[YOUR CHARACTER REFERENCE] IN THE EXACT SAME POSE AND PLACEMENT AS THE REFERENCE IMAGE. "
+            f"Subject matches the following description: {detailed_caption}. "
+            f"Replicate the exact framing, body language, facial expression, and camera angle. "
+            f"8k resolution, cinematic lighting, masterpiece --ar 9:16"
+        )
         return prompt
         
     except Exception as e:
