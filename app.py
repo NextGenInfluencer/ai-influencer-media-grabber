@@ -1018,7 +1018,7 @@ def restart_server():
     def restart_task():
         time.sleep(1.5)
         print("Restarting server from UI...", flush=True)
-        os.execv(sys.executable, ['python'] + sys.argv)
+        os._exit(42) # Exits Python with code 42, which run.bat catches to loop and restart
     
     threading.Thread(target=restart_task).start()
     return jsonify({"status": "Restarting server..."})
