@@ -819,10 +819,22 @@ def open_folder():
     if not path or not os.path.exists(path):
         return jsonify({"error": "Path not found"}), 400
     
-    if os.path.isfile(path):
-        subprocess.run(['explorer', '/select,', os.path.abspath(path)])
+    abs_path = os.path.abspath(path)
+    if sys.platform == 'win32':
+        if os.path.isfile(abs_path):
+            subprocess.run(['explorer', '/select,', abs_path])
+        else:
+            os.startfile(abs_path)
+    elif sys.platform == 'darwin':
+        if os.path.isfile(abs_path):
+            subprocess.run(['open', '-R', abs_path])
+        else:
+            subprocess.run(['open', abs_path])
     else:
-        os.startfile(os.path.abspath(path))
+        # Linux
+        dir_to_open = os.path.dirname(abs_path) if os.path.isfile(abs_path) else abs_path
+        subprocess.run(['xdg-open', dir_to_open])
+        
     return jsonify({"success": True})
 
 @app.route('/api/preview')

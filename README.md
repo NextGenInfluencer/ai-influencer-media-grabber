@@ -59,11 +59,13 @@ If you already have Python installed, you can skip this step!
 1. Go to the top of this GitHub page and click the green **"<> Code"** button.
 2. Click **"Download ZIP"**.
 3. Once downloaded, **Extract/Unzip** the folder anywhere on your computer (like your Desktop).
-4. Open the extracted folder and simply **double-click** the file named `run.bat`.
-5. *(Optional)* **Double-click** the file named `create_shortcut.bat`! This will place a convenient app icon right on your Desktop so you never have to open this folder again.
+4. Open the extracted folder.
+    - **Windows:** Simply **double-click** the file named `run.bat`.
+    - **Mac/Linux:** Open terminal in the folder and run `bash run.sh`
+5. *(Optional for Windows)* **Double-click** the file named `create_shortcut.bat`! This will place a convenient app icon right on your Desktop so you never have to open this folder again.
 
 ### That's it! 🎉
-The `run.bat` script is fully automated. It will download everything it needs, install all the requirements, and instantly pop open the beautiful AI Influencer Media Grabber interface in your web browser. 
+The startup script is fully automated. It will download everything it needs, install all the requirements, and instantly pop open the beautiful AI Influencer Media Grabber interface in your web browser. 
 
 *Note: By default, all of your downloaded videos, photos, and converted media will be neatly saved in your `Documents/Media Grabber` folder!*
 
