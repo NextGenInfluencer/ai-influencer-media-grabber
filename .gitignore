@@ -15,7 +15,6 @@ re_add_converter.py
 rebuild_ui.py
 check.py
 backup_temp/
-Airi_Refs/
 toolkit_*/
 test.vbs
 cookies.txt
