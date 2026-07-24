@@ -51,7 +51,8 @@ A dedicated offline media suite to format and tweak your media:
 1. Go to the **Output Gallery** tab to view your downloaded videos and images.
 2. Hover over any video or image card.
 3. Click the shiny **Extract Prompt** button that appears in the overlay menu.
-4. Wait a moment for the AI to analyze the media. (Note: The first time you use this, the app will automatically download the local AI vision model, which may take a minute. Subsequent extractions are instant!)
+4. Wait a moment for the AI to analyze the media. 
+   - ⚠️ **First Run Disclaimer:** The very first time you click this button, the app will automatically download the local PyTorch Vision Model (`BLIP-Large`, approx. 1.9GB) in the background. After the download completes, you **must restart the app** (fully close the terminal/CMD window and run it again) for the AI model to initialize properly. All subsequent extractions will be instant and completely offline!
 5. A popup will appear with your generated prompt, perfectly formatted and ready to be pasted into Midjourney, Kling, or any other AI generator.
 
 ---
