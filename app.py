@@ -1,6 +1,7 @@
 import os
 import re
 import sys
+import string
 import subprocess
 import threading
 import uuid
@@ -16,6 +17,7 @@ import cv2
 import whisper
 import time
 import numpy as np
+import yt_dlp
 
 # Global dict to store cancel flags for download tasks
 cancel_flags = {}
@@ -25,25 +27,6 @@ DEFAULT_SAVE_DIR = os.path.join(os.path.expanduser("~"), "Documents", "Media Gra
 os.makedirs(DEFAULT_SAVE_DIR, exist_ok=True)
 for sub in ['YouTube', 'Instagram', 'TikTok', 'Twitter', 'Other', 'Conversions']:
     os.makedirs(os.path.join(DEFAULT_SAVE_DIR, sub), exist_ok=True)
-
-# Global dict to store paused AI sessions
-ai_sessions = {}
-
-HISTORY_FILE = "history.json"
-
-def load_history():
-    if not os.path.exists(HISTORY_FILE): return []
-    try:
-        with open(HISTORY_FILE, 'r', encoding='utf-8') as f: return json.load(f)
-    except Exception: return []
-
-def save_history(data):
-    with open(HISTORY_FILE, 'w', encoding='utf-8') as f: json.dump(data, f, indent=4)
-    
-def add_history_entry(entry):
-    h = load_history()
-    h.insert(0, entry)
-    save_history(h)
 
 # Ensure ffmpeg is in PATH for whisper
 os.environ["PATH"] += os.pathsep + os.path.dirname(imageio_ffmpeg.get_ffmpeg_exe())
@@ -120,8 +103,6 @@ if should_update:
 else:
     print("yt-dlp update check skipped (already checked today).")
 
-import yt_dlp
-
 def sanitize_filename(name):
     # Remove illegal characters for Windows/Linux/Mac
     return re.sub(r'[\\/*?:"<>|]', "", name)
@@ -144,19 +125,12 @@ def shazam_file(audio_path):
 def index():
     return render_template('index.html')
 
-def cleanup_temp_dir(dir_path):
-    time.sleep(30)
-    try:
-        shutil.rmtree(dir_path)
-    except Exception:
-        pass
 
 @app.route('/api/list_drives', methods=['GET'])
 def list_drives():
     """List available drive letters on Windows, or root on Unix."""
     drives = []
     if os.name == 'nt':
-        import string
         for letter in string.ascii_uppercase:
             drive = f"{letter}:\\"
             if os.path.exists(drive):
@@ -401,7 +375,6 @@ def preview_url():
         return jsonify({"error": "No URL provided"}), 400
         
     try:
-        import yt_dlp
         ydl_opts = {
             'quiet': True,
             'no_warnings': True,
@@ -593,13 +566,13 @@ def download_video():
 
                             q.put({"status": f"{prefix}Error: {err_msg}"})
                             failed_count += 1
-                            import time; time.sleep(4)
+                            time.sleep(4)
                             continue
                             
                         if not info:
                             q.put({"status": f"{prefix}Failed. No video found."})
                             failed_count += 1
-                            import time; time.sleep(4)
+                            time.sleep(4)
                             continue
                             
                         if info.get('_type') == 'playlist' or info.get('_type') == 'multi_video':
