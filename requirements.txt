@@ -7,4 +7,5 @@ openai-whisper>=20231117
 opencv-python>=4.8.0
 gallery-dl>=1.26.0
 pillow>=10.0.0
+numpy>=1.24.0
 send2trash>=1.8.0

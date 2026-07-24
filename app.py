@@ -855,7 +855,6 @@ def batch_clean_upload():
     if not files or not files[0].filename:
         return jsonify({"error": "No selected files"}), 400
         
-    import time
     from werkzeug.utils import secure_filename
     upload_folder = os.path.join(DEFAULT_SAVE_DIR, "AI Cleaned", f"Uploaded_{int(time.time())}")
     os.makedirs(upload_folder, exist_ok=True)

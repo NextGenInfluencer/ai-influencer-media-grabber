@@ -84,7 +84,7 @@ The `run.bat` script is fully automated. It will download everything it needs, i
 - **New Feature:** `AI Cleaner` Tab added to the main UI. You can now browse for a folder or file to securely scramble pixels and strip metadata in batch!
 - **New Feature:** Auto-Bypass added to the Studio Downloader tab. Instantly bypass AI detectors when downloading media from the web.
 - **Enhancement:** All FFmpeg binaries are fully self-contained using `imageio_ffmpeg` (no more manual installations!).
-- **Safety:** Automatic backup folder generation (`backup_unscrambled`) and duplicate-prevention tracking added.
+- **Safety:** Non-destructive editing — original files are copied to `AI Cleaned/` before processing, with duplicate-prevention tracking.
 - **UI:** Added Live Terminal for the Batch Cleaner utilizing Server-Sent Events (SSE).
 
 ### v1.3 
