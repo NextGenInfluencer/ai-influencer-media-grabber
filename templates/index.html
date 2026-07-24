@@ -60,7 +60,7 @@
             <div>
                 <h1 class="text-base font-black text-white tracking-wide uppercase flex items-center">
                     AI Influencer Media Grabber 
-                    <span class="ml-2 text.8px] font-mono bg-pink-500/20 text-pink-400 px-2 py-0.5 rounded-full align-middle">v1.5</span>
+                    <span class="ml-2 text-[10px] font-mono bg-pink-500/20 text-pink-400 px-2 py-0.5 rounded-full align-middle">v1.6</span>
                 </h1>
                 <p class="text-[11px] text-zinc-400 font-medium">Local Media Grabber, Anti-AI Watermark & Converter Suite</p>
             </div>
@@ -80,10 +80,14 @@
             <button id="tab-gallery" onclick="switchTab('gallery')" class="px-6 py-2 rounded-xl text-xs font-bold uppercase tracking-wider text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 transition-all flex items-center">
                 <i class="fa-solid fa-images mr-2"></i> Gallery
             </button>
+            <button id="tab-history" onclick="switchTab('history')" class="px-6 py-2 rounded-xl text-xs font-bold uppercase tracking-wider text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 transition-all flex items-center">
+                <i class="fa-solid fa-clock-rotate-left mr-2"></i> History
+            </button>
         </div>
 
         <!-- Right System Status Badge -->
         <div class="hidden lg:flex items-center space-x-3 text-xs text-zinc-400">
+            <div id="queueCountBadge" class="hidden px-2 py-1 bg-pink-500/20 text-pink-400 border border-pink-500/30 rounded-lg font-bold">Queue: 0</div>
             <div class="flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-zinc-900/80 border border-zinc-800">
                 <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
                 <span class="text-[11px] font-bold text-zinc-300">Engine Online (100% Local)</span>
@@ -195,7 +199,15 @@
                     <!-- Media File Input -->
                     <div class="space-y-2">
                         <label class="block text-xs font-bold text-zinc-300 uppercase tracking-widest"><span class="text-purple-500 mr-1.5">01.</span> Select Media File</label>
-                        <input type="file" id="mediaFile" name="file" class="w-full text-xs text-zinc-400 file:mr-4 file:py-3 file:px-5 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-purple-500/20 file:text-purple-300 hover:file:bg-purple-500/30 transition cursor-pointer bg-[#080809] border border-zinc-800 rounded-2xl p-2" accept="video/*,audio/*,image/*">
+                        <div id="dropZone" class="relative group cursor-pointer border-2 border-dashed border-zinc-700 hover:border-purple-500 bg-[#080809] hover:bg-zinc-900 rounded-2xl p-6 transition-all text-center flex flex-col items-center justify-center space-y-3" onclick="document.getElementById('mediaFile').click()">
+                            <input type="file" id="mediaFile" name="file" class="hidden" accept="video/*,audio/*,image/*">
+                            <i class="fa-solid fa-cloud-arrow-up text-3xl text-zinc-600 group-hover:text-purple-400 transition-colors"></i>
+                            <div>
+                                <span class="text-xs font-bold text-zinc-300">Drag & drop files here</span>
+                                <span class="text-[10px] text-zinc-500 block mt-1">or click to browse</span>
+                            </div>
+                            <div id="selectedFileName" class="hidden mt-2 text-[10px] font-bold text-purple-400 bg-purple-500/10 px-3 py-1 rounded-full truncate max-w-full"></div>
+                        </div>
                     </div>
 
                     <!-- Trim Options -->
@@ -317,13 +329,31 @@
                         <div class="flex items-center space-x-2"><i class="fa-solid fa-check text-pink-500 text-xs"></i><span>Strips C2PA, EXIF, & XMP Metadata</span></div>
                         <div class="flex items-center space-x-2"><i class="fa-solid fa-check text-pink-500 text-xs"></i><span>Shaves 0.5% Edges (Grid Shift)</span></div>
                         <div class="flex items-center space-x-2"><i class="fa-solid fa-check text-pink-500 text-xs"></i><span>Injects Micro Gaussian Noise (SynthID Scatter)</span></div>
-                        <div class="flex items-center space-x-2"><i class="fa-solid fa-shield text-emerald-400 text-xs"></i><span class="text-emerald-400 font-semibold">Auto-Backups in backup_unscrambled/</span></div>
+                        <div class="flex items-center space-x-2"><i class="fa-solid fa-shield text-emerald-400 text-xs"></i><span class="text-emerald-400 font-semibold">Non-Destructive (Copies saved to AI Cleaned)</span></div>
                     </div>
                 </div>
 
                 <form id="cleanerForm" class="space-y-6">
                     <div class="space-y-2">
                         <label class="block text-xs font-bold text-zinc-300 uppercase tracking-widest"><span class="text-pink-500 mr-1.5">01.</span> Select AI Media Folder or File</label>
+                        
+                        <!-- Drag & Drop Zone -->
+                        <div id="cleanerDropZone" class="relative group cursor-pointer border-2 border-dashed border-zinc-700 hover:border-pink-500 bg-[#080809] hover:bg-zinc-900 rounded-2xl p-6 transition-all text-center flex flex-col items-center justify-center space-y-3 mb-3" onclick="document.getElementById('cleanerFile').click()">
+                            <input type="file" id="cleanerFile" name="files" class="hidden" multiple accept="video/*,audio/*,image/*">
+                            <i class="fa-solid fa-cloud-arrow-up text-3xl text-zinc-600 group-hover:text-pink-400 transition-colors"></i>
+                            <div>
+                                <span class="text-xs font-bold text-zinc-300">Drag & drop files here</span>
+                                <span class="text-[10px] text-zinc-500 block mt-1">or click to browse</span>
+                            </div>
+                            <div id="cleanerSelectedFiles" class="hidden mt-2 text-[10px] font-bold text-pink-400 bg-pink-500/10 px-3 py-1 rounded-full truncate max-w-full"></div>
+                        </div>
+
+                        <div class="flex items-center space-x-3 text-xs text-zinc-500 uppercase font-bold tracking-widest justify-center mb-3">
+                            <div class="h-px bg-zinc-800 flex-1"></div>
+                            <span>OR PICK LOCAL PATH</span>
+                            <div class="h-px bg-zinc-800 flex-1"></div>
+                        </div>
+
                         <div class="flex space-x-3">
                             <div class="relative cursor-pointer group flex-1" onclick="browseCleanerFolder()">
                                 <input type="text" id="cleaner_dir" name="cleaner_dir" class="w-full px-4 py-3.5 bg-[#080809] border border-zinc-800 rounded-xl text-xs font-medium text-zinc-300 focus:outline-none focus:border-pink-500 shadow-inner group-hover:border-zinc-700 transition" placeholder="Click to choose folder..." readonly>
@@ -346,17 +376,32 @@
             <div id="section-gallery" class="hidden flex-1 overflow-y-auto space-y-4">
                 <div class="sticky top-0 bg-[#0c0c0e] z-10 py-2 border-b border-zinc-800 flex items-center justify-between">
                     <span class="text-xs font-bold text-zinc-300 uppercase tracking-wider">Output Gallery</span>
-                    <select id="galleryFilter" class="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white focus:outline-none" onchange="loadGallery()">
-                        <option value="All">All Folders</option>
+                    <div class="flex items-center space-x-2">
+                        <input type="text" id="gallerySearch" placeholder="Search gallery..." class="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white focus:outline-none focus:border-pink-500 w-48" oninput="loadGallery()">
+                        <select id="galleryFilter" class="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white focus:outline-none" onchange="loadGallery()">
+                            <option value="All">All Folders</option>
                         <option value="YouTube">YouTube</option>
                         <option value="Instagram">Instagram</option>
                         <option value="TikTok">TikTok</option>
                         <option value="Twitter">Twitter</option>
                         <option value="Conversions">Conversions</option>
                         <option value="Other">Other</option>
-                    </select>
+                        </select>
+                    </div>
                 </div>
                 <div id="galleryGrid" class="grid grid-cols-2 md:grid-cols-3 gap-3 p-1"></div>
+            </div>
+
+            <!-- SECTION 5: HISTORY -->
+            <div id="section-history" class="hidden flex-1 overflow-y-auto space-y-4">
+                <div class="sticky top-0 bg-[#0c0c0e] z-10 py-2 border-b border-zinc-800 flex items-center justify-between">
+                    <span class="text-xs font-bold text-zinc-300 uppercase tracking-wider">Download History</span>
+                    <div class="flex items-center space-x-2">
+                        <input type="text" id="historySearch" placeholder="Search title or url..." class="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white focus:outline-none focus:border-pink-500 w-48" oninput="loadHistory()">
+                        <button onclick="clearHistory()" class="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg text-xs font-bold uppercase tracking-wider transition">Clear All</button>
+                    </div>
+                </div>
+                <div id="historyList" class="flex flex-col space-y-2 pb-4"></div>
             </div>
 
             <!-- Action Buttons Footer -->
@@ -615,7 +660,7 @@
         }
 
         function switchTab(tab) {
-            ['downloader', 'converter', 'cleaner', 'gallery'].forEach(t => {
+            ['downloader', 'converter', 'cleaner', 'gallery', 'history'].forEach(t => {
                 const isTab = t === tab;
                 const el = document.getElementById('section-' + t);
                 if (el) el.classList.toggle('hidden', !isTab);
@@ -639,10 +684,21 @@
             if (cleanSubmit) cleanSubmit.style.display = tab === 'cleaner' ? 'flex' : 'none';
             
             if (tab === 'gallery') loadGallery();
+            if (tab === 'history') loadHistory();
         }
         
+        function formatBytes(bytes, decimals = 2) {
+            if (!+bytes) return '0 Bytes';
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+        }
+
         async function loadGallery() {
             const filter = document.getElementById('galleryFilter').value;
+            const query = (document.getElementById('gallerySearch')?.value || '').toLowerCase();
             const res = await fetch('/api/gallery');
             const data = await res.json();
             const grid = document.getElementById('galleryGrid');
@@ -651,7 +707,9 @@
             
             data.forEach(item => {
                 if (filter !== 'All' && item.folder !== filter) return;
-                const url = '/api/media/' + encodeURIComponent(item.folder) + '/' + encodeURIComponent(item.name);
+                if (query && !item.name.toLowerCase().includes(query)) return;
+                
+                const url = '/api/media/' + item.path.split('/').map(encodeURIComponent).join('/');
                 const el = document.createElement('div');
                 el.className = 'relative aspect-[9/16] rounded-xl overflow-hidden border border-zinc-800 bg-black group';
                 
@@ -664,13 +722,121 @@
                     <audio src="${url}" controls class="absolute bottom-0 left-0 w-full h-10"></audio>`;
                 }
                 
+                const safePath = item.full_path || '';
+                
+                const hoverOverlay = document.createElement('div');
+                hoverOverlay.className = 'absolute top-0 left-0 w-full h-full bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-2 pointer-events-none';
+                
+                const topBar = document.createElement('div');
+                topBar.className = 'flex items-center justify-between pointer-events-auto';
+                
+                const sizeBadge = document.createElement('span');
+                sizeBadge.className = 'bg-black/80 text-white text-[9px] px-1.5 py-0.5 rounded font-bold';
+                sizeBadge.textContent = formatBytes(item.size);
+                
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'w-7 h-7 rounded bg-red-500/80 hover:bg-red-500 text-white flex items-center justify-center transition shadow-lg';
+                deleteBtn.innerHTML = '<i class="fa-solid fa-trash text-[10px]"></i>';
+                deleteBtn.title = 'Delete File';
+                deleteBtn.onclick = () => deleteGalleryItem(safePath);
+                
+                topBar.appendChild(sizeBadge);
+                topBar.appendChild(deleteBtn);
+                
+                const bottomBar = document.createElement('div');
+                bottomBar.className = 'pointer-events-auto flex items-center space-x-2';
+                
+                const openFolderBtn = document.createElement('button');
+                openFolderBtn.className = 'flex-1 py-1.5 bg-zinc-900/90 hover:bg-pink-500 text-white rounded text-[10px] font-bold uppercase tracking-wider transition shadow-lg backdrop-blur flex items-center justify-center space-x-1';
+                openFolderBtn.innerHTML = '<i class="fa-solid fa-folder-open"></i> <span>Folder</span>';
+                openFolderBtn.onclick = () => openFolder(safePath);
+                
+                bottomBar.appendChild(openFolderBtn);
+                
+                hoverOverlay.appendChild(topBar);
+                hoverOverlay.appendChild(bottomBar);
+                el.appendChild(hoverOverlay);
+                
                 const label = document.createElement('div');
-                label.className = 'absolute top-0 left-0 w-full p-2 bg-gradient-to-b from-black/80 to-transparent text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity truncate';
+                label.className = 'absolute bottom-10 left-0 w-full p-2 bg-gradient-to-t from-black/80 to-transparent text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity truncate pointer-events-none';
                 label.textContent = item.name;
                 el.appendChild(label);
                 
                 grid.appendChild(el);
             });
+        }
+        
+        async function deleteGalleryItem(path) {
+            if (!confirm('Delete this file? (Moved to Trash/Recycle Bin)')) return;
+            try {
+                const res = await fetch('/api/gallery/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    loadGallery();
+                } else {
+                    alert('Delete failed: ' + (data.error || 'Unknown error'));
+                }
+            } catch (err) {
+                alert('Delete failed: ' + err.message);
+            }
+        }
+        
+        async function loadHistory() {
+            const query = document.getElementById('historySearch').value.toLowerCase();
+            const res = await fetch('/api/history');
+            const data = await res.json();
+            const list = document.getElementById('historyList');
+            if (!list) return;
+            list.innerHTML = '';
+            
+            if (data.length === 0) {
+                list.innerHTML = '<div class="text-center text-zinc-500 text-xs py-8">No download history found.</div>';
+                return;
+            }
+
+            data.forEach(item => {
+                if (query && !item.title.toLowerCase().includes(query) && !item.url.toLowerCase().includes(query)) return;
+                
+                const dateStr = new Date(item.timestamp * 1000).toLocaleString();
+                const safePath = item.file_path ? item.file_path.replace(/\\/g, '\\\\') : '';
+                
+                const el = document.createElement('div');
+                el.className = 'p-3 rounded-xl bg-[#080809] border border-zinc-800 flex items-center justify-between group';
+                el.innerHTML = `
+                    <div class="flex-1 overflow-hidden pr-4">
+                        <div class="flex items-center space-x-2 mb-1">
+                            <span class="px-1.5 py-0.5 rounded bg-pink-500/20 text-pink-400 text-[9px] font-bold uppercase tracking-wider">${item.platform}</span>
+                            <span class="text-xs font-bold text-zinc-200 truncate flex-1">${item.title}</span>
+                        </div>
+                        <div class="flex items-center space-x-3 text-[10px] text-zinc-500">
+                            <span class="truncate max-w-[200px]"><i class="fa-solid fa-link"></i> ${item.url}</span>
+                            <span><i class="fa-solid fa-clock"></i> ${dateStr}</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        ${safePath ? `<button onclick="openFolder('${safePath}')" class="w-8 h-8 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-pink-400 flex items-center justify-center transition" title="Open Folder"><i class="fa-solid fa-folder-open"></i></button>` : ''}
+                        <button onclick="deleteHistoryItem('${item.id}')" class="w-8 h-8 rounded-lg bg-zinc-900 hover:bg-red-500/20 text-zinc-500 hover:text-red-400 flex items-center justify-center transition" title="Remove from History">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                `;
+                list.appendChild(el);
+            });
+        }
+        
+        async function clearHistory() {
+            if (!confirm('Clear all download history?')) return;
+            await fetch('/api/history', { method: 'DELETE' });
+            loadHistory();
+        }
+        
+        async function deleteHistoryItem(id) {
+            await fetch('/api/history/' + id, { method: 'DELETE' });
+            loadHistory();
         }
 
         // Downloader JS
@@ -851,11 +1017,13 @@
                                 if(stopBtn) stopBtn.remove();
                                 delete activeDownloads[taskId];
                                 
-                                if (data.filepath) {
+                                showToast('Download Complete', data.file_path ? `Saved to ${data.file_path}` : 'Task finished successfully.');
+                                
+                                if (data.file_path) {
                                     const actionBtn = document.createElement('button');
                                     actionBtn.className = 'mt-2 text-[10px] text-pink-400 hover:text-pink-300 font-bold uppercase tracking-wider flex items-center space-x-1 transition';
                                     actionBtn.innerHTML = '<i class="fa-solid fa-folder-open text-xs"></i> <span>Open Folder</span>';
-                                    actionBtn.onclick = () => openFolder(data.filepath);
+                                    actionBtn.onclick = () => openFolder(data.file_path);
                                     row.appendChild(actionBtn);
                                 }
                                 finished = true;
@@ -918,17 +1086,30 @@
             }
         }
 
+        function updateQueueCount() {
+            const badge = document.getElementById('queueCountBadge');
+            const count = downloadQueue.length;
+            if (count > 0) {
+                badge.textContent = `Queue: ${count}`;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+
         async function processQueue() {
             if (isQueueRunning) return;
             isQueueRunning = true;
 
             while (downloadQueue.length > 0) {
+                updateQueueCount();
                 const taskData = downloadQueue.shift();
                 if (taskData.cancelled) continue;
                 await processTask(taskData);
             }
 
             isQueueRunning = false;
+            updateQueueCount();
         }
 
         document.getElementById('downloadForm').addEventListener('submit', async (e) => {
@@ -981,23 +1162,52 @@
             });
 
             document.getElementById('url').value = '';
+            updateQueueCount();
             processQueue();
         });
 
         // Converter Form JS
         const mediaFileInput = document.getElementById('mediaFile');
+        const dropZone = document.getElementById('dropZone');
+        const selectedFileName = document.getElementById('selectedFileName');
         const trimmerContainer = document.getElementById('trimmerContainer');
         const videoPreview = document.getElementById('videoPreview');
 
-        mediaFileInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file && file.type.startsWith('video/')) {
+        function handleFileSelect(file) {
+            if (!file) return;
+            selectedFileName.textContent = file.name;
+            selectedFileName.classList.remove('hidden');
+            
+            if (file.type.startsWith('video/')) {
                 const url = URL.createObjectURL(file);
                 videoPreview.src = url;
                 trimmerContainer.classList.remove('hidden');
             } else {
                 trimmerContainer.classList.add('hidden');
                 videoPreview.src = '';
+            }
+        }
+
+        mediaFileInput.addEventListener('change', (e) => {
+            handleFileSelect(e.target.files[0]);
+        });
+        
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('border-purple-500', 'bg-zinc-900');
+        });
+        
+        dropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('border-purple-500', 'bg-zinc-900');
+        });
+        
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('border-purple-500', 'bg-zinc-900');
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                mediaFileInput.files = e.dataTransfer.files;
+                handleFileSelect(e.dataTransfer.files[0]);
             }
         });
 
@@ -1088,11 +1298,52 @@
             }
         });
 
+        // Cleaner Drop Zone Events
+        const cleanerFileInput = document.getElementById('cleanerFile');
+        const cleanerDropZone = document.getElementById('cleanerDropZone');
+        const cleanerSelectedFiles = document.getElementById('cleanerSelectedFiles');
+
+        cleanerFileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                cleanerSelectedFiles.textContent = e.target.files.length + ' file(s) selected';
+                cleanerSelectedFiles.classList.remove('hidden');
+                document.getElementById('cleaner_dir').value = '';
+            } else {
+                cleanerSelectedFiles.classList.add('hidden');
+            }
+        });
+
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            cleanerDropZone.addEventListener(eventName, preventDefaults, false);
+        });
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            cleanerDropZone.addEventListener(eventName, () => {
+                cleanerDropZone.classList.add('border-pink-500', 'bg-zinc-900');
+            }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            cleanerDropZone.addEventListener(eventName, () => {
+                cleanerDropZone.classList.remove('border-pink-500', 'bg-zinc-900');
+            }, false);
+        });
+
+        cleanerDropZone.addEventListener('drop', (e) => {
+            const files = e.dataTransfer.files;
+            if (files.length) {
+                cleanerFileInput.files = files;
+                cleanerFileInput.dispatchEvent(new Event('change'));
+            }
+        }, false);
+
         // AI Cleaner Form JS
         document.getElementById('cleanerForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const dir = document.getElementById('cleaner_dir').value;
-            if (!dir) return;
+            const files = document.getElementById('cleanerFile').files;
+            
+            if (!dir && files.length === 0) return;
 
             const terminal = document.getElementById('cleanerTerminal');
             const submitBtn = document.getElementById('cleanerSubmitBtn');
@@ -1102,11 +1353,23 @@
             submitBtn.classList.add('opacity-50');
 
             try {
-                const response = await fetch('/api/batch_clean', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ target_dirs: [dir] })
-                });
+                let response;
+                if (files.length > 0) {
+                    const formData = new FormData();
+                    for(let i=0; i<files.length; i++) {
+                        formData.append('files', files[i]);
+                    }
+                    response = await fetch('/api/batch_clean_upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+                } else {
+                    response = await fetch('/api/batch_clean', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ target_dirs: [dir] })
+                    });
+                }
 
                 if (!response.ok) {
                     throw new Error('Batch cleaner failed to start');
@@ -1141,6 +1404,29 @@
                 submitBtn.classList.remove('opacity-50');
             }
         });
+        
+        function showToast(title, message) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastTitle').textContent = title;
+            document.getElementById('toastMessage').textContent = message;
+            
+            toast.classList.remove('translate-y-24', 'opacity-0');
+            
+            setTimeout(() => {
+                toast.classList.add('translate-y-24', 'opacity-0');
+            }, 3000);
+        }
     </script>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-6 right-6 transform translate-y-24 opacity-0 transition-all duration-300 z-50 bg-[#0c0c0e] border border-zinc-800 rounded-2xl shadow-[0_0_30px_rgba(0,0,0,0.8)] p-4 flex items-center space-x-4 max-w-sm">
+        <div class="w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+            <i class="fa-solid fa-check"></i>
+        </div>
+        <div>
+            <h4 class="text-xs font-bold text-white uppercase tracking-wider mb-0.5" id="toastTitle">Success</h4>
+            <p class="text-[10px] text-zinc-400 leading-tight" id="toastMessage">Operation completed.</p>
+        </div>
+    </div>
 </body>
 </html>

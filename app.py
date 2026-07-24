@@ -13,8 +13,6 @@ import asyncio
 import tempfile
 import shutil
 from shazamio import Shazam
-import cv2
-import whisper
 import time
 import numpy as np
 import yt_dlp
@@ -28,6 +26,30 @@ os.makedirs(DEFAULT_SAVE_DIR, exist_ok=True)
 for sub in ['YouTube', 'Instagram', 'TikTok', 'Twitter', 'Other', 'Conversions']:
     os.makedirs(os.path.join(DEFAULT_SAVE_DIR, sub), exist_ok=True)
 
+HISTORY_FILE = "history.json"
+
+def load_history():
+    if not os.path.exists(HISTORY_FILE): return []
+    try:
+        with open(HISTORY_FILE, 'r', encoding='utf-8') as f: return json.load(f)
+    except Exception: return []
+
+def save_history(data):
+    with open(HISTORY_FILE, 'w', encoding='utf-8') as f: json.dump(data, f, indent=4)
+    
+def add_history_entry(url, title, uploader, file_path, platform):
+    h = load_history()
+    h.insert(0, {
+        "id": str(uuid.uuid4()),
+        "url": url,
+        "title": title,
+        "uploader": uploader,
+        "file_path": file_path,
+        "platform": platform,
+        "timestamp": time.time()
+    })
+    save_history(h)
+
 # Ensure ffmpeg is in PATH for whisper
 os.environ["PATH"] += os.pathsep + os.path.dirname(imageio_ffmpeg.get_ffmpeg_exe())
 
@@ -35,6 +57,7 @@ whisper_model = None
 def get_whisper():
     global whisper_model
     if whisper_model is None:
+        import whisper
         print("Loading Whisper model (this may take a moment)...")
         whisper_model = whisper.load_model("base")
     return whisper_model
@@ -43,6 +66,7 @@ def get_whisper():
 _face_cascade = None
 
 def get_face_center_x(video_path):
+    import cv2
     global _face_cascade
     if _face_cascade is None:
         _face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
@@ -551,6 +575,7 @@ def download_video():
                                     
                                     if return_code == 0:
                                         q.put({"status": f"{prefix}Successfully downloaded images/profile!"})
+                                        add_history_entry(url, url, "Unknown", output_path, "Other")
                                         time.sleep(2)
                                         continue
                                     else:
@@ -716,6 +741,12 @@ def download_video():
                                         
                                     if not success:
                                         q.put({"status": f"{prefix}AI Bypass Failed: {msg}"})
+                                
+                                # Add to history
+                                title = info.get('title', 'Unknown Title')
+                                uploader = info.get('uploader', 'Unknown')
+                                platform = info.get('extractor_key', 'Other')
+                                add_history_entry(url, title, uploader, final_path, platform)
                 except Exception as e:
                     error_msg = str(e)
                     error_msg = re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', error_msg)
@@ -767,6 +798,7 @@ def list_gallery():
                                 "name": file,
                                 "folder": folder,
                                 "path": f"{folder}/{item_path}",
+                                "full_path": file_path,
                                 "type": "video" if ext in ['.mp4', '.mov', '.mkv', '.webm', '.avi'] else "audio" if ext == ".mp3" else "image",
                                 "timestamp": os.path.getmtime(file_path),
                                 "size": os.path.getsize(file_path)
@@ -806,15 +838,74 @@ def batch_clean():
     data = request.json
     target_dirs = data.get('target_dirs', [])
     
-    # Use the first target directory as the base for the backup folder, 
-    # or fallback to DEFAULT_SAVE_DIR
-    base_backup_dir = target_dirs[0] if target_dirs else DEFAULT_SAVE_DIR
+    output_dir = os.path.join(DEFAULT_SAVE_DIR, "AI Cleaned")
     
     try:
         from cleaner import run_batch_cleaner
-        return Response(run_batch_cleaner(target_dirs, base_backup_dir), mimetype='text/event-stream')
+        return Response(run_batch_cleaner(target_dirs, output_dir, is_upload=False), mimetype='text/event-stream')
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route('/api/batch_clean_upload', methods=['POST'])
+def batch_clean_upload():
+    if 'files' not in request.files:
+        return jsonify({"error": "No files uploaded"}), 400
+        
+    files = request.files.getlist('files')
+    if not files or not files[0].filename:
+        return jsonify({"error": "No selected files"}), 400
+        
+    import time
+    from werkzeug.utils import secure_filename
+    upload_folder = os.path.join(DEFAULT_SAVE_DIR, "AI Cleaned", f"Uploaded_{int(time.time())}")
+    os.makedirs(upload_folder, exist_ok=True)
+    
+    uploaded_paths = []
+    for file in files:
+        if file and file.filename:
+            filename = secure_filename(file.filename)
+            file_path = os.path.join(upload_folder, filename)
+            file.save(file_path)
+            uploaded_paths.append(file_path)
+            
+    try:
+        from cleaner import run_batch_cleaner
+        return Response(run_batch_cleaner(uploaded_paths, upload_folder, is_upload=True), mimetype='text/event-stream')
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/history', methods=['GET'])
+def get_history():
+    return jsonify(load_history())
+
+@app.route('/api/history', methods=['DELETE'])
+def clear_history():
+    save_history([])
+    return jsonify({"success": True})
+
+@app.route('/api/history/<history_id>', methods=['DELETE'])
+def delete_history_item(history_id):
+    h = load_history()
+    h = [item for item in h if item.get('id') != history_id]
+    save_history(h)
+    return jsonify({"success": True})
+
+@app.route('/api/gallery/delete', methods=['POST'])
+def delete_gallery_item():
+    path = request.json.get('path')
+    if not path or not os.path.exists(path):
+        return jsonify({"error": "File not found"}), 404
+        
+    try:
+        from send2trash import send2trash
+        send2trash(path)
+    except Exception:
+        try:
+            os.remove(path)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+            
+    return jsonify({"success": True})
 
 if __name__ == '__main__':
     import webbrowser

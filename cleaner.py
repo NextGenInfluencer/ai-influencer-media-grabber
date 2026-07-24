@@ -20,20 +20,9 @@ NUM_PATTERN = re.compile(r'^photo_(\d+)', re.IGNORECASE)
 def should_skip_dir(dir_path):
     parts = dir_path.split(os.sep)
     for part in parts:
-        if part.startswith('.') or part == 'desktop.ini' or part == 'backup_unscrambled':
+        if part.startswith('.') or part == 'desktop.ini':
             return True
     return False
-
-def backup_file(file_path, base_backup_dir):
-    try:
-        backup_dir = os.path.join(base_backup_dir, "backup_unscrambled")
-        rel_path = os.path.relpath(file_path, base_backup_dir)
-        backup_path = os.path.join(backup_dir, rel_path)
-        os.makedirs(os.path.dirname(backup_path), exist_ok=True)
-        shutil.copy2(file_path, backup_path)
-        return True
-    except Exception as e:
-        return False
 
 def clean_video(file_path, ffmpeg_exe=None):
     if not ffmpeg_exe:
@@ -108,18 +97,21 @@ def make_sse(status_msg, done=False):
         data["done"] = True
     return "data: " + json.dumps(data) + "\n\n"
 
-def run_batch_cleaner(target_dirs, base_backup_dir):
+def run_batch_cleaner(target_dirs, output_dir, is_upload=False):
     """
     Generator function that yields log messages to stream via SSE.
+    If is_upload=False, copies original files into output_dir and processes them there.
+    If is_upload=True, target_dirs are already inside output_dir, process them in-place.
     """
+    total_copied = 0
     total_renamed = 0
     total_scrambled = 0
     total_videos = 0
     
     yield make_sse("Starting Batch Cleaner...")
     
-    registry_file = os.path.join(base_backup_dir, "scramble_registry.txt")
-    video_registry_file = os.path.join(base_backup_dir, "video_scramble_registry.txt")
+    registry_file = os.path.join(output_dir, "scramble_registry.txt")
+    video_registry_file = os.path.join(output_dir, "video_scramble_registry.txt")
     
     def load_registry(path):
         if os.path.exists(path):
@@ -141,20 +133,14 @@ def run_batch_cleaner(target_dirs, base_backup_dir):
     photo_registry = load_registry(registry_file)
     video_registry = load_registry(video_registry_file)
     
-    dirs_to_process = []
-    
+    files_to_process = [] # list of (original_path, target_path, is_photo)
+
     for root_dir in target_dirs:
         if os.path.isfile(root_dir):
-            dirname = os.path.dirname(root_dir)
-            fname = os.path.basename(root_dir)
-            ext = os.path.splitext(fname)[1].lower()
-            if ext in IMAGE_EXTENSIONS:
-                if fname.lower().startswith('photo_'):
-                    dirs_to_process.append((dirname, [fname], [], []))
-                else:
-                    dirs_to_process.append((dirname, [], [(fname, ext)], []))
-            elif ext in VIDEO_EXTENSIONS:
-                dirs_to_process.append((dirname, [], [], [(fname, ext)]))
+            ext = os.path.splitext(root_dir)[1].lower()
+            if ext in IMAGE_EXTENSIONS or ext in VIDEO_EXTENSIONS:
+                target_path = root_dir if is_upload else os.path.join(output_dir, os.path.basename(root_dir))
+                files_to_process.append((root_dir, target_path, ext in IMAGE_EXTENSIONS))
             continue
             
         if not os.path.isdir(root_dir):
@@ -165,93 +151,114 @@ def run_batch_cleaner(target_dirs, base_backup_dir):
             if should_skip_dir(dirpath):
                 continue
                 
-            existing_photos = []
-            files_to_rename = []
-            videos_to_process = []
-            
             for f in filenames:
                 ext = os.path.splitext(f)[1].lower()
-                if ext in IMAGE_EXTENSIONS:
-                    if f.lower().startswith('photo_'):
-                        existing_photos.append(f)
+                if ext in IMAGE_EXTENSIONS or ext in VIDEO_EXTENSIONS:
+                    file_path = os.path.join(dirpath, f)
+                    if is_upload:
+                        target_path = file_path
                     else:
-                        files_to_rename.append((f, ext))
-                elif ext in VIDEO_EXTENSIONS:
-                    videos_to_process.append((f, ext))
+                        rel_path = os.path.relpath(file_path, root_dir)
+                        folder_name = os.path.basename(os.path.normpath(root_dir))
+                        target_path = os.path.join(output_dir, folder_name, rel_path)
+                    
+                    files_to_process.append((file_path, target_path, ext in IMAGE_EXTENSIONS))
+
+    # Sort files so photos are together
+    files_to_process.sort(key=lambda x: x[1])
+
+    # 1. Copy Files if not uploaded
+    if not is_upload:
+        for orig, target, is_photo in files_to_process:
+            norm_orig = os.path.normpath(orig)
+            registry_set = photo_registry if is_photo else video_registry
+            if norm_orig in registry_set:
+                yield make_sse(f"Skipping already processed file: {orig}")
+                continue
             
-            if existing_photos or files_to_rename or videos_to_process:
-                dirs_to_process.append((dirpath, existing_photos, files_to_rename, videos_to_process))
+            try:
+                os.makedirs(os.path.dirname(target), exist_ok=True)
+                shutil.copy2(orig, target)
+                total_copied += 1
+            except Exception as e:
+                yield make_sse(f"[Error] Failed to copy {orig}: {str(e)}")
+
+    # Group by directory for renaming logic
+    dirs_to_process = {}
+    for orig, target, is_photo in files_to_process:
+        norm_orig = os.path.normpath(orig)
+        registry_set = photo_registry if is_photo else video_registry
+        if not is_upload and norm_orig in registry_set:
+            continue
             
-    for subdir, existing_photos, files_to_rename, videos_to_process in sorted(dirs_to_process, key=lambda x: x[0].lower()):
+        d = os.path.dirname(target)
+        if d not in dirs_to_process:
+            dirs_to_process[d] = {'photos': [], 'videos': []}
+        
+        if is_photo:
+            dirs_to_process[d]['photos'].append((orig, target))
+        else:
+            dirs_to_process[d]['videos'].append((orig, target))
+
+    for subdir, files in dirs_to_process.items():
         yield make_sse(f"Processing folder: {subdir}")
         
-        # 1. Rename Photos
+        photos = files['photos']
+        videos = files['videos']
+        
+        # Rename logic
+        existing_photo_names = [os.path.basename(t) for o, t in photos if os.path.basename(t).lower().startswith('photo_')]
         used_numbers = set()
-        for f in existing_photos:
+        for f in existing_photo_names:
             match = NUM_PATTERN.match(f)
             if match:
                 used_numbers.add(int(match.group(1)))
                 
         next_number = max(used_numbers) + 1 if used_numbers else 1
         
-        if files_to_rename:
-            files_to_rename.sort(key=lambda x: x[0].lower())
-            
-            temp_renames = []
-            for idx, (original_name, ext) in enumerate(files_to_rename):
-                original_path = os.path.join(subdir, original_name)
-                temp_name = f"__temp_rename_new_{idx}__{ext}"
-                temp_path = os.path.join(subdir, temp_name)
+        photos_to_rename = [(o, t) for o, t in photos if not os.path.basename(t).lower().startswith('photo_')]
+        final_photos = [(o, t) for o, t in photos if os.path.basename(t).lower().startswith('photo_')]
+        
+        if photos_to_rename:
+            for orig, target in photos_to_rename:
+                ext = os.path.splitext(target)[1].lower()
+                final_name = f"photo_{next_number}{ext}"
+                final_path = os.path.join(subdir, final_name)
                 try:
-                    os.rename(original_path, temp_path)
-                    temp_renames.append((temp_path, ext, original_name))
+                    os.rename(target, final_path)
+                    yield make_sse(f"  [Renamed] {os.path.basename(orig)} -> {final_name}")
+                    total_renamed += 1
+                    final_photos.append((orig, final_path))
+                    next_number += 1
                 except Exception as e:
-                    yield make_sse(f"  [Error] Failed to rename {original_name}: {str(e)}")
-            
-            if temp_renames:
-                for idx, (temp_path, ext, original_name) in enumerate(temp_renames):
-                    num = next_number + idx
-                    final_name = f"photo_{num}{ext}"
-                    final_path = os.path.join(subdir, final_name)
-                    try:
-                        os.rename(temp_path, final_path)
-                        yield make_sse(f"  [Renamed] {original_name} -> {final_name}")
-                        total_renamed += 1
-                        existing_photos.append(final_name)
-                    except Exception as e:
-                        yield make_sse(f"  [Error] Final rename failed for {final_name}: {str(e)}")
-                        
-        # 2. Scramble Photos
-        for f in existing_photos:
-            file_path = os.path.join(subdir, f)
-            norm_path = os.path.normpath(file_path)
-            
-            if norm_path not in photo_registry:
-                if backup_file(norm_path, base_backup_dir):
-                    success, msg = clean_photo(norm_path)
-                    if success:
-                        yield make_sse(f"  [Cleaned Photo] {f}")
-                        save_registry(registry_file, norm_path)
-                        photo_registry.add(norm_path)
-                        total_scrambled += 1
-                    else:
-                        yield make_sse(f"  [Error] Photo clean failed on {f}: {msg}")
-                        
-        # 3. Process Videos
-        for f, ext in videos_to_process:
-            file_path = os.path.join(subdir, f)
-            norm_path = os.path.normpath(file_path)
-            
-            if norm_path not in video_registry:
-                if backup_file(norm_path, base_backup_dir):
-                    yield make_sse(f"  [Processing Video] {f}...")
-                    success, msg = clean_video(norm_path)
-                    if success:
-                        yield make_sse(f"  [Cleaned Video] {f}")
-                        save_registry(video_registry_file, norm_path)
-                        video_registry.add(norm_path)
-                        total_videos += 1
-                    else:
-                        yield make_sse(f"  [Error] Video clean failed on {f}: {msg}")
+                    yield make_sse(f"  [Error] Rename failed for {target}: {str(e)}")
+                    final_photos.append((orig, target))
+        
+        # Scramble photos
+        for orig, target in final_photos:
+            if is_upload or os.path.normpath(orig) not in photo_registry:
+                success, msg = clean_photo(target)
+                if success:
+                    yield make_sse(f"  [Cleaned Photo] {os.path.basename(target)}")
+                    if not is_upload:
+                        save_registry(registry_file, os.path.normpath(orig))
+                        photo_registry.add(os.path.normpath(orig))
+                    total_scrambled += 1
+                else:
+                    yield make_sse(f"  [Error] Photo clean failed on {target}: {msg}")
+                    
+        # Scramble videos
+        for orig, target in videos:
+            if is_upload or os.path.normpath(orig) not in video_registry:
+                yield make_sse(f"  [Processing Video] {os.path.basename(target)}...")
+                success, msg = clean_video(target)
+                if success:
+                    yield make_sse(f"  [Cleaned Video] {os.path.basename(target)}")
+                    if not is_upload:
+                        save_registry(video_registry_file, os.path.normpath(orig))
+                        video_registry.add(os.path.normpath(orig))
+                    total_videos += 1
+                else:
+                    yield make_sse(f"  [Error] Video clean failed on {target}: {msg}")
 
-    yield make_sse(f"Batch Cleaner Completed! Renamed: {total_renamed}, Cleaned Photos: {total_scrambled}, Cleaned Videos: {total_videos}.", done=True)
+    yield make_sse(f"Batch Cleaner Completed! Copied: {total_copied}, Renamed: {total_renamed}, Cleaned Photos: {total_scrambled}, Cleaned Videos: {total_videos}.", done=True)
