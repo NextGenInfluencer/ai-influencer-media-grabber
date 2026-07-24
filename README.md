@@ -30,7 +30,7 @@ The dedicated centerpiece feature designed specifically for AI creators and infl
 - **Deduplication:** Keeps track of processed files in registry text logs so you never waste time double-cleaning media.
 
 ### 🪄 AI Prompt Extractor (Vision Engine)
-- **Image & Video to Prompt:** Extract high-quality AI prompts (formatted for Midjourney & Kling) directly from images or the first frame of videos using local PyTorch vision models (`Salesforce/blip-image-captioning-base`).
+- **Image & Video to Prompt:** Extract high-quality AI prompts (formatted for Nano Banana 2 / Pro & GPT Image 2) directly from images or the first frame of videos using local PyTorch vision models (`Salesforce/blip-image-captioning-large`).
 - **Gallery Integration:** Extract prompts directly from any video or image in your Output Gallery with a single click.
 
 ### 📥 Reference Downloader Engine
@@ -90,7 +90,7 @@ The startup script is fully automated. It will download everything it needs, ins
 ## 📜 Changelog
 
 ### v1.6 (Current)
-- **New Feature:** Added **AI Prompt Extractor** powered by local PyTorch Vision models (`BLIP`) to extract Midjourney/Kling prompts from image/video frames in the Output Gallery.
+- **New Feature:** Added **AI Prompt Extractor** powered by local PyTorch Vision models (`BLIP-Large`) to extract Nano Banana 2 / Pro & GPT Image 2 prompts from image/video frames in the Output Gallery.
 - **New Feature:** Added **Auto Subtitle Burner** in Media Tools & Downloader powered by local Whisper AI transcription.
 - **New Feature:** Added **Blurred-Background Padding (9:16)** option in Converter to turn horizontal 16:9 videos into vertical 9:16 format with blurred background canvas.
 - **New Feature:** Added **Fake iPhone 15 Pro EXIF Metadata Injector** in AI Cleaner to inject realistic Apple camera metadata into cleaned media.
