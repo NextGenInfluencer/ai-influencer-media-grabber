@@ -894,7 +894,9 @@
 
         // --- Extracted Prompt Modal ---
         function promptModal(promptText) {
+            const modalId = 'promptModal_' + Date.now();
             const modal = document.createElement('div');
+            modal.id = modalId;
             modal.style.cssText = 'position:fixed; inset:0; z-index:10000; background:rgba(0,0,0,0.8); backdrop-filter:blur(8px); display:flex; align-items:center; justify-content:center;';
             modal.innerHTML = `
                 <div class="bg-[#111113] border border-zinc-800 rounded-2xl w-[min(500px,90vw)] p-6 shadow-2xl">
@@ -903,7 +905,7 @@
                             <i class="fa-solid fa-wand-magic-sparkles"></i>
                             <span>Extracted AI Prompt</span>
                         </div>
-                        <button class="text-zinc-500 hover:text-zinc-300 transition p-1" onclick="this.closest('.fixed').remove()"><i class="fa-solid fa-xmark"></i></button>
+                        <button class="text-zinc-500 hover:text-zinc-300 transition p-1" onclick="document.getElementById('${modalId}').remove()"><i class="fa-solid fa-xmark"></i></button>
                     </div>
                     <textarea class="w-full h-32 bg-[#080809] border border-zinc-800 rounded-xl p-3 text-xs text-zinc-300 font-mono focus:outline-none focus:border-emerald-500 transition mb-4" readonly>${promptText}</textarea>
                     <div class="flex space-x-3">
