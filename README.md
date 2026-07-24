@@ -8,6 +8,16 @@
 
 Whether you're building a massive reference folder of TikTok trends, extracting music from Instagram Reels, pulling perfectly-framed thumbnails for YouTube shorts, or prepping videos for AI generation tools like Kling—this grabber automates the entire workflow in just a few clicks. It's safe, blazing fast, completely private, and incredibly powerful.
 
+## 📸 Interface Preview
+
+<div align="center">
+  <img src="assets/ui_downloader.png" width="49%" alt="Studio Downloader" />
+  <img src="assets/ui_cleaner.png" width="49%" alt="AI Cleaner" />
+  <br>
+  <img src="assets/ui_converter.png" width="49%" alt="Media Tools Converter" />
+  <img src="assets/ui_gallery.png" width="49%" alt="Output Gallery" />
+</div>
+
 ## ✨ Features
 
 ### 🛡️ AI Cleaner Tab (Flagship Anti-AI Detection Engine)
