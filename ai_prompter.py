@@ -11,8 +11,8 @@ def get_blip_model():
         try:
             from transformers import BlipProcessor, BlipForConditionalGeneration
             # Use local cache if possible to avoid re-downloads
-            _blip_processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
-            _blip_model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base")
+            _blip_processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base", use_safetensors=True)
+            _blip_model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base", use_safetensors=True)
             
             # Use GPU if available, else CPU
             device = "cuda" if torch.cuda.is_available() else "cpu"
