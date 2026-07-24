@@ -89,3 +89,8 @@ The `run.bat` script is fully automated. It will download everything it needs, i
 
 ### v1.3 
 - Added Media Tools Converter for offline editing, UI refinements, and local audio transcriptions using Whisper AI.
+
+---
+
+> [!IMPORTANT]
+> **Disclaimer:** This software is for personal educational and archival use only. Users are responsible for complying with local copyright laws and the Terms of Service of the respective platforms.
