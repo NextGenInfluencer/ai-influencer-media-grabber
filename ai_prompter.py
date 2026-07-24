@@ -11,8 +11,8 @@ def get_blip_model():
         try:
             from transformers import BlipProcessor, BlipForConditionalGeneration
             # Use local cache if possible to avoid re-downloads
-            _blip_processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base", use_safetensors=True)
-            _blip_model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base", use_safetensors=True)
+            _blip_processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-large", use_safetensors=True)
+            _blip_model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-large", use_safetensors=True)
             
             # Use GPU if available, else CPU
             device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -32,19 +32,21 @@ def extract_prompt_from_image(image_path):
         raw_image = Image.open(image_path).convert('RGB')
         device = "cuda" if torch.cuda.is_available() else "cpu"
         
-        # Generate basic caption
-        inputs = processor(raw_image, return_tensors="pt").to(device)
-        out = model.generate(**inputs, max_length=150)
-        basic_caption = processor.decode(out[0], skip_special_tokens=True)
-        
-        # Generate descriptive details
-        text_prefix = "a cinematic photorealistic shot of "
+        # We don't need basic caption, just generate a highly detailed one.
+        # Use beam search for better descriptiveness
+        text_prefix = "a highly detailed, cinematic photorealistic shot of "
         inputs_desc = processor(raw_image, text=text_prefix, return_tensors="pt").to(device)
-        out_desc = model.generate(**inputs_desc, max_length=150)
+        out_desc = model.generate(
+            **inputs_desc, 
+            max_length=150,
+            min_length=20,
+            num_beams=4,
+            repetition_penalty=1.5
+        )
         detailed_caption = processor.decode(out_desc[0], skip_special_tokens=True)
         
         # Format as a high-quality AI prompt
-        prompt = f"{detailed_caption}, highly detailed, 8k resolution, cinematic lighting, photorealistic --ar 9:16"
+        prompt = f"{detailed_caption}, 8k resolution, cinematic lighting, masterpiece --ar 9:16"
         return prompt
         
     except Exception as e:
