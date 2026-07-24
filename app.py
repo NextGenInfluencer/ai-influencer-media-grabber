@@ -1009,6 +1009,20 @@ def delete_gallery_item():
             
     return jsonify({"success": True})
 
+@app.route('/api/restart', methods=['POST'])
+def restart_server():
+    import threading
+    import sys
+    import os
+    import time
+    def restart_task():
+        time.sleep(1.5)
+        print("Restarting server from UI...")
+        os.execv(sys.executable, ['python'] + sys.argv)
+    
+    threading.Thread(target=restart_task).start()
+    return jsonify({"status": "Restarting server..."})
+
 if __name__ == '__main__':
     import webbrowser
     import threading

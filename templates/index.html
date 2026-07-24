@@ -88,6 +88,12 @@
         <!-- Right System Status Badge -->
         <div class="hidden lg:flex items-center space-x-3 text-xs text-zinc-400">
             <div id="queueCountBadge" class="hidden px-2 py-1 bg-pink-500/20 text-pink-400 border border-pink-500/30 rounded-lg font-bold">Queue: 0</div>
+            
+            <button onclick="restartServer()" class="px-3.5 py-1.5 rounded-full bg-orange-500/10 border border-orange-500/30 hover:bg-orange-500/20 text-orange-400 font-bold transition-all flex items-center space-x-2 group">
+                <i class="fa-solid fa-power-off group-hover:rotate-180 transition-transform duration-500"></i>
+                <span class="text-[11px]">Restart App</span>
+            </button>
+
             <div class="flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-zinc-900/80 border border-zinc-800">
                 <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
                 <span class="text-[11px] font-bold text-zinc-300">Engine Online (100% Local)</span>
@@ -1508,6 +1514,19 @@
             setTimeout(() => {
                 toast.classList.add('translate-y-24', 'opacity-0');
             }, 3000);
+        }
+
+        async function restartServer() {
+            if(!confirm("Are you sure you want to restart the background server? Any active downloads or conversions will be interrupted.")) return;
+            showToast("Restarting...", "Server is restarting. The page will reload in a moment.");
+            try {
+                await fetch('/api/restart', { method: 'POST' });
+                setTimeout(() => {
+                    window.location.reload();
+                }, 3500);
+            } catch (err) {
+                alert("Failed to send restart command.");
+            }
         }
     </script>
 
