@@ -1027,7 +1027,9 @@ if __name__ == '__main__':
     import webbrowser
     import threading
     from waitress import serve
-    print("Server running on http://127.0.0.1:5000")
+    print("\n" + "="*50)
+    print("🚀 SERVER ONLINE AND READY! http://127.0.0.1:5000")
+    print("="*50 + "\n")
     # Launch browser precisely after the server is ready
     threading.Timer(1.25, lambda: webbrowser.open("http://127.0.0.1:5000")).start()
     serve(app, host='127.0.0.1', port=5000, threads=8)
