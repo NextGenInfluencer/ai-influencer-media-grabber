@@ -1017,7 +1017,7 @@ def restart_server():
     import time
     def restart_task():
         time.sleep(1.5)
-        print("Restarting server from UI...")
+        print("Restarting server from UI...", flush=True)
         os.execv(sys.executable, ['python'] + sys.argv)
     
     threading.Thread(target=restart_task).start()
@@ -1027,9 +1027,9 @@ if __name__ == '__main__':
     import webbrowser
     import threading
     from waitress import serve
-    print("\n" + "="*50)
-    print("🚀 SERVER ONLINE AND READY! http://127.0.0.1:5000")
-    print("="*50 + "\n")
+    print("\n" + "="*50, flush=True)
+    print(" SERVER ONLINE AND READY! http://127.0.0.1:5000 ", flush=True)
+    print("="*50 + "\n", flush=True)
     # Launch browser precisely after the server is ready
     threading.Timer(1.25, lambda: webbrowser.open("http://127.0.0.1:5000")).start()
     serve(app, host='127.0.0.1', port=5000, threads=8)
