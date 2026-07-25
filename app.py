@@ -10,6 +10,7 @@ import time
 import asyncio
 import tempfile
 import shutil
+import spaces
 from pathlib import Path
 
 # Fix: some libraries might not be available if not installed properly, we handle them gracefully if needed
@@ -88,6 +89,7 @@ def cleanup_daemon():
 
 threading.Thread(target=cleanup_daemon, daemon=True).start()
 
+@spaces.GPU
 def process_download(url, options):
     if not yt_dlp:
         yield "Error: yt-dlp is not installed.", None
@@ -370,7 +372,7 @@ input[type="text"], textarea {
 }
 """
 
-with gr.Blocks(css=custom_css, theme=gr.themes.Default(primary_hue="fuchsia")) as demo:
+with gr.Blocks() as demo:
     gr.HTML('''
     <div class="status-header">
         <h1>AI INFLUENCER MEDIA GRABBER V1.6 <span class="engine-online">● Engine Online</span></h1>
@@ -426,6 +428,8 @@ if __name__ == "__main__":
     demo.launch(
         server_name="0.0.0.0", 
         server_port=7860,
-        auth=(auth_user, auth_pass)
+        auth=(auth_user, auth_pass),
+        css=custom_css,
+        theme=gr.themes.Default(primary_hue="fuchsia")
     )
 
