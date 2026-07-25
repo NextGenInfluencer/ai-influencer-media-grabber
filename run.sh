@@ -15,4 +15,4 @@ echo "Installing dependencies..."
 pip install -q -r requirements.txt
 
 echo "Starting Flask server..."
-python app.py
+python app_local.py

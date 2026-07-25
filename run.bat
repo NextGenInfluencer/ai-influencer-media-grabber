@@ -16,7 +16,7 @@ pip install -q -r requirements.txt
 
 :start
 echo Starting Flask server...
-python app.py
+python app_local.py
 
 if %ERRORLEVEL% EQU 42 (
     echo.
