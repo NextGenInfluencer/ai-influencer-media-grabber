@@ -600,6 +600,17 @@ with gr.Blocks(css=custom_css, theme=gr.themes.Default(primary_hue="fuchsia")) a
     with gr.Tabs():
         # TAB 1: STUDIO
         with gr.TabItem("STUDIO"):
+            with gr.Accordion("❓ How to Use & Feature Guide", open=False):
+                gr.Markdown("""
+                - 📥 **Batch Downloader**: Paste links from TikTok, IG Reels, YouTube Shorts, X/Twitter, or Pinterest carousels (one per line).
+                - 🎬 **Force H.264 Encoding**: Fixes video import glitches in CapCut, Kling AI, and Premiere.
+                - 🛡️ **Clean AI Metadata**: Strips watermarks and AI metadata to bypass algorithm detection.
+                - 🎙️ **Transcribe Audio (Whisper)**: Automatically converts video speech into text transcriptions.
+                - 🎵 **Identify Song (Shazam)**: Detects background music titles and artists.
+                - 🖼️ **Extract First Frame**: Generates high-quality video cover thumbnails.
+                - 📝 **Extract AI Prompt**: Pulls AI prompts into downloadable `.txt` files.
+                - 🧹 **Auto-Storage Cleaner**: Purges temporary video files older than 1 hour to keep storage 100% free.
+                """)
             with gr.Row():
                 with gr.Column(scale=2):
                     with gr.Group(elem_classes="dark-container"):
