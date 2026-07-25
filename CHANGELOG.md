@@ -5,7 +5,8 @@ All notable changes to the AI Influencer Media Grabber project will be documente
 ## [v1.6] - 2026-07-24
 
 ### Added
-- **AI Prompt Extractor**: Extract Midjourney/Kling prompts directly from images or video frames using local PyTorch vision models (`Salesforce/blip-image-captioning-base`).
+- **AI Prompt Extractor**: Extract Nano Banana 2/Pro & GPT Image 2 optimized prompts directly from images or video frames using local PyTorch vision models (`Salesforce/blip-image-captioning-large`).
+- **UI Hard Restart Button**: Added a robust Restart button to the header to automatically reboot the local python server.
 - **Auto Subtitle Burner**: Burn subtitles directly into videos using local Whisper AI transcription and FFmpeg.
 - **Blurred-Background Padding (9:16)**: Convert horizontal 16:9 videos into vertical 9:16 format with a blurred background canvas.
 - **iPhone 15 Pro EXIF Metadata Injector**: Inject realistic iPhone 15 Pro EXIF metadata into cleaned photos and videos in the AI Cleaner tab.
