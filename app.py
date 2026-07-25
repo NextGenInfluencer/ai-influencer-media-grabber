@@ -730,7 +730,7 @@ with gr.Blocks(css=custom_css, theme=gr.themes.Default(primary_hue="fuchsia")) a
 
 if __name__ == "__main__":
     auth_user = os.environ.get("WEB_USERNAME", "admin")
-    auth_pass = os.environ.get("WEB_PASSWORD", "influencer123")
+    auth_pass = os.environ.get("WEB_PASSWORD", "EmpressMin26")
     
     print(f"Starting server with Basic Auth enabled for user: {auth_user}")
     
