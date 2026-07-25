@@ -1,4 +1,14 @@
-# 🎥 AI Influencer Media Grabber
+---
+title: Ai Influencer Media Grabber
+emoji: 🎬
+colorFrom: purple
+colorTo: pink
+sdk: gradio
+app_file: app.py
+pinned: false
+---
+
+# AI Influencer Media Grabber v1.6
 
 ![Version 1.6](https://img.shields.io/badge/Version-1.6-blue?style=for-the-badge) ![UI Preview](https://img.shields.io/badge/UI-Media_Grabber-f472b6?style=for-the-badge)
 
