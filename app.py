@@ -250,7 +250,6 @@ def process_download(url, options, custom_name):
                     yield log("Download failed, file not found."), None
                     return
                 
-                final_files_to_return.append(final_path)
                 yield log("Download complete. Starting post-processing..."), None
                 
                 ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe() if imageio_ffmpeg else "ffmpeg"
@@ -326,11 +325,16 @@ def process_download(url, options, custom_name):
                         try: os.remove(full_audio)
                         except: pass
                 
-                if opt_force_h264 and final_path.endswith('.mp4'):
+                is_video = final_path.lower().endswith(('.mp4', '.mov', '.mkv', '.webm', '.avi', '.m4v'))
+                if opt_force_h264 and is_video:
                     yield log("Forcing Standard Encoding (H.264)..."), None
                     temp_h264 = base + "_h264_temp.mp4"
                     subprocess.run([ffmpeg_exe, "-y", "-i", final_path, "-c:v", "libx264", "-preset", "fast", "-crf", "23", "-c:a", "aac", "-pix_fmt", "yuv420p", "-movflags", "+faststart", temp_h264], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                     if os.path.exists(temp_h264):
+                        if not final_path.endswith('.mp4'):
+                            try: os.remove(final_path)
+                            except: pass
+                            final_path = base + ".mp4"
                         os.replace(temp_h264, final_path)
                         
                 if opt_ai_bypass:
@@ -346,6 +350,7 @@ def process_download(url, options, custom_name):
                         if not success: yield log(f"AI Bypass Failed: {msg}"), None
                     except Exception as e:
                         yield log(f"AI Bypass Error: {e}"), None
+                final_files_to_return.insert(0, final_path)
 
                 title = info.get('title', 'Unknown Title')
                 uploader = info.get('uploader', 'Unknown')
