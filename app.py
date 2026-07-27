@@ -206,6 +206,7 @@ def process_download(url, options, custom_name):
     ydl_opts = {
         'format': 'bestvideo+bestaudio/best' if opt_force_h264 else 'bestvideo[vcodec^=avc]+bestaudio[acodec^=mp4a]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best',
         'merge_output_format': 'mp4',
+        'restrictfilenames': True,
         'outtmpl': os.path.join(task_dir, f'{filename_template}.%(ext)s'),
         'quiet': True,
         'no_warnings': True,
