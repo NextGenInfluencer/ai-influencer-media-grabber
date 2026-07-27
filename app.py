@@ -329,13 +329,18 @@ def process_download(url, options, custom_name):
                 if opt_force_h264 and is_video:
                     yield log("Forcing Standard Encoding (H.264)..."), None
                     temp_h264 = base + "_h264_temp.mp4"
-                    subprocess.run([ffmpeg_exe, "-y", "-i", final_path, "-c:v", "libx264", "-preset", "fast", "-crf", "23", "-c:a", "aac", "-pix_fmt", "yuv420p", "-movflags", "+faststart", temp_h264], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                    if os.path.exists(temp_h264):
+                    res = subprocess.run([ffmpeg_exe, "-y", "-i", final_path, "-c:v", "libx264", "-preset", "fast", "-crf", "23", "-c:a", "aac", "-pix_fmt", "yuv420p", "-movflags", "+faststart", temp_h264], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+                    if res.returncode == 0 and os.path.exists(temp_h264) and os.path.getsize(temp_h264) > 1024:
                         if not final_path.endswith('.mp4'):
                             try: os.remove(final_path)
                             except: pass
                             final_path = base + ".mp4"
                         os.replace(temp_h264, final_path)
+                    else:
+                        err_msg = res.stderr.decode('utf-8', errors='ignore')[-200:] if res.stderr else "Unknown FFmpeg error"
+                        yield log(f"H.264 Encode Failed! Kept original. ({err_msg})"), None
+                        try: os.remove(temp_h264)
+                        except: pass
                         
                 if opt_ai_bypass:
                     yield log("Applying AI Bypass (Scramble & Clean)..."), None
