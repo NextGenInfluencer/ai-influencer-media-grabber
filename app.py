@@ -591,7 +591,14 @@ input[type="text"], textarea {
 """
 
 with gr.Blocks(css=custom_css, theme=gr.themes.Default(primary_hue="fuchsia")) as demo:
-    gr.HTML('''
+    with gr.Column(visible=True, elem_classes="dark-container") as login_screen:
+        gr.Markdown("<h1 class='pink-header' style='text-align:center;'>🔒 RESTRICTED ACCESS</h1>")
+        pw_input = gr.Textbox(type="password", label="Enter Password", placeholder="••••••••")
+        login_btn = gr.Button("UNLOCK SYSTEM", elem_classes="magenta-btn")
+        login_err = gr.Markdown(visible=False)
+
+    with gr.Column(visible=False) as main_app:
+        gr.HTML('''
     <div class="status-header">
         <h1>AI INFLUENCER MEDIA GRABBER V1.6 <span class="engine-online">● Engine Online</span></h1>
     </div>
@@ -751,17 +758,20 @@ with gr.Blocks(css=custom_css, theme=gr.themes.Default(primary_hue="fuchsia")) a
             clear_hist_btn.click(fn=clear_history_fn, inputs=[], outputs=[hist_output])
             demo.load(fn=load_history_df, inputs=[], outputs=[hist_output])
 
+    def check_pw(pw):
+        if pw == os.environ.get("WEB_PASSWORD", "EmpressMin26"):
+            return gr.update(visible=False), gr.update(visible=True), gr.update(visible=False)
+        return gr.update(visible=True), gr.update(visible=False), gr.update(value="<h3 style='color:red;text-align:center;'>❌ ACCESS DENIED</h3>", visible=True)
+
+    login_btn.click(fn=check_pw, inputs=[pw_input], outputs=[login_screen, main_app, login_err])
+    pw_input.submit(fn=check_pw, inputs=[pw_input], outputs=[login_screen, main_app, login_err])
 
 if __name__ == "__main__":
-    auth_user = os.environ.get("WEB_USERNAME", "admin")
-    auth_pass = os.environ.get("WEB_PASSWORD", "EmpressMin26")
-    
-    print(f"Starting server with Basic Auth enabled for user: {auth_user}")
+    print(f"Starting server with In-App Auth enabled.")
     
     demo.launch(
         server_name="0.0.0.0", 
         server_port=7860,
-        auth=(auth_user, auth_pass),
         css=custom_css,
         theme=gr.themes.Default(primary_hue="fuchsia")
     )
