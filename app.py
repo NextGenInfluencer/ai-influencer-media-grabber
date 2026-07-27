@@ -640,7 +640,7 @@ input[type="text"]:focus, textarea:focus {
 }
 """
 
-with gr.Blocks(css=custom_css, theme=gr.themes.Default(primary_hue="fuchsia")) as demo:
+with gr.Blocks() as demo:
     with gr.Column(visible=True, elem_classes="dark-container") as login_screen:
         gr.Markdown("<h1 class='pink-header' style='text-align:center;'>🔒 RESTRICTED ACCESS</h1>")
         pw_input = gr.Textbox(type="password", label="Enter Password", placeholder="••••••••")
