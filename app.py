@@ -604,159 +604,159 @@ with gr.Blocks(css=custom_css, theme=gr.themes.Default(primary_hue="fuchsia")) a
     </div>
     ''')
     
-    with gr.Accordion("❓ Master Features & Tab Guide", open=False):
-        gr.Markdown("""
-        ### 🎛️ STUDIO TAB
-        - **Batch Link Downloader**: Paste TikTok, IG Reels, YouTube Shorts, X/Twitter, or Pinterest links (one per line).
-        - **Force H.264 Encoding**: Fixes video import glitches in CapCut, Kling AI, and Premiere.
-        - **Transcribe Audio (Whisper)**: Converts video speech into text transcriptions.
-        - **Identify Song (Shazam)**: Detects background music titles and artists.
-        - **Extract First Frame**: Generates video cover thumbnails.
-        - **Extract AI Prompt**: Pulls AI prompts into `.txt` files.
-        - **Auto-Storage Cleaner**: Automatically deletes files older than 1 hour to keep cloud storage 100% free.
+        with gr.Accordion("❓ Master Features & Tab Guide", open=False):
+            gr.Markdown("""
+            ### 🎛️ STUDIO TAB
+            - **Batch Link Downloader**: Paste TikTok, IG Reels, YouTube Shorts, X/Twitter, or Pinterest links (one per line).
+            - **Force H.264 Encoding**: Fixes video import glitches in CapCut, Kling AI, and Premiere.
+            - **Transcribe Audio (Whisper)**: Converts video speech into text transcriptions.
+            - **Identify Song (Shazam)**: Detects background music titles and artists.
+            - **Extract First Frame**: Generates video cover thumbnails.
+            - **Extract AI Prompt**: Pulls AI prompts into `.txt` files.
+            - **Auto-Storage Cleaner**: Automatically deletes files older than 1 hour to keep cloud storage 100% free.
 
-        ### 🛠️ MEDIA TOOLS TAB
-        - Format converter, audio extractor (MP3/WAV), and resolution/bitrate adjustments for local and processed media files.
+            ### 🛠️ MEDIA TOOLS TAB
+            - Format converter, audio extractor (MP3/WAV), and resolution/bitrate adjustments for local and processed media files.
 
-        ### 🛡️ AI CLEANER TAB
-        - Standalone metadata scrubbing and C2PA AI watermark removal to bypass social media AI detection algorithms.
+            ### 🛡️ AI CLEANER TAB
+            - Standalone metadata scrubbing and C2PA AI watermark removal to bypass social media AI detection algorithms.
 
-        ### 🖼️ GALLERY TAB
-        - Interactive grid to view, play, and download all active processed files sitting in `./web_downloads`.
+            ### 🖼️ GALLERY TAB
+            - Interactive grid to view, play, and download all active processed files sitting in `./web_downloads`.
 
-        ### 📜 HISTORY TAB
-        - Review past download logs, execution timestamps, and task status details.
-        """)
-        
-    with gr.Tabs():
-        # TAB 1: STUDIO
-        with gr.TabItem("STUDIO"):
-            with gr.Row():
-                with gr.Column(scale=2):
-                    with gr.Group(elem_classes="dark-container"):
-                        gr.Markdown("<h3 class='pink-header'>01. MEDIA URL</h3>")
-                        url_input = gr.Textbox(placeholder="Paste YouTube, Instagram, TikTok, Twitter URL here...", label="Media URL", lines=2)
-                        custom_name = gr.Textbox(placeholder="Optional: Custom Filename", label="Custom Filename")
-                        
-                    with gr.Group(elem_classes="dark-container"):
-                        gr.Markdown("<h3 class='pink-header'>02. PROCESSING OPTIONS</h3>")
-                        options = gr.CheckboxGroup(
-                            choices=[
-                                "Force H.264 Encoding",
-                                "Extract First Frame",
-                                "Extract AI Prompt (BLIP)",
-                                "Identify Song Metadata",
-                                "Transcribe Audio (Whisper)",
-                                "AI Bypass (Scramble & Clean)"
-                            ],
-                            label="Select processing steps",
-                            value=["Force H.264 Encoding", "Extract First Frame"]
-                        )
-                        
-                    process_btn = gr.Button("START DOWNLOADING MEDIA", elem_classes="magenta-btn", size="lg")
-                    
-                with gr.Column(scale=1):
-                    with gr.Group(elem_classes="dark-container"):
-                        gr.Markdown("<h3 class='pink-header'>03. TASK QUEUE & LOGS</h3>")
-                        status_log = gr.Textbox(label="Status Log", lines=8, interactive=False)
-                        output_files = gr.File(label="Output Files", interactive=False)
-                        
-            process_btn.click(fn=process_download, inputs=[url_input, options, custom_name], outputs=[status_log, output_files])
-
-        # TAB 2: MEDIA TOOLS
-        with gr.TabItem("MEDIA TOOLS"):
-            with gr.Row():
-                with gr.Column(scale=2):
-                    with gr.Group(elem_classes="dark-container"):
-                        gr.Markdown("<h3 class='pink-header'>FORMAT CONVERTER</h3>")
-                        conv_files = gr.File(label="Upload Media Files", file_count="multiple")
-                        
-                        with gr.Row():
-                            conv_format = gr.Dropdown(
-                                choices=["mp4", "mp3", "gif", "jpg", "png", "webm", "wav"],
-                                label="Output Format", value="mp4"
-                            )
-                            conv_resize = gr.Dropdown(
-                                choices=["none", "crop_9_16", "pad_9_16", "pad_blur_9_16", "crop_1_1", "crop_16_9"],
-                                label="Resize / Framing", value="none"
-                            )
-                            conv_compress = gr.Dropdown(
-                                choices=["none", "scale_1080p", "scale_720p", "compress_high", "compress_web"],
-                                label="Compression", value="none"
-                            )
-                            
-                        with gr.Row():
-                            conv_autocrop = gr.Checkbox(label="Smart Auto-Crop (Face Detect)")
-                            conv_subtitles = gr.Checkbox(label="Burn Auto-Subtitles (Whisper)")
-                            
-                        with gr.Row():
-                            conv_trim_start = gr.Textbox(label="Trim Start (e.g. 00:00:10)", placeholder="HH:MM:SS")
-                            conv_trim_end = gr.Textbox(label="Trim End (e.g. 00:00:20)", placeholder="HH:MM:SS")
-                            
-                    conv_btn = gr.Button("START CONVERSION", elem_classes="magenta-btn", size="lg")
-                    
-                with gr.Column(scale=1):
-                    with gr.Group(elem_classes="dark-container"):
-                        gr.Markdown("<h3 class='pink-header'>LOGS</h3>")
-                        conv_log = gr.Textbox(label="Status Log", lines=8, interactive=False)
-                        conv_output = gr.File(label="Converted Files", interactive=False)
-                        
-            conv_btn.click(
-                fn=process_conversion,
-                inputs=[conv_files, conv_resize, conv_format, conv_autocrop, conv_subtitles, conv_trim_start, conv_trim_end, conv_compress],
-                outputs=[conv_log, conv_output]
-            )
-
-        # TAB 3: AI CLEANER
-        with gr.TabItem("AI CLEANER"):
-            with gr.Row():
-                with gr.Column(scale=2):
-                    with gr.Group(elem_classes="dark-container"):
-                        gr.Markdown("<h3 class='pink-header'>BATCH AI CLEANER</h3>")
-                        gr.Markdown("Strip metadata, scramble C2PA patterns, and apply microscopic visual noise to completely bypass AI detector classifiers.")
-                        cleaner_files = gr.File(label="Upload Media Files", file_count="multiple")
-                        cleaner_exif = gr.Checkbox(label="Inject Fake iPhone 15 Pro EXIF Metadata", value=True)
-                        
-                    cleaner_btn = gr.Button("RUN BATCH CLEANER", elem_classes="magenta-btn", size="lg")
-                    
-                with gr.Column(scale=1):
-                    with gr.Group(elem_classes="dark-container"):
-                        gr.Markdown("<h3 class='pink-header'>LOGS</h3>")
-                        cleaner_log = gr.Textbox(label="Status Log", lines=8, interactive=False)
-                        cleaner_output = gr.File(label="Cleaned Files", interactive=False)
-                        
-            cleaner_btn.click(fn=process_cleaner, inputs=[cleaner_files, cleaner_exif], outputs=[cleaner_log, cleaner_output])
-
-        # TAB 4: GALLERY
-        with gr.TabItem("GALLERY"):
-            with gr.Group(elem_classes="dark-container"):
-                gr.Markdown("<h3 class='pink-header'>SERVER CACHE GALLERY</h3>")
-                gr.Markdown("Note: Files are automatically deleted 1 hour after generation to save disk space.")
-                refresh_gallery_btn = gr.Button("Refresh Gallery")
-                gallery_output = gr.Gallery(label="Cached Media", columns=4)
-                gallery_files_output = gr.File(label="Download Direct Files", interactive=False)
-                
-            def refresh_gal():
-                g = load_gallery()
-                return g, g
-                
-            refresh_gallery_btn.click(fn=refresh_gal, inputs=[], outputs=[gallery_output, gallery_files_output])
-            # Auto-load on mount
-            demo.load(fn=refresh_gal, inputs=[], outputs=[gallery_output, gallery_files_output])
-
-        # TAB 5: HISTORY
-        with gr.TabItem("HISTORY"):
-            with gr.Group(elem_classes="dark-container"):
-                gr.Markdown("<h3 class='pink-header'>DOWNLOAD HISTORY</h3>")
+            ### 📜 HISTORY TAB
+            - Review past download logs, execution timestamps, and task status details.
+            """)
+            
+        with gr.Tabs():
+            # TAB 1: STUDIO
+            with gr.TabItem("STUDIO"):
                 with gr.Row():
-                    refresh_hist_btn = gr.Button("Refresh History")
-                    clear_hist_btn = gr.Button("Clear History", variant="stop")
+                    with gr.Column(scale=2):
+                        with gr.Group(elem_classes="dark-container"):
+                            gr.Markdown("<h3 class='pink-header'>01. MEDIA URL</h3>")
+                            url_input = gr.Textbox(placeholder="Paste YouTube, Instagram, TikTok, Twitter URL here...", label="Media URL", lines=2)
+                            custom_name = gr.Textbox(placeholder="Optional: Custom Filename", label="Custom Filename")
+                            
+                        with gr.Group(elem_classes="dark-container"):
+                            gr.Markdown("<h3 class='pink-header'>02. PROCESSING OPTIONS</h3>")
+                            options = gr.CheckboxGroup(
+                                choices=[
+                                    "Force H.264 Encoding",
+                                    "Extract First Frame",
+                                    "Extract AI Prompt (BLIP)",
+                                    "Identify Song Metadata",
+                                    "Transcribe Audio (Whisper)",
+                                    "AI Bypass (Scramble & Clean)"
+                                ],
+                                label="Select processing steps",
+                                value=["Force H.264 Encoding", "Extract First Frame"]
+                            )
+                            
+                        process_btn = gr.Button("START DOWNLOADING MEDIA", elem_classes="magenta-btn", size="lg")
+                        
+                    with gr.Column(scale=1):
+                        with gr.Group(elem_classes="dark-container"):
+                            gr.Markdown("<h3 class='pink-header'>03. TASK QUEUE & LOGS</h3>")
+                            status_log = gr.Textbox(label="Status Log", lines=8, interactive=False)
+                            output_files = gr.File(label="Output Files", interactive=False)
+                            
+                process_btn.click(fn=process_download, inputs=[url_input, options, custom_name], outputs=[status_log, output_files])
+
+            # TAB 2: MEDIA TOOLS
+            with gr.TabItem("MEDIA TOOLS"):
+                with gr.Row():
+                    with gr.Column(scale=2):
+                        with gr.Group(elem_classes="dark-container"):
+                            gr.Markdown("<h3 class='pink-header'>FORMAT CONVERTER</h3>")
+                            conv_files = gr.File(label="Upload Media Files", file_count="multiple")
+                            
+                            with gr.Row():
+                                conv_format = gr.Dropdown(
+                                    choices=["mp4", "mp3", "gif", "jpg", "png", "webm", "wav"],
+                                    label="Output Format", value="mp4"
+                                )
+                                conv_resize = gr.Dropdown(
+                                    choices=["none", "crop_9_16", "pad_9_16", "pad_blur_9_16", "crop_1_1", "crop_16_9"],
+                                    label="Resize / Framing", value="none"
+                                )
+                                conv_compress = gr.Dropdown(
+                                    choices=["none", "scale_1080p", "scale_720p", "compress_high", "compress_web"],
+                                    label="Compression", value="none"
+                                )
+                                
+                            with gr.Row():
+                                conv_autocrop = gr.Checkbox(label="Smart Auto-Crop (Face Detect)")
+                                conv_subtitles = gr.Checkbox(label="Burn Auto-Subtitles (Whisper)")
+                                
+                            with gr.Row():
+                                conv_trim_start = gr.Textbox(label="Trim Start (e.g. 00:00:10)", placeholder="HH:MM:SS")
+                                conv_trim_end = gr.Textbox(label="Trim End (e.g. 00:00:20)", placeholder="HH:MM:SS")
+                                
+                        conv_btn = gr.Button("START CONVERSION", elem_classes="magenta-btn", size="lg")
+                        
+                    with gr.Column(scale=1):
+                        with gr.Group(elem_classes="dark-container"):
+                            gr.Markdown("<h3 class='pink-header'>LOGS</h3>")
+                            conv_log = gr.Textbox(label="Status Log", lines=8, interactive=False)
+                            conv_output = gr.File(label="Converted Files", interactive=False)
+                            
+                conv_btn.click(
+                    fn=process_conversion,
+                    inputs=[conv_files, conv_resize, conv_format, conv_autocrop, conv_subtitles, conv_trim_start, conv_trim_end, conv_compress],
+                    outputs=[conv_log, conv_output]
+                )
+
+            # TAB 3: AI CLEANER
+            with gr.TabItem("AI CLEANER"):
+                with gr.Row():
+                    with gr.Column(scale=2):
+                        with gr.Group(elem_classes="dark-container"):
+                            gr.Markdown("<h3 class='pink-header'>BATCH AI CLEANER</h3>")
+                            gr.Markdown("Strip metadata, scramble C2PA patterns, and apply microscopic visual noise to completely bypass AI detector classifiers.")
+                            cleaner_files = gr.File(label="Upload Media Files", file_count="multiple")
+                            cleaner_exif = gr.Checkbox(label="Inject Fake iPhone 15 Pro EXIF Metadata", value=True)
+                            
+                        cleaner_btn = gr.Button("RUN BATCH CLEANER", elem_classes="magenta-btn", size="lg")
+                        
+                    with gr.Column(scale=1):
+                        with gr.Group(elem_classes="dark-container"):
+                            gr.Markdown("<h3 class='pink-header'>LOGS</h3>")
+                            cleaner_log = gr.Textbox(label="Status Log", lines=8, interactive=False)
+                            cleaner_output = gr.File(label="Cleaned Files", interactive=False)
+                            
+                cleaner_btn.click(fn=process_cleaner, inputs=[cleaner_files, cleaner_exif], outputs=[cleaner_log, cleaner_output])
+
+            # TAB 4: GALLERY
+            with gr.TabItem("GALLERY"):
+                with gr.Group(elem_classes="dark-container"):
+                    gr.Markdown("<h3 class='pink-header'>SERVER CACHE GALLERY</h3>")
+                    gr.Markdown("Note: Files are automatically deleted 1 hour after generation to save disk space.")
+                    refresh_gallery_btn = gr.Button("Refresh Gallery")
+                    gallery_output = gr.Gallery(label="Cached Media", columns=4)
+                    gallery_files_output = gr.File(label="Download Direct Files", interactive=False)
                     
-                hist_output = gr.Dataframe(headers=["Time", "Platform", "Title", "Uploader", "URL", "File"])
-                
-            refresh_hist_btn.click(fn=load_history_df, inputs=[], outputs=[hist_output])
-            clear_hist_btn.click(fn=clear_history_fn, inputs=[], outputs=[hist_output])
-            demo.load(fn=load_history_df, inputs=[], outputs=[hist_output])
+                def refresh_gal():
+                    g = load_gallery()
+                    return g, g
+                    
+                refresh_gallery_btn.click(fn=refresh_gal, inputs=[], outputs=[gallery_output, gallery_files_output])
+                # Auto-load on mount
+                demo.load(fn=refresh_gal, inputs=[], outputs=[gallery_output, gallery_files_output])
+
+            # TAB 5: HISTORY
+            with gr.TabItem("HISTORY"):
+                with gr.Group(elem_classes="dark-container"):
+                    gr.Markdown("<h3 class='pink-header'>DOWNLOAD HISTORY</h3>")
+                    with gr.Row():
+                        refresh_hist_btn = gr.Button("Refresh History")
+                        clear_hist_btn = gr.Button("Clear History", variant="stop")
+                        
+                    hist_output = gr.Dataframe(headers=["Time", "Platform", "Title", "Uploader", "URL", "File"])
+                    
+                refresh_hist_btn.click(fn=load_history_df, inputs=[], outputs=[hist_output])
+                clear_hist_btn.click(fn=clear_history_fn, inputs=[], outputs=[hist_output])
+                demo.load(fn=load_history_df, inputs=[], outputs=[hist_output])
 
     def check_pw(pw):
         if pw == os.environ.get("WEB_PASSWORD", "EmpressMin26"):
