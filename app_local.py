@@ -224,6 +224,7 @@ def convert_media():
     burn_subtitles = request.form.get('burn_subtitles') == 'true'
     trim_start = request.form.get('trimStart')
     trim_end = request.form.get('trimEnd')
+    compress_opt = request.form.get('compress')
     
     if not files or files[0].filename == '':
         return jsonify({"error": "No selected file"}), 400
@@ -314,7 +315,6 @@ def convert_media():
                             vf_filters.append("split[original][copy];[copy]scale=-1:1920,crop=1080:1920,boxblur=20:5[bg];[original]scale=1080:1920:force_original_aspect_ratio=decrease[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2")
 
                     # 2. File Size & Resolution Scaling (MB Reduction)
-                    compress_opt = request.form.get('compress')
                     if compress_opt and compress_opt != "none" and format_opt not in ["mp3", "wav"]:
                         if compress_opt == "scale_1080p":
                             vf_filters.append("scale='min(1080,iw)':'min(1920,ih)':force_original_aspect_ratio=decrease")
@@ -402,9 +402,13 @@ def convert_media():
                     except Exception: pass
                     
                 except Exception as e:
+                    import traceback
+                    traceback.print_exc()
                     failed_count += 1
                     err_msg = str(e)
                     q.put({"status": f"{prefix}Error converting file."})
+                    with open("converter_debug.log", "a") as f:
+                        f.write(f"Conversion Error:\n{traceback.format_exc()}\n")
                     time.sleep(3)
                     
             if failed_count == 0:
