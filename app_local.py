@@ -391,7 +391,11 @@ def convert_media():
                     cmd.append(output_path)
                     
                     q.put({"status": f"{prefix}Encoding..."})
-                    subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    try:
+                        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+                    except subprocess.CalledProcessError as e:
+                        print(f"FFmpeg Error:\n{e.stderr}")
+                        raise e
                     
                     # Cleanup temp for this file immediately
                     try: os.remove(input_path) 
@@ -406,7 +410,7 @@ def convert_media():
             if failed_count == 0:
                 q.put({"status": f"Successfully saved to {output_dir}", "done": True})
             else:
-                q.put({"status": f"Complete! ({failed_count} failed)", "done": True})
+                q.put({"error": f"{failed_count} file(s) failed to convert. Check console logs."})
 
         t = threading.Thread(target=run_conv)
         t.start()
