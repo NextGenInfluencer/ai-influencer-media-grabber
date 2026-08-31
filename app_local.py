@@ -332,8 +332,12 @@ def convert_media():
                             crf_val = "28"
                         elif compress_opt == "compress_high":
                             crf_val = "28" # ~50% MB size reduction
+                            if format_opt == "gif":
+                                vf_filters.append("scale=iw*0.5:ih*0.5")
                         elif compress_opt == "compress_web":
                             crf_val = "32" # ~75% MB size reduction (Web/Discord)
+                            if format_opt == "gif":
+                                vf_filters.append("scale=iw*0.33:ih*0.33")
                     
                     # Audio formats (ignore video filters)
                     if format_opt in ["mp3", "wav"]:
