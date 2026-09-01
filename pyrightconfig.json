@@ -1,7 +1,17 @@
 {
-  "venvPath": ".",
+  "include": [
+    "."
+  ],
+  "exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    ".venv"
+  ],
+  "venvPath": "c:\\Users\\lefte\\Documents\\antigravity\\video-downloader",
   "venv": ".venv",
   "extraPaths": [
-    ".venv/Lib/site-packages"
-  ]
+    "c:\\Users\\lefte\\Documents\\antigravity\\video-downloader\\.venv\\Lib\\site-packages"
+  ],
+  "reportMissingImports": "none",
+  "reportMissingModuleSource": "none"
 }
