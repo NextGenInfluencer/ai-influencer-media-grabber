@@ -1,13 +1,3 @@
----
-title: Ai Influencer Media Grabber
-emoji: 🎬
-colorFrom: purple
-colorTo: pink
-sdk: gradio
-app_file: app.py
-pinned: false
----
-
 # AI Influencer Media Grabber v1.6
 
 ![Version 1.6](https://img.shields.io/badge/Version-1.6-blue?style=for-the-badge) ![UI Preview](https://img.shields.io/badge/UI-Media_Grabber-f472b6?style=for-the-badge)
@@ -53,6 +43,7 @@ The dedicated centerpiece feature designed specifically for AI creators and infl
 ### 🛠️ Media Tools Converter
 A dedicated offline media suite to format and tweak your media:
 - **Convert & Subtitle:** Convert videos to GIF, MP3, MP4, or PNG frame sequences with optional Whisper AI auto-subtitle burning.
+- **Granular Size & MB Compression:** Multi-tier compression profiles (~50%, ~75% Web/Discord, ~80%, ~85%, ~90% Extreme) with intelligent dimension downscaling for Discord-friendly GIFs (under 10MB).
 - **Smart Framing & Blurred Padding:** Crop dimensions, resize resolutions, convert 16:9 to 9:16 vertical format with a blurred background canvas, and trim clip lengths offline.
 
 ---
@@ -62,7 +53,7 @@ A dedicated offline media suite to format and tweak your media:
 2. Hover over any video or image card.
 3. Click the shiny **Extract Prompt** button that appears in the overlay menu.
 4. Wait a moment for the AI to analyze the media. 
-   - ⚠️ **First Run Disclaimer:** The very first time you click this button, the app will automatically download the local PyTorch Vision Model (`BLIP-Large`, approx. 1.9GB) in the background. After the download completes, you **must restart the app** (you can simply click the red **Restart App** button in the top right corner) for the AI model to initialize properly. All subsequent extractions will be instant and completely offline!
+   - ⚠️ **First Run Disclaimer:** The very first time you click this button, the app will automatically download the local PyTorch Vision Model (`BLIP-Large`, approx. 1.9GB) in the background. After the download completes, you can simply click the orange **Restart App** button in the header for the model to load properly. All subsequent extractions will be instant and completely offline!
 5. A popup will appear with your generated prompt, optimized specifically for **Nano Banana 2**, **Nano Banana Pro**, and **GPT Image 2** models.
 
 ---
@@ -102,9 +93,12 @@ The startup script is fully automated. It will download everything it needs, ins
 
 ### v1.6 (Current)
 - **New Feature:** Added **AI Prompt Extractor** powered by local PyTorch Vision models (`BLIP-Large`) to extract Nano Banana 2 / Pro & GPT Image 2 prompts from image/video frames in the Output Gallery.
+- **New Feature:** Added **UI Hard Restart Button** in the header to reboot the local server with one click.
 - **New Feature:** Added **Auto Subtitle Burner** in Media Tools & Downloader powered by local Whisper AI transcription.
 - **New Feature:** Added **Blurred-Background Padding (9:16)** option in Converter to turn horizontal 16:9 videos into vertical 9:16 format with blurred background canvas.
+- **New Feature:** Added **Fine-Tuned MB Compression Levels** (50%, 75%, 80%, 85%, 90%) with automatic dynamic scaling for GIF exports to hit Discord limits.
 - **New Feature:** Added **Fake iPhone 15 Pro EXIF Metadata Injector** in AI Cleaner to inject realistic Apple camera metadata into cleaned media.
+- **Fix:** Fixed multi-part FormData conversion handling and Flask thread request-context detachment bugs.
 - **Enhancement:** Full cross-platform support for **macOS and Linux** with `run.sh` launcher and native file manager integration.
 
 ### v1.5
