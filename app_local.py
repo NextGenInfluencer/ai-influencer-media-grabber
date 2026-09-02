@@ -958,8 +958,13 @@ def download_video():
                                         with open(caption_txt_path, "w", encoding="utf-8") as f:
                                             f.write(yt_desc)
                                         
-                                # Transcribe Video (Whisper)
-                                if processing_options.get('transcribeAudio', True):
+                                # Transcribe Video (Whisper) if transcript, summary, or subtitles are requested
+                                want_transcribe = processing_options.get('transcribeAudio')
+                                want_summarize = processing_options.get('aiSummarize')
+                                want_burn = processing_options.get('burn_subtitles')
+                                want_export = processing_options.get('export_subtitles')
+
+                                if want_transcribe or want_summarize or want_burn or want_export:
                                     q.put({"status": f"{prefix}Transcribing speech..."})
                                     transcript_path = base + "_transcript.txt"
                                     full_audio = base + "_full_audio.mp3"
@@ -975,10 +980,11 @@ def download_video():
                                             model = get_whisper()
                                             result = model.transcribe(full_audio, verbose=False)
                                             transcript_text = result.get("text", "").strip()
-                                            with open(transcript_path, "w", encoding="utf-8") as f:
-                                                f.write(transcript_text)
+                                            if want_transcribe and transcript_text:
+                                                with open(transcript_path, "w", encoding="utf-8") as f:
+                                                    f.write(transcript_text)
                                                 
-                                            if processing_options.get('aiSummarize') and transcript_text:
+                                            if want_summarize and transcript_text:
                                                 llm_model_choice = processing_options.get('llmModel', 'none')
                                                 if llm_model_choice and llm_model_choice != 'none':
                                                     q.put({"status": f"{prefix}Generating AI Summary & SEO Tags..."})

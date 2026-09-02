@@ -22,3 +22,5 @@ cookies.txt
 web_downloads/
 converter_debug.log
 *.pyc
+ai_models/
+*.gguf
