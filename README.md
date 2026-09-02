@@ -1,6 +1,6 @@
-# AI Influencer Media Grabber v1.7
+# AI Influencer Media Grabber v1.8
 
-![Version 1.7](https://img.shields.io/badge/Version-1.7-blue?style=for-the-badge) ![UI Preview](https://img.shields.io/badge/UI-Media_Grabber-f472b6?style=for-the-badge)
+![Version 1.8](https://img.shields.io/badge/Version-1.8-blue?style=for-the-badge) ![UI Preview](https://img.shields.io/badge/UI-Media_Grabber-f472b6?style=for-the-badge)
 
 ## 🌟 What is the AI Influencer Media Grabber?
 
@@ -91,7 +91,15 @@ The startup script is fully automated. It will download everything it needs, ins
 
 ## 📜 Changelog
 
-### v1.7 (Current)
+### v1.8 (Current)
+- **New Feature**: **Local LLM Integration**! You can now run heavy AI models (Llama 3.2 1B & Llama 3 8B) entirely offline directly in the app.
+- **New Feature**: **AI Smart Summarizer (Downloader)**. Check a box and the LLM will read the video's transcript to generate a summary, 3 viral TikTok/Reels captions, and SEO hashtags automatically!
+- **New Feature**: **Nano Banana Prompts**. The Auto-Extract AI Prompt feature now routes the basic image description through the Local LLM to perfectly format highly detailed prompts specifically for *Nano Banana Pro* & *Nano Banana 2*.
+- **New Feature**: **Offline Subtitle Translation**. Use the Local LLM in the Converter tab to translate your video's auto-generated subtitles to English, Spanish, French, German, or Japanese entirely offline.
+- **New Feature**: **Dynamic Face-Tracking Auto-Crop (Converter)**. The Converter can now intelligently track the speaker's face frame-by-frame and gracefully pan the camera to keep them in the center of the vertical 9:16 frame.
+- **Enhancement**: Subtitles can now be exported directly as `.srt` files alongside the downloaded or converted videos.
+
+### v1.7
 - **Security & Stability:** Fixed major path traversal vulnerabilities, plugged memory leaks in download tasks and temporary folder creations, and eliminated SSE loop hangs.
 - **Memory Management:** Added automatic RAM and VRAM garbage collection. AI models (Whisper and BLIP) now intelligently self-unload after 10 minutes of inactivity to keep your system fast.
 - **UX Improvements:** Implemented native keyboard shortcuts (`Ctrl/Cmd + Enter` to start tasks, `Escape` to close modals). User settings and dropdowns now automatically persist across sessions using `localStorage`.
