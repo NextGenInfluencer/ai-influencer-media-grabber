@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Local Media Grabber, Anti-AI Watermark & Converter Suite">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎬</text></svg>">
     <title>AI Influencer Media Grabber</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
@@ -59,8 +61,8 @@
             </div>
             <div>
                 <h1 class="text-base font-black text-white tracking-wide uppercase flex items-center">
-                    AI Influencer Media Grabber 
-                    <span class="ml-2 text-[10px] font-mono bg-pink-500/20 text-pink-400 px-2 py-0.5 rounded-full align-middle">v1.6</span>
+                    <i class="fa-solid fa-wand-magic-sparkles text-pink-500 mr-3 shadow-pink-500/50 drop-shadow-md"></i>AI Influencer Media Grabber
+                    <span class="ml-2 text-[10px] font-mono bg-pink-500/20 text-pink-400 px-2 py-0.5 rounded-full align-middle">v{{ version }}</span>
                 </h1>
                 <p class="text-[11px] text-zinc-400 font-medium">Local Media Grabber, Anti-AI Watermark & Converter Suite</p>
             </div>
@@ -188,9 +190,25 @@
                                     <span>Auto-Burn Subtitles (Whisper)</span>
                                 </label>
                                 <label class="flex items-center space-x-2.5 text-xs text-zinc-400 cursor-pointer">
+                                    <input type="checkbox" id="exportSubtitlesDownloader" class="form-checkbox text-pink-500 rounded border-zinc-700 bg-zinc-900">
+                                    <span>Export Subtitle File (.srt)</span>
+                                </label>
+                                <label class="flex items-center space-x-2.5 text-xs text-zinc-400 cursor-pointer">
                                     <input type="checkbox" id="autoExtractPrompt" class="form-checkbox text-pink-500 rounded border-zinc-700 bg-zinc-900">
                                     <span>Auto-Extract AI Prompt (.txt)</span>
                                 </label>
+                                <label class="flex items-center space-x-2.5 text-xs text-zinc-400 cursor-pointer">
+                                    <input type="checkbox" id="aiSummarize" class="form-checkbox text-pink-500 rounded border-zinc-700 bg-zinc-900">
+                                    <span>AI Smart Summarizer & SEO (.txt)</span>
+                                </label>
+                                <div class="pt-2 border-t border-zinc-800">
+                                    <label class="block text-[10px] font-bold text-zinc-400 uppercase mb-1">Local LLM Model</label>
+                                    <select id="llmModelDownloader" class="w-full px-2 py-1.5 bg-zinc-900 border border-zinc-700 rounded text-xs text-zinc-200 focus:outline-none focus:border-pink-500">
+                                        <option value="none">None (Disable LLM Features)</option>
+                                        <option value="llama-3.2-1b" selected>Llama 3.2 1B (Fast, CPU Friendly)</option>
+                                        <option value="llama-3-8b">Llama 3 8B (Heavy, High Reasoning)</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -266,7 +284,7 @@
                                         <option value="crop_16_9">Crop to 16:9 (Fill Screen)</option>
                                         <option value="pad_16_9">Pad to 16:9 (Letterbox Fit)</option>
                                     </optgroup>
-                                    <optgroup label="Vertical (TikTok/Reels/Shorts)">
+                                    <optgroup label="Blurred Background">
                                         <option value="pad_blur_9_16">Pad 16:9 to 9:16 (Blurred Canvas)</option>
                                     </optgroup>
                                     <optgroup label="Square & Feed">
@@ -297,12 +315,49 @@
                                 </select>
                             </div>
 
-                            <!-- Auto-Crop Checkbox -->
-                            <div class="space-y-2 col-span-2 pt-2 border-t border-zinc-800/60 flex items-center justify-between">
-                                <label class="flex items-center space-x-2 text-xs text-zinc-300 cursor-pointer">
-                                    <input type="checkbox" id="convAutoCrop" class="form-checkbox text-purple-500 rounded border-zinc-700 bg-zinc-900 focus:ring-purple-500">
-                                    <span>Smart Subject Auto-Crop (Keeps Detected Face Centered)</span>
+                            <!-- Auto-Crop & Subtitles Checkboxes -->
+                            <div class="space-y-2 col-span-2 pt-2 border-t border-zinc-800/60">
+                                <label class="flex items-center justify-between space-x-2 text-xs text-zinc-300 cursor-pointer mb-2">
+                                    <div class="flex items-center space-x-2">
+                                        <input type="checkbox" id="convAutoCrop" class="form-checkbox text-purple-500 rounded border-zinc-700 bg-zinc-900 focus:ring-purple-500">
+                                        <span>Dynamic Face-Tracking Crop to 9:16</span>
+                                    </div>
                                 </label>
+                                <label class="flex items-center justify-between space-x-2 text-xs text-zinc-300 cursor-pointer mb-2">
+                                    <div class="flex items-center space-x-2">
+                                        <input type="checkbox" id="convBurnSubtitles" class="form-checkbox text-purple-500 rounded border-zinc-700 bg-zinc-900 focus:ring-purple-500">
+                                        <span>Burn Subtitles (Whisper AI)</span>
+                                    </div>
+                                </label>
+                                <label class="flex items-center justify-between space-x-2 text-xs text-zinc-300 cursor-pointer mb-2">
+                                    <div class="flex items-center space-x-2">
+                                        <input type="checkbox" id="convExportSubtitles" class="form-checkbox text-purple-500 rounded border-zinc-700 bg-zinc-900 focus:ring-purple-500">
+                                        <span>Export Subtitle File (.srt)</span>
+                                    </div>
+                                </label>
+                                <div class="flex items-center space-x-2 mt-4 pt-4 border-t border-zinc-800/60 w-full justify-between">
+                                    <label class="flex items-center space-x-2 text-xs text-zinc-300 cursor-pointer">
+                                        <span>AI Translate Subtitles</span>
+                                    </label>
+                                    <select id="convTranslateLang" class="w-1/2 px-2 py-1.5 bg-zinc-900 border border-zinc-700 rounded text-xs text-zinc-200 focus:outline-none focus:border-purple-500">
+                                        <option value="none" selected>No Translation</option>
+                                        <option value="English">English</option>
+                                        <option value="Spanish">Spanish</option>
+                                        <option value="French">French</option>
+                                        <option value="German">German</option>
+                                        <option value="Japanese">Japanese</option>
+                                    </select>
+                                </div>
+                                <div class="flex items-center space-x-2 mt-2 w-full justify-between">
+                                    <label class="text-[10px] font-bold text-zinc-400 uppercase">Local LLM Model</label>
+                                    <select id="llmModelConverter" class="w-2/3 px-2 py-1.5 bg-zinc-900 border border-zinc-700 rounded text-xs text-zinc-200 focus:outline-none focus:border-purple-500">
+                                        <option value="none">None (Disable LLM Features)</option>
+                                        <option value="llama-3.2-1b" selected>Llama 3.2 1B (Fast, CPU Friendly)</option>
+                                        <option value="llama-3-8b">Llama 3 8B (Heavy, High Reasoning)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-span-2 flex items-center justify-end">
                                 <div class="w-1/3">
                                     <select id="convFormat" name="format" class="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-zinc-200 focus:outline-none focus:border-purple-500 appearance-none">
                                         <optgroup label="Video">
@@ -741,12 +796,13 @@
                 el.className = 'relative aspect-[9/16] rounded-xl overflow-hidden border border-zinc-800 bg-black group';
                 
                 if (item.type === 'video') {
-                    el.innerHTML = `<video src="${url}" class="w-full h-full object-cover" controls preload="metadata"></video>`;
+                    el.innerHTML = `<video src="${url}" class="w-full h-full object-cover" controls preload="none"></video>`;
                 } else if (item.type === 'image') {
-                    el.innerHTML = `<img src="${url}" class="w-full h-full object-cover" />`;
+                    el.innerHTML = `<img src="${url}" class="w-full h-full object-cover" loading="lazy" />`;
                 } else {
-                    el.innerHTML = `<div class="w-full h-full flex items-center justify-center text-xs text-zinc-500 break-all p-2 text-center bg-zinc-900">${item.name}</div>
+                    el.innerHTML = `<div class="w-full h-full flex items-center justify-center text-xs text-zinc-500 break-all p-2 text-center bg-zinc-900 audio-title"></div>
                     <audio src="${url}" controls class="absolute bottom-0 left-0 w-full h-10"></audio>`;
+                    el.querySelector('.audio-title').textContent = item.name;
                 }
                 
                 const safePath = item.full_path || '';
@@ -916,13 +972,14 @@
                         </div>
                         <button class="text-zinc-500 hover:text-zinc-300 transition p-1" onclick="document.getElementById('${modalId}').remove()"><i class="fa-solid fa-xmark"></i></button>
                     </div>
-                    <textarea class="w-full h-32 bg-[#080809] border border-zinc-800 rounded-xl p-3 text-xs text-zinc-300 font-mono focus:outline-none focus:border-emerald-500 transition mb-4" readonly>${promptText}</textarea>
+                    <textarea id="${modalId}_text" class="w-full h-32 bg-[#080809] border border-zinc-800 rounded-xl p-3 text-xs text-zinc-300 font-mono focus:outline-none focus:border-emerald-500 transition mb-4" readonly></textarea>
                     <div class="flex space-x-3">
-                        <button class="flex-1 py-3 bg-emerald-500 hover:bg-emerald-400 text-white font-bold uppercase text-[10px] tracking-wider rounded-xl transition" onclick="navigator.clipboard.writeText('${promptText.replace(/'/g, "\\'")}'); this.innerHTML='<i class=\\'fa-solid fa-check\\'></i> Copied!'; setTimeout(() => this.innerHTML='Copy Prompt', 2000);">Copy Prompt</button>
+                        <button class="flex-1 py-3 bg-emerald-500 hover:bg-emerald-400 text-white font-bold uppercase text-[10px] tracking-wider rounded-xl transition" onclick="navigator.clipboard.writeText(document.getElementById('${modalId}_text').value); this.innerHTML='<i class=\\'fa-solid fa-check\\'></i> Copied!'; setTimeout(() => this.innerHTML='Copy Prompt', 2000);">Copy Prompt</button>
                     </div>
                 </div>
             `;
             document.body.appendChild(modal);
+            document.getElementById(`${modalId}_text`).value = promptText;
         }
 
         // Form Submit for Downloader JS
@@ -1112,6 +1169,7 @@
                                     actionBtn.onclick = () => openFolder(data.file_path);
                                     row.appendChild(actionBtn);
                                 }
+                                if (typeof loadGallery === 'function') loadGallery();
                                 finished = true;
                                 break;
                             }
@@ -1233,7 +1291,10 @@
                         identifySong: document.getElementById('identifySong').checked,
                         transcribeAudio: document.getElementById('transcribeAudio').checked,
                         burn_subtitles: document.getElementById('burnSubtitles').checked,
-                        autoExtractPrompt: document.getElementById('autoExtractPrompt').checked
+                        export_subtitles: document.getElementById('exportSubtitlesDownloader').checked,
+                        autoExtractPrompt: document.getElementById('autoExtractPrompt').checked,
+                        aiSummarize: document.getElementById('aiSummarize').checked,
+                        llmModel: document.getElementById('llmModelDownloader').value
                     }
                 };
 
@@ -1328,7 +1389,10 @@
             e.preventDefault();
             const formData = new FormData(e.target);
             formData.set('autocrop', document.getElementById('convAutoCrop').checked);
-            
+            formData.set('burn_subtitles', document.getElementById('convBurnSubtitles').checked);
+            formData.set('export_subtitles', document.getElementById('convExportSubtitles').checked);
+            formData.set('translate_lang', document.getElementById('convTranslateLang').value);
+            formData.set('llmModel', document.getElementById('llmModelConverter').value);
             const statusContainer = document.getElementById('convStatusContainer');
             const statusText = document.getElementById('convStatusText');
             const statusIcon = document.getElementById('convStatusIcon');
@@ -1411,6 +1475,11 @@
                 cleanerSelectedFiles.classList.add('hidden');
             }
         });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
 
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
             cleanerDropZone.addEventListener(eventName, preventDefaults, false);
@@ -1531,6 +1600,49 @@
                 alert("Failed to send restart command.");
             }
         }
+
+        // --- Keyboard Shortcuts & Settings Persistence ---
+        window.addEventListener('DOMContentLoaded', () => {
+            // Restore settings
+            const settingsIds = [
+                'browser', 'convResize', 'convCompress', 'convFormat', 
+                'convAutoCrop', 'convBurnSubtitles', 'convExportSubtitles', 
+                'burnSubtitles', 'exportSubtitlesDownloader', 'injectExif',
+                'aiSummarize', 'llmModelDownloader', 'convTranslateLang', 'llmModelConverter'
+            ];
+            settingsIds.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    const saved = localStorage.getItem('setting_' + id);
+                    if (saved !== null) {
+                        if (el.type === 'checkbox') el.checked = saved === 'true';
+                        else el.value = saved;
+                    }
+                    el.addEventListener('change', () => {
+                        localStorage.setItem('setting_' + id, el.type === 'checkbox' ? el.checked : el.value);
+                    });
+                }
+            });
+
+            // Keyboard Shortcuts
+            window.addEventListener('keydown', (e) => {
+                // Escape closes modal
+                if (e.key === 'Escape' && document.getElementById('browserModal').style.display !== 'none') {
+                    closeBrowserModal();
+                }
+                
+                // Ctrl+Enter or Cmd+Enter to submit current visible form
+                if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                    if (document.getElementById('section-downloader').classList.contains('hidden') === false) {
+                        document.getElementById('downloadForm').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+                    } else if (document.getElementById('section-converter').classList.contains('hidden') === false) {
+                        document.getElementById('converterForm').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+                    } else if (document.getElementById('section-cleaner').classList.contains('hidden') === false) {
+                        document.getElementById('cleanerForm').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+                    }
+                }
+            });
+        });
     </script>
 
     <!-- Toast Notification -->

@@ -6,6 +6,7 @@ import shutil
 import re
 import numpy as np
 from PIL import Image
+import uuid
 
 # Import imageio_ffmpeg for internal ffmpeg exe
 try:
@@ -31,7 +32,7 @@ def clean_video(file_path, ffmpeg_exe=None, inject_exif=False):
         else:
             ffmpeg_exe = "ffmpeg"
             
-    temp_output = file_path + ".tmp_clean.mp4"
+    temp_output = file_path + f".tmp_clean_{uuid.uuid4().hex[:8]}.mp4"
     cmd = [
         ffmpeg_exe, "-y", "-i", file_path,
         "-vf", "crop=in_w*0.995:in_h*0.995,noise=alls=1.2:allf=t+u",
@@ -92,6 +93,16 @@ def get_fake_exif():
     except ImportError:
         return None
 
+def backup_file(file_path, save_dir):
+    try:
+        backup_dir = os.path.join(save_dir, "AI Cleaned", "Original Backups")
+        os.makedirs(backup_dir, exist_ok=True)
+        backup_path = os.path.join(backup_dir, os.path.basename(file_path))
+        if not os.path.exists(backup_path):
+            shutil.copy2(file_path, backup_path)
+    except Exception:
+        pass
+
 def clean_photo(file_path, inject_exif=False):
     ext = os.path.splitext(file_path)[1].lower()
     try:
@@ -121,11 +132,15 @@ def clean_photo(file_path, inject_exif=False):
                     scrambled_img.save(file_path, 'JPEG', quality=98, exif=exif_bytes)
                 else:
                     scrambled_img.save(file_path, 'JPEG', quality=98)
+                return True, "Success"
             elif ext == '.png':
                 scrambled_img.save(file_path, 'PNG')
+                if inject_exif:
+                    return True, "Success (EXIF ignored for PNG)"
+                return True, "Success"
             else:
                 scrambled_img.save(file_path)
-            return True, "Success"
+                return True, "Success"
     except Exception as e:
         return False, str(e)
 

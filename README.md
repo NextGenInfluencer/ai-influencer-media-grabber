@@ -1,6 +1,6 @@
-# AI Influencer Media Grabber v1.6
+# AI Influencer Media Grabber v1.7
 
-![Version 1.6](https://img.shields.io/badge/Version-1.6-blue?style=for-the-badge) ![UI Preview](https://img.shields.io/badge/UI-Media_Grabber-f472b6?style=for-the-badge)
+![Version 1.7](https://img.shields.io/badge/Version-1.7-blue?style=for-the-badge) ![UI Preview](https://img.shields.io/badge/UI-Media_Grabber-f472b6?style=for-the-badge)
 
 ## 🌟 What is the AI Influencer Media Grabber?
 
@@ -91,7 +91,14 @@ The startup script is fully automated. It will download everything it needs, ins
 
 ## 📜 Changelog
 
-### v1.6 (Current)
+### v1.7 (Current)
+- **Security & Stability:** Fixed major path traversal vulnerabilities, plugged memory leaks in download tasks and temporary folder creations, and eliminated SSE loop hangs.
+- **Memory Management:** Added automatic RAM and VRAM garbage collection. AI models (Whisper and BLIP) now intelligently self-unload after 10 minutes of inactivity to keep your system fast.
+- **UX Improvements:** Implemented native keyboard shortcuts (`Ctrl/Cmd + Enter` to start tasks, `Escape` to close modals). User settings and dropdowns now automatically persist across sessions using `localStorage`.
+- **UI Enhancements:** The Gallery tab now auto-refreshes when a task finishes. Added an "Open Folder" quick action directly on completed download tasks.
+- **Performance:** Implemented a smart 2-second cache on the Gallery API to prevent filesystem thrashing during rapid searches.
+
+### v1.6
 - **New Feature:** Added **AI Prompt Extractor** powered by local PyTorch Vision models (`BLIP-Large`) to extract Nano Banana 2 / Pro & GPT Image 2 prompts from image/video frames in the Output Gallery.
 - **New Feature:** Added **UI Hard Restart Button** in the header to reboot the local server with one click.
 - **New Feature:** Added **Auto Subtitle Burner** in Media Tools & Downloader powered by local Whisper AI transcription.

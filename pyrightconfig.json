@@ -13,5 +13,6 @@
     "c:\\Users\\lefte\\Documents\\antigravity\\video-downloader\\.venv\\Lib\\site-packages"
   ],
   "reportMissingImports": "none",
-  "reportMissingModuleSource": "none"
+  "reportMissingModuleSource": "none",
+  "reportMissingTypeStubs": "none"
 }

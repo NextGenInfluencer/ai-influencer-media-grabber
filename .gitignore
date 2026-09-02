@@ -18,3 +18,7 @@ backup_temp/
 toolkit_*/
 test.vbs
 cookies.txt
+
+web_downloads/
+converter_debug.log
+*.pyc

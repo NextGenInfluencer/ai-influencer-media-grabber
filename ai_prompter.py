@@ -5,8 +5,28 @@ from PIL import Image
 _blip_processor = None
 _blip_model = None
 
+import threading
+import gc
+
+_blip_timer = None
+
+def unload_blip():
+    global _blip_processor, _blip_model, _blip_timer
+    if _blip_model is not None:
+        print("Unloading BLIP model to free memory...")
+        _blip_processor = None
+        _blip_model = None
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        gc.collect()
+    _blip_timer = None
+
 def get_blip_model():
-    global _blip_processor, _blip_model
+    global _blip_processor, _blip_model, _blip_timer
+    
+    if _blip_timer is not None:
+        _blip_timer.cancel()
+        
     if _blip_model is None:
         try:
             from transformers import BlipProcessor, BlipForConditionalGeneration
@@ -21,6 +41,9 @@ def get_blip_model():
             print(f"Error loading BLIP model: {e}")
             return None, None
             
+    _blip_timer = threading.Timer(600, unload_blip)
+    _blip_timer.daemon = True
+    _blip_timer.start()
     return _blip_processor, _blip_model
 
 def extract_prompt_from_image(image_path):

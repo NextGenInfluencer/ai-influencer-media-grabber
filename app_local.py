@@ -26,86 +26,242 @@ os.makedirs(DEFAULT_SAVE_DIR, exist_ok=True)
 for sub in ['YouTube', 'Instagram', 'TikTok', 'Twitter', 'Other', 'Conversions']:
     os.makedirs(os.path.join(DEFAULT_SAVE_DIR, sub), exist_ok=True)
 
-HISTORY_FILE = "history.json"
+HISTORY_FILE = os.path.join(DEFAULT_SAVE_DIR, "history.json")
+history_lock = threading.RLock()
 
 def load_history():
-    if not os.path.exists(HISTORY_FILE): return []
-    try:
-        with open(HISTORY_FILE, 'r', encoding='utf-8') as f: return json.load(f)
-    except Exception: return []
+    with history_lock:
+        if not os.path.exists(HISTORY_FILE): return []
+        try:
+            with open(HISTORY_FILE, 'r', encoding='utf-8') as f: return json.load(f)
+        except Exception: return []
 
 def save_history(data):
-    with open(HISTORY_FILE, 'w', encoding='utf-8') as f: json.dump(data, f, indent=4)
+    with history_lock:
+        with open(HISTORY_FILE, 'w', encoding='utf-8') as f: json.dump(data, f, indent=4)
     
 def add_history_entry(url, title, uploader, file_path, platform):
-    h = load_history()
-    h.insert(0, {
-        "id": str(uuid.uuid4()),
-        "url": url,
-        "title": title,
-        "uploader": uploader,
-        "file_path": file_path,
-        "platform": platform,
-        "timestamp": time.time()
-    })
-    save_history(h)
+    with history_lock:
+        h = load_history()
+        h.insert(0, {
+            "id": str(uuid.uuid4()),
+            "url": url,
+            "title": title,
+            "uploader": uploader,
+            "file_path": file_path,
+            "platform": platform,
+            "timestamp": time.time()
+        })
+        save_history(h)
 
 # Ensure ffmpeg is in PATH for whisper
 os.environ["PATH"] += os.pathsep + os.path.dirname(imageio_ffmpeg.get_ffmpeg_exe())
 
+import gc
 whisper_model = None
+_whisper_timer = None
+
+def unload_whisper():
+    global whisper_model, _whisper_timer
+    if whisper_model is not None:
+        print("Unloading Whisper model to free memory...")
+        whisper_model = None
+        try:
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except Exception: pass
+        gc.collect()
+    _whisper_timer = None
+
 def get_whisper():
-    global whisper_model
+    global whisper_model, _whisper_timer
+    if _whisper_timer is not None:
+        _whisper_timer.cancel()
     if whisper_model is None:
         import whisper
         print("Loading Whisper model (this may take a moment)...")
         whisper_model = whisper.load_model("base")
+    _whisper_timer = threading.Timer(600, unload_whisper)
+    _whisper_timer.daemon = True
+    _whisper_timer.start()
     return whisper_model
+
+llm_model = None
+_llm_timer = None
+_current_llm_id = None
+
+def unload_llm():
+    global llm_model, _llm_timer, _current_llm_id
+    if llm_model is not None:
+        del llm_model
+        llm_model = None
+        _current_llm_id = None
+        gc.collect()
+    _llm_timer = None
+
+def get_llm(model_id="llama-3.2-1b"):
+    global llm_model, _llm_timer, _current_llm_id
+    if _llm_timer is not None:
+        _llm_timer.cancel()
+        
+    if llm_model is None or _current_llm_id != model_id:
+        if llm_model is not None: unload_llm()
+        
+        from llama_cpp import Llama
+        from huggingface_hub import hf_hub_download
+        
+        models_dir = os.path.join(app.root_path, "ai_models")
+        os.makedirs(models_dir, exist_ok=True)
+        
+        print(f"Loading Local LLM ({model_id})...")
+        if model_id == "llama-3-8b":
+            repo_id = "QuantFactory/Meta-Llama-3-8B-Instruct-GGUF"
+            filename = "Meta-Llama-3-8B-Instruct.Q4_K_M.gguf"
+        else: # Default: Llama 3.2 1B
+            repo_id = "bartowski/Llama-3.2-1B-Instruct-GGUF"
+            filename = "Llama-3.2-1B-Instruct-Q4_K_M.gguf"
+            
+        model_path = os.path.join(models_dir, filename)
+        if not os.path.exists(model_path):
+            print(f"Downloading {filename} from HuggingFace (First time only)...")
+            hf_hub_download(repo_id=repo_id, filename=filename, local_dir=models_dir)
+            
+        # Initialize Llama model
+        llm_model = Llama(
+            model_path=model_path,
+            n_gpu_layers=-1, # Auto-detect GPU if possible
+            n_ctx=4096,
+            verbose=False
+        )
+        _current_llm_id = model_id
+        
+    _llm_timer = threading.Timer(600, unload_llm)
+    _llm_timer.daemon = True
+    _llm_timer.start()
+    return llm_model
+
+def llm_generate(prompt, system_prompt="You are a helpful AI assistant.", model_id="llama-3.2-1b"):
+    llm = get_llm(model_id)
+    response = llm.create_chat_completion(
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0.7,
+        max_tokens=1024
+    )
+    return response['choices'][0]['message']['content'].strip()
 
 # Cache the face detection cascade globally but initialize lazily
 _face_cascade = None
 
-def get_face_center_x(video_path):
+def dynamic_auto_crop(input_path, output_path, q=None, prefix=""):
     import cv2
+    import cv2.data # type: ignore
     global _face_cascade
     if _face_cascade is None:
-        _face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        _face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml') # type: ignore
         
-    cap = cv2.VideoCapture(video_path)
+    cap = cv2.VideoCapture(input_path)
     if not cap.isOpened():
-        return None
+        return False
         
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    if fps <= 0: fps = 30
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     
-    # Only reframe if it's horizontal
+    target_width = int(height * (9 / 16))
+    if target_width > width: target_width = width
     if width <= height:
         cap.release()
-        return None
+        return False
         
     face_cascade = _face_cascade
-    centers = []
-    frame_count = 0
     
-    # Read every 15th frame, max 10 seconds (approx 300 frames)
-    while cap.isOpened() and frame_count < 300:
+    if q: q.put({"status": f"{prefix}Scanning video for face tracking..."})
+    
+    keyframe_interval = max(1, int(fps / 2)) # Twice a second
+    frame_centers = []
+    frame_idx = 0
+    last_center = width // 2
+    
+    while cap.isOpened() and frame_idx < total_frames:
         ret, frame = cap.read()
         if not ret: break
         
-        if frame_count % 15 == 0:
+        if frame_idx % keyframe_interval == 0:
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            # Resize for faster processing
             small = cv2.resize(gray, (0,0), fx=0.5, fy=0.5)
             faces = face_cascade.detectMultiScale(small, 1.1, 4)
-            for (x, y, w, h) in faces:
-                centers.append((x + w//2) * 2)
-                break
-        frame_count += 1
-        
+            if len(faces) > 0:
+                faces = sorted(faces, key=lambda f: f[2]*f[3], reverse=True)
+                (x, y, w, h) = faces[0]
+                last_center = (x + w//2) * 2
+            frame_centers.append((frame_idx, last_center))
+        frame_idx += 1
     cap.release()
-    if centers:
-        return sum(centers) // len(centers)
-    return None
+    
+    if not frame_centers: return False
+    
+    smoothed_centers = []
+    all_centers = [width//2] * frame_idx
+    for i in range(len(frame_centers) - 1):
+        idx1, c1 = frame_centers[i]
+        idx2, c2 = frame_centers[i+1]
+        for j in range(idx1, idx2):
+            all_centers[j] = int(c1 + (c2 - c1) * (j - idx1) / (idx2 - idx1))
+    if frame_centers:
+        idx_last, c_last = frame_centers[-1]
+        for j in range(idx_last, frame_idx): all_centers[j] = c_last
+        
+    alpha = 0.05
+    current_smooth = all_centers[0]
+    for c in all_centers:
+        current_smooth = alpha * c + (1 - alpha) * current_smooth
+        clamped = max(target_width // 2, min(width - target_width // 2, int(current_smooth)))
+        smoothed_centers.append(clamped)
+        
+    if q: q.put({"status": f"{prefix}Rendering dynamic face-tracked video..."})
+    
+    cap = cv2.VideoCapture(input_path)
+    ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe() if imageio_ffmpeg else "ffmpeg"
+    
+    cmd = [
+        ffmpeg_exe, '-y', '-f', 'rawvideo', '-vcodec', 'rawvideo',
+        '-s', f'{target_width}x{height}', '-pix_fmt', 'bgr24', '-r', str(fps),
+        '-i', '-', '-i', input_path, '-map', '0:v', '-map', '1:a?', 
+        '-c:v', 'libx264', '-preset', 'fast', '-crf', '17', '-c:a', 'copy',
+        output_path
+    ]
+    
+    process = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    
+    frame_idx = 0
+    while True:
+        ret, frame = cap.read()
+        if not ret: break
+        
+        c = smoothed_centers[frame_idx] if frame_idx < len(smoothed_centers) else smoothed_centers[-1]
+        x_start = c - target_width // 2
+        cropped = frame[:, x_start:x_start+target_width]
+        
+        try: process.stdin.write(cropped.tobytes())
+        except Exception: break
+        frame_idx += 1
+        if q and frame_idx % int(fps * 2) == 0 and total_frames > 0:
+            pct = int(frame_idx/total_frames*100)
+            q.put({"status": f"{prefix}Rendering face-tracked video... ({pct}%)"})
+            
+    cap.release()
+    try: 
+        process.stdin.close()
+        process.wait()
+    except Exception: pass
+    
+    return os.path.exists(output_path) and os.path.getsize(output_path) > 0
 
 app = Flask(__name__)
 # Allow large file uploads (500MB max)
@@ -131,23 +287,28 @@ def sanitize_filename(name):
     # Remove illegal characters for Windows/Linux/Mac
     return re.sub(r'[\\/*?:"<>|]', "", name)
 
+def is_safe_path(path):
+    try:
+        abs_path = os.path.abspath(path)
+        return abs_path.startswith(os.path.abspath(DEFAULT_SAVE_DIR))
+    except Exception:
+        return False
+
 def shazam_file(audio_path):
     async def recognize():
         shazam = Shazam()
         return await shazam.recognize(audio_path)
-    loop = asyncio.new_event_loop()
     try:
-        asyncio.set_event_loop(loop)
-        return loop.run_until_complete(recognize())
+        return asyncio.run(recognize())
     except Exception as e:
         print("Shazam error:", e)
         return None
-    finally:
-        loop.close()
+
+APP_VERSION = "1.8"
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index.html', version=APP_VERSION)
 
 
 @app.route('/api/list_drives', methods=['GET'])
@@ -222,6 +383,9 @@ def convert_media():
     format_opt = request.form.get('format')
     autocrop = request.form.get('autocrop') == 'true'
     burn_subtitles = request.form.get('burn_subtitles') == 'true'
+    export_subtitles = request.form.get('export_subtitles') == 'true'
+    translate_lang = request.form.get('translate_lang', 'none')
+    llm_model = request.form.get('llmModel', 'none')
     trim_start = request.form.get('trimStart')
     trim_end = request.form.get('trimEnd')
     compress_opt = request.form.get('compress')
@@ -292,10 +456,10 @@ def convert_media():
                     
                     # 1. Smart Auto-Crop or Aspect Ratio Crop/Pad
                     if autocrop and format_opt not in ["mp3", "wav"] and input_ext not in [".mp3", ".wav", ".jpg", ".png", ".webp"]:
-                        q.put({"status": f"{prefix}Analyzing face position for Smart Auto-Crop..."})
-                        center_x = get_face_center_x(input_path)
-                        if center_x is not None:
-                            vf_filters.append(f"crop=ih*9/16:ih:{center_x}-ih*9/32:0")
+                        temp_crop_path = os.path.join(shared_temp_dir, f"{uuid.uuid4().hex}_precrop.mp4")
+                        if dynamic_auto_crop(input_path, temp_crop_path, q, prefix):
+                            input_path = temp_crop_path
+                            # dynamic_auto_crop already crops to 9:16
                         else:
                             vf_filters.append("crop=ih*9/16:ih")
                     elif resize and resize != "none" and format_opt not in ["mp3", "wav"]:
@@ -359,10 +523,13 @@ def convert_media():
                             cmd.extend(["-vn", "-acodec", "pcm_s16le"])
                     else:
                         # Video or Image formats
-                        if burn_subtitles:
-                            q.put({"status": f"{prefix}Generating & Burning Subtitles..."})
+                        if burn_subtitles or export_subtitles:
+                            q.put({"status": f"{prefix}Generating Subtitles..."})
                             temp_audio = os.path.join(shared_temp_dir, f"{uuid.uuid4().hex}.mp3")
-                            temp_srt = os.path.join(shared_temp_dir, f"{uuid.uuid4().hex}.srt")
+                            
+                            # For export, we should place the SRT next to the output video
+                            final_srt_path = os.path.splitext(output_path)[0] + "_subtitles.srt"
+                            temp_srt = final_srt_path if export_subtitles else os.path.join(shared_temp_dir, f"{uuid.uuid4().hex}.srt")
                             
                             audio_cmd = [ffmpeg_exe, "-y", "-i", input_path, "-vn", "-acodec", "libmp3lame", temp_audio]
                             subprocess.run(audio_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -384,8 +551,21 @@ def convert_media():
                                             f.write(f"{format_time(segment['start'])} --> {format_time(segment['end'])}\n")
                                             f.write(f"{segment['text'].strip()}\n\n")
                                             
-                                    srt_escaped = temp_srt.replace('\\', '\\\\').replace(':', '\\:')
-                                    vf_filters.append(f"subtitles='{srt_escaped}':force_style='FontSize=24,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2'")
+                                    if translate_lang and translate_lang != 'none' and llm_model and llm_model != 'none':
+                                        q.put({"status": f"{prefix}Translating Subtitles to {translate_lang}..."})
+                                        try:
+                                            with open(temp_srt, 'r', encoding='utf-8') as tf:
+                                                srt_content = tf.read()
+                                            sys_p = f"You are a professional subtitle translator. Translate the following .srt file to {translate_lang}. Maintain the exact SRT formatting and timestamps. Output ONLY the translated SRT text."
+                                            translated_srt = llm_generate(srt_content, sys_p, llm_model)
+                                            with open(temp_srt, 'w', encoding='utf-8') as tf:
+                                                tf.write(translated_srt)
+                                        except Exception as e:
+                                            print(f"Translation Error: {e}")
+                                            
+                                    if burn_subtitles:
+                                        srt_escaped = temp_srt.replace('\\', '\\\\').replace(':', '\\:')
+                                        vf_filters.append(f"subtitles='{srt_escaped}':force_style='FontSize=24,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2'")
                                 except Exception as e:
                                     print("Subtitle error:", e)
 
@@ -423,7 +603,7 @@ def convert_media():
                     failed_count += 1
                     err_msg = str(e)
                     q.put({"status": f"{prefix}Error converting file."})
-                    with open("converter_debug.log", "a") as f:
+                    with open(os.path.join(DEFAULT_SAVE_DIR, "converter_debug.log"), "a") as f:
                         f.write(f"Conversion Error:\n{traceback.format_exc()}\n")
                     time.sleep(3)
                     
@@ -431,12 +611,20 @@ def convert_media():
                 q.put({"status": f"Successfully saved to {output_dir}", "done": True})
             else:
                 q.put({"error": f"{failed_count} file(s) failed to convert. Check console logs."})
+            
+            import shutil
+            try: shutil.rmtree(shared_temp_dir)
+            except Exception: pass
 
-        t = threading.Thread(target=run_conv)
+        t = threading.Thread(target=run_conv, daemon=True)
         t.start()
         
         while True:
-            msg = q.get()
+            try:
+                msg = q.get(timeout=120)
+            except queue.Empty:
+                yield f"data: {json.dumps({'error': 'Task timed out.'})}\n\n"
+                break
             yield f"data: {json.dumps(msg)}\n\n"
             if msg.get("done") or msg.get("error"):
                 break
@@ -454,6 +642,9 @@ def preview_url():
     url = data.get('url')
     if not url:
         return jsonify({"error": "No URL provided"}), 400
+    url = url.strip()
+    if not url.startswith(('http://', 'https://')):
+        return jsonify({"error": "Invalid URL scheme"}), 400
         
     try:
         ydl_opts = {
@@ -488,12 +679,12 @@ def download_video():
     # Ensure task is not cancelled before starting
     cancel_flags[task_id] = False
 
-    url = urls_raw.strip()
-    urls = [url] if url else []
+    urls = [u.strip() for u in urls_raw.split('\n') if u.strip().startswith(('http://', 'https://'))]
 
     if not urls:
-        return jsonify({"error": "URL is required"}), 400
+        return jsonify({"error": "Valid URL(s) required"}), 400
         
+    url = urls[0] # keeping url for downstream variable references, but loop uses urls
     if not output_path or not output_path.strip():
         output_path = os.path.join(os.path.expanduser("~"), "Documents", "Media Grabber")
         
@@ -554,9 +745,11 @@ def download_video():
                 
             if d['status'] == 'downloading':
                 percent = d.get('_percent_str', '0%').strip()
-                # Clean up ANSI escape sequences from percent
                 percent = re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', percent)
-                q.put({"status": f"Downloading: {percent}"})
+                speed = d.get('_speed_str', '').strip()
+                speed = re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', speed)
+                speed_text = f" at {speed}" if speed else ""
+                q.put({"status": f"Downloading: {percent}{speed_text}"})
             elif d['status'] == 'finished':
                 q.put({"status": "Merging files..."})
             elif d['status'] == 'error':
@@ -695,6 +888,16 @@ def download_video():
                                         target_image = frame_path if os.path.exists(frame_path) else final_path
                                         if os.path.exists(target_image):
                                             prompt_text = extract_prompt_from_image(target_image)
+                                            
+                                            llm_model_choice = processing_options.get('llmModel', 'none')
+                                            if llm_model_choice and llm_model_choice != 'none':
+                                                q.put({"status": f"{prefix}Enhancing prompt with Local LLM..."})
+                                                sys_p = "You are an expert AI prompt engineer. Take the basic image description and rewrite it into a highly detailed, professional prompt optimized for Nano Banana Pro and Nano Banana 2 image generation models. Focus on lighting, mood, camera angles, and high quality keywords. Output ONLY the prompt text, nothing else."
+                                                try:
+                                                    prompt_text = llm_generate(prompt_text, sys_p, llm_model_choice)
+                                                except Exception as e:
+                                                    print(f"LLM Enhancement Error: {e}")
+                                            
                                             prompt_txt_path = base + "_prompt.txt"
                                             with open(prompt_txt_path, "w", encoding="utf-8") as f:
                                                 f.write(prompt_text)
@@ -771,8 +974,59 @@ def download_video():
                                         try:
                                             model = get_whisper()
                                             result = model.transcribe(full_audio, verbose=False)
+                                            transcript_text = result.get("text", "").strip()
                                             with open(transcript_path, "w", encoding="utf-8") as f:
-                                                f.write(result.get("text", "").strip())
+                                                f.write(transcript_text)
+                                                
+                                            if processing_options.get('aiSummarize') and transcript_text:
+                                                llm_model_choice = processing_options.get('llmModel', 'none')
+                                                if llm_model_choice and llm_model_choice != 'none':
+                                                    q.put({"status": f"{prefix}Generating AI Summary & SEO Tags..."})
+                                                    sys_p = "You are an expert social media manager. Read the video transcript and output: 1) A clean, bulleted summary of key points. 2) 3 viral TikTok/Reels captions. 3) SEO-optimized hashtags."
+                                                    try:
+                                                        summary_text = llm_generate(transcript_text, sys_p, llm_model_choice)
+                                                        summary_path = base + "_AI_Summary.txt"
+                                                        with open(summary_path, "w", encoding="utf-8") as sf:
+                                                            sf.write(summary_text)
+                                                    except Exception as e:
+                                                        print(f"LLM Summarize Error: {e}")
+                                                
+                                            want_burn = processing_options.get('burn_subtitles')
+                                            want_export = processing_options.get('export_subtitles')
+                                            
+                                            if (want_burn or want_export) and final_path.endswith(('.mp4', '.mkv', '.mov')):
+                                                srt_path = base + "_subtitles.srt"
+                                                def format_timestamp(seconds):
+                                                    ms = int((seconds - int(seconds)) * 1000)
+                                                    s = int(seconds) % 60
+                                                    m = int(seconds / 60) % 60
+                                                    h = int(seconds / 3600)
+                                                    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+                                                    
+                                                with open(srt_path, "w", encoding="utf-8") as srt_f:
+                                                    for i, segment in enumerate(result.get("segments", []), start=1):
+                                                        srt_f.write(f"{i}\n")
+                                                        srt_f.write(f"{format_timestamp(segment['start'])} --> {format_timestamp(segment['end'])}\n")
+                                                        srt_f.write(f"{segment['text'].strip()}\n\n")
+                                                        
+                                                if want_burn:
+                                                    q.put({"status": f"{prefix}Burning subtitles into video..."})
+                                                    temp_sub = base + "_subbed.mp4"
+                                                    rel_srt = os.path.relpath(srt_path).replace('\\', '/')
+                                                    rel_srt = rel_srt.replace(':', '\\:').replace(',', '\\,').replace("'", "\\'")
+                                                    
+                                                    ffmpeg_sub = [
+                                                        imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-i", final_path,
+                                                        "-vf", f"subtitles='{rel_srt}'", "-c:a", "copy", temp_sub
+                                                    ]
+                                                    subprocess.run(ffmpeg_sub, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                                                    if os.path.exists(temp_sub):
+                                                        os.replace(temp_sub, final_path)
+                                                
+                                                if not want_export and os.path.exists(srt_path):
+                                                    try: os.remove(srt_path)
+                                                    except: pass
+                                                    
                                         except Exception as e:
                                             print("Whisper error:", e)
                                         try:
@@ -828,22 +1082,36 @@ def download_video():
             else:
                 q.put({"status": f"Complete! ({failed_count} failed)", "done": True, "file_path": last_final_path, "output_path": output_path})
 
-        t = threading.Thread(target=run_dl)
+        t = threading.Thread(target=run_dl, daemon=True)
         t.start()
 
-        while True:
-            msg = q.get()
-            yield f"data: {json.dumps(msg)}\n\n"
-            if msg.get("done") or msg.get("error") or msg.get("action_required"):
-                break
+        try:
+            while True:
+                try:
+                    msg = q.get(timeout=120)
+                except queue.Empty:
+                    yield f"data: {json.dumps({'error': 'Task timed out.'})}\n\n"
+                    break
+                yield f"data: {json.dumps(msg)}\n\n"
+                if msg.get("done") or msg.get("error") or msg.get("action_required"):
+                    break
+        finally:
+            if task_id in cancel_flags:
+                del cancel_flags[task_id]
 
     return Response(generate(), mimetype='text/event-stream')
 
 
 
 
+_gallery_cache = {"time": 0, "data": []}
+
 @app.route('/api/gallery', methods=['GET'])
 def list_gallery():
+    global _gallery_cache
+    if time.time() - _gallery_cache["time"] < 2:
+        return jsonify(_gallery_cache["data"])
+        
     base_dir = os.path.join(os.path.expanduser("~"), "Documents", "Media Grabber")
     folders = ['YouTube', 'Instagram', 'TikTok', 'Twitter', 'Other', 'Conversions']
     
@@ -875,6 +1143,8 @@ def list_gallery():
                             })
                         
     media.sort(key=lambda x: x['timestamp'], reverse=True)
+    _gallery_cache["time"] = time.time()
+    _gallery_cache["data"] = media
     return jsonify(media)
 
 @app.route('/api/media/<folder>/<path:filename>')
@@ -886,8 +1156,8 @@ def serve_media(folder, filename):
 @app.route('/api/open_folder', methods=['POST'])
 def open_folder():
     path = request.json.get('path')
-    if not path or not os.path.exists(path):
-        return jsonify({"error": "Path not found"}), 400
+    if not path or not os.path.exists(path) or not is_safe_path(path):
+        return jsonify({"error": "Path not found or forbidden"}), 403
     
     abs_path = os.path.abspath(path)
     if sys.platform == 'win32':
@@ -911,8 +1181,8 @@ def open_folder():
 def extract_prompt():
     data = request.json
     path = data.get('path')
-    if not path or not os.path.exists(path):
-        return jsonify({"error": "File not found"}), 404
+    if not path or not os.path.exists(path) or not is_safe_path(path):
+        return jsonify({"error": "File not found or forbidden"}), 404
         
     ext = os.path.splitext(path)[1].lower()
     is_video = ext in ['.mp4', '.mov', '.mkv', '.webm', '.avi']
@@ -946,15 +1216,15 @@ def extract_prompt():
         if temp_frame and os.path.exists(temp_frame):
             try:
                 os.remove(temp_frame)
-            except:
+            except Exception:
                 pass
 
-@app.route('/api/preview')
+@app.route('/api/preview_file')
 def preview_file():
     # send_file is imported at the top of the file
     path = request.args.get('path')
-    if not path or not os.path.exists(path) or not os.path.isfile(path):
-        return "Not found", 404
+    if not path or not os.path.exists(path) or not os.path.isfile(path) or not is_safe_path(path):
+        return "Not found or forbidden", 403
     return send_file(path)
 
 @app.route('/api/batch_clean', methods=['POST'])
@@ -1019,8 +1289,8 @@ def delete_history_item(history_id):
 @app.route('/api/gallery/delete', methods=['POST'])
 def delete_gallery_item():
     path = request.json.get('path')
-    if not path or not os.path.exists(path):
-        return jsonify({"error": "File not found"}), 404
+    if not path or not os.path.exists(path) or not is_safe_path(path):
+        return jsonify({"error": "File not found or forbidden"}), 403
         
     try:
         from send2trash import send2trash
@@ -1035,10 +1305,6 @@ def delete_gallery_item():
 
 @app.route('/api/restart', methods=['POST'])
 def restart_server():
-    import threading
-    import sys
-    import os
-    import time
     def restart_task():
         time.sleep(1.5)
         print("Restarting server from UI...", flush=True)
