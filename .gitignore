@@ -32,3 +32,4 @@ ai_models/
 *.wav
 *.mp3
 *.url
+dist/

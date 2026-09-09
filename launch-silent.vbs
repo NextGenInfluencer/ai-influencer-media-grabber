@@ -11,15 +11,21 @@ Set fso = CreateObject("Scripting.FileSystemObject")
 scriptDir = fso.GetParentFolderName(WScript.ScriptFullName)
 WshShell.CurrentDirectory = scriptDir
 
-' 0. First-Time Setup: Check if virtual environment exists
-If Not fso.FileExists(scriptDir & "\.venv\Scripts\python.exe") Then
-    WshShell.Run """" & scriptDir & "\run.bat"" --setup-only", 1, True
-End If
-
-' Path to windowless Python runner (pythonw.exe) in .venv
-pythonwExe = scriptDir & "\.venv\Scripts\pythonw.exe"
-If Not fso.FileExists(pythonwExe) Then
-    pythonwExe = scriptDir & "\.venv\Scripts\python.exe"
+' 0. Python Runner Detection: Check for embedded python runtime first, then .venv
+pythonwExe = ""
+If fso.FileExists(scriptDir & "\python_runtime\pythonw.exe") Then
+    pythonwExe = scriptDir & "\python_runtime\pythonw.exe"
+ElseIf fso.FileExists(scriptDir & "\python\pythonw.exe") Then
+    pythonwExe = scriptDir & "\python\pythonw.exe"
+Else
+    ' Fallback to virtual environment (Original / Developer mode)
+    If Not fso.FileExists(scriptDir & "\.venv\Scripts\python.exe") Then
+        WshShell.Run """" & scriptDir & "\run.bat"" --setup-only", 1, True
+    End If
+    pythonwExe = scriptDir & "\.venv\Scripts\pythonw.exe"
+    If Not fso.FileExists(pythonwExe) Then
+        pythonwExe = scriptDir & "\.venv\Scripts\python.exe"
+    End If
 End If
 
 appPy = scriptDir & "\app_local.py"

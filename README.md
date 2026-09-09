@@ -1,6 +1,6 @@
-# AI Influencer Media Grabber v1.9
+# AI Influencer Media Grabber v2.0
 
-![Version 1.9](https://img.shields.io/badge/Version-1.9-blue?style=for-the-badge) ![UI Preview](https://img.shields.io/badge/UI-Media_Grabber-f472b6?style=for-the-badge)
+![Version 2.0](https://img.shields.io/badge/Version-2.0-blue?style=for-the-badge) ![UI Preview](https://img.shields.io/badge/UI-Media_Grabber-f472b6?style=for-the-badge) ![Windows](https://img.shields.io/badge/Platform-Windows_10%2F11-0078D4?style=for-the-badge&logo=windows)
 
 ## 🌟 What is the AI Influencer Media Grabber?
 
@@ -65,31 +65,74 @@ A dedicated offline media suite to format and tweak your media:
 
 ---
 
-## 💻 How to Download & Run (For Beginners)
+## 📦 Installation & Setup (Choose Your Method)
 
-If you don't know how to use the command line, don't worry! Running this app is incredibly simple.
+You can choose between the **1-Click Windows Setup (`.exe`)** or the **Original / Portable ZIP** (full developer source):
 
-### 🛠️ Step 1: Install Python (Prerequisite)
-If you already have Python installed, you can skip this step!
+| Feature | 🌟 Option A: 1-Click Windows Setup (`.exe`) | 🛠️ Option B: Original / Portable ZIP (Developer) |
+| :--- | :--- | :--- |
+| **Best For** | Regular users, quick setup, zero terminal | Creators who want to customize code, inspect source, or run portably |
+| **Requires Python Installed?** | ❌ **No** (Bundles self-contained Python 3.10 runtime) | ⚙️ **Yes** (Python 3.10+ with `Add to PATH`) |
+| **Initial Download Size** | ~76 MB (`AI-Influencer-Media-Grabber-v2.0-Setup.exe`) | ~50 MB (Full source repo / ZIP) |
+| **Initial Setup Time** | ~15 seconds | ~20 seconds |
+| **Shortcuts & Desktop Integration** | Automatic Start Menu & Desktop shortcuts | 1-Click shortcut creator (`create_shortcut.bat`) |
+| **Window Mode** | Dedicated frameless desktop app (zero black CMD windows) | Dedicated frameless desktop app (`launch-silent.vbs`) |
+| **Where Files Live** | `%LOCALAPPDATA%\AI Influencer Media Grabber` | Any folder you choose (USB drive, `Documents`, etc.) |
+| **Code Customization** | Packaged for standalone deployment | Direct access to all `.py`, `.html`, and `.css` files |
+| **Modular AI Pack** | 1-Click in Web UI header | 1-Click in Web UI header or `install_ai.bat` |
 
-1. **Download Python (Version 3.10 or newer)** from the official website:
-   👉 [Click here to download Python](https://www.python.org/downloads/)
-2. Open the downloaded installer.
-3. ⚠️ **CRITICAL STEP**: When the installer opens, look at the **very bottom of the first window**. You **MUST** check the small box that says **"Add python.exe to PATH"** before clicking Install. If you don't check this box, the app will not work!
-4. Click "Install Now" and let it finish.
+---
 
-### 🚀 Step 2: Download & Run AI Influencer Media Grabber
-1. Go to the top of this GitHub page and click the green **"<> Code"** button.
-2. Click **"Download ZIP"** (or clone the repository).
-3. Once downloaded, **Extract/Unzip** the folder anywhere on your computer (such as your Desktop or Documents).
-4. Launch the application:
-    - **Windows (Recommended - Native Desktop Window):** Double-click **`create_shortcut.bat`**. This places a branded **AI Influencer Media Grabber** shortcut right on your Windows Desktop. Double-clicking the shortcut launches the app silently in its own dedicated, frameless desktop window with **zero black CMD windows**!
-    - **Windows (Alternative):** Double-click **`launch-silent.vbs`** directly, or run **`run.bat`** if you prefer a console window.
-    - **Mac/Linux:** Open your terminal inside the folder and run `bash run.sh`.
+### 🌟 Option A: 1-Click Windows Setup (Recommended for Everyone)
+> **No Python installation required! Zero setup hassle.**
 
-### That's it! 🎉
-- **Instant Setup (< 20 seconds):** First launch automatically sets up the isolated Python virtual environment and installs only the ultra-fast core media downloader dependencies (~80 MB).
-- **Optional AI Pack (1-Click Install):** AI features (Whisper subtitles, BLIP vision prompt extractor, LLaMA 3 offline reasoning) are modular. Enable them with **1 click directly inside the web UI** or by running **`install_ai.bat`**.
+1. Head to the **[Releases](https://github.com/NextGenInfluencer/ai-influencer-media-grabber/releases)** page.
+2. Download **`AI-Influencer-Media-Grabber-v2.0-Setup.exe`** (~76 MB).
+3. Double-click the installer and follow the standard wizard (**Next -> Install**).
+4. **Done!** The installer places a branded **AI Influencer Media Grabber** shortcut on your Desktop and Start Menu.
+5. Launch the app: it opens immediately in its own native, frameless desktop window with **zero background terminal windows**.
+
+---
+
+### 🛠️ Option B: Original / Portable ZIP (For Developers & Power Users)
+> **Run directly from source, customize code, or keep on a portable USB drive.**
+
+#### Prerequisites
+1. **Download Python (Version 3.10 or newer)** from [python.org](https://www.python.org/downloads/).
+2. ⚠️ **CRITICAL STEP**: When the Python installer opens, check the box at the bottom that says **"Add python.exe to PATH"** before clicking Install.
+
+#### Running the App
+1. Go to the top of this GitHub repository, click **"<> Code"** -> **"Download ZIP"** (or clone via Git).
+2. Extract the folder anywhere on your computer (e.g. `Documents`, `Desktop`, or an external drive).
+3. Launch the application:
+    - **Windows (Recommended - Silent Desktop Window):** Double-click **`create_shortcut.bat`**. This creates a branded shortcut on your Desktop that launches the app silently with zero console windows.
+    - **Windows (Alternative):** Double-click **`launch-silent.vbs`** directly, or run **`run.bat`** if you prefer a standard terminal window.
+    - **Mac/Linux:** Open terminal in the folder and run `bash run.sh`.
+
+---
+
+### 🧠 The Modular AI Pack (Lightweight by Default)
+
+Both Option A and Option B feature our **Modular AI Engine**:
+- **Blazing Fast Core Out of the Box:** The core media grabber, anti-AI cleaner, video/audio converter, and output gallery install in **under 20 seconds** (~80 MB) without forcing ~2.5 GB of PyTorch or CUDA downloads upfront.
+- **AI On Demand:** Whenever you want local speech transcription (Whisper), AI vision prompt extraction (BLIP), or offline LLaMA 3 reasoning:
+  1. Click the purple **"Enable AI Pack"** button in the top navigation bar at any time, OR
+  2. Simply check any AI feature box (e.g., *Generate Whisper Subtitles* or *AI Smart Summarizer*). The app will automatically detect that the AI pack is uninstalled and open the 1-click installer modal with a real-time progress bar.
+  3. *(For Option B users)* You can also double-click **`install_ai.bat`** in the project root to install the AI stack in the terminal.
+
+---
+
+### 🔨 Building the Windows Installer from Source
+
+If you are a developer using Option B and want to compile your own `.exe` installer:
+1. Ensure Inno Setup 6 is installed (the build script will offer to install it automatically via `winget` if missing).
+2. Run **`build_installer.bat`** (or `python build_staging.py`).
+3. The script will automatically stage the embedded portable runtime, install core requirements, and compile `dist\AI-Influencer-Media-Grabber-v2.0-Setup.exe`.
+
+
+### Highlights 🎉
+- **Instant Setup (< 20 seconds):** First launch sets up the isolated Python virtual environment and installs only the ultra-fast core media downloader dependencies (~80 MB).
+- **Modular AI Pack (1-Click Install):** AI features (Whisper subtitles, BLIP vision prompt extractor, LLaMA 3 offline reasoning) are modular. Enable them with **1 click directly inside the web UI** or by running **`install_ai.bat`**.
 - **Clean Exit:** Click the **Exit** button in the top navigation bar at any time to cleanly shut down the backend engine and close the app window.
 - **Media Location:** All downloaded media, extracted frames, companion post links, and converted files are neatly organized in your personal `Documents/Media Grabber` folder.
 - **Safe & Private:** 100% runs locally on your machine with zero ad trackers, no telemetry, and no external accounts required.
@@ -98,15 +141,16 @@ If you already have Python installed, you can skip this step!
 
 ## 📜 Changelog
 
-### v1.9 (Current)
+### v2.0 (The Desktop Studio Release) - Current
+- **1-Click Windows Installer (`.exe`)**: Created a professional, non-admin Windows Setup wizard using Inno Setup bundling a self-contained embedded Python runtime. Requires zero Python installation from the end-user.
 - **Modular Core & AI Engine Architecture**: Separated lightweight core dependencies (`requirements.txt`, ~80MB, fast 15-second setup) from heavy AI packages (`requirements-ai.txt`). Core video and audio downloading installs instantly without requiring multi-gigabyte PyTorch downloads upfront.
 - **In-App 1-Click AI Pack Installer**: Added an interactive AI Pack installer modal with live download progress and console stream directly inside the web UI.
 - **Standalone `install_ai.bat`**: Double-click batch script for manual or offline AI pack installation.
 - **Native Desktop Window & Silent Launcher**: Run as a dedicated, frameless desktop application with zero background command prompts via `launch-silent.vbs` and desktop shortcut.
 - **In-App Live Console**: Real-time server and engine logs streamed directly into a sleek, syntax-highlighted terminal widget inside the Activity panel with timestamping and auto-scroll.
 - **Output Gallery Post Links & Companion URLs**: One-click `🔗 Visit Post` button on gallery media cards to easily revisit the source post and influencer profile, plus companion `.url` files saved alongside downloads.
-- **Enhancement**: Clean exit button in UI to safely terminate the backend server and close the native window.
-- **Docs & UI**: Updated high-resolution interface preview screenshots showcasing the latest v1.9 desktop studio.
+- **Self-Reboot Hard Restart**: Added robust hard server reboot mechanism in navigation header.
+- **Privacy Hardening**: Verified and heavily blurred card thumbnails in documentation previews.
 
 ### v1.8
 - **New Feature**: **Local LLM Integration**! You can now run heavy AI models (Llama 3.2 1B & Llama 3 8B) entirely offline directly in the app.
