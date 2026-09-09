@@ -15,7 +15,7 @@ Whether you're building a massive reference folder of TikTok trends, extracting 
   <img src="assets/ui_cleaner.png" width="49%" alt="AI Cleaner" />
   <br>
   <img src="assets/ui_converter.png" width="49%" alt="Media Tools Converter" />
-  <img src="assets/ui_gallery.png" width="49%" alt="Output Gallery" />
+  <img src="assets/ui_gallery_preview.png" width="49%" alt="Output Gallery" />
 </div>
 
 ## ✨ Features

@@ -1676,12 +1676,28 @@
 
         async function restartServer() {
             if(!confirm("Are you sure you want to restart the background server? Any active downloads or conversions will be interrupted.")) return;
-            showToast("Restarting...", "Server is restarting. The page will reload in a moment.");
+            showToast("Restarting...", "Rebooting server engine. Page will reconnect automatically...");
             try {
                 await fetch('/api/restart', { method: 'POST' });
                 setTimeout(() => {
-                    window.location.reload();
-                }, 3500);
+                    let attempts = 0;
+                    const poll = setInterval(async () => {
+                        attempts++;
+                        try {
+                            const res = await fetch('/api/health_check?t=' + Date.now(), { cache: 'no-store' });
+                            if (res.ok) {
+                                clearInterval(poll);
+                                showToast("Success", "Server back online! Reconnecting...");
+                                setTimeout(() => window.location.reload(), 400);
+                            }
+                        } catch (e) {
+                            if (attempts >= 40) {
+                                clearInterval(poll);
+                                window.location.reload();
+                            }
+                        }
+                    }, 600);
+                }, 1200);
             } catch (err) {
                 alert("Failed to send restart command.");
             }

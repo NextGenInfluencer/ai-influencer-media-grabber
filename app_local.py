@@ -1528,14 +1528,45 @@ def shutdown_app():
     threading.Thread(target=do_shutdown, daemon=True).start()
     return jsonify({"status": "App shutting down..."})
 
+@app.route('/api/health_check', methods=['GET'])
+def health_check():
+    return jsonify({"status": "ok", "version": APP_VERSION})
+
 @app.route('/api/restart', methods=['POST'])
 def restart_server():
     def restart_task():
-        time.sleep(1.5)
+        time.sleep(0.5)
         print("Restarting server from UI...", flush=True)
-        os._exit(42) # Exits Python with code 42, which run.bat catches to loop and restart
+        try:
+            script_path = os.path.abspath(__file__)
+            python_exe = sys.executable
+            extra_args = ["--no-browser"] if "--no-browser" in sys.argv else []
+            
+            helper_cmd = (
+                "import time, subprocess\n"
+                "time.sleep(1.2)\n"
+                f"subprocess.Popen([{repr(python_exe)}, {repr(script_path)}] + {repr(extra_args)}, cwd={repr(os.path.dirname(script_path))})\n"
+            )
+            
+            if os.name == 'nt':
+                subprocess.Popen(
+                    [python_exe, "-c", helper_cmd],
+                    cwd=os.path.dirname(script_path),
+                    creationflags=0x00000008 | 0x00000200
+                )
+            else:
+                subprocess.Popen(
+                    [python_exe, "-c", helper_cmd],
+                    cwd=os.path.dirname(script_path),
+                    start_new_session=True
+                )
+        except Exception as e:
+            print(f"Failed to schedule server restart: {e}", flush=True)
+        finally:
+            time.sleep(0.2)
+            os._exit(0)
     
-    threading.Thread(target=restart_task).start()
+    threading.Thread(target=restart_task, daemon=True).start()
     return jsonify({"status": "Restarting server..."})
 
 if __name__ == '__main__':
