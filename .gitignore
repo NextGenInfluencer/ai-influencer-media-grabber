@@ -24,3 +24,11 @@ converter_debug.log
 *.pyc
 ai_models/
 *.gguf
+*.mp4
+*.mov
+*.webm
+*.avi
+*.mkv
+*.wav
+*.mp3
+*.url

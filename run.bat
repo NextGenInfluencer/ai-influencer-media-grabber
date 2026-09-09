@@ -14,6 +14,15 @@ call .venv\Scripts\activate.bat
 echo Installing dependencies...
 pip install -q -r requirements.txt
 
+if "%1"=="--setup-only" (
+    echo.
+    echo ==============================================
+    echo Environment setup complete!
+    echo ==============================================
+    timeout /t 2 >nul
+    exit /b 0
+)
+
 :start
 echo Starting Flask server...
 python app_local.py

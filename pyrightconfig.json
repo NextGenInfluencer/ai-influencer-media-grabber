@@ -7,11 +7,8 @@
     "**/__pycache__",
     ".venv"
   ],
-  "venvPath": "c:\\Users\\lefte\\Documents\\antigravity\\video-downloader",
+  "venvPath": ".",
   "venv": ".venv",
-  "extraPaths": [
-    "c:\\Users\\lefte\\Documents\\antigravity\\video-downloader\\.venv\\Lib\\site-packages"
-  ],
   "reportMissingImports": "none",
   "reportMissingModuleSource": "none",
   "reportMissingTypeStubs": "none"

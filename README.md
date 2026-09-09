@@ -80,19 +80,19 @@ If you already have Python installed, you can skip this step!
 
 ### 🚀 Step 2: Download & Run AI Influencer Media Grabber
 1. Go to the top of this GitHub page and click the green **"<> Code"** button.
-2. Click **"Download ZIP"**.
-3. Once downloaded, **Extract/Unzip** the folder anywhere on your computer (like your Desktop).
-4. Open the extracted folder.
-    - **Windows:** Simply **double-click** the file named `run.bat`.
-    - **Mac/Linux:** Open terminal in the folder and run `bash run.sh`
-5. *(Optional for Windows)* **Double-click** the file named `create_shortcut.bat`! This will place a convenient app icon right on your Desktop so you never have to open this folder again.
+2. Click **"Download ZIP"** (or clone the repository).
+3. Once downloaded, **Extract/Unzip** the folder anywhere on your computer (such as your Desktop or Documents).
+4. Launch the application:
+    - **Windows (Recommended - Native Desktop Window):** Double-click **`create_shortcut.bat`**. This places a branded **AI Influencer Media Grabber** shortcut right on your Windows Desktop. Double-clicking the shortcut launches the app silently in its own dedicated, frameless desktop window with **zero black CMD windows**!
+    - **Windows (Alternative):** Double-click **`launch-silent.vbs`** directly, or run **`run.bat`** if you prefer a console window.
+    - **Mac/Linux:** Open your terminal inside the folder and run `bash run.sh`.
 
 ### That's it! 🎉
-The startup script is fully automated. It will download everything it needs, install all the requirements, and instantly pop open the beautiful AI Influencer Media Grabber interface in your web browser. 
+The startup script is fully automated. On first launch, it automatically sets up the isolated Python virtual environment, installs dependencies, and opens the sleek studio interface.
 
-*Note: By default, all of your downloaded videos, photos, and converted media will be neatly saved in your `Documents/Media Grabber` folder!*
-
-*Note: The very first time you run it, it might take a few minutes to download the AI models and setup the environment. Every time after that, it will launch instantly!*
+- **Clean Exit:** Click the **Exit** button in the top navigation bar at any time to cleanly shut down the backend engine and close the app window.
+- **Media Location:** All downloaded media, extracted frames, companion post links, and converted files are neatly organized in your personal `Documents/Media Grabber` folder.
+- **Safe & Private:** 100% runs locally on your machine with zero ad trackers, no telemetry, and no external accounts required.
 
 ---
 

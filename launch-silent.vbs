@@ -11,6 +11,11 @@ Set fso = CreateObject("Scripting.FileSystemObject")
 scriptDir = fso.GetParentFolderName(WScript.ScriptFullName)
 WshShell.CurrentDirectory = scriptDir
 
+' 0. First-Time Setup: Check if virtual environment exists
+If Not fso.FileExists(scriptDir & "\.venv\Scripts\python.exe") Then
+    WshShell.Run """" & scriptDir & "\run.bat"" --setup-only", 1, True
+End If
+
 ' Path to windowless Python runner (pythonw.exe) in .venv
 pythonwExe = scriptDir & "\.venv\Scripts\pythonw.exe"
 If Not fso.FileExists(pythonwExe) Then

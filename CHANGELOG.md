@@ -6,12 +6,17 @@ All notable changes to the AI Influencer Media Grabber project will be documente
 
 ### Added
 - **Native Desktop Window Mode**: Run the app as an independent, frameless desktop window via `launch-silent.vbs` without opening browser tabs or black CMD windows.
-- **In-App Live Console**: Real-time server and download engine logs streamed via Server-Sent Events (SSE) into a built-in terminal widget in the Activity panel.
+- **In-App Live Console**: Real-time server and download engine logs streamed via Server-Sent Events (SSE) into a built-in terminal widget in the Activity panel with syntax highlighting, timestamps, and auto-scroll.
 - **Output Gallery Post Links**: Direct `🔗 Visit Post` action button on all gallery media cards, allowing immediate access to the original post and influencer profile.
 - **Automatic Post Link Inference**: Automatically recovers Instagram, TikTok, and YouTube URLs from existing downloaded filenames and history.
 - **Companion `.url` Internet Shortcuts**: Every download automatically saves a companion Windows `.url` internet shortcut alongside the media file.
-- **Desktop Shortcut Creator**: Script `create_desktop_shortcut.ps1` and `create_shortcut.bat` to place a one-click desktop shortcut with custom icon `assets/app_icon.ico`.
-- **Exit App Button**: Clean shutdown action in the navigation header that terminates the Python engine and closes the window.
+- **Desktop Shortcut Creator**: `create_shortcut.bat` and `create_desktop_shortcut.ps1` to place a one-click desktop shortcut with custom icon `assets/app_icon.ico`.
+- **Automated First-Time Setup**: `launch-silent.vbs` and `run.bat` auto-detect if the Python environment is uninitialized, running dependencies installation automatically before launching.
+- **Exit App Button**: Clean shutdown action in the navigation header that cleanly terminates the Python engine and closes the window.
+- **Retina Interface Previews**: Fresh high-resolution 2x screenshots for all 4 application tabs in `assets/`.
+
+### Security & Privacy
+- Sanitized configuration files (`pyrightconfig.json`) and added comprehensive `.gitignore` rules to ensure zero developer paths or user media data are present in distributions.
 
 ## [v1.8] - 2026-09-02
 
@@ -20,19 +25,34 @@ All notable changes to the AI Influencer Media Grabber project will be documente
 - **AI Video Summarizer & SEO**: Automatically generates comprehensive video summaries, transcript key points, and SEO hashtags (`_AI_Summary.txt`).
 - **Nano Banana Prompt Enhancement**: Uses local LLMs to expand image descriptions into detailed prompt engineering keywords.
 - **Decoupled Subtitle Translation**: Subtitle translation runs independently of raw audio transcription checkbox.
+- **Dynamic Face-Tracking Auto-Crop (Converter)**: Converter can track the speaker's face frame-by-frame and keep them centered in vertical 9:16 format.
+- **SRT Subtitle Export**: Direct `.srt` subtitle file export alongside downloaded or converted videos.
+
+## [v1.7] - 2026-08-28
+
+### Security & Stability
+- Fixed path traversal vulnerabilities and plugged memory leaks in download tasks.
+- Plugged SSE loop hangs and temporary folder creation leaks.
+- Automatic RAM and VRAM garbage collection; AI models (Whisper and BLIP) now unload after 10 minutes of inactivity.
+- Native keyboard shortcuts (`Ctrl/Cmd + Enter` to start tasks, `Escape` to close modals).
+- Persistent `localStorage` settings across sessions.
+- Auto-refreshing gallery and 2-second gallery cache to prevent filesystem thrashing.
+
+## [v1.6] - 2026-08-20
 
 ### Added
 - **AI Prompt Extractor**: Extract Nano Banana 2/Pro & GPT Image 2 optimized prompts directly from images or video frames using local PyTorch vision models (`Salesforce/blip-image-captioning-large`).
-- **UI Hard Restart Button**: Added a robust Restart button to the header to automatically reboot the local python server.
+- **UI Hard Restart Button**: Added a robust Restart button to the header to reboot the local Python server with one click.
 - **Auto Subtitle Burner**: Burn subtitles directly into videos using local Whisper AI transcription and FFmpeg.
 - **Blurred-Background Padding (9:16)**: Convert horizontal 16:9 videos into vertical 9:16 format with a blurred background canvas.
 - **iPhone 15 Pro EXIF Metadata Injector**: Inject realistic iPhone 15 Pro EXIF metadata into cleaned photos and videos in the AI Cleaner tab.
-- **Fine-Tuned MB Compression Levels**: Added 50%, 75%, 80%, 85%, and 90% compression tiers with automatic GIF dimension downscaling to comfortably meet Discord 10MB limits.
+- **Fine-Tuned MB Compression Levels**: Added 50%, 75%, 80%, 85%, and 90% compression tiers with automatic GIF dimension downscaling to meet Discord 10MB limits.
 - **Cross-Platform Compatibility**: macOS and Linux shell launcher `run.sh` and platform-native file manager opening support (`open`, `xdg-open`).
 
 ### Fixed
 - **Converter Engine**: Fixed a critical bug where Flask request contexts were dropping in background threads causing silent converter crashes.
 - **Media Tools UI**: Fixed missing HTML attributes preventing Trim Start and Trim End times from being sent to the backend.
+
 ## [v1.5]
 
 ### Added
