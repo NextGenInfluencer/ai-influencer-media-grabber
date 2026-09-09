@@ -96,6 +96,11 @@
                 <span class="text-[11px]">Restart App</span>
             </button>
 
+            <button onclick="exitApp()" class="px-3 py-1.5 rounded-full bg-red-500/10 border border-red-500/30 hover:bg-red-500/20 text-red-400 font-bold transition-all flex items-center space-x-1.5" title="Quit Application & Stop Server">
+                <i class="fa-solid fa-xmark text-xs"></i>
+                <span class="text-[11px]">Exit</span>
+            </button>
+
             <div class="flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-zinc-900/80 border border-zinc-800">
                 <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
                 <span class="text-[11px] font-bold text-zinc-300">Engine Online (100% Local)</span>
@@ -506,29 +511,63 @@
         </div>
 
         <!-- Right Activity Hub & Task Queue (35% width) -->
-        <div class="hidden lg:flex lg:w-[35%] flex-col h-full bg-[#0c0c0e]/90 border border-zinc-800/80 rounded-3xl p-6 shadow-2xl backdrop-blur-xl relative overflow-hidden">
-            <div class="flex items-center justify-between pb-4 mb-4 border-b border-zinc-800/80">
-                <h2 class="text-xs font-black text-white tracking-[0.15em] uppercase flex items-center">
-                    <i class="fa-solid fa-list-check text-pink-500 mr-2.5"></i> Task Queue & Activity
-                </h2>
-                <button onclick="document.getElementById('queueContainer').innerHTML=''" class="text-[10px] text-zinc-500 hover:text-zinc-300 font-bold uppercase transition">Clear Completed</button>
+        <div class="hidden lg:flex lg:w-[35%] flex-col h-full bg-[#0c0c0e]/90 border border-zinc-800/80 rounded-3xl p-5 shadow-2xl backdrop-blur-xl relative overflow-hidden">
+            <!-- Header with Tab Switcher -->
+            <div class="flex items-center justify-between pb-3 mb-3 border-b border-zinc-800/80">
+                <div class="flex items-center space-x-1.5 bg-[#080809] p-1 rounded-xl border border-zinc-800">
+                    <button id="rightTabQueue" onclick="switchRightTab('queue')" class="px-3 py-1.5 rounded-lg text-[10px] font-extrabold uppercase tracking-wider bg-gradient-to-r from-pink-500 to-purple-600 text-white transition flex items-center space-x-1.5 shadow-sm">
+                        <i class="fa-solid fa-list-check"></i>
+                        <span>Tasks</span>
+                    </button>
+                    <button id="rightTabConsole" onclick="switchRightTab('console')" class="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition flex items-center space-x-1.5">
+                        <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                        <span>Live Console</span>
+                    </button>
+                </div>
+                
+                <div id="rightHeaderActionsQueue" class="flex items-center">
+                    <button onclick="document.getElementById('queueContainer').innerHTML=''" class="text-[10px] text-zinc-500 hover:text-zinc-300 font-bold uppercase transition">Clear Completed</button>
+                </div>
+                <div id="rightHeaderActionsConsole" class="hidden flex items-center space-x-2">
+                    <label class="flex items-center space-x-1 text-[10px] text-zinc-400 cursor-pointer select-none">
+                        <input type="checkbox" id="autoScrollConsole" class="form-checkbox text-pink-500 rounded border-zinc-700 bg-zinc-900 w-3 h-3" checked>
+                        <span>Auto-scroll</span>
+                    </label>
+                    <button onclick="clearConsoleLogs()" class="text-[10px] text-zinc-500 hover:text-zinc-300 font-bold uppercase transition">Clear</button>
+                </div>
             </div>
 
-            <!-- Queue Container -->
-            <div id="queueContainer" class="flex-1 overflow-y-auto space-y-3 pr-1 scroll-smooth">
-                <!-- Helper Welcome Card when no active task -->
-                <div id="emptyQueueNotice" class="p-6 rounded-2xl bg-[#080809] border border-zinc-800/80 text-center space-y-4 my-auto">
-                    <div class="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mx-auto text-pink-500">
-                        <i class="fa-solid fa-layer-group text-lg"></i>
+            <!-- Queue View Container -->
+            <div id="queueView" class="flex-1 flex flex-col overflow-hidden">
+                <div id="queueContainer" class="flex-1 overflow-y-auto space-y-3 pr-1 scroll-smooth">
+                    <!-- Helper Welcome Card when no active task -->
+                    <div id="emptyQueueNotice" class="p-6 rounded-2xl bg-[#080809] border border-zinc-800/80 text-center space-y-4 my-auto">
+                        <div class="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mx-auto text-pink-500">
+                            <i class="fa-solid fa-layer-group text-lg"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-xs font-bold text-zinc-200">System Ready & Active</h3>
+                            <p class="text-[11px] text-zinc-500 mt-1 leading-relaxed">Task progress, live video previews, and conversion streams will display right here in real-time.</p>
+                        </div>
+                        <div class="pt-3 border-t border-zinc-800/60 text-[10px] text-zinc-400 space-y-2 text-left">
+                            <div class="flex items-center justify-between"><span class="text-zinc-500">Default Save Location:</span><span class="font-mono text-zinc-300">Documents/Media Grabber</span></div>
+                            <div class="flex items-center justify-between"><span class="text-zinc-500">Anti-AI Output:</span><span class="font-mono text-emerald-400">AI Cleaned/</span></div>
+                        </div>
                     </div>
-                    <div>
-                        <h3 class="text-xs font-bold text-zinc-200">System Ready & Active</h3>
-                        <p class="text-[11px] text-zinc-500 mt-1 leading-relaxed">Task progress, live video previews, and conversion streams will display right here in real-time.</p>
+                </div>
+            </div>
+
+            <!-- Live Console View Container -->
+            <div id="consoleView" class="hidden flex-1 flex flex-col overflow-hidden bg-[#050506] rounded-2xl border border-zinc-800/80 font-mono text-[11px] shadow-inner">
+                <div class="px-3 py-2 bg-zinc-900/80 border-b border-zinc-800/80 flex items-center justify-between text-[10px] text-zinc-400 shrink-0">
+                    <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-terminal text-pink-500"></i>
+                        <span class="font-bold uppercase tracking-wider text-zinc-300">Live Server Engine Logs</span>
                     </div>
-                    <div class="pt-3 border-t border-zinc-800/60 text-[10px] text-zinc-400 space-y-2 text-left">
-                        <div class="flex items-center justify-between"><span class="text-zinc-500">Default Save Location:</span><span class="font-mono text-zinc-300">Documents/Media Grabber</span></div>
-                        <div class="flex items-center justify-between"><span class="text-zinc-500">Anti-AI Output:</span><span class="font-mono text-emerald-400">AI Cleaned/</span></div>
-                    </div>
+                    <span class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold uppercase">Streaming</span>
+                </div>
+                <div id="liveConsoleLogs" class="flex-1 p-3 overflow-y-auto space-y-1 select-text scroll-smooth text-zinc-300 leading-relaxed font-mono">
+                    <div class="text-zinc-600 italic text-[10px]">Initializing live server log connection...</div>
                 </div>
             </div>
         </div>
@@ -824,17 +863,64 @@
                 deleteBtn.onclick = () => deleteGalleryItem(safePath);
                 
                 topBar.appendChild(sizeBadge);
+                if (item.uploader) {
+                    const authorBadge = document.createElement('span');
+                    authorBadge.className = 'bg-pink-500/20 text-pink-300 border border-pink-500/30 text-[9px] px-1.5 py-0.5 rounded font-bold truncate max-w-[110px]';
+                    authorBadge.textContent = `@${item.uploader}`;
+                    authorBadge.title = `Influencer: @${item.uploader}`;
+                    topBar.appendChild(authorBadge);
+                }
                 topBar.appendChild(deleteBtn);
                 
                 const bottomBar = document.createElement('div');
-                bottomBar.className = 'pointer-events-auto flex items-center space-x-2';
+                bottomBar.className = 'pointer-events-auto flex items-center space-x-1.5';
                 
                 const openFolderBtn = document.createElement('button');
-                openFolderBtn.className = 'flex-1 py-1.5 bg-zinc-900/90 hover:bg-pink-500 text-white rounded text-[10px] font-bold uppercase tracking-wider transition shadow-lg backdrop-blur flex items-center justify-center space-x-1';
-                openFolderBtn.innerHTML = '<i class="fa-solid fa-folder-open"></i> <span>Folder</span>';
-                openFolderBtn.onclick = () => openFolder(safePath);
-                
+                openFolderBtn.className = 'flex-1 py-1.5 bg-zinc-900/90 hover:bg-zinc-800 text-white rounded text-[10px] font-bold uppercase tracking-wider transition shadow-lg backdrop-blur flex items-center justify-center space-x-1 border border-zinc-800/80';
+                openFolderBtn.innerHTML = '<i class="fa-solid fa-folder-open text-pink-500"></i> <span>Folder</span>';
+                openFolderBtn.title = 'Open enclosing folder';
+                openFolderBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    openFolder(safePath);
+                };
                 bottomBar.appendChild(openFolderBtn);
+
+                const postLinkBtn = document.createElement('button');
+                if (item.source_url) {
+                    postLinkBtn.className = 'flex-1 py-1.5 bg-pink-600/90 hover:bg-pink-500 text-white rounded text-[10px] font-bold uppercase tracking-wider transition shadow-lg backdrop-blur flex items-center justify-center space-x-1';
+                    postLinkBtn.innerHTML = '<i class="fa-solid fa-arrow-up-right-from-square"></i> <span>Visit Post</span>';
+                    postLinkBtn.title = `Source: ${item.source_url}${item.uploader ? ' (@' + item.uploader + ')' : ''}`;
+                    postLinkBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        window.open(item.source_url, '_blank');
+                    };
+                } else {
+                    postLinkBtn.className = 'flex-1 py-1.5 bg-zinc-900/90 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 rounded text-[10px] font-bold uppercase tracking-wider transition shadow-lg backdrop-blur flex items-center justify-center space-x-1 border border-zinc-800/80';
+                    postLinkBtn.innerHTML = '<i class="fa-solid fa-link"></i> <span>+ Link</span>';
+                    postLinkBtn.title = 'Attach or save source post URL';
+                    postLinkBtn.onclick = async (e) => {
+                        e.stopPropagation();
+                        const inputUrl = prompt('Enter or paste the source post URL for this media:');
+                        if (inputUrl && inputUrl.trim()) {
+                            try {
+                                const res = await fetch('/api/gallery/set_url', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ path: safePath, url: inputUrl.trim() })
+                                });
+                                const resData = await res.json();
+                                if (resData.success) {
+                                    loadGallery();
+                                } else {
+                                    alert('Could not save URL: ' + (resData.error || 'Unknown error'));
+                                }
+                            } catch (err) {
+                                alert('Failed to save URL: ' + err.message);
+                            }
+                        }
+                    };
+                }
+                bottomBar.appendChild(postLinkBtn);
                 
                 hoverOverlay.appendChild(topBar);
                 hoverOverlay.appendChild(bottomBar);
@@ -1642,7 +1728,114 @@
                     }
                 }
             });
+
+            // Start Live Server Console Stream
+            initLiveConsole();
         });
+
+        // --- Live Console & Desktop App Functions ---
+        function switchRightTab(tab) {
+            const isQueue = tab === 'queue';
+            document.getElementById('queueView').classList.toggle('hidden', !isQueue);
+            document.getElementById('consoleView').classList.toggle('hidden', isQueue);
+            
+            document.getElementById('rightHeaderActionsQueue').classList.toggle('hidden', !isQueue);
+            document.getElementById('rightHeaderActionsConsole').classList.toggle('hidden', isQueue);
+            
+            const tabQueue = document.getElementById('rightTabQueue');
+            const tabConsole = document.getElementById('rightTabConsole');
+            
+            if (isQueue) {
+                tabQueue.className = 'px-3 py-1.5 rounded-lg text-[10px] font-extrabold uppercase tracking-wider bg-gradient-to-r from-pink-500 to-purple-600 text-white transition flex items-center space-x-1.5 shadow-sm';
+                tabConsole.className = 'px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition flex items-center space-x-1.5';
+            } else {
+                tabConsole.className = 'px-3 py-1.5 rounded-lg text-[10px] font-extrabold uppercase tracking-wider bg-gradient-to-r from-pink-500 to-purple-600 text-white transition flex items-center space-x-1.5 shadow-sm';
+                tabQueue.className = 'px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition flex items-center space-x-1.5';
+                const consoleLogs = document.getElementById('liveConsoleLogs');
+                if (consoleLogs) consoleLogs.scrollTop = consoleLogs.scrollHeight;
+            }
+        }
+
+        function clearConsoleLogs() {
+            const logsContainer = document.getElementById('liveConsoleLogs');
+            if (logsContainer) {
+                logsContainer.innerHTML = '<div class="text-zinc-600 italic text-[10px]">Console cleared.</div>';
+            }
+        }
+
+        async function exitApp() {
+            if (!confirm("Exit Media Grabber and stop backend engine?")) return;
+            try {
+                await fetch('/api/shutdown', { method: 'POST' });
+            } catch (e) {}
+            window.close();
+        }
+
+        function appendConsoleLog(entry) {
+            const logsContainer = document.getElementById('liveConsoleLogs');
+            if (!logsContainer) return;
+            
+            const placeholder = logsContainer.querySelector('.text-zinc-600.italic');
+            if (placeholder) placeholder.remove();
+
+            const line = document.createElement('div');
+            line.className = 'flex items-start space-x-2 py-0.5 border-b border-zinc-900/40';
+            
+            const timeSpan = document.createElement('span');
+            timeSpan.className = 'text-zinc-500 text-[9px] shrink-0 select-none font-mono';
+            timeSpan.textContent = `[${entry.time || new Date().toLocaleTimeString()}]`;
+            
+            const textSpan = document.createElement('span');
+            textSpan.className = 'break-all font-mono text-[10.5px] leading-relaxed';
+            
+            const t = entry.text || '';
+            if (t.toLowerCase().includes('error') || t.toLowerCase().includes('failed') || t.toLowerCase().includes('exception')) {
+                textSpan.className += ' text-red-400 font-semibold';
+            } else if (t.toLowerCase().includes('success') || t.toLowerCase().includes('complete') || t.toLowerCase().includes('online') || t.toLowerCase().includes('ready!')) {
+                textSpan.className += ' text-emerald-400 font-semibold';
+            } else if (t.includes('Whisper') || t.includes('transcrib')) {
+                textSpan.className += ' text-indigo-300';
+            } else if (t.includes('LLM') || t.includes('Llama') || t.includes('prompt')) {
+                textSpan.className += ' text-purple-300';
+            } else if (t.includes('[download]') || t.includes('gallery-dl')) {
+                textSpan.className += ' text-pink-300';
+            } else {
+                textSpan.className += ' text-zinc-300';
+            }
+            textSpan.textContent = t;
+
+            line.appendChild(timeSpan);
+            line.appendChild(textSpan);
+            logsContainer.appendChild(line);
+
+            while (logsContainer.children.length > 500) {
+                logsContainer.removeChild(logsContainer.firstChild);
+            }
+
+            const autoScroll = document.getElementById('autoScrollConsole');
+            if (autoScroll && autoScroll.checked) {
+                logsContainer.scrollTop = logsContainer.scrollHeight;
+            }
+        }
+
+        let _logSource = null;
+        function initLiveConsole() {
+            if (_logSource) {
+                try { _logSource.close(); } catch(e) {}
+            }
+            
+            try {
+                _logSource = new EventSource('/api/logs/stream');
+                _logSource.onmessage = (e) => {
+                    try {
+                        const data = JSON.parse(e.data);
+                        appendConsoleLog(data);
+                    } catch(err) {}
+                };
+            } catch(e) {
+                console.error("Failed to connect live console log stream", e);
+            }
+        }
     </script>
 
     <!-- Toast Notification -->

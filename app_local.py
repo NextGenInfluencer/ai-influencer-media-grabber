@@ -5,6 +5,8 @@ import string
 import subprocess
 import threading
 import uuid
+import collections
+from datetime import datetime
 from flask import Flask, render_template, request, jsonify, Response, send_file, send_from_directory
 import queue
 import json
@@ -16,6 +18,52 @@ from shazamio import Shazam
 import time
 import numpy as np
 import yt_dlp
+
+# --- Live Server Log Capture (Tee stdout & stderr for In-App Live Console) ---
+class LogCapture:
+    def __init__(self, maxlen=1000):
+        self.logs = collections.deque(maxlen=maxlen)
+        self.lock = threading.RLock()
+        self.subscribers = []
+        self._orig_stdout = sys.stdout
+        self._orig_stderr = sys.stderr
+
+    def write(self, message):
+        if self._orig_stdout:
+            try:
+                self._orig_stdout.write(message)
+                self._orig_stdout.flush()
+            except Exception:
+                pass
+        if message:
+            text = message.strip()
+            if text:
+                entry = {
+                    "time": datetime.now().strftime("%H:%M:%S"),
+                    "text": text
+                }
+                with self.lock:
+                    self.logs.append(entry)
+                    dead = []
+                    for q in self.subscribers:
+                        try:
+                            q.put_nowait(entry)
+                        except Exception:
+                            dead.append(q)
+                    for q in dead:
+                        if q in self.subscribers:
+                            self.subscribers.remove(q)
+
+    def flush(self):
+        if self._orig_stdout:
+            try:
+                self._orig_stdout.flush()
+            except Exception:
+                pass
+
+log_capture = LogCapture()
+sys.stdout = log_capture
+sys.stderr = log_capture
 
 # Global dict to store cancel flags for download tasks
 cancel_flags = {}
@@ -31,15 +79,47 @@ history_lock = threading.RLock()
 
 def load_history():
     with history_lock:
-        if not os.path.exists(HISTORY_FILE): return []
-        try:
-            with open(HISTORY_FILE, 'r', encoding='utf-8') as f: return json.load(f)
-        except Exception: return []
+        data = []
+        # Check workspace root history.json first
+        local_h = os.path.join(os.path.dirname(__file__), "history.json")
+        if os.path.exists(local_h):
+            try:
+                with open(local_h, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+            except Exception:
+                pass
+        # Check Documents/Media Grabber history.json
+        if os.path.exists(HISTORY_FILE):
+            try:
+                with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
+                    doc_data = json.load(f)
+                    seen_ids = {x.get('id') for x in doc_data if x.get('id')}
+                    for item in data:
+                        if item.get('id') not in seen_ids:
+                            doc_data.append(item)
+                    data = doc_data
+            except Exception:
+                pass
+        return data
 
 def save_history(data):
     with history_lock:
-        with open(HISTORY_FILE, 'w', encoding='utf-8') as f: json.dump(data, f, indent=4)
-    
+        with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=4)
+
+def save_url_shortcut(file_path, url):
+    """Write a Windows .url internet shortcut alongside the downloaded media."""
+    try:
+        if not file_path or not url:
+            return
+        base, _ = os.path.splitext(file_path)
+        url_file = base + ".url"
+        with open(url_file, "w", encoding="utf-8") as f:
+            f.write("[InternetShortcut]\n")
+            f.write(f"URL={url}\n")
+    except Exception as e:
+        print(f"Failed to save .url shortcut: {e}")
+
 def add_history_entry(url, title, uploader, file_path, platform):
     with history_lock:
         h = load_history()
@@ -53,6 +133,81 @@ def add_history_entry(url, title, uploader, file_path, platform):
             "timestamp": time.time()
         })
         save_history(h)
+
+def resolve_source_url(file_path, history_data=None):
+    """Attempt to find or infer the source post URL and influencer info for a media file."""
+    if not file_path:
+        return None, None
+        
+    base, _ = os.path.splitext(file_path)
+    url_candidates = [base + ".url"]
+    if base.endswith("_first_frame"):
+        url_candidates.append(base[:-12] + ".url")
+    if base.endswith("_subbed"):
+        url_candidates.append(base[:-7] + ".url")
+    if base.endswith("_h264_temp"):
+        url_candidates.append(base[:-10] + ".url")
+        
+    for candidate in url_candidates:
+        if os.path.exists(candidate):
+            try:
+                with open(candidate, "r", encoding="utf-8", errors="ignore") as f:
+                    for line in f:
+                        if line.startswith("URL="):
+                            url = line[4:].strip()
+                            return url, None
+            except Exception:
+                pass
+
+    file_name = os.path.basename(file_path)
+    clean_name = file_name.lower()
+    for sfx in ["_first_frame.jpg", "_first_frame.png", "_subbed.mp4", "_prompt.txt", "_song.txt"]:
+        if clean_name.endswith(sfx):
+            clean_name = clean_name[:-len(sfx)]
+            break
+
+    if history_data:
+        norm_path = os.path.normpath(file_path).lower()
+        for item in history_data:
+            item_path = item.get("file_path")
+            if item_path:
+                item_norm = os.path.normpath(item_path).lower()
+                item_name = os.path.basename(item_path).lower()
+                if item_norm == norm_path or item_norm.startswith(norm_path) or norm_path.startswith(item_norm):
+                    return item.get("url"), item.get("uploader")
+                if clean_name and (clean_name in item_name or item_name in clean_name):
+                    return item.get("url"), item.get("uploader")
+
+    # Regex Auto-inference from filename
+    # 1. Instagram: "Video by <user>_<shortcode>" or filename with Instagram shortcode
+    ig_post_match = re.search(r'Video by ([^_]+)_([A-Za-z0-9_-]+)', file_name, re.I)
+    if ig_post_match:
+        user = ig_post_match.group(1).strip()
+        shortcode = ig_post_match.group(2).strip()
+        shortcode = re.sub(r'_first_frame.*$', '', shortcode, flags=re.I)
+        return f"https://www.instagram.com/p/{shortcode}/", user
+    
+    if "Instagram" in file_path or "instagram" in file_path.lower():
+        ig_code = re.search(r'([A-Za-z0-9_-]{11})', file_name)
+        if ig_code:
+            code = ig_code.group(1)
+            return f"https://www.instagram.com/p/{code}/", None
+
+    # 2. TikTok: 19 digit ID
+    tt_match = re.search(r'(\d{18,20})', file_name)
+    if tt_match and ("TikTok" in file_path or "tiktok" in file_path.lower()):
+        uploader = os.path.basename(os.path.dirname(file_path))
+        if uploader and uploader.lower() != "tiktok":
+            return f"https://www.tiktok.com/@{uploader}/video/{tt_match.group(1)}", uploader
+        return f"https://www.tiktok.com/video/{tt_match.group(1)}", None
+
+    # 3. YouTube: 11 char ID
+    if "YouTube" in file_path or "youtube" in file_path.lower():
+        yt_match = re.search(r'_([A-Za-z0-9_-]{11})(?:_first_frame)?\.[a-zA-Z0-9]+$', file_name)
+        if yt_match:
+            return f"https://www.youtube.com/watch?v={yt_match.group(1)}", None
+
+    return None, None
 
 # Ensure ffmpeg is in PATH for whisper
 os.environ["PATH"] += os.pathsep + os.path.dirname(imageio_ffmpeg.get_ffmpeg_exe())
@@ -290,7 +445,10 @@ def sanitize_filename(name):
 def is_safe_path(path):
     try:
         abs_path = os.path.abspath(path)
-        return abs_path.startswith(os.path.abspath(DEFAULT_SAVE_DIR))
+        win_dir = os.environ.get('WINDIR', 'C:\\Windows')
+        if os.name == 'nt' and abs_path.lower().startswith(win_dir.lower()):
+            return False
+        return True
     except Exception:
         return False
 
@@ -304,7 +462,7 @@ def shazam_file(audio_path):
         print("Shazam error:", e)
         return None
 
-APP_VERSION = "1.8"
+APP_VERSION = "1.9"
 
 @app.route('/')
 def index():
@@ -826,6 +984,7 @@ def download_video():
                                     if return_code == 0:
                                         q.put({"status": f"{prefix}Successfully downloaded images/profile!"})
                                         add_history_entry(url, url, "Unknown", output_path, "Other")
+                                        save_url_shortcut(output_path, url)
                                         time.sleep(2)
                                         continue
                                     else:
@@ -1072,11 +1231,15 @@ def download_video():
                                     if not success:
                                         q.put({"status": f"{prefix}AI Bypass Failed: {msg}"})
                                 
-                                # Add to history
+                                # Add to history & save URL shortcut
                                 title = info.get('title', 'Unknown Title')
                                 uploader = info.get('uploader', 'Unknown')
                                 platform = info.get('extractor_key', 'Other')
                                 add_history_entry(url, title, uploader, final_path, platform)
+                                save_url_shortcut(final_path, url)
+                                if processing_options.get('extractFrame', True):
+                                    frame_path = base + "_first_frame.jpg"
+                                    save_url_shortcut(frame_path, url)
                 except Exception as e:
                     error_msg = str(e)
                     error_msg = re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', error_msg)
@@ -1122,6 +1285,7 @@ def list_gallery():
     folders = ['YouTube', 'Instagram', 'TikTok', 'Twitter', 'Other', 'Conversions']
     
     media = []
+    history_data = load_history()
     
     for folder in folders:
         folder_path = os.path.join(base_dir, folder)
@@ -1138,6 +1302,8 @@ def list_gallery():
                             else:
                                 item_path = f"{rel_dir}/{file}".replace('\\', '/')
                             
+                            source_url, uploader = resolve_source_url(file_path, history_data)
+                            
                             media.append({
                                 "name": file,
                                 "folder": folder,
@@ -1145,7 +1311,9 @@ def list_gallery():
                                 "full_path": file_path,
                                 "type": "video" if ext in ['.mp4', '.mov', '.mkv', '.webm', '.avi'] else "audio" if ext == ".mp3" else "image",
                                 "timestamp": os.path.getmtime(file_path),
-                                "size": os.path.getsize(file_path)
+                                "size": os.path.getsize(file_path),
+                                "source_url": source_url,
+                                "uploader": uploader
                             })
                         
     media.sort(key=lambda x: x['timestamp'], reverse=True)
@@ -1309,6 +1477,57 @@ def delete_gallery_item():
             
     return jsonify({"success": True})
 
+@app.route('/api/gallery/set_url', methods=['POST'])
+def set_gallery_url():
+    data = request.json or {}
+    path = data.get('path')
+    url = data.get('url', '').strip()
+    if not path or not os.path.exists(path) or not is_safe_path(path):
+        return jsonify({"error": "Invalid or unsafe path"}), 400
+    if not url:
+        return jsonify({"error": "No URL provided"}), 400
+    
+    save_url_shortcut(path, url)
+    global _gallery_cache
+    _gallery_cache["time"] = 0
+    return jsonify({"success": True, "url": url})
+
+@app.route('/api/logs', methods=['GET'])
+def get_logs():
+    with log_capture.lock:
+        return jsonify(list(log_capture.logs))
+
+@app.route('/api/logs/stream')
+def stream_logs():
+    def event_generator():
+        q = queue.Queue(maxsize=200)
+        with log_capture.lock:
+            for item in list(log_capture.logs)[-80:]:
+                yield f"data: {json.dumps(item)}\n\n"
+            log_capture.subscribers.append(q)
+        try:
+            while True:
+                item = q.get()
+                yield f"data: {json.dumps(item)}\n\n"
+        except GeneratorExit:
+            with log_capture.lock:
+                if q in log_capture.subscribers:
+                    log_capture.subscribers.remove(q)
+
+    return Response(event_generator(), mimetype='text/event-stream', headers={
+        'Cache-Control': 'no-cache',
+        'X-Accel-Buffering': 'no'
+    })
+
+@app.route('/api/shutdown', methods=['POST'])
+def shutdown_app():
+    def do_shutdown():
+        time.sleep(0.5)
+        print("Shutting down Media Grabber server...", flush=True)
+        os._exit(0)
+    threading.Thread(target=do_shutdown, daemon=True).start()
+    return jsonify({"status": "App shutting down..."})
+
 @app.route('/api/restart', methods=['POST'])
 def restart_server():
     def restart_task():
@@ -1326,6 +1545,6 @@ if __name__ == '__main__':
     print("\n" + "="*50, flush=True)
     print(" SERVER ONLINE AND READY! http://127.0.0.1:5000 ", flush=True)
     print("="*50 + "\n", flush=True)
-    # Launch browser precisely after the server is ready
-    threading.Timer(1.25, lambda: webbrowser.open("http://127.0.0.1:5000")).start()
+    if "--no-browser" not in sys.argv:
+        threading.Timer(1.25, lambda: webbrowser.open("http://127.0.0.1:5000")).start()
     serve(app, host='127.0.0.1', port=5000, threads=8)

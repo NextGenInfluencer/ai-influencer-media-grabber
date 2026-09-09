@@ -1,6 +1,6 @@
-# AI Influencer Media Grabber v1.8
+# AI Influencer Media Grabber v1.9
 
-![Version 1.8](https://img.shields.io/badge/Version-1.8-blue?style=for-the-badge) ![UI Preview](https://img.shields.io/badge/UI-Media_Grabber-f472b6?style=for-the-badge)
+![Version 1.9](https://img.shields.io/badge/Version-1.9-blue?style=for-the-badge) ![UI Preview](https://img.shields.io/badge/UI-Media_Grabber-f472b6?style=for-the-badge)
 
 ## 🌟 What is the AI Influencer Media Grabber?
 
@@ -19,6 +19,13 @@ Whether you're building a massive reference folder of TikTok trends, extracting 
 </div>
 
 ## ✨ Features
+
+### 🖥️ Native Desktop App Mode & In-App Live Console
+- **Standalone Desktop Window:** Launch silently with zero black command prompt windows. Opens in an independent, frameless desktop window via `launch-silent.vbs` or your Desktop shortcut.
+- **In-App Live Console:** Real-time server and download engine logs stream live into the built-in terminal widget inside the Activity panel (complete with color syntax, timestamps, and auto-scroll).
+- **Output Gallery Post Links:** Direct **`🔗 Visit Post`** button on all gallery media cards, allowing one-click access to the original post and influencer profile.
+- **Companion `.url` Internet Shortcuts:** Every download automatically saves a companion Windows `.url` shortcut alongside the video file.
+- **Clean Exit:** An in-app Exit button cleanly shuts down the backend engine and closes the window.
 
 ### 🛡️ AI Cleaner Tab (Flagship Anti-AI Detection Engine)
 The dedicated centerpiece feature designed specifically for AI creators and influencers. Select any local folder or file containing your AI-generated creations (from **Kling AI, Midjourney, Stable Diffusion, Google Nano Banana, Veo, etc.**) to make them look like authentic camera footage:
