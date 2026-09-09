@@ -91,6 +91,8 @@
         <div class="hidden lg:flex items-center space-x-3 text-xs text-zinc-400">
             <div id="queueCountBadge" class="hidden px-2 py-1 bg-pink-500/20 text-pink-400 border border-pink-500/30 rounded-lg font-bold">Queue: 0</div>
             
+            <div id="aiEngineBadgeContainer"></div>
+
             <button onclick="restartServer()" class="px-3.5 py-1.5 rounded-full bg-orange-500/10 border border-orange-500/30 hover:bg-orange-500/20 text-orange-400 font-bold transition-all flex items-center space-x-2 group">
                 <i class="fa-solid fa-power-off group-hover:rotate-180 transition-transform duration-500"></i>
                 <span class="text-[11px]">Restart App</span>
@@ -187,7 +189,7 @@
                                     <span>Identify Song (Shazam)</span>
                                 </label>
                                 <label class="flex items-center space-x-2.5 text-xs text-zinc-400 cursor-pointer">
-                                    <input type="checkbox" id="transcribeAudio" class="form-checkbox text-pink-500 rounded border-zinc-700 bg-zinc-900" checked>
+                                    <input type="checkbox" id="transcribeAudio" class="form-checkbox text-pink-500 rounded border-zinc-700 bg-zinc-900">
                                     <span>Transcribe Audio (Local Whisper)</span>
                                 </label>
                                 <label class="flex items-center space-x-2.5 text-xs text-zinc-400 cursor-pointer">
@@ -209,8 +211,8 @@
                                 <div class="pt-2 border-t border-zinc-800">
                                     <label class="block text-[10px] font-bold text-zinc-400 uppercase mb-1">Local LLM Model</label>
                                     <select id="llmModelDownloader" class="w-full px-2 py-1.5 bg-zinc-900 border border-zinc-700 rounded text-xs text-zinc-200 focus:outline-none focus:border-pink-500">
-                                        <option value="none">None (Disable LLM Features)</option>
-                                        <option value="llama-3.2-1b" selected>Llama 3.2 1B (Fast, CPU Friendly)</option>
+                                        <option value="none" selected>None (Disable LLM Features)</option>
+                                        <option value="llama-3.2-1b">Llama 3.2 1B (Fast, CPU Friendly)</option>
                                         <option value="llama-3-8b">Llama 3 8B (Heavy, High Reasoning)</option>
                                     </select>
                                 </div>
@@ -932,6 +934,10 @@
                 aiBtn.className = 'flex-1 py-1.5 bg-zinc-900/90 hover:bg-emerald-500 text-white rounded text-[10px] font-bold uppercase tracking-wider transition shadow-lg backdrop-blur flex items-center justify-center space-x-1';
                 aiBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> <span>Extract Prompt</span>';
                 aiBtn.onclick = async () => {
+                    if (currentAiStatus && !currentAiStatus.all_installed && !currentAiStatus.torch) {
+                        openAiInstallModal('BLIP Vision Prompt Extractor');
+                        return;
+                    }
                     const originalText = aiBtn.innerHTML;
                     aiBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>Extracting...</span>';
                     aiBtn.disabled = true;
@@ -944,6 +950,8 @@
                         const result = await res.json();
                         if (result.prompt) {
                             promptModal(result.prompt);
+                        } else if (result.error === 'ai_pack_required') {
+                            openAiInstallModal('BLIP Vision Prompt Extractor');
                         } else {
                             alert('Extraction failed: ' + (result.error || 'Unknown error'));
                         }
@@ -1852,7 +1860,278 @@
                 console.error("Failed to connect live console log stream", e);
             }
         }
+
+        // ─── AI Engine Pack Management ───
+        let currentAiStatus = {
+            all_installed: false,
+            whisper: false,
+            torch: false,
+            transformers: false,
+            llama: false,
+            is_installing: false
+        };
+        let _aiPollInterval = null;
+
+        async function fetchAiStatus() {
+            try {
+                const res = await fetch('/api/ai_status');
+                currentAiStatus = await res.json();
+                renderAiBadge();
+                if (currentAiStatus.is_installing) {
+                    renderInstallProgress();
+                    startAiStatusPolling();
+                } else if (_aiPollInterval && !currentAiStatus.is_installing) {
+                    stopAiStatusPolling();
+                    renderInstallProgress();
+                }
+            } catch(e) {
+                console.error("Failed to fetch AI status", e);
+            }
+        }
+
+        function renderAiBadge() {
+            const container = document.getElementById('aiEngineBadgeContainer');
+            if (!container) return;
+
+            if (currentAiStatus.is_installing) {
+                container.innerHTML = `
+                    <button onclick="openAiInstallModal()" class="px-3 py-1.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 font-bold text-[11px] flex items-center space-x-1.5 animate-pulse cursor-pointer">
+                        <i class="fa-solid fa-spinner fa-spin text-xs"></i>
+                        <span>Installing AI Pack (${currentAiStatus.install_progress || 0}%)</span>
+                    </button>
+                `;
+            } else if (currentAiStatus.all_installed) {
+                container.innerHTML = `
+                    <div class="flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-purple-500/10 border border-purple-500/30 text-purple-300 font-bold text-[11px] shadow-[0_0_12px_rgba(168,85,247,0.15)]" title="AI Vision, Whisper & LLaMA Pack is Active">
+                        <span class="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse"></span>
+                        <span>AI Pack: Active</span>
+                    </div>
+                `;
+            } else {
+                container.innerHTML = `
+                    <button onclick="openAiInstallModal()" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-300 font-bold text-[11px] transition cursor-pointer group" title="Click to Enable Offline AI Subtitles, Vision & LLaMA">
+                        <i class="fa-solid fa-wand-magic-sparkles text-xs text-purple-400 group-hover:scale-110 transition-transform"></i>
+                        <span>Enable AI Pack</span>
+                    </button>
+                `;
+            }
+        }
+
+        function openAiInstallModal(featureName = null) {
+            const modal = document.getElementById('aiInstallModal');
+            const notice = document.getElementById('aiModalNotice');
+            const noticeText = document.getElementById('aiModalNoticeText');
+            
+            if (featureName) {
+                noticeText.textContent = `"${featureName}" requires the AI Engine Pack.`;
+                notice.classList.remove('hidden');
+            } else {
+                notice.classList.add('hidden');
+            }
+            
+            modal.classList.remove('hidden');
+            renderInstallProgress();
+        }
+
+        function closeAiInstallModal() {
+            const modal = document.getElementById('aiInstallModal');
+            modal.classList.add('hidden');
+        }
+
+        async function triggerAiInstall() {
+            const btn = document.getElementById('aiInstallActionBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>Starting...</span>';
+            
+            try {
+                const res = await fetch('/api/install_ai', { method: 'POST' });
+                const data = await res.json();
+                startAiStatusPolling();
+                await fetchAiStatus();
+            } catch (err) {
+                alert('Failed to launch installer: ' + err.message);
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-down"></i> <span>Download & Install AI Pack</span>';
+            }
+        }
+
+        function renderInstallProgress() {
+            const progressBox = document.getElementById('aiInstallProgressBox');
+            const statusText = document.getElementById('aiInstallStatusText');
+            const percentText = document.getElementById('aiInstallPercentText');
+            const bar = document.getElementById('aiInstallProgressBar');
+            const logBox = document.getElementById('aiInstallLogBox');
+            const btn = document.getElementById('aiInstallActionBtn');
+
+            if (!progressBox) return;
+
+            if (currentAiStatus.is_installing) {
+                progressBox.classList.remove('hidden');
+                statusText.textContent = currentAiStatus.install_status || 'Installing AI Engine Pack...';
+                const p = currentAiStatus.install_progress || 10;
+                percentText.textContent = p + '%';
+                bar.style.width = p + '%';
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>Installing in Background...</span>';
+
+                if (currentAiStatus.install_log && currentAiStatus.install_log.length > 0) {
+                    logBox.innerHTML = currentAiStatus.install_log.map(l => `<div class="truncate">${escapeHtml(l)}</div>`).join('');
+                    logBox.scrollTop = logBox.scrollHeight;
+                }
+            } else if (currentAiStatus.all_installed) {
+                progressBox.classList.remove('hidden');
+                statusText.textContent = 'AI Engine Pack Installed & Ready!';
+                percentText.textContent = '100%';
+                bar.style.width = '100%';
+                btn.disabled = true;
+                btn.className = 'px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider text-white bg-emerald-600 flex items-center space-x-2';
+                btn.innerHTML = '<i class="fa-solid fa-check"></i> <span>AI Pack Ready</span>';
+            } else {
+                progressBox.classList.add('hidden');
+                btn.disabled = false;
+                btn.className = 'px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider text-white bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 shadow-[0_0_20px_rgba(168,85,247,0.3)] transition-all flex items-center space-x-2';
+                btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-down"></i> <span>Download & Install AI Pack</span>';
+            }
+        }
+
+        function startAiStatusPolling() {
+            if (_aiPollInterval) return;
+            _aiPollInterval = setInterval(async () => {
+                await fetchAiStatus();
+                if (!currentAiStatus.is_installing && currentAiStatus.all_installed) {
+                    stopAiStatusPolling();
+                    showToast('AI Pack Ready', 'AI features (Whisper, Vision, LLaMA) are now fully unlocked!');
+                }
+            }, 1800);
+        }
+
+        function stopAiStatusPolling() {
+            if (_aiPollInterval) {
+                clearInterval(_aiPollInterval);
+                _aiPollInterval = null;
+            }
+        }
+
+        function escapeHtml(str) {
+            return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        // Initialize AI Status on startup
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchAiStatus();
+
+            // Intercept AI checkboxes to guide user if AI is not yet installed
+            const aiWatchers = [
+                { id: 'transcribeAudio', name: 'Whisper Audio Transcription' },
+                { id: 'burnSubtitles', name: 'Whisper Subtitles' },
+                { id: 'exportSubtitlesDownloader', name: 'Subtitle (.srt) Export' },
+                { id: 'autoExtractPrompt', name: 'BLIP Vision Prompt Extractor' },
+                { id: 'aiSummarize', name: 'AI Smart Summarizer' },
+                { id: 'convBurnSubtitles', name: 'Burn Subtitles (Whisper AI)' }
+            ];
+
+            aiWatchers.forEach(item => {
+                const el = document.getElementById(item.id);
+                if (el) {
+                    el.addEventListener('change', (e) => {
+                        if (e.target.checked && currentAiStatus && !currentAiStatus.all_installed && !currentAiStatus.whisper) {
+                            openAiInstallModal(item.name);
+                        }
+                    });
+                }
+            });
+        });
     </script>
+
+    <!-- AI Engine Pack Modal -->
+    <div id="aiInstallModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4">
+        <div class="bg-[#0f0f12] border border-zinc-800 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl transition-all">
+            <!-- Modal Header -->
+            <div class="px-6 py-5 border-b border-zinc-800/80 flex items-center justify-between bg-gradient-to-r from-purple-900/20 via-pink-900/10 to-transparent">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-purple-600 to-pink-500 flex items-center justify-center shadow-[0_0_20px_rgba(168,85,247,0.4)]">
+                        <i class="fa-solid fa-wand-magic-sparkles text-white text-base"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-extrabold text-white tracking-wide uppercase">AI Engine Pack</h3>
+                        <p class="text-[11px] text-zinc-400 font-medium">Whisper, Vision Prompter & Offline LLaMA</p>
+                    </div>
+                </div>
+                <button onclick="closeAiInstallModal()" class="w-8 h-8 rounded-full bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center transition">
+                    <i class="fa-solid fa-xmark text-sm"></i>
+                </button>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="p-6 space-y-4">
+                <div id="aiModalNotice" class="hidden px-4 py-2.5 rounded-xl bg-purple-500/10 border border-purple-500/30 text-purple-300 text-xs flex items-center space-x-2">
+                    <i class="fa-solid fa-circle-info text-purple-400"></i>
+                    <span id="aiModalNoticeText">This feature requires the AI Engine Pack.</span>
+                </div>
+
+                <div class="grid grid-cols-1 gap-2.5">
+                    <div class="p-3 rounded-xl bg-[#09090b] border border-zinc-800/80 flex items-start space-x-3">
+                        <div class="w-8 h-8 rounded-lg bg-pink-500/10 text-pink-400 flex items-center justify-center shrink-0 mt-0.5">
+                            <i class="fa-solid fa-microphone-lines text-xs"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="text-xs font-bold text-zinc-200">Local Whisper Speech AI</div>
+                            <div class="text-[10px] text-zinc-400">100% offline audio transcription & auto-burned video subtitles (.srt export)</div>
+                        </div>
+                    </div>
+
+                    <div class="p-3 rounded-xl bg-[#09090b] border border-zinc-800/80 flex items-start space-x-3">
+                        <div class="w-8 h-8 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center shrink-0 mt-0.5">
+                            <i class="fa-solid fa-eye text-xs"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="text-xs font-bold text-zinc-200">BLIP Vision Prompt Extractor</div>
+                            <div class="text-[10px] text-zinc-400">Extracts photorealistic prompts formatted for Nano Banana 2/Pro & GPT Image 2</div>
+                        </div>
+                    </div>
+
+                    <div class="p-3 rounded-xl bg-[#09090b] border border-zinc-800/80 flex items-start space-x-3">
+                        <div class="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center shrink-0 mt-0.5">
+                            <i class="fa-solid fa-brain text-xs"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="text-xs font-bold text-zinc-200">Offline LLaMA Intelligence</div>
+                            <div class="text-[10px] text-zinc-400">Generates video summaries, viral captions, and hashtags without sending data to the cloud</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between text-[11px] text-zinc-400 px-1">
+                    <span><i class="fa-solid fa-hard-drive mr-1.5 text-zinc-500"></i>Download Size: <strong class="text-zinc-200">~1.2 GB - 1.8 GB</strong></span>
+                    <span><i class="fa-solid fa-shield-check mr-1.5 text-emerald-400"></i>Runs 100% locally</span>
+                </div>
+
+                <!-- Live Installation Progress (Hidden when idle) -->
+                <div id="aiInstallProgressBox" class="hidden space-y-2.5 pt-2">
+                    <div class="flex items-center justify-between text-xs">
+                        <span id="aiInstallStatusText" class="font-bold text-purple-300 truncate max-w-[320px]">Downloading packages...</span>
+                        <span id="aiInstallPercentText" class="font-mono text-zinc-400">0%</span>
+                    </div>
+                    <div class="w-full h-2 rounded-full bg-zinc-800 overflow-hidden">
+                        <div id="aiInstallProgressBar" class="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-300" style="width: 0%;"></div>
+                    </div>
+                    <!-- Live console snippet -->
+                    <div id="aiInstallLogBox" class="p-2.5 rounded-xl bg-black border border-zinc-800/80 font-mono text-[9.5px] text-zinc-400 max-h-24 overflow-y-auto space-y-1">
+                        <div>Ready.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="px-6 py-4 bg-[#0a0a0c] border-t border-zinc-800/80 flex items-center justify-end space-x-3">
+                <button onclick="closeAiInstallModal()" class="px-4 py-2 rounded-xl text-xs font-bold text-zinc-400 hover:text-white transition">Close</button>
+                <button id="aiInstallActionBtn" onclick="triggerAiInstall()" class="px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider text-white bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 shadow-[0_0_20px_rgba(168,85,247,0.3)] transition-all flex items-center space-x-2">
+                    <i class="fa-solid fa-cloud-arrow-down"></i>
+                    <span>Download & Install AI Pack</span>
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- Toast Notification -->
     <div id="toast" class="fixed bottom-6 right-6 transform translate-y-24 opacity-0 transition-all duration-300 z-50 bg-[#0c0c0e] border border-zinc-800 rounded-2xl shadow-[0_0_30px_rgba(0,0,0,0.8)] p-4 flex items-center space-x-4 max-w-sm">

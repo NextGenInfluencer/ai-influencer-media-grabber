@@ -1,14 +1,19 @@
 import os
-import torch
+import threading
+import gc
 from PIL import Image
 
 _blip_processor = None
 _blip_model = None
-
-import threading
-import gc
-
 _blip_timer = None
+
+def is_ai_vision_available():
+    try:
+        import torch
+        import transformers
+        return True
+    except ImportError:
+        return False
 
 def unload_blip():
     global _blip_processor, _blip_model, _blip_timer
@@ -16,8 +21,12 @@ def unload_blip():
         print("Unloading BLIP model to free memory...")
         _blip_processor = None
         _blip_model = None
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+        try:
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except Exception:
+            pass
         gc.collect()
     _blip_timer = None
 
@@ -29,6 +38,7 @@ def get_blip_model():
         
     if _blip_model is None:
         try:
+            import torch
             from transformers import BlipProcessor, BlipForConditionalGeneration
             # Use local cache if possible to avoid re-downloads
             _blip_processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-large", use_safetensors=True)
@@ -37,6 +47,9 @@ def get_blip_model():
             # Use GPU if available, else CPU
             device = "cuda" if torch.cuda.is_available() else "cpu"
             _blip_model.to(device)
+        except ImportError:
+            print("Error: PyTorch or Transformers not installed.")
+            return None, None
         except Exception as e:
             print(f"Error loading BLIP model: {e}")
             return None, None
@@ -47,16 +60,18 @@ def get_blip_model():
     return _blip_processor, _blip_model
 
 def extract_prompt_from_image(image_path):
+    if not is_ai_vision_available():
+        return "Error: AI Pack not installed. Please install the AI Engine pack to use prompt extraction."
+        
     processor, model = get_blip_model()
     if not processor or not model:
-        return "Error: Vision model not loaded. Please restart the app or check dependencies."
+        return "Error: Vision model could not be loaded. Please check your internet connection or GPU/RAM."
         
     try:
+        import torch
         raw_image = Image.open(image_path).convert('RGB')
         device = "cuda" if torch.cuda.is_available() else "cpu"
         
-        # We don't need basic caption, just generate a highly detailed one.
-        # Use beam search for better descriptiveness
         text_prefix = "a highly detailed, cinematic photorealistic shot of "
         inputs_desc = processor(raw_image, text=text_prefix, return_tensors="pt").to(device)
         out_desc = model.generate(
@@ -68,10 +83,6 @@ def extract_prompt_from_image(image_path):
         )
         detailed_caption = processor.decode(out_desc[0], skip_special_tokens=True)
         
-        # Post-process caption to make it a character template
-        # The AI usually starts with something like "a highly detailed... shot of a young woman"
-        
-        # Format as a natural language prompt optimized for Nano Banana 2 / Pro / GPT Image 2
         prompt = (
             f"Generate a photorealistic image matching this exact scene: {detailed_caption}. "
             f"The main subject is [YOUR CHARACTER NAME/REFERENCE]. "

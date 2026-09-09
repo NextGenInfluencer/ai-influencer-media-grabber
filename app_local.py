@@ -234,7 +234,11 @@ def get_whisper():
     if _whisper_timer is not None:
         _whisper_timer.cancel()
     if whisper_model is None:
-        import whisper
+        try:
+            import whisper
+        except ImportError:
+            print("Whisper is not installed. AI Pack required.")
+            return None
         print("Loading Whisper model (this may take a moment)...")
         whisper_model = whisper.load_model("base")
     _whisper_timer = threading.Timer(600, unload_whisper)
@@ -263,8 +267,12 @@ def get_llm(model_id="llama-3.2-1b"):
     if llm_model is None or _current_llm_id != model_id:
         if llm_model is not None: unload_llm()
         
-        from llama_cpp import Llama
-        from huggingface_hub import hf_hub_download
+        try:
+            from llama_cpp import Llama
+            from huggingface_hub import hf_hub_download
+        except ImportError:
+            print("llama-cpp-python or huggingface_hub not installed. AI Pack required.")
+            return None
         
         models_dir = os.path.join(app.root_path, "ai_models")
         os.makedirs(models_dir, exist_ok=True)
@@ -298,6 +306,8 @@ def get_llm(model_id="llama-3.2-1b"):
 
 def llm_generate(prompt, system_prompt="You are a helpful AI assistant.", model_id="llama-3.2-1b"):
     llm = get_llm(model_id)
+    if not llm:
+        return "AI Engine pack required for local LLM generation."
     response = llm.create_chat_completion(
         messages=[
             {"role": "system", "content": system_prompt},
@@ -695,7 +705,10 @@ def convert_media():
                             if os.path.exists(temp_audio):
                                 try:
                                     model = get_whisper()
-                                    result = model.transcribe(temp_audio, verbose=False)
+                                    if not model:
+                                        q.put({"status": f"{prefix}Whisper AI Pack not installed. Skipping subtitles."})
+                                    else:
+                                        result = model.transcribe(temp_audio, verbose=False)
                                     
                                     def format_time(seconds):
                                         m, s = divmod(seconds, 60)
@@ -1137,8 +1150,11 @@ def download_video():
                                     if os.path.exists(full_audio):
                                         try:
                                             model = get_whisper()
-                                            result = model.transcribe(full_audio, verbose=False)
-                                            transcript_text = result.get("text", "").strip()
+                                            if not model:
+                                                q.put({"status": f"{prefix}Whisper AI Pack not installed. Skipping transcription/subtitles."})
+                                            else:
+                                                result = model.transcribe(full_audio, verbose=False)
+                                                transcript_text = result.get("text", "").strip()
                                             if want_transcribe and transcript_text:
                                                 with open(transcript_path, "w", encoding="utf-8") as f:
                                                     f.write(transcript_text)
@@ -1381,7 +1397,12 @@ def extract_prompt():
             return jsonify({"error": f"Video extraction error: {str(e)}"}), 500
             
     try:
-        from ai_prompter import extract_prompt_from_image
+        from ai_prompter import extract_prompt_from_image, is_ai_vision_available
+        if not is_ai_vision_available():
+            return jsonify({
+                "error": "ai_pack_required", 
+                "message": "AI Vision Engine pack is required for prompt extraction."
+            }), 400
         prompt = extract_prompt_from_image(target_image)
         return jsonify({"prompt": prompt})
     except Exception as e:
@@ -1518,6 +1539,128 @@ def stream_logs():
         'Cache-Control': 'no-cache',
         'X-Accel-Buffering': 'no'
     })
+
+# AI Status and Installer State
+ai_installer_state = {
+    "is_installing": False,
+    "progress": 0,
+    "status": "idle",
+    "error": None,
+    "log": []
+}
+
+def get_ai_status():
+    st = {
+        "whisper": False,
+        "torch": False,
+        "transformers": False,
+        "llama": False,
+        "all_installed": False
+    }
+    try:
+        import whisper
+        st["whisper"] = True
+    except ImportError: pass
+    
+    try:
+        import torch
+        st["torch"] = True
+    except ImportError: pass
+    
+    try:
+        import transformers
+        st["transformers"] = True
+    except ImportError: pass
+    
+    try:
+        import llama_cpp
+        st["llama"] = True
+    except ImportError: pass
+    
+    st["all_installed"] = st["whisper"] and st["torch"] and st["transformers"]
+    return st
+
+def run_ai_install_worker():
+    global ai_installer_state
+    ai_installer_state["is_installing"] = True
+    ai_installer_state["status"] = "Installing AI Engine pack..."
+    ai_installer_state["progress"] = 10
+    ai_installer_state["error"] = None
+    ai_installer_state["log"] = ["Starting AI Engine installation via pip..."]
+    
+    req_file = os.path.join(app.root_path, "requirements-ai.txt")
+    if not os.path.exists(req_file):
+        ai_installer_state["error"] = "requirements-ai.txt not found!"
+        ai_installer_state["is_installing"] = False
+        return
+
+    cmd = [sys.executable, "-m", "pip", "install", "-r", req_file]
+    try:
+        flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            creationflags=flags
+        )
+        
+        for line in iter(process.stdout.readline, ''):
+            line_clean = line.strip()
+            if line_clean:
+                ai_installer_state["log"].append(line_clean)
+                if len(ai_installer_state["log"]) > 40:
+                    ai_installer_state["log"].pop(0)
+                if "Downloading" in line_clean:
+                    ai_installer_state["progress"] = min(85, ai_installer_state["progress"] + 2)
+                    ai_installer_state["status"] = f"Downloading AI packages: {line_clean[:55]}..."
+                elif "Installing collected packages" in line_clean:
+                    ai_installer_state["progress"] = 90
+                    ai_installer_state["status"] = "Unpacking and configuring AI packages..."
+                elif "Successfully installed" in line_clean:
+                    ai_installer_state["progress"] = 98
+
+        process.stdout.close()
+        code = process.wait()
+        
+        if code == 0:
+            ai_installer_state["is_installing"] = False
+            ai_installer_state["status"] = "complete"
+            ai_installer_state["progress"] = 100
+            ai_installer_state["log"].append("AI Engine Pack installed successfully!")
+        else:
+            ai_installer_state["is_installing"] = False
+            ai_installer_state["status"] = "failed"
+            ai_installer_state["error"] = f"Installation exited with code {code}"
+            ai_installer_state["log"].append(f"Installation failed with code {code}")
+    except Exception as e:
+        ai_installer_state["is_installing"] = False
+        ai_installer_state["status"] = "failed"
+        ai_installer_state["error"] = str(e)
+        ai_installer_state["log"].append(f"Error: {str(e)}")
+
+@app.route('/api/ai_status', methods=['GET'])
+def api_ai_status():
+    st = get_ai_status()
+    return jsonify({
+        **st,
+        "is_installing": ai_installer_state["is_installing"],
+        "install_status": ai_installer_state["status"],
+        "install_progress": ai_installer_state["progress"],
+        "install_error": ai_installer_state["error"],
+        "install_log": ai_installer_state["log"][-8:]
+    })
+
+@app.route('/api/install_ai', methods=['POST'])
+def api_install_ai():
+    global ai_installer_state
+    if ai_installer_state["is_installing"]:
+        return jsonify({"status": "already_running"}), 400
+        
+    t = threading.Thread(target=run_ai_install_worker, daemon=True)
+    t.start()
+    return jsonify({"status": "started"})
 
 @app.route('/api/shutdown', methods=['POST'])
 def shutdown_app():

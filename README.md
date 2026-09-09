@@ -88,8 +88,8 @@ If you already have Python installed, you can skip this step!
     - **Mac/Linux:** Open your terminal inside the folder and run `bash run.sh`.
 
 ### That's it! 🎉
-The startup script is fully automated. On first launch, it automatically sets up the isolated Python virtual environment, installs dependencies, and opens the sleek studio interface.
-
+- **Instant Setup (< 20 seconds):** First launch automatically sets up the isolated Python virtual environment and installs only the ultra-fast core media downloader dependencies (~80 MB).
+- **Optional AI Pack (1-Click Install):** AI features (Whisper subtitles, BLIP vision prompt extractor, LLaMA 3 offline reasoning) are modular. Enable them with **1 click directly inside the web UI** or by running **`install_ai.bat`**.
 - **Clean Exit:** Click the **Exit** button in the top navigation bar at any time to cleanly shut down the backend engine and close the app window.
 - **Media Location:** All downloaded media, extracted frames, companion post links, and converted files are neatly organized in your personal `Documents/Media Grabber` folder.
 - **Safe & Private:** 100% runs locally on your machine with zero ad trackers, no telemetry, and no external accounts required.
@@ -99,9 +99,12 @@ The startup script is fully automated. On first launch, it automatically sets up
 ## 📜 Changelog
 
 ### v1.9 (Current)
-- **New Feature**: **Native Desktop Window & Silent Launcher**. Run as a dedicated, frameless desktop application with zero background command prompts via `launch-silent.vbs` and desktop shortcut.
-- **New Feature**: **In-App Live Console**. Real-time server and engine logs streamed directly into a sleek, syntax-highlighted terminal widget inside the Activity panel with timestamping and auto-scroll.
-- **New Feature**: **Output Gallery Post Links & Companion URLs**. One-click `🔗 Visit Post` button on gallery media cards to easily revisit the source post and influencer profile, plus companion `.url` files saved alongside downloads.
+- **Modular Core & AI Engine Architecture**: Separated lightweight core dependencies (`requirements.txt`, ~80MB, fast 15-second setup) from heavy AI packages (`requirements-ai.txt`). Core video and audio downloading installs instantly without requiring multi-gigabyte PyTorch downloads upfront.
+- **In-App 1-Click AI Pack Installer**: Added an interactive AI Pack installer modal with live download progress and console stream directly inside the web UI.
+- **Standalone `install_ai.bat`**: Double-click batch script for manual or offline AI pack installation.
+- **Native Desktop Window & Silent Launcher**: Run as a dedicated, frameless desktop application with zero background command prompts via `launch-silent.vbs` and desktop shortcut.
+- **In-App Live Console**: Real-time server and engine logs streamed directly into a sleek, syntax-highlighted terminal widget inside the Activity panel with timestamping and auto-scroll.
+- **Output Gallery Post Links & Companion URLs**: One-click `🔗 Visit Post` button on gallery media cards to easily revisit the source post and influencer profile, plus companion `.url` files saved alongside downloads.
 - **Enhancement**: Clean exit button in UI to safely terminate the backend server and close the native window.
 - **Docs & UI**: Updated high-resolution interface preview screenshots showcasing the latest v1.9 desktop studio.
 

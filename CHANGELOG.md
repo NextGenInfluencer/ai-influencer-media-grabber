@@ -13,6 +13,10 @@ All notable changes to the AI Influencer Media Grabber project will be documente
 - **Desktop Shortcut Creator**: `create_shortcut.bat` and `create_desktop_shortcut.ps1` to place a one-click desktop shortcut with custom icon `assets/app_icon.ico`.
 - **Automated First-Time Setup**: `launch-silent.vbs` and `run.bat` auto-detect if the Python environment is uninitialized, running dependencies installation automatically before launching.
 - **Exit App Button**: Clean shutdown action in the navigation header that cleanly terminates the Python engine and closes the window.
+- **Modular Dependency Architecture**: Separated lightweight Core downloader dependencies (`requirements.txt`, ~80MB, fast 15-second setup) from the heavy AI Engine stack (`requirements-ai.txt`, PyTorch, Whisper, Vision BLIP, LLaMA).
+- **In-App 1-Click AI Pack Installer**: Added visual AI Engine status badge in the header, an interactive AI Pack installer modal with real-time download progress and log stream, and smart auto-detection whenever an AI feature is invoked.
+- **Standalone `install_ai.bat` Script**: Convenient 1-click batch script for manual or offline AI Engine pack installation.
+- **Graceful Fallback & Lazy Imports**: Dynamic lazy imports in `ai_prompter.py` and `app_local.py` ensuring the application boots immediately and runs all video downloading and conversion tools with 100% reliability even when PyTorch is not yet installed.
 - **Retina Interface Previews**: Fresh high-resolution 2x screenshots for all 4 application tabs in `assets/`.
 
 ### Security & Privacy
