@@ -9,8 +9,7 @@ $TargetVBS = Join-Path -Path $ScriptDir -ChildPath "launch-silent.vbs"
 $IconPath = Join-Path -Path $ScriptDir -ChildPath "assets\app_icon.ico"
 
 $Shortcut = $WshShell.CreateShortcut($ShortcutPath)
-$Shortcut.TargetPath = "wscript.exe"
-$Shortcut.Arguments = "`"$TargetVBS`""
+$Shortcut.TargetPath = $TargetVBS
 $Shortcut.WorkingDirectory = $ScriptDir
 $Shortcut.Description = "AI Influencer Media Grabber (Native Desktop App)"
 

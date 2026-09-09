@@ -14,8 +14,7 @@ set "ICON_PATH=%SCRIPT_DIR%assets\app_icon.ico"
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
     "$wsh = New-Object -ComObject WScript.Shell; " ^
     "$sc = $wsh.CreateShortcut('%SHORTCUT_PATH%'); " ^
-    "$sc.TargetPath = 'wscript.exe'; " ^
-    "$sc.Arguments = '\"%TARGET_VBS%\"'; " ^
+    "$sc.TargetPath = '%TARGET_VBS%'; " ^
     "$sc.WorkingDirectory = '%SCRIPT_DIR%'; " ^
     "$sc.Description = 'AI Influencer Media Grabber (Native Desktop App)'; " ^
     "if (Test-Path '%ICON_PATH%') { $sc.IconLocation = '%ICON_PATH%,0' } else { $sc.IconLocation = 'shell32.dll,238' }; " ^
