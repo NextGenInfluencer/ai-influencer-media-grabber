@@ -98,7 +98,14 @@ The startup script is fully automated. It will download everything it needs, ins
 
 ## 📜 Changelog
 
-### v1.8 (Current)
+### v1.9 (Current)
+- **New Feature**: **Native Desktop Window & Silent Launcher**. Run as a dedicated, frameless desktop application with zero background command prompts via `launch-silent.vbs` and desktop shortcut.
+- **New Feature**: **In-App Live Console**. Real-time server and engine logs streamed directly into a sleek, syntax-highlighted terminal widget inside the Activity panel with timestamping and auto-scroll.
+- **New Feature**: **Output Gallery Post Links & Companion URLs**. One-click `🔗 Visit Post` button on gallery media cards to easily revisit the source post and influencer profile, plus companion `.url` files saved alongside downloads.
+- **Enhancement**: Clean exit button in UI to safely terminate the backend server and close the native window.
+- **Docs & UI**: Updated high-resolution interface preview screenshots showcasing the latest v1.9 desktop studio.
+
+### v1.8
 - **New Feature**: **Local LLM Integration**! You can now run heavy AI models (Llama 3.2 1B & Llama 3 8B) entirely offline directly in the app.
 - **New Feature**: **AI Smart Summarizer (Downloader)**. Check a box and the LLM will read the video's transcript to generate a summary, 3 viral TikTok/Reels captions, and SEO hashtags automatically!
 - **New Feature**: **Nano Banana Prompts**. The Auto-Extract AI Prompt feature now routes the basic image description through the Local LLM to perfectly format highly detailed prompts specifically for *Nano Banana Pro* & *Nano Banana 2*.
