@@ -1211,7 +1211,7 @@ def download_video():
                                                     rel_srt = rel_srt.replace(':', '\\:').replace(',', '\\,').replace("'", "\\'")
                                                     
                                                     ffmpeg_sub = [
-                                                        str(imageio_ffmpeg.get_ffmpeg_exe()), "-y", "-i", final_path,
+                                                        imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-i", final_path,
                                                         "-vf", f"subtitles='{rel_srt}'", "-c:a", "copy", temp_sub
                                                     ]
                                                     subprocess.run(ffmpeg_sub, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -1234,7 +1234,7 @@ def download_video():
                                     q.put({"status": f"{prefix}Forcing Standard Encoding (H.264)..."})
                                     temp_h264 = base + "_h264_temp.mp4"
                                     ffmpeg_h264_cmd = [
-                                        str(imageio_ffmpeg.get_ffmpeg_exe()), "-y", "-i", final_path,
+                                        imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-i", final_path,
                                         "-c:v", "libx264", "-preset", "fast", "-crf", "23",
                                         "-c:a", "aac", "-pix_fmt", "yuv420p", "-movflags", "+faststart", temp_h264
                                     ]
@@ -1723,7 +1723,9 @@ def restart_server():
         finally:
             time.sleep(0.2)
             os._exit(0)
-    
+    threading.Thread(target=restart_task, daemon=True).start()
+    return jsonify({"status": "Server restarting..."})
+
 # ====================================================================
 # In-App GitHub OTA Auto-Updater Engine
 # ====================================================================
@@ -1750,7 +1752,7 @@ app_updater_state: dict[str, Any] = {
 
 def parse_semver(v_str: str) -> tuple:
     """Extract (major, minor, patch, ...) integer tuple from a version string."""
-    clean = re.sub(r'^[vV]', '', str(v_str).strip())
+    clean = re.sub(r'^[vV]', '', v_str.strip())
     parts = []
     for piece in clean.split('.'):
         match = re.match(r'^\d+', piece)
