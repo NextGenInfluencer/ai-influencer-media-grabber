@@ -18,6 +18,7 @@ from shazamio import Shazam
 import time
 import numpy as np
 import yt_dlp
+from typing import Any, Optional, Dict, List, Union
 
 # --- Live Server Log Capture (Tee stdout & stderr for In-App Live Console) ---
 class LogCapture:
@@ -316,7 +317,10 @@ def llm_generate(prompt, system_prompt="You are a helpful AI assistant.", model_
         temperature=0.7,
         max_tokens=1024
     )
-    return response['choices'][0]['message']['content'].strip()
+    if isinstance(response, dict):
+        content = response.get('choices', [{}])[0].get('message', {}).get('content')
+        return (content or "").strip()
+    return ""
 
 # Cache the face detection cascade globally but initialize lazily
 _face_cascade = None
@@ -413,7 +417,9 @@ def dynamic_auto_crop(input_path, output_path, q=None, prefix=""):
         x_start = c - target_width // 2
         cropped = frame[:, x_start:x_start+target_width]
         
-        try: process.stdin.write(cropped.tobytes())
+        try:
+            if process.stdin:
+                process.stdin.write(cropped.tobytes())
         except Exception: break
         frame_idx += 1
         if q and frame_idx % int(fps * 2) == 0 and total_frames > 0:
@@ -422,7 +428,8 @@ def dynamic_auto_crop(input_path, output_path, q=None, prefix=""):
             
     cap.release()
     try: 
-        process.stdin.close()
+        if process.stdin:
+            process.stdin.close()
         process.wait()
     except Exception: pass
     
@@ -710,17 +717,17 @@ def convert_media():
                                     else:
                                         result = model.transcribe(temp_audio, verbose=False)
                                     
-                                    def format_time(seconds):
-                                        m, s = divmod(seconds, 60)
-                                        h, m = divmod(m, 60)
-                                        ms = int((s - int(s)) * 1000)
-                                        return f"{int(h):02d}:{int(m):02d}:{int(s):02d},{ms:03d}"
-                                    
-                                    with open(temp_srt, 'w', encoding='utf-8') as f:
-                                        for i, segment in enumerate(result.get('segments', [])):
-                                            f.write(f"{i + 1}\n")
-                                            f.write(f"{format_time(segment['start'])} --> {format_time(segment['end'])}\n")
-                                            f.write(f"{segment['text'].strip()}\n\n")
+                                        def format_time(seconds):
+                                            m, s = divmod(seconds, 60)
+                                            h, m = divmod(m, 60)
+                                            ms = int((s - int(s)) * 1000)
+                                            return f"{int(h):02d}:{int(m):02d}:{int(s):02d},{ms:03d}"
+                                        
+                                        with open(temp_srt, 'w', encoding='utf-8') as f:
+                                            for i, segment in enumerate(result.get('segments', [])):
+                                                f.write(f"{i + 1}\n")
+                                                f.write(f"{format_time(segment['start'])} --> {format_time(segment['end'])}\n")
+                                                f.write(f"{segment['text'].strip()}\n\n")
                                             
                                     if translate_lang and translate_lang != 'none' and llm_model and llm_model != 'none':
                                         q.put({"status": f"{prefix}Translating Subtitles to {translate_lang}..."})
@@ -818,7 +825,7 @@ def preview_url():
         return jsonify({"error": "Invalid URL scheme"}), 400
         
     try:
-        ydl_opts = {
+        ydl_opts: dict[str, Any] = {
             'quiet': True,
             'no_warnings': True,
             'extract_flat': True,
@@ -876,7 +883,7 @@ def download_video():
     def generate():
         yield f"data: {json.dumps({'status': 'Fetching metadata...'})}\n\n"
         
-        ydl_opts = {
+        ydl_opts: dict[str, Any] = {
             'format': 'bestvideo+bestaudio/best' if processing_options.get('forceH264') else 'bestvideo[vcodec^=avc]+bestaudio[acodec^=mp4a]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best',
             'merge_output_format': 'mp4',
             'outtmpl': os.path.join(output_path, '%(playlist_title,uploader)s', '%(playlist_index|)s%(playlist_index& - |)s%(title)s_%(id)s.%(ext)s'),
@@ -949,14 +956,14 @@ def download_video():
                                     while os.path.exists(f"{orig_base} ({c}){ext}") or os.path.exists(f"{orig_base} ({c}).mp4"):
                                         c += 1
                                     
-                                    local_opts = ydl_opts.copy()
+                                    local_opts: dict[str, Any] = ydl_opts.copy()
                                     local_opts['outtmpl'] = f"{orig_base} ({c}).%(ext)s"
                                     with yt_dlp.YoutubeDL(local_opts) as local_ydl:
-                                        info = local_ydl.extract_info(url, download=True)
+                                        info: Any = local_ydl.extract_info(url, download=True)
                                 else:
-                                    info = ydl.extract_info(url, download=True)
+                                    info: Any = ydl.extract_info(url, download=True)
                             else:
-                                info = ydl.extract_info(url, download=True)
+                                info: Any = ydl.extract_info(url, download=True)
                         except Exception as e:
                             err_msg = str(e)
                             err_msg = re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', err_msg)
@@ -980,18 +987,19 @@ def download_video():
                                 
                                 try:
                                     process = subprocess.Popen(gdl_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
-                                    for line in iter(process.stdout.readline, ''):
-                                        if cancel_flags.get(task_id):
-                                            process.terminate()
-                                            q.put({"status": f"{prefix}Cancelled by user"})
-                                            break
-                                        
-                                        line = line.strip()
-                                        if line:
-                                            short_line = line if len(line) < 60 else "..." + line[-57:]
-                                            q.put({"status": f"gallery-dl: {short_line}"})
+                                    if process.stdout:
+                                        for line in iter(process.stdout.readline, ''):
+                                            if cancel_flags.get(task_id):
+                                                process.terminate()
+                                                q.put({"status": f"{prefix}Cancelled by user"})
+                                                break
                                             
-                                    process.stdout.close()
+                                            line = line.strip()
+                                            if line:
+                                                short_line = line if len(line) < 60 else "..." + line[-57:]
+                                                q.put({"status": f"gallery-dl: {short_line}"})
+                                                
+                                        process.stdout.close()
                                     return_code = process.wait()
                                     
                                     if return_code == 0:
@@ -1026,11 +1034,15 @@ def download_video():
                             continue
                             
                         # Determine the final file path
-                        final_path = None
-                        if 'requested_downloads' in info and info['requested_downloads']:
-                            final_path = info['requested_downloads'][0].get('filepath')
-                        if not final_path:
-                            final_path = info.get('_filename') or ydl.prepare_filename(info)
+                        final_path: Optional[str] = None
+                        if isinstance(info, dict) and 'requested_downloads' in info and info['requested_downloads']:
+                            req_dl = info['requested_downloads'][0]
+                            if isinstance(req_dl, dict) and req_dl.get('filepath'):
+                                final_path = str(req_dl['filepath'])
+                        if not final_path and isinstance(info, dict):
+                            fn = info.get('_filename') or ydl.prepare_filename(info)
+                            if fn:
+                                final_path = str(fn)
                             
                         # Handle edge case where file was merged to .mp4 but info holds original extension
                         if final_path:
@@ -1150,6 +1162,8 @@ def download_video():
                                     if os.path.exists(full_audio):
                                         try:
                                             model = get_whisper()
+                                            transcript_text = ""
+                                            result: dict[str, Any] = {}
                                             if not model:
                                                 q.put({"status": f"{prefix}Whisper AI Pack not installed. Skipping transcription/subtitles."})
                                             else:
@@ -1175,7 +1189,7 @@ def download_video():
                                             want_burn = processing_options.get('burn_subtitles')
                                             want_export = processing_options.get('export_subtitles')
                                             
-                                            if (want_burn or want_export) and final_path.endswith(('.mp4', '.mkv', '.mov')):
+                                            if (want_burn or want_export) and final_path and final_path.endswith(('.mp4', '.mkv', '.mov')) and result:
                                                 srt_path = base + "_subtitles.srt"
                                                 def format_timestamp(seconds):
                                                     ms = int((seconds - int(seconds)) * 1000)
@@ -1197,7 +1211,7 @@ def download_video():
                                                     rel_srt = rel_srt.replace(':', '\\:').replace(',', '\\,').replace("'", "\\'")
                                                     
                                                     ffmpeg_sub = [
-                                                        imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-i", final_path,
+                                                        str(imageio_ffmpeg.get_ffmpeg_exe()), "-y", "-i", final_path,
                                                         "-vf", f"subtitles='{rel_srt}'", "-c:a", "copy", temp_sub
                                                     ]
                                                     subprocess.run(ffmpeg_sub, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -1216,11 +1230,11 @@ def download_video():
                                             pass
                                             
                                 # Force H.264 Encoding (Fixes AI tool compatibility)
-                                if processing_options.get('forceH264') and final_path.endswith('.mp4'):
+                                if processing_options.get('forceH264') and final_path and final_path.endswith('.mp4'):
                                     q.put({"status": f"{prefix}Forcing Standard Encoding (H.264)..."})
                                     temp_h264 = base + "_h264_temp.mp4"
                                     ffmpeg_h264_cmd = [
-                                        imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-i", final_path,
+                                        str(imageio_ffmpeg.get_ffmpeg_exe()), "-y", "-i", final_path,
                                         "-c:v", "libx264", "-preset", "fast", "-crf", "23",
                                         "-c:a", "aac", "-pix_fmt", "yuv420p", "-movflags", "+faststart", temp_h264
                                     ]
@@ -1229,7 +1243,7 @@ def download_video():
                                         os.replace(temp_h264, final_path)
                                         
                                 # AI Bypass (Clean & Scramble)
-                                if processing_options.get('aiBypass'):
+                                if processing_options.get('aiBypass') and final_path:
                                     q.put({"status": f"{prefix}Applying AI Bypass (Scramble & Clean)..."})
                                     from cleaner import clean_video, clean_photo, backup_file
                                     
@@ -1289,7 +1303,7 @@ def download_video():
 
 
 
-_gallery_cache = {"time": 0, "data": []}
+_gallery_cache: dict[str, Any] = {"time": 0.0, "data": []}
 
 @app.route('/api/gallery', methods=['GET'])
 def list_gallery():
@@ -1541,7 +1555,7 @@ def stream_logs():
     })
 
 # AI Status and Installer State
-ai_installer_state = {
+ai_installer_state: dict[str, Any] = {
     "is_installing": False,
     "progress": 0,
     "status": "idle",
@@ -1606,22 +1620,23 @@ def run_ai_install_worker():
             creationflags=flags
         )
         
-        for line in iter(process.stdout.readline, ''):
-            line_clean = line.strip()
-            if line_clean:
-                ai_installer_state["log"].append(line_clean)
-                if len(ai_installer_state["log"]) > 40:
-                    ai_installer_state["log"].pop(0)
-                if "Downloading" in line_clean:
-                    ai_installer_state["progress"] = min(85, ai_installer_state["progress"] + 2)
-                    ai_installer_state["status"] = f"Downloading AI packages: {line_clean[:55]}..."
-                elif "Installing collected packages" in line_clean:
-                    ai_installer_state["progress"] = 90
-                    ai_installer_state["status"] = "Unpacking and configuring AI packages..."
-                elif "Successfully installed" in line_clean:
-                    ai_installer_state["progress"] = 98
+        if process.stdout:
+            for line in iter(process.stdout.readline, ''):
+                line_clean = line.strip()
+                if line_clean:
+                    ai_installer_state["log"].append(line_clean)
+                    if len(ai_installer_state["log"]) > 40:
+                        ai_installer_state["log"].pop(0)
+                    if "Downloading" in line_clean:
+                        ai_installer_state["progress"] = min(85, ai_installer_state["progress"] + 2)
+                        ai_installer_state["status"] = f"Downloading AI packages: {line_clean[:55]}..."
+                    elif "Installing collected packages" in line_clean:
+                        ai_installer_state["progress"] = 90
+                        ai_installer_state["status"] = "Unpacking and configuring AI packages..."
+                    elif "Successfully installed" in line_clean:
+                        ai_installer_state["progress"] = 98
 
-        process.stdout.close()
+            process.stdout.close()
         code = process.wait()
         
         if code == 0:

@@ -4,6 +4,8 @@ import shutil
 import urllib.request
 import zipfile
 import subprocess
+import stat
+import time
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 DIST_DIR = os.path.join(ROOT_DIR, "dist")

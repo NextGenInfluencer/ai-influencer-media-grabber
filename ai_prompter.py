@@ -73,7 +73,7 @@ def extract_prompt_from_image(image_path):
         device = "cuda" if torch.cuda.is_available() else "cpu"
         
         text_prefix = "a highly detailed, cinematic photorealistic shot of "
-        inputs_desc = processor(raw_image, text=text_prefix, return_tensors="pt").to(device)
+        inputs_desc = processor(raw_image, text=text_prefix, return_tensors="pt").to(device)  # type: ignore
         out_desc = model.generate(
             **inputs_desc, 
             max_length=150,
