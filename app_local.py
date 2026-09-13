@@ -1724,8 +1724,253 @@ def restart_server():
             time.sleep(0.2)
             os._exit(0)
     
-    threading.Thread(target=restart_task, daemon=True).start()
-    return jsonify({"status": "Restarting server..."})
+# ====================================================================
+# In-App GitHub OTA Auto-Updater Engine
+# ====================================================================
+
+GITHUB_REPO = "NextGenInfluencer/ai-influencer-media-grabber"
+_update_check_cache: dict[str, Any] = {"time": 0.0, "data": None}
+
+app_updater_state: dict[str, Any] = {
+    "is_checking": False,
+    "has_update": False,
+    "current_version": APP_VERSION,
+    "latest_version": APP_VERSION,
+    "release_title": "",
+    "release_notes": "",
+    "published_at": "",
+    "zipball_url": "",
+    "html_url": "",
+    "is_updating": False,
+    "progress": 0,
+    "status": "idle",
+    "error": None,
+    "log": []
+}
+
+def parse_semver(v_str: str) -> tuple:
+    """Extract (major, minor, patch, ...) integer tuple from a version string."""
+    clean = re.sub(r'^[vV]', '', str(v_str).strip())
+    parts = []
+    for piece in clean.split('.'):
+        match = re.match(r'^\d+', piece)
+        if match:
+            parts.append(int(match.group(0)))
+        else:
+            parts.append(0)
+    while len(parts) < 3:
+        parts.append(0)
+    return tuple(parts)
+
+def fetch_latest_release(force=False) -> dict[str, Any]:
+    global _update_check_cache, app_updater_state
+    now = time.time()
+    if not force and _update_check_cache["data"] and (now - _update_check_cache["time"] < 300):
+        return _update_check_cache["data"]
+
+    app_updater_state["is_checking"] = True
+    try:
+        import requests
+        url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+        headers = {"User-Agent": "AI-Influencer-Media-Grabber-Updater"}
+        resp = requests.get(url, headers=headers, timeout=6)
+        if resp.status_code == 200:
+            rel = resp.json()
+            tag = rel.get("tag_name", "")
+            title = rel.get("name") or tag
+            body = rel.get("body", "")
+            zip_url = rel.get("zipball_url") or f"https://api.github.com/repos/{GITHUB_REPO}/zipball/{tag}"
+            html_url = rel.get("html_url", f"https://github.com/{GITHUB_REPO}/releases")
+            pub_at = rel.get("published_at", "")
+
+            curr_v = parse_semver(APP_VERSION)
+            latest_v = parse_semver(tag)
+            has_update = latest_v > curr_v
+
+            result: dict[str, Any] = {
+                "has_update": has_update,
+                "update_available": has_update,
+                "current_version": APP_VERSION,
+                "latest_version": tag,
+                "release_title": title,
+                "release_name": title,
+                "release_notes": body,
+                "published_at": pub_at,
+                "zipball_url": zip_url,
+                "html_url": html_url,
+                "error": None
+            }
+            _update_check_cache["time"] = now
+            _update_check_cache["data"] = result
+
+            app_updater_state.update({
+                "has_update": has_update,
+                "update_available": has_update,
+                "latest_version": tag,
+                "release_title": title,
+                "release_name": title,
+                "release_notes": body,
+                "published_at": pub_at,
+                "zipball_url": zip_url,
+                "html_url": html_url,
+                "error": None
+            })
+            return result
+        else:
+            err = f"GitHub API returned status {resp.status_code}"
+            app_updater_state["error"] = err
+            return {"has_update": False, "update_available": False, "error": err, "current_version": APP_VERSION}
+    except Exception as e:
+        err = str(e)
+        app_updater_state["error"] = err
+        return {"has_update": False, "error": err, "current_version": APP_VERSION}
+    finally:
+        app_updater_state["is_checking"] = False
+
+def run_ota_update_worker():
+    global app_updater_state
+    app_updater_state["is_updating"] = True
+    app_updater_state["progress"] = 5
+    app_updater_state["status"] = "Connecting to GitHub..."
+    app_updater_state["error"] = None
+    app_updater_state["log"] = ["Starting Over-The-Air Update..."]
+
+    try:
+        import requests
+        import zipfile
+        import io
+
+        # 1. Fetch latest release info to get zipball URL
+        rel = fetch_latest_release(force=True)
+        zip_url = rel.get("zipball_url")
+        if not zip_url:
+            raise Exception("Could not locate release archive URL on GitHub.")
+
+        tag_name = rel.get("latest_version", "latest")
+        app_updater_state["progress"] = 15
+        app_updater_state["status"] = f"Downloading update {tag_name}..."
+        app_updater_state["log"].append(f"Downloading release archive: {tag_name}")
+
+        headers = {"User-Agent": "AI-Influencer-Media-Grabber-Updater"}
+        resp = requests.get(zip_url, headers=headers, timeout=60, stream=True)
+        if resp.status_code != 200:
+            raise Exception(f"Failed to download release zip (status {resp.status_code})")
+
+        content_chunks = []
+        total_dl = 0
+        for chunk in resp.iter_content(chunk_size=65536):
+            if chunk:
+                content_chunks.append(chunk)
+                total_dl += len(chunk)
+                app_updater_state["progress"] = min(55, 15 + int(total_dl / (3 * 1024 * 1024) * 40))
+
+        zip_data = b"".join(content_chunks)
+        app_updater_state["log"].append(f"Download complete ({len(zip_data) // 1024} KB). Extracting files...")
+        app_updater_state["progress"] = 60
+        app_updater_state["status"] = "Unpacking updated application files..."
+
+        # 2. Extract into app root
+        app_root = os.path.dirname(os.path.abspath(__file__))
+        z = zipfile.ZipFile(io.BytesIO(zip_data))
+        
+        namelist = z.namelist()
+        if not namelist:
+            raise Exception("Downloaded release archive is empty.")
+        top_prefix = namelist[0].split('/')[0] + '/'
+
+        protected_prefixes = (
+            '.venv',
+            'python_runtime',
+            'dist',
+            '.git',
+            'downloads',
+            'cache',
+            '.system_generated',
+            'scratch'
+        )
+
+        extracted_count = 0
+        req_changed = False
+        old_req_content = ""
+        req_path = os.path.join(app_root, "requirements.txt")
+        if os.path.exists(req_path):
+            try:
+                with open(req_path, "r", encoding="utf-8") as f:
+                    old_req_content = f.read().strip()
+            except Exception: pass
+
+        for member in z.infolist():
+            if not member.filename.startswith(top_prefix):
+                continue
+            rel_path = member.filename[len(top_prefix):]
+            if not rel_path or rel_path.endswith('/'):
+                continue
+            
+            first_part = rel_path.split('/')[0]
+            if first_part in protected_prefixes:
+                continue
+
+            target_path = os.path.join(app_root, *rel_path.split('/'))
+            os.makedirs(os.path.dirname(target_path), exist_ok=True)
+
+            with z.open(member) as src_f, open(target_path, "wb") as dst_f:
+                shutil.copyfileobj(src_f, dst_f)
+            extracted_count += 1
+
+        app_updater_state["log"].append(f"Extracted {extracted_count} updated application files.")
+        app_updater_state["progress"] = 85
+        app_updater_state["status"] = "Checking dependencies..."
+
+        # 3. Check if requirements.txt changed
+        if os.path.exists(req_path):
+            try:
+                with open(req_path, "r", encoding="utf-8") as f:
+                    new_req_content = f.read().strip()
+                if new_req_content and new_req_content != old_req_content:
+                    req_changed = True
+            except Exception: pass
+
+        if req_changed:
+            app_updater_state["log"].append("Core requirements updated. Running pip install...")
+            app_updater_state["status"] = "Updating Python dependencies..."
+            try:
+                subprocess.run([sys.executable, "-m", "pip", "install", "-r", req_path, "-q"], check=False)
+            except Exception as e:
+                app_updater_state["log"].append(f"Pip note: {e}")
+
+        app_updater_state["progress"] = 100
+        app_updater_state["is_updating"] = False
+        app_updater_state["status"] = "complete"
+        app_updater_state["current_version"] = tag_name
+        app_updater_state["has_update"] = False
+        app_updater_state["log"].append(f"Successfully updated application to {tag_name}!")
+
+    except Exception as e:
+        app_updater_state["is_updating"] = False
+        app_updater_state["status"] = "failed"
+        app_updater_state["error"] = str(e)
+        app_updater_state["log"].append(f"Update failed: {str(e)}")
+
+@app.route('/api/check_update', methods=['GET', 'POST'])
+def api_check_update():
+    force = request.args.get('force') == '1' or request.method == 'POST'
+    result = fetch_latest_release(force=force)
+    return jsonify(result)
+
+@app.route('/api/apply_update', methods=['POST'])
+def api_apply_update():
+    global app_updater_state
+    if app_updater_state["is_updating"]:
+        return jsonify({"status": "already_updating"}), 409
+    threading.Thread(target=run_ota_update_worker, daemon=True).start()
+    return jsonify({"status": "Update started"})
+
+@app.route('/api/update_status', methods=['GET'])
+def api_update_status():
+    global app_updater_state
+    resp = dict(app_updater_state)
+    resp["completed"] = (app_updater_state.get("status") == "complete")
+    return jsonify(resp)
 
 if __name__ == '__main__':
     import webbrowser

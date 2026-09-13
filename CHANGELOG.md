@@ -18,6 +18,11 @@ All notable changes to the AI Influencer Media Grabber project will be documente
 - **Desktop Shortcut Creator**: `create_shortcut.bat` and `create_desktop_shortcut.ps1` to place a one-click desktop shortcut with custom icon `assets/app_icon.ico`.
 - **Self-Reboot Hard Restart**: Added robust hard server reboot mechanism in navigation header.
 - **Exit App Button**: Clean shutdown action in the navigation header that cleanly terminates the Python engine and closes the window.
+- **1-Click In-App GitHub Auto-Updater (OTA)**: Users can now update the application directly from the latest GitHub releases without having to re-download or reinstall the `.exe` installer or ZIP package.
+- **Top Navigation Version Badge**: Shows current installed version with on-demand update checks, dynamically converting to an animated "Update Available" badge when a new release is detected.
+- **Glassmorphism Update Modal**: Displays release title, release notes, published date, direct GitHub release link, real-time download/extraction progress bar, and live hot-patch status logs.
+- **Protected User Data**: Safely hot-patches application files, templates, and assets while protecting user downloads (`Documents/Media Grabber`), user settings, Python runtimes (`.venv`, `python_runtime`), and version control directories.
+- **Automatic Dependency Sync**: Automatically detects changes in `requirements.txt` upon updating and updates Python packages in the runtime environment.
 - **Retina Interface Previews**: Fresh high-resolution 2x screenshots for all 4 application tabs in `assets/`.
 
 ### Security & Privacy

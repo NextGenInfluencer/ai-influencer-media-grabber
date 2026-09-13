@@ -92,7 +92,7 @@
             <div id="queueCountBadge" class="hidden px-2 py-1 bg-pink-500/20 text-pink-400 border border-pink-500/30 rounded-lg font-bold">Queue: 0</div>
             
             <div id="aiEngineBadgeContainer"></div>
-
+            <div id="appUpdateBadgeContainer"></div>
 
             <button onclick="exitApp()" class="px-3 py-1.5 rounded-full bg-red-500/10 border border-red-500/30 hover:bg-red-500/20 text-red-400 font-bold transition-all flex items-center space-x-1.5" title="Quit Application & Stop Server">
                 <i class="fa-solid fa-xmark text-xs"></i>
@@ -2008,7 +2008,236 @@
                     });
                 }
             });
+
+            // Automatically check for GitHub updates 3.5s after launch
+            setTimeout(() => checkAppUpdates(true), 3500);
         });
+
+        // ─── Over-The-Air (OTA) App Auto-Updater ───
+        let _currentUpdateInfo = null;
+        let _updatePollInterval = null;
+
+        async function checkAppUpdates(silent = true) {
+            const badge = document.getElementById('appUpdateBadgeContainer');
+            if (badge && !silent) {
+                badge.innerHTML = `
+                    <div class="px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-400 text-[10px] font-mono flex items-center space-x-1.5">
+                        <i class="fa-solid fa-spinner fa-spin text-cyan-400 text-xs"></i>
+                        <span>Checking...</span>
+                    </div>
+                `;
+            }
+
+            try {
+                const res = await fetch('/api/check_update');
+                const data = await res.json();
+                _currentUpdateInfo = data;
+                renderUpdateBadge(data);
+
+                if (!silent) {
+                    openUpdateModal();
+                    if (!data.update_available && !data.error) {
+                        showToast('Up to Date', `You are running the latest version (${data.current_version || '2.0'}).`);
+                    } else if (data.error) {
+                        showToast('Check Failed', data.error);
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to check for updates:", err);
+                if (!silent) {
+                    showToast('Update Check Error', err.message);
+                }
+            }
+        }
+
+        function renderUpdateBadge(data) {
+            const container = document.getElementById('appUpdateBadgeContainer');
+            if (!container) return;
+
+            if (data && data.update_available) {
+                container.innerHTML = `
+                    <button onclick="openUpdateModal()" class="px-3 py-1.5 rounded-full bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/40 text-cyan-300 font-bold text-[11px] flex items-center space-x-1.5 hover:from-cyan-500/30 hover:to-blue-500/30 transition-all cursor-pointer shadow-[0_0_15px_rgba(6,182,212,0.25)] animate-pulse" title="Software Update Available - Click to Install">
+                        <i class="fa-solid fa-cloud-arrow-down text-cyan-400 text-xs"></i>
+                        <span>Update ${data.latest_version || ''}</span>
+                    </button>
+                `;
+            } else {
+                const cur = (data && data.current_version) ? `v${data.current_version}` : 'v2.0';
+                container.innerHTML = `
+                    <button onclick="checkAppUpdates(false)" class="px-2.5 py-1 rounded-full bg-zinc-900/60 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-zinc-200 text-[10px] font-mono transition flex items-center space-x-1.5 cursor-pointer" title="Installed Version: ${cur} • Click to Check for GitHub Updates">
+                        <i class="fa-solid fa-code-branch text-zinc-500 text-[10px]"></i>
+                        <span>${cur}</span>
+                    </button>
+                `;
+            }
+        }
+
+        function openUpdateModal() {
+            const modal = document.getElementById('appUpdateModal');
+            if (!modal) return;
+
+            const curVerEl = document.getElementById('updateModalCurrentVer');
+            const latestVerEl = document.getElementById('updateModalLatestVer');
+            const releaseNotesEl = document.getElementById('updateModalNotes');
+            const releaseDateEl = document.getElementById('updateModalReleaseDate');
+            const ghLink = document.getElementById('updateViewOnGithub');
+            const actionBtn = document.getElementById('updateActionBtn');
+            const actionBtnText = document.getElementById('updateActionBtnText');
+            const restartBtn = document.getElementById('updateRestartBtn');
+            const successCard = document.getElementById('updateSuccessCard');
+            const progressBox = document.getElementById('updateProgressBox');
+
+            const info = _currentUpdateInfo || {};
+            curVerEl.textContent = `v${info.current_version || '2.0'}`;
+            latestVerEl.textContent = info.latest_version ? `${info.latest_version}` : 'Latest';
+            
+            if (info.published_at) {
+                try {
+                    const d = new Date(info.published_at);
+                    releaseDateEl.textContent = d.toLocaleDateString();
+                } catch(e) {
+                    releaseDateEl.textContent = '';
+                }
+            } else {
+                releaseDateEl.textContent = '';
+            }
+
+            if (info.release_notes && info.release_notes.trim()) {
+                releaseNotesEl.textContent = info.release_notes;
+            } else if (info.update_available) {
+                releaseNotesEl.textContent = `Release ${info.release_name || info.latest_version} is available on GitHub.`;
+            } else if (info.error) {
+                releaseNotesEl.textContent = `Error reaching GitHub Releases:\n${info.error}\n\nPlease check your internet connection or GitHub rate limits.`;
+            } else {
+                releaseNotesEl.textContent = `You are running the newest release (${info.current_version || '2.0'}). No new updates are available right now.`;
+            }
+
+            if (info.html_url) {
+                ghLink.href = info.html_url;
+            }
+
+            // Button & Card states
+            if (info.update_available) {
+                actionBtn.classList.remove('hidden');
+                actionBtn.disabled = false;
+                actionBtnText.textContent = `Update to ${info.latest_version} (1-Click)`;
+            } else {
+                actionBtn.classList.add('hidden');
+            }
+
+            modal.classList.remove('hidden');
+        }
+
+        function closeUpdateModal() {
+            const modal = document.getElementById('appUpdateModal');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        async function triggerAppUpdate() {
+            const actionBtn = document.getElementById('updateActionBtn');
+            const actionBtnText = document.getElementById('updateActionBtnText');
+            const progressBox = document.getElementById('updateProgressBox');
+            const statusText = document.getElementById('updateStatusText');
+            const percentText = document.getElementById('updatePercentText');
+            const progressBar = document.getElementById('updateProgressBar');
+            const logBox = document.getElementById('updateLogBox');
+
+            actionBtn.disabled = true;
+            actionBtn.classList.add('opacity-50');
+            actionBtnText.textContent = 'Updating...';
+
+            progressBox.classList.remove('hidden');
+            statusText.textContent = 'Contacting GitHub & downloading release package...';
+            percentText.textContent = '10%';
+            progressBar.style.width = '10%';
+            logBox.innerHTML = '<div>Initiating Over-The-Air hot-patch...</div>';
+
+            try {
+                const res = await fetch('/api/apply_update', { method: 'POST' });
+                const data = await res.json();
+                if (data.error && !data.success) {
+                    throw new Error(data.error);
+                }
+                startUpdateStatusPolling();
+            } catch (err) {
+                actionBtn.disabled = false;
+                actionBtn.classList.remove('opacity-50');
+                actionBtnText.textContent = 'Retry Update';
+                statusText.textContent = 'Update failed: ' + err.message;
+                statusText.className = 'font-bold text-red-400 truncate max-w-[320px]';
+                logBox.innerHTML += `<div class="text-red-400">Error: ${escapeHtml(err.message)}</div>`;
+                showToast('Update Failed', err.message);
+            }
+        }
+
+        function startUpdateStatusPolling() {
+            if (_updatePollInterval) return;
+            _updatePollInterval = setInterval(async () => {
+                await fetchUpdateProgress();
+            }, 1200);
+        }
+
+        async function fetchUpdateProgress() {
+            try {
+                const res = await fetch('/api/update_status');
+                const st = await res.json();
+
+                const statusText = document.getElementById('updateStatusText');
+                const percentText = document.getElementById('updatePercentText');
+                const progressBar = document.getElementById('updateProgressBar');
+                const logBox = document.getElementById('updateLogBox');
+                const actionBtn = document.getElementById('updateActionBtn');
+                const restartBtn = document.getElementById('updateRestartBtn');
+                const successCard = document.getElementById('updateSuccessCard');
+                const badge = document.getElementById('appUpdateBadgeContainer');
+
+                if (st.status) statusText.textContent = st.status;
+                const p = st.progress || 0;
+                percentText.textContent = `${p}%`;
+                progressBar.style.width = `${p}%`;
+
+                if (st.log && st.log.length > 0) {
+                    logBox.innerHTML = st.log.map(l => `<div class="truncate">${escapeHtml(l)}</div>`).join('');
+                    logBox.scrollTop = logBox.scrollHeight;
+                }
+
+                if (st.completed) {
+                    if (_updatePollInterval) {
+                        clearInterval(_updatePollInterval);
+                        _updatePollInterval = null;
+                    }
+                    actionBtn.classList.add('hidden');
+                    restartBtn.classList.remove('hidden');
+                    successCard.classList.remove('hidden');
+                    statusText.textContent = 'Update Finished!';
+                    statusText.className = 'font-bold text-emerald-400 truncate max-w-[320px]';
+                    progressBar.className = 'h-full bg-emerald-500 transition-all duration-300';
+                    if (badge) {
+                        badge.innerHTML = `
+                            <div class="px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold text-[10px] flex items-center space-x-1">
+                                <i class="fa-solid fa-check text-[10px]"></i>
+                                <span>Updated! Restart required</span>
+                            </div>
+                        `;
+                    }
+                    showToast('Update Installed!', 'Application hot-patched to latest version. Please close and relaunch.');
+                } else if (st.error) {
+                    if (_updatePollInterval) {
+                        clearInterval(_updatePollInterval);
+                        _updatePollInterval = null;
+                    }
+                    actionBtn.disabled = false;
+                    actionBtn.classList.remove('opacity-50');
+                    actionBtn.classList.remove('hidden');
+                    document.getElementById('updateActionBtnText').textContent = 'Retry Update';
+                    statusText.textContent = 'Update failed: ' + st.error;
+                    statusText.className = 'font-bold text-red-400 truncate max-w-[320px]';
+                    showToast('Update Failed', st.error);
+                }
+            } catch (e) {
+                console.error("Error polling update status:", e);
+            }
+        }
     </script>
 
     <!-- AI Engine Pack Modal -->
@@ -2097,6 +2326,100 @@
                     <i class="fa-solid fa-cloud-arrow-down"></i>
                     <span>Download & Install AI Pack</span>
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Software Update Modal -->
+    <div id="appUpdateModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4">
+        <div class="bg-[#0f0f12] border border-zinc-800 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl transition-all">
+            <!-- Modal Header -->
+            <div class="px-6 py-5 border-b border-zinc-800/80 flex items-center justify-between bg-gradient-to-r from-cyan-900/20 via-blue-900/10 to-transparent">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-[0_0_20px_rgba(6,182,212,0.4)]">
+                        <i class="fa-solid fa-arrows-rotate text-white text-base"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-extrabold text-white tracking-wide uppercase">Software Update</h3>
+                        <p class="text-[11px] text-zinc-400 font-medium" id="updateModalSubtitle">Over-The-Air GitHub Auto-Updater</p>
+                    </div>
+                </div>
+                <button onclick="closeUpdateModal()" class="w-8 h-8 rounded-full bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center transition">
+                    <i class="fa-solid fa-xmark text-sm"></i>
+                </button>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="p-6 space-y-4">
+                <!-- Version Comparison Card -->
+                <div class="p-4 rounded-2xl bg-[#08080a] border border-zinc-800/80 flex items-center justify-between">
+                    <div>
+                        <span class="text-[10px] uppercase tracking-wider text-zinc-500 font-bold block mb-0.5">Current Installed</span>
+                        <span id="updateModalCurrentVer" class="text-sm font-mono font-bold text-zinc-300">v2.0</span>
+                    </div>
+                    <div class="w-8 h-8 rounded-full bg-zinc-800/60 flex items-center justify-center text-zinc-500">
+                        <i class="fa-solid fa-arrow-right text-xs"></i>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-[10px] uppercase tracking-wider text-cyan-400 font-bold block mb-0.5">Latest Release</span>
+                        <span id="updateModalLatestVer" class="text-sm font-mono font-bold text-cyan-300">Checking...</span>
+                    </div>
+                </div>
+
+                <!-- Release Info & Notes -->
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between text-xs font-bold text-zinc-300">
+                        <span class="uppercase tracking-wider text-[11px]"><i class="fa-solid fa-clipboard-list text-cyan-400 mr-1.5"></i> Release Notes</span>
+                        <span id="updateModalReleaseDate" class="text-[10px] text-zinc-500 font-normal font-mono"></span>
+                    </div>
+                    <div id="updateModalNotes" class="p-3.5 rounded-xl bg-black border border-zinc-800/80 font-mono text-[11px] text-zinc-300 max-h-36 overflow-y-auto leading-relaxed whitespace-pre-wrap select-text">
+                        Checking GitHub for updates...
+                    </div>
+                </div>
+
+                <!-- Live Progress Box (Hidden until updating or completed) -->
+                <div id="updateProgressBox" class="hidden space-y-2.5 pt-1">
+                    <div class="flex items-center justify-between text-xs">
+                        <span id="updateStatusText" class="font-bold text-cyan-300 truncate max-w-[320px]">Downloading update package...</span>
+                        <span id="updatePercentText" class="font-mono text-zinc-400">0%</span>
+                    </div>
+                    <div class="w-full h-2 rounded-full bg-zinc-800 overflow-hidden">
+                        <div id="updateProgressBar" class="h-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-300" style="width: 0%;"></div>
+                    </div>
+                    <!-- Log feed -->
+                    <div id="updateLogBox" class="p-2.5 rounded-xl bg-black border border-zinc-800/80 font-mono text-[9.5px] text-zinc-400 max-h-24 overflow-y-auto space-y-1">
+                        <div>Connecting to GitHub...</div>
+                    </div>
+                </div>
+
+                <!-- Completion Card (Hidden until complete) -->
+                <div id="updateSuccessCard" class="hidden p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 space-y-2 text-center">
+                    <div class="flex items-center justify-center space-x-2 text-emerald-400 font-bold text-xs uppercase tracking-wider">
+                        <i class="fa-solid fa-circle-check text-base"></i>
+                        <span>Hot Patch Applied Successfully!</span>
+                    </div>
+                    <p class="text-xs text-zinc-300">All updated files and features have been applied to your installation.</p>
+                    <p class="text-[11px] text-zinc-400">Please close and restart the application from your Desktop shortcut to run the newest version.</p>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="px-6 py-4 bg-[#0a0a0c] border-t border-zinc-800/80 flex items-center justify-between">
+                <a id="updateViewOnGithub" href="https://github.com/NextGenInfluencer/ai-influencer-media-grabber/releases" target="_blank" class="text-[11px] text-zinc-400 hover:text-cyan-400 transition flex items-center space-x-1">
+                    <i class="fa-brands fa-github text-xs"></i>
+                    <span>View on GitHub</span>
+                </a>
+                <div class="flex items-center space-x-3">
+                    <button onclick="closeUpdateModal()" class="px-4 py-2 rounded-xl text-xs font-bold text-zinc-400 hover:text-white transition">Close</button>
+                    <button id="updateActionBtn" onclick="triggerAppUpdate()" class="px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider text-white bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 shadow-[0_0_20px_rgba(6,182,212,0.3)] transition-all flex items-center space-x-2">
+                        <i class="fa-solid fa-cloud-arrow-down"></i>
+                        <span id="updateActionBtnText">Update Now (1-Click)</span>
+                    </button>
+                    <button id="updateRestartBtn" onclick="exitApp()" class="hidden px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider text-white bg-emerald-600 hover:bg-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all flex items-center space-x-2">
+                        <i class="fa-solid fa-power-off"></i>
+                        <span>Close & Restart App</span>
+                    </button>
+                </div>
             </div>
         </div>
     </div>
