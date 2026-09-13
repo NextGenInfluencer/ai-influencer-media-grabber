@@ -2037,7 +2037,7 @@
                 if (!silent) {
                     openUpdateModal();
                     if (!data.update_available && !data.error) {
-                        showToast('Up to Date', `You are running the latest version (${data.current_version || '2.0'}).`);
+                        showToast('Up to Date', `You are running the latest version (${data.current_version || '2.1'}).`);
                     } else if (data.error) {
                         showToast('Check Failed', data.error);
                     }
@@ -2062,7 +2062,7 @@
                     </button>
                 `;
             } else {
-                const cur = (data && data.current_version) ? `v${data.current_version}` : 'v2.0';
+                const cur = (data && data.current_version) ? `v${data.current_version}` : 'v2.1';
                 container.innerHTML = `
                     <button onclick="checkAppUpdates(false)" class="px-2.5 py-1 rounded-full bg-zinc-900/60 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-zinc-200 text-[10px] font-mono transition flex items-center space-x-1.5 cursor-pointer" title="Installed Version: ${cur} • Click to Check for GitHub Updates">
                         <i class="fa-solid fa-code-branch text-zinc-500 text-[10px]"></i>
@@ -2088,7 +2088,7 @@
             const progressBox = document.getElementById('updateProgressBox');
 
             const info = _currentUpdateInfo || {};
-            curVerEl.textContent = `v${info.current_version || '2.0'}`;
+            curVerEl.textContent = `v${info.current_version || '2.1'}`;
             latestVerEl.textContent = info.latest_version ? `${info.latest_version}` : 'Latest';
             
             if (info.published_at) {
@@ -2109,7 +2109,7 @@
             } else if (info.error) {
                 releaseNotesEl.textContent = `Error reaching GitHub Releases:\n${info.error}\n\nPlease check your internet connection or GitHub rate limits.`;
             } else {
-                releaseNotesEl.textContent = `You are running the newest release (${info.current_version || '2.0'}). No new updates are available right now.`;
+                releaseNotesEl.textContent = `You are running the newest release (${info.current_version || '2.1'}). No new updates are available right now.`;
             }
 
             if (info.html_url) {
@@ -2355,7 +2355,7 @@
                 <div class="p-4 rounded-2xl bg-[#08080a] border border-zinc-800/80 flex items-center justify-between">
                     <div>
                         <span class="text-[10px] uppercase tracking-wider text-zinc-500 font-bold block mb-0.5">Current Installed</span>
-                        <span id="updateModalCurrentVer" class="text-sm font-mono font-bold text-zinc-300">v2.0</span>
+                        <span id="updateModalCurrentVer" class="text-sm font-mono font-bold text-zinc-300">v2.1</span>
                     </div>
                     <div class="w-8 h-8 rounded-full bg-zinc-800/60 flex items-center justify-center text-zinc-500">
                         <i class="fa-solid fa-arrow-right text-xs"></i>

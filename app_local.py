@@ -479,7 +479,7 @@ def shazam_file(audio_path):
         print("Shazam error:", e)
         return None
 
-APP_VERSION = "2.0"
+APP_VERSION = "2.1"
 
 @app.route('/')
 def index():

@@ -1,6 +1,6 @@
-# AI Influencer Media Grabber v2.0
+# AI Influencer Media Grabber v2.1
 
-![Version 2.0](https://img.shields.io/badge/Version-2.0-blue?style=for-the-badge) ![UI Preview](https://img.shields.io/badge/UI-Media_Grabber-f472b6?style=for-the-badge) ![Windows](https://img.shields.io/badge/Platform-Windows_10%2F11-0078D4?style=for-the-badge&logo=windows)
+![Version 2.1](https://img.shields.io/badge/Version-2.1-blue?style=for-the-badge) ![UI Preview](https://img.shields.io/badge/UI-Media_Grabber-f472b6?style=for-the-badge) ![Windows](https://img.shields.io/badge/Platform-Windows_10%2F11-0078D4?style=for-the-badge&logo=windows)
 
 ## 🌟 What is the AI Influencer Media Grabber?
 
@@ -73,7 +73,7 @@ You can choose between the **1-Click Windows Setup (`.exe`)** or the **Original 
 | :--- | :--- | :--- |
 | **Best For** | Regular users, quick setup, zero terminal | Creators who want to customize code, inspect source, or run portably |
 | **Requires Python Installed?** | ❌ **No** (Bundles self-contained Python 3.10 runtime) | ⚙️ **Yes** (Python 3.10+ with `Add to PATH`) |
-| **Initial Download Size** | ~76 MB (`AI-Influencer-Media-Grabber-v2.0-Setup.exe`) | ~50 MB (Full source repo / ZIP) |
+| **Initial Download Size** | ~76 MB (`AI-Influencer-Media-Grabber-v2.1-Setup.exe`) | ~50 MB (Full source repo / ZIP) |
 | **Initial Setup Time** | ~15 seconds | ~20 seconds |
 | **Shortcuts & Desktop Integration** | Automatic Start Menu & Desktop shortcuts | 1-Click shortcut creator (`create_shortcut.bat`) |
 | **Window Mode** | Dedicated frameless desktop app (zero black CMD windows) | Dedicated frameless desktop app (`launch-silent.vbs`) |
@@ -87,7 +87,7 @@ You can choose between the **1-Click Windows Setup (`.exe`)** or the **Original 
 > **No Python installation required! Zero setup hassle.**
 
 1. Head to the **[Releases](https://github.com/NextGenInfluencer/ai-influencer-media-grabber/releases)** page.
-2. Download **`AI-Influencer-Media-Grabber-v2.0-Setup.exe`** (~76 MB).
+2. Download **`AI-Influencer-Media-Grabber-v2.1-Setup.exe`** (~76 MB).
 3. Double-click the installer and follow the standard wizard (**Next -> Install**).
 4. **Done!** The installer places a branded **AI Influencer Media Grabber** shortcut on your Desktop and Start Menu.
 5. Launch the app: it opens immediately in its own native, frameless desktop window with **zero background terminal windows**.
@@ -127,7 +127,7 @@ Both Option A and Option B feature our **Modular AI Engine**:
 If you are a developer using Option B and want to compile your own `.exe` installer:
 1. Ensure Inno Setup 6 is installed (the build script will offer to install it automatically via `winget` if missing).
 2. Run **`build_installer.bat`** (or `python build_staging.py`).
-3. The script will automatically stage the embedded portable runtime, install core requirements, and compile `dist\AI-Influencer-Media-Grabber-v2.0-Setup.exe`.
+3. The script will automatically stage the embedded portable runtime, install core requirements, and compile `dist\AI-Influencer-Media-Grabber-v2.1-Setup.exe`.
 
 
 ### Highlights 🎉
@@ -141,7 +141,13 @@ If you are a developer using Option B and want to compile your own `.exe` instal
 
 ## 📜 Changelog
 
-### v2.0 (The Desktop Studio Release) - Current
+### v2.1 (OTA Auto-Updater & Stability Release) - Current
+- **1-Click In-App GitHub Auto-Updater (OTA)**: Automatically check for and hot-patch application releases directly within the app without reinstalling.
+- **Top Navigation Version Badge & Glassmorphism Modal**: Visual indicator showing current version and notifying users when updates are published on GitHub.
+- **Protected User Data**: Safe patching preserving user downloads in `Documents/Media Grabber`, virtual environments, and configuration.
+- **Server Stability**: Fixed server restart exit code handling and type safety improvements.
+
+### v2.0 (The Desktop Studio Release)
 - **1-Click Windows Installer (`.exe`)**: Created a professional, non-admin Windows Setup wizard using Inno Setup bundling a self-contained embedded Python runtime. Requires zero Python installation from the end-user.
 - **Modular Core & AI Engine Architecture**: Separated lightweight core dependencies (`requirements.txt`, ~80MB, fast 15-second setup) from heavy AI packages (`requirements-ai.txt`). Core video and audio downloading installs instantly without requiring multi-gigabyte PyTorch downloads upfront.
 - **In-App 1-Click AI Pack Installer**: Added an interactive AI Pack installer modal with live download progress and console stream directly inside the web UI.

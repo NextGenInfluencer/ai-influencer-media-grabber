@@ -2,6 +2,19 @@
 
 All notable changes to the AI Influencer Media Grabber project will be documented in this file.
 
+## [v2.1] - 2026-09-13
+
+### Added
+- **1-Click In-App GitHub Auto-Updater (OTA)**: Users can now update the application seamlessly from the latest GitHub releases without having to re-download or reinstall the `.exe` installer or ZIP package.
+- **Top Navigation Version Badge**: Displays current installed version with on-demand update checks, dynamically converting to an animated "Update Available" badge when a new release is detected.
+- **Glassmorphism Update Modal**: Displays release title, release notes, published date, direct GitHub release link, real-time download/extraction progress bar, and live hot-patch status logs.
+- **Safe Hot-Patch Architecture**: Safely hot-patches application code, templates, and assets while protecting user downloads (`Documents/Media Grabber`), user settings, Python runtimes (`.venv`, `python_runtime`), and version control directories.
+- **Automatic Dependency Sync**: Automatically detects changes in `requirements.txt` upon updating and updates Python packages in the runtime environment.
+
+### Fixed & Improved
+- **Robust Server Restart**: Guaranteed process exit and scheduled re-launch helper preventing port collision and hanging states during restarts.
+- **Code Audit & Type Safety**: Cleaned redundant `str()` conversions, eliminated uninitialized variable references, and ensured 100% test pass rate across all API endpoints.
+
 ## [v2.0] - 2026-09-09
 
 ### Added
@@ -16,13 +29,7 @@ All notable changes to the AI Influencer Media Grabber project will be documente
 - **Automatic Post Link Inference**: Automatically recovers Instagram, TikTok, and YouTube URLs from existing downloaded filenames and history.
 - **Companion `.url` Internet Shortcuts**: Every download automatically saves a companion Windows `.url` internet shortcut alongside the media file.
 - **Desktop Shortcut Creator**: `create_shortcut.bat` and `create_desktop_shortcut.ps1` to place a one-click desktop shortcut with custom icon `assets/app_icon.ico`.
-- **Self-Reboot Hard Restart**: Added robust hard server reboot mechanism in navigation header.
 - **Exit App Button**: Clean shutdown action in the navigation header that cleanly terminates the Python engine and closes the window.
-- **1-Click In-App GitHub Auto-Updater (OTA)**: Users can now update the application directly from the latest GitHub releases without having to re-download or reinstall the `.exe` installer or ZIP package.
-- **Top Navigation Version Badge**: Shows current installed version with on-demand update checks, dynamically converting to an animated "Update Available" badge when a new release is detected.
-- **Glassmorphism Update Modal**: Displays release title, release notes, published date, direct GitHub release link, real-time download/extraction progress bar, and live hot-patch status logs.
-- **Protected User Data**: Safely hot-patches application files, templates, and assets while protecting user downloads (`Documents/Media Grabber`), user settings, Python runtimes (`.venv`, `python_runtime`), and version control directories.
-- **Automatic Dependency Sync**: Automatically detects changes in `requirements.txt` upon updating and updates Python packages in the runtime environment.
 - **Retina Interface Previews**: Fresh high-resolution 2x screenshots for all 4 application tabs in `assets/`.
 
 ### Security & Privacy
