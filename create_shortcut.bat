@@ -1,6 +1,7 @@
 @echo off
 setlocal
-title AI Influencer Media Grabber - Desktop Shortcut Setup
+cd /d "%~dp0"
+
 echo ====================================================================
 echo  Creating Native Desktop Window Shortcut for AI Media Grabber...
 echo ====================================================================
@@ -15,6 +16,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
     "$wsh = New-Object -ComObject WScript.Shell; " ^
     "$sc = $wsh.CreateShortcut('%SHORTCUT_PATH%'); " ^
     "$sc.TargetPath = '%TARGET_VBS%'; " ^
+    "$sc.Arguments = ''; " ^
     "$sc.WorkingDirectory = '%SCRIPT_DIR%'; " ^
     "$sc.Description = 'AI Influencer Media Grabber (Native Desktop App)'; " ^
     "if (Test-Path '%ICON_PATH%') { $sc.IconLocation = '%ICON_PATH%,0' } else { $sc.IconLocation = 'shell32.dll,238' }; " ^

@@ -34,10 +34,10 @@ appPy = scriptDir & "\app_local.py"
 Function IsServerOnline()
     On Error Resume Next
     Set http = CreateObject("MSXML2.ServerXMLHTTP.6.0")
-    http.setTimeouts 600, 600, 600, 600
-    http.open "GET", "http://127.0.0.1:5000/", False
+    http.setTimeouts 500, 500, 500, 500
+    http.open "GET", "http://127.0.0.1:5000/api/health_check", False
     http.send
-    If Err.Number = 0 Then
+    If Err.Number = 0 And http.Status = 200 Then
         IsServerOnline = True
     Else
         IsServerOnline = False
@@ -51,8 +51,8 @@ If Not IsServerOnline() Then
     ' Run pythonw with window mode 0 (completely hidden), no console window
     WshShell.Run """" & pythonwExe & """ """ & appPy & """ --no-browser", 0, False
     
-    ' Wait up to 15 seconds for waitress server to become responsive
-    For i = 1 To 30
+    ' Wait up to 30 seconds for waitress server to become responsive
+    For i = 1 To 60
         WScript.Sleep 500
         If IsServerOnline() Then Exit For
     Next

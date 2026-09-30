@@ -10,6 +10,7 @@ $IconPath = Join-Path -Path $ScriptDir -ChildPath "assets\app_icon.ico"
 
 $Shortcut = $WshShell.CreateShortcut($ShortcutPath)
 $Shortcut.TargetPath = $TargetVBS
+$Shortcut.Arguments = ""
 $Shortcut.WorkingDirectory = $ScriptDir
 $Shortcut.Description = "AI Influencer Media Grabber (Native Desktop App)"
 
