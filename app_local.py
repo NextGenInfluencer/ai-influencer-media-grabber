@@ -8,7 +8,7 @@ import traceback
 import uuid
 from collections import deque
 from datetime import datetime
-from flask import Flask, render_template, request, jsonify, Response, send_file, send_from_directory
+from flask import Flask, render_template, request, jsonify, Response, send_file, send_from_directory, abort
 from werkzeug.utils import secure_filename
 import queue
 import json
@@ -42,7 +42,12 @@ class LogCapture:
                 self._orig_stdout.write(message)
                 self._orig_stdout.flush()
             except Exception:
-                pass
+                try:
+                    enc = getattr(self._orig_stdout, 'encoding', 'utf-8') or 'utf-8'
+                    self._orig_stdout.write(message.encode(enc, errors='replace').decode(enc))
+                    self._orig_stdout.flush()
+                except Exception:
+                    pass
         if message:
             text = message.strip()
             if text:
@@ -79,13 +84,61 @@ cancel_flags = {}
 # Ensure the Documents/Media Grabber folder exists immediately on startup
 DEFAULT_SAVE_DIR = os.path.join(os.path.expanduser("~"), "Documents", "Media Grabber")
 os.makedirs(DEFAULT_SAVE_DIR, exist_ok=True)
-for sub in ['YouTube', 'Instagram', 'TikTok', 'Twitter', 'Other', 'Conversions']:
+for sub in ['YouTube', 'Instagram', 'TikTok', 'Twitter', 'Other', 'Conversions', 'AI Cleaned']:
     os.makedirs(os.path.join(DEFAULT_SAVE_DIR, sub), exist_ok=True)
+
+_gallery_cache: dict[str, Any] = {"time": 0.0, "data": []}
+
+def invalidate_gallery_cache():
+    global _gallery_cache
+    _gallery_cache = {"time": 0.0, "data": []}
 
 HISTORY_FILE = os.path.join(DEFAULT_SAVE_DIR, "history.json")
 history_lock = threading.RLock()
 
-def load_history():
+def reconcile_download_history(data):
+    """Scan download directories for any media files not yet recorded in history and add them."""
+    try:
+        known_paths = {os.path.normpath(x.get('file_path', '')).lower() for x in data if x.get('file_path')}
+        new_entries = []
+        scan_folders = ['YouTube', 'Instagram', 'TikTok', 'Twitter', 'Other']
+        for folder in scan_folders:
+            fdir = os.path.join(DEFAULT_SAVE_DIR, folder)
+            if not os.path.exists(fdir):
+                continue
+            for root, _, files in os.walk(fdir):
+                for file in files:
+                    ext = os.path.splitext(file)[1].lower()
+                    if ext in ['.mp4', '.mov', '.mkv', '.webm', '.avi', '.mp3']:
+                        fp = os.path.normpath(os.path.join(root, file))
+                        if fp.lower() not in known_paths:
+                            source_url, uploader = resolve_source_url(fp, data)
+                            if not uploader:
+                                rel = os.path.relpath(root, fdir)
+                                if rel != '.':
+                                    uploader = rel.replace('\\', '/')
+                                else:
+                                    uploader = 'Unknown'
+                            base_title = os.path.splitext(file)[0]
+                            clean_t = re.sub(r'_[a-zA-Z0-9_-]{11}$', '', base_title)
+                            new_entries.append({
+                                "id": str(uuid.uuid4()),
+                                "url": source_url or "",
+                                "title": clean_t,
+                                "uploader": uploader,
+                                "file_path": fp,
+                                "platform": folder,
+                                "timestamp": os.path.getmtime(fp)
+                            })
+                            known_paths.add(fp.lower())
+        if new_entries:
+            data.extend(new_entries)
+            save_history(data)
+    except Exception as e:
+        print(f"Reconcile history error: {e}")
+    return data
+
+def load_history(reconcile=True):
     with history_lock:
         data = []
         # Check workspace root history.json first
@@ -108,6 +161,9 @@ def load_history():
                     data = doc_data
             except Exception:
                 pass
+        if reconcile:
+            data = reconcile_download_history(data)
+        data.sort(key=lambda x: float(x.get('timestamp', 0)), reverse=True)
         return data
 
 def save_history(data):
@@ -130,7 +186,7 @@ def save_url_shortcut(file_path, url):
 
 def add_history_entry(url, title, uploader, file_path, platform):
     with history_lock:
-        h = load_history()
+        h = load_history(reconcile=False)
         h.insert(0, {
             "id": str(uuid.uuid4()),
             "url": url,
@@ -141,6 +197,7 @@ def add_history_entry(url, title, uploader, file_path, platform):
             "timestamp": time.time()
         })
         save_history(h)
+
 
 def resolve_source_url(file_path, history_data=None):
     """Attempt to find or infer the source post URL and influencer info for a media file."""
@@ -868,8 +925,10 @@ def convert_media():
                         f.write(f"Conversion Error:\n{traceback.format_exc()}\n")
                     time.sleep(3)
                     
+            invalidate_gallery_cache()
             if failed_count == 0:
-                q.put({"status": f"Successfully saved to {output_dir}", "done": True})
+                last_path = output_path if 'output_path' in locals() and os.path.exists(output_path) else output_dir
+                q.put({"status": f"Successfully saved to {output_dir}", "done": True, "file_path": last_path, "output_path": output_dir})
             else:
                 q.put({"error": f"{failed_count} file(s) failed to convert. Check console logs."})
             
@@ -1050,6 +1109,7 @@ def download_video():
                     with yt_dlp.YoutubeDL(cast(Any, ydl_opts)) as ydl:
                         try:
                             # Pre-flight check for file collisions to add (1) to filename
+                            actual_download_path = None
                             info_dict = ydl.extract_info(url, download=False)
                             if info_dict:
                                 temp_final = ydl.prepare_filename(cast(Any, info_dict))
@@ -1062,6 +1122,7 @@ def download_video():
                                     
                                     local_opts: dict[str, Any] = ydl_opts.copy()
                                     local_opts['outtmpl'] = f"{orig_base} ({c}).%(ext)s"
+                                    actual_download_path = f"{orig_base} ({c}).mp4"
                                     with yt_dlp.YoutubeDL(cast(Any, local_opts)) as local_ydl:
                                         info: Any = local_ydl.extract_info(url, download=True)
                                 else:
@@ -1144,7 +1205,7 @@ def download_video():
                             if isinstance(req_dl, dict) and req_dl.get('filepath'):
                                 final_path = str(req_dl['filepath'])
                         if not final_path and isinstance(info, dict):
-                            fn = info.get('_filename') or ydl.prepare_filename(cast(Any, info))
+                            fn = info.get('_filename') or (actual_download_path if actual_download_path and os.path.exists(actual_download_path) else None) or ydl.prepare_filename(cast(Any, info))
                             if fn:
                                 final_path = str(fn)
                             
@@ -1153,10 +1214,25 @@ def download_video():
                             base, _ = os.path.splitext(final_path)
                             if not os.path.exists(final_path) and os.path.exists(base + ".mp4"):
                                 final_path = base + ".mp4"
+                        elif actual_download_path and os.path.exists(actual_download_path):
+                            final_path = actual_download_path
+
+                        if final_path and os.path.exists(final_path):
                             last_final_path = final_path
+
+                        # Add to history & save URL shortcut IMMEDIATELY (never skipped!)
+                        title = info.get('title', 'Unknown Title') if isinstance(info, dict) else 'Unknown Title'
+                        uploader = info.get('uploader', 'Unknown') if isinstance(info, dict) else 'Unknown'
+                        platform = info.get('extractor_key', 'Other') if isinstance(info, dict) else 'Other'
+                        add_history_entry(url, title, uploader, final_path or output_path, platform)
+                        if final_path and os.path.exists(final_path):
+                            save_url_shortcut(final_path, url)
+                        invalidate_gallery_cache()
                                 
+                        if final_path and os.path.exists(final_path):
+                            base, _ = os.path.splitext(final_path)
                             # Extract first frame
-                            if os.path.exists(final_path) and processing_options.get('extractFrame', True):
+                            if processing_options.get('extractFrame', True):
                                 q.put({"status": f"{prefix}Extracting frame..."})
                                 frame_path = base + "_first_frame.jpg"
                                 ffmpeg_cmd = [
@@ -1169,217 +1245,207 @@ def download_video():
                                 ]
                                 subprocess.run(ffmpeg_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                                 
-                                if processing_options.get('autoExtractPrompt'):
-                                    q.put({"status": f"{prefix}Extracting AI Prompt (BLIP)..."})
+                            if processing_options.get('autoExtractPrompt'):
+                                q.put({"status": f"{prefix}Extracting AI Prompt (BLIP)..."})
+                                try:
+                                    from ai_prompter import extract_prompt_from_image
+                                    target_image = frame_path if os.path.exists(frame_path) else final_path
+                                    if os.path.exists(target_image):
+                                        prompt_text = extract_prompt_from_image(target_image)
+                                        
+                                        llm_model_choice = processing_options.get('llmModel', 'none')
+                                        if llm_model_choice and llm_model_choice != 'none':
+                                            q.put({"status": f"{prefix}Enhancing prompt with Local LLM..."})
+                                            sys_p = "You are an expert AI prompt engineer. Take the basic image description and rewrite it into a highly detailed, professional prompt optimized for Nano Banana Pro and Nano Banana 2 image generation models. Focus on lighting, mood, camera angles, and high quality keywords. Output ONLY the prompt text, nothing else."
+                                            try:
+                                                prompt_text = llm_generate(prompt_text, sys_p, llm_model_choice)
+                                            except Exception as e:
+                                                print(f"LLM Enhancement Error: {e}")
+                                        
+                                        prompt_txt_path = base + "_prompt.txt"
+                                        with open(prompt_txt_path, "w", encoding="utf-8") as f:
+                                            f.write(prompt_text)
+                                except Exception as e:
+                                    q.put({"status": f"{prefix}Prompt Extraction Error: {str(e)}"})
+                            
+                            # Audio Recognition & Metadata
+                            if processing_options.get('identifySong', True):
+                                q.put({"status": f"{prefix}Identifying song & metadata..."})
+                                song_txt_path = base + "_song.txt"
+                                temp_audio = base + "_temp_audio.mp3"
+                                
+                                # Extract 15 seconds of audio
+                                ffmpeg_audio_cmd = [
+                                    imageio_ffmpeg.get_ffmpeg_exe(),
+                                    "-y",
+                                    "-i", final_path,
+                                    "-t", "15",
+                                    "-vn",
+                                    "-acodec", "libmp3lame",
+                                    temp_audio
+                                ]
+                                subprocess.run(ffmpeg_audio_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                                
+                                shazam_track = None
+                                shazam_artist = None
+                                
+                                if os.path.exists(temp_audio):
+                                    shazam_res = shazam_file(temp_audio)
+                                    if shazam_res and 'track' in shazam_res:
+                                        shazam_track = shazam_res['track'].get('title')
+                                        shazam_artist = shazam_res['track'].get('subtitle')
                                     try:
-                                        from ai_prompter import extract_prompt_from_image
-                                        target_image = frame_path if os.path.exists(frame_path) else final_path
-                                        if os.path.exists(target_image):
-                                            prompt_text = extract_prompt_from_image(target_image)
+                                        os.remove(temp_audio)
+                                    except Exception:
+                                        pass
+                                        
+                                # Write metadata to files
+                                yt_track = info.get('track') or info.get('alt_title')
+                                yt_artist = info.get('artist') or info.get('creator')
+                                yt_desc = info.get('description', '')
+                                
+                                with open(song_txt_path, "w", encoding="utf-8") as f:
+                                    f.write("--- VIDEO AUDIO INFO ---\n\n")
+                                    if shazam_track:
+                                        f.write(f" Shazam Match:\n")
+                                        f.write(f"Song: {shazam_track}\n")
+                                        f.write(f"Artist: {shazam_artist}\n\n")
+                                    else:
+                                        f.write(f" Shazam Match: No match found.\n\n")
+                                        
+                                    f.write(f" Original Upload Metadata (yt-dlp):\n")
+                                    f.write(f"Track: {yt_track or 'Unknown'}\n")
+                                    f.write(f"Artist/Creator: {yt_artist or 'Unknown'}\n")
+
+                                if yt_desc:
+                                    caption_txt_path = base + "_caption.txt"
+                                    with open(caption_txt_path, "w", encoding="utf-8") as f:
+                                        f.write(yt_desc)
+                                    
+                            # Transcribe Video (Whisper) if transcript, summary, or subtitles are requested
+                            want_transcribe = processing_options.get('transcribeAudio')
+                            want_summarize = processing_options.get('aiSummarize')
+                            want_burn = processing_options.get('burn_subtitles')
+                            want_export = processing_options.get('export_subtitles')
+
+                            if want_transcribe or want_summarize or want_burn or want_export:
+                                q.put({"status": f"{prefix}Transcribing speech..."})
+                                transcript_path = base + "_transcript.txt"
+                                full_audio = base + "_full_audio.mp3"
+                                
+                                ffmpeg_full_audio = [
+                                    imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-i", final_path,
+                                    "-vn", "-acodec", "libmp3lame", full_audio
+                                ]
+                                subprocess.run(ffmpeg_full_audio, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                                
+                                if os.path.exists(full_audio):
+                                    try:
+                                        model = get_whisper()
+                                        transcript_text = ""
+                                        result: dict[str, Any] = {}
+                                        if not model:
+                                            q.put({"status": f"{prefix}Whisper AI Pack not installed. Skipping transcription/subtitles."})
+                                        else:
+                                            result = model.transcribe(full_audio, verbose=False)
+                                            transcript_text = result.get("text", "").strip()
+                                        if want_transcribe and transcript_text:
+                                            with open(transcript_path, "w", encoding="utf-8") as f:
+                                                f.write(transcript_text)
                                             
+                                        if want_summarize and transcript_text:
                                             llm_model_choice = processing_options.get('llmModel', 'none')
                                             if llm_model_choice and llm_model_choice != 'none':
-                                                q.put({"status": f"{prefix}Enhancing prompt with Local LLM..."})
-                                                sys_p = "You are an expert AI prompt engineer. Take the basic image description and rewrite it into a highly detailed, professional prompt optimized for Nano Banana Pro and Nano Banana 2 image generation models. Focus on lighting, mood, camera angles, and high quality keywords. Output ONLY the prompt text, nothing else."
+                                                q.put({"status": f"{prefix}Generating AI Summary & SEO Tags..."})
+                                                sys_p = "You are an expert social media manager. Read the video transcript and output: 1) A clean, bulleted summary of key points. 2) 3 viral TikTok/Reels captions. 3) SEO-optimized hashtags."
                                                 try:
-                                                    prompt_text = llm_generate(prompt_text, sys_p, llm_model_choice)
+                                                    summary_text = llm_generate(transcript_text, sys_p, llm_model_choice)
+                                                    summary_path = base + "_AI_Summary.txt"
+                                                    with open(summary_path, "w", encoding="utf-8") as sf:
+                                                        sf.write(summary_text)
                                                 except Exception as e:
-                                                    print(f"LLM Enhancement Error: {e}")
+                                                    print(f"LLM Summarize Error: {e}")
                                             
-                                            prompt_txt_path = base + "_prompt.txt"
-                                            with open(prompt_txt_path, "w", encoding="utf-8") as f:
-                                                f.write(prompt_text)
+                                        
+                                        if (want_burn or want_export) and final_path and final_path.endswith(('.mp4', '.mkv', '.mov')) and result:
+                                            srt_path = base + "_subtitles.srt"
+
+                                                
+                                            with open(srt_path, "w", encoding="utf-8") as srt_f:
+                                                raw_segs = result.get("segments", [])
+                                                segments = raw_segs if isinstance(raw_segs, list) else []
+                                                for i, segment in enumerate(segments, start=1):
+                                                    if not isinstance(segment, dict):
+                                                        continue
+                                                    seg_start = float(segment.get('start', 0.0))
+                                                    seg_end = float(segment.get('end', 0.0))
+                                                    seg_text = str(segment.get('text', '')).strip()
+                                                    srt_f.write(f"{i}\n")
+                                                    srt_f.write(f"{format_srt_timestamp(seg_start)} --> {format_srt_timestamp(seg_end)}\n")
+                                                    srt_f.write(f"{seg_text}\n\n")
+                                                    
+                                            if want_burn:
+                                                q.put({"status": f"{prefix}Burning subtitles into video..."})
+                                                temp_sub = base + "_subbed.mp4"
+                                                rel_srt = os.path.relpath(srt_path).replace('\\', '/')
+                                                rel_srt = rel_srt.replace(':', '\\:').replace(',', '\\,').replace("'", "\\'")
+                                                
+                                                ffmpeg_sub = [
+                                                    imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-i", final_path,
+                                                    "-vf", f"subtitles='{rel_srt}'", "-c:a", "copy", temp_sub
+                                                ]
+                                                subprocess.run(ffmpeg_sub, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                                                if os.path.exists(temp_sub):
+                                                    os.replace(temp_sub, final_path)
+                                            
+                                            if not want_export and os.path.exists(srt_path):
+                                                try: os.remove(srt_path)
+                                                except Exception: pass
+                                                
                                     except Exception as e:
-                                        q.put({"status": f"{prefix}Prompt Extraction Error: {str(e)}"})
+                                        print("Whisper error:", e)
+                                    try:
+                                        os.remove(full_audio)
+                                    except Exception:
+                                        pass
+                                        
+                            # Force H.264 Encoding (Fixes AI tool compatibility)
+                            if processing_options.get('forceH264') and final_path and final_path.endswith('.mp4'):
+                                q.put({"status": f"{prefix}Forcing Standard Encoding (H.264)..."})
+                                temp_h264 = base + "_h264_temp.mp4"
+                                ffmpeg_h264_cmd = [
+                                    imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-i", final_path,
+                                    "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+                                    "-c:a", "aac", "-pix_fmt", "yuv420p", "-movflags", "+faststart", temp_h264
+                                ]
+                                subprocess.run(ffmpeg_h264_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                                if os.path.exists(temp_h264):
+                                    os.replace(temp_h264, final_path)
+                                    
+                            # AI Bypass (Clean & Scramble)
+                            if processing_options.get('aiBypass') and final_path:
+                                q.put({"status": f"{prefix}Applying AI Bypass (Scramble & Clean)..."})
+                                from cleaner import clean_video, clean_photo, backup_file
                                 
-                                # Audio Recognition & Metadata
-                                if processing_options.get('identifySong', True):
-                                    q.put({"status": f"{prefix}Identifying song & metadata..."})
-                                    song_txt_path = base + "_song.txt"
-                                    temp_audio = base + "_temp_audio.mp3"
-                                    
-                                    # Extract 15 seconds of audio
-                                    ffmpeg_audio_cmd = [
-                                        imageio_ffmpeg.get_ffmpeg_exe(),
-                                        "-y",
-                                        "-i", final_path,
-                                        "-t", "15",
-                                        "-vn",
-                                        "-acodec", "libmp3lame",
-                                        temp_audio
-                                    ]
-                                    subprocess.run(ffmpeg_audio_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                                    
-                                    shazam_track = None
-                                    shazam_artist = None
-                                    
-                                    if os.path.exists(temp_audio):
-                                        shazam_res = shazam_file(temp_audio)
-                                        if shazam_res and 'track' in shazam_res:
-                                            shazam_track = shazam_res['track'].get('title')
-                                            shazam_artist = shazam_res['track'].get('subtitle')
-                                        try:
-                                            os.remove(temp_audio)
-                                        except Exception:
-                                            pass
-                                            
-                                    # Write metadata to files
-                                    yt_track = info.get('track') or info.get('alt_title')
-                                    yt_artist = info.get('artist') or info.get('creator')
-                                    yt_desc = info.get('description', '')
-                                    
-                                    with open(song_txt_path, "w", encoding="utf-8") as f:
-                                        f.write("--- VIDEO AUDIO INFO ---\n\n")
-                                        if shazam_track:
-                                            f.write(f" Shazam Match:\n")
-                                            f.write(f"Song: {shazam_track}\n")
-                                            f.write(f"Artist: {shazam_artist}\n\n")
-                                        else:
-                                            f.write(f" Shazam Match: No match found.\n\n")
-                                            
-                                        f.write(f" Original Upload Metadata (yt-dlp):\n")
-                                        f.write(f"Track: {yt_track or 'Unknown'}\n")
-                                        f.write(f"Artist/Creator: {yt_artist or 'Unknown'}\n")
-
-                                    if yt_desc:
-                                        caption_txt_path = base + "_caption.txt"
-                                        with open(caption_txt_path, "w", encoding="utf-8") as f:
-                                            f.write(yt_desc)
-                                        
-                                # Transcribe Video (Whisper) if transcript, summary, or subtitles are requested
-                                want_transcribe = processing_options.get('transcribeAudio')
-                                want_summarize = processing_options.get('aiSummarize')
-                                want_burn = processing_options.get('burn_subtitles')
-                                want_export = processing_options.get('export_subtitles')
-
-                                if want_transcribe or want_summarize or want_burn or want_export:
-                                    q.put({"status": f"{prefix}Transcribing speech..."})
-                                    transcript_path = base + "_transcript.txt"
-                                    full_audio = base + "_full_audio.mp3"
-                                    
-                                    ffmpeg_full_audio = [
-                                        imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-i", final_path,
-                                        "-vn", "-acodec", "libmp3lame", full_audio
-                                    ]
-                                    subprocess.run(ffmpeg_full_audio, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                                    
-                                    if os.path.exists(full_audio):
-                                        try:
-                                            model = get_whisper()
-                                            transcript_text = ""
-                                            result: dict[str, Any] = {}
-                                            if not model:
-                                                q.put({"status": f"{prefix}Whisper AI Pack not installed. Skipping transcription/subtitles."})
-                                            else:
-                                                result = model.transcribe(full_audio, verbose=False)
-                                                transcript_text = result.get("text", "").strip()
-                                            if want_transcribe and transcript_text:
-                                                with open(transcript_path, "w", encoding="utf-8") as f:
-                                                    f.write(transcript_text)
-                                                
-                                            if want_summarize and transcript_text:
-                                                llm_model_choice = processing_options.get('llmModel', 'none')
-                                                if llm_model_choice and llm_model_choice != 'none':
-                                                    q.put({"status": f"{prefix}Generating AI Summary & SEO Tags..."})
-                                                    sys_p = "You are an expert social media manager. Read the video transcript and output: 1) A clean, bulleted summary of key points. 2) 3 viral TikTok/Reels captions. 3) SEO-optimized hashtags."
-                                                    try:
-                                                        summary_text = llm_generate(transcript_text, sys_p, llm_model_choice)
-                                                        summary_path = base + "_AI_Summary.txt"
-                                                        with open(summary_path, "w", encoding="utf-8") as sf:
-                                                            sf.write(summary_text)
-                                                    except Exception as e:
-                                                        print(f"LLM Summarize Error: {e}")
-                                                
-                                            
-                                            if (want_burn or want_export) and final_path and final_path.endswith(('.mp4', '.mkv', '.mov')) and result:
-                                                srt_path = base + "_subtitles.srt"
-
-                                                    
-                                                with open(srt_path, "w", encoding="utf-8") as srt_f:
-                                                    raw_segs = result.get("segments", [])
-                                                    segments = raw_segs if isinstance(raw_segs, list) else []
-                                                    for i, segment in enumerate(segments, start=1):
-                                                        if not isinstance(segment, dict):
-                                                            continue
-                                                        seg_start = float(segment.get('start', 0.0))
-                                                        seg_end = float(segment.get('end', 0.0))
-                                                        seg_text = str(segment.get('text', '')).strip()
-                                                        srt_f.write(f"{i}\n")
-                                                        srt_f.write(f"{format_srt_timestamp(seg_start)} --> {format_srt_timestamp(seg_end)}\n")
-                                                        srt_f.write(f"{seg_text}\n\n")
-                                                        
-                                                if want_burn:
-                                                    q.put({"status": f"{prefix}Burning subtitles into video..."})
-                                                    temp_sub = base + "_subbed.mp4"
-                                                    rel_srt = os.path.relpath(srt_path).replace('\\', '/')
-                                                    rel_srt = rel_srt.replace(':', '\\:').replace(',', '\\,').replace("'", "\\'")
-                                                    
-                                                    ffmpeg_sub = [
-                                                        imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-i", final_path,
-                                                        "-vf", f"subtitles='{rel_srt}'", "-c:a", "copy", temp_sub
-                                                    ]
-                                                    subprocess.run(ffmpeg_sub, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                                                    if os.path.exists(temp_sub):
-                                                        os.replace(temp_sub, final_path)
-                                                
-                                                if not want_export and os.path.exists(srt_path):
-                                                    try: os.remove(srt_path)
-                                                    except Exception: pass
-                                                    
-                                        except Exception as e:
-                                            print("Whisper error:", e)
-                                        try:
-                                            os.remove(full_audio)
-                                        except Exception:
-                                            pass
-                                            
-                                # Force H.264 Encoding (Fixes AI tool compatibility)
-                                if processing_options.get('forceH264') and final_path and final_path.endswith('.mp4'):
-                                    q.put({"status": f"{prefix}Forcing Standard Encoding (H.264)..."})
-                                    temp_h264 = base + "_h264_temp.mp4"
-                                    ffmpeg_h264_cmd = [
-                                        imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-i", final_path,
-                                        "-c:v", "libx264", "-preset", "fast", "-crf", "23",
-                                        "-c:a", "aac", "-pix_fmt", "yuv420p", "-movflags", "+faststart", temp_h264
-                                    ]
-                                    subprocess.run(ffmpeg_h264_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                                    if os.path.exists(temp_h264):
-                                        os.replace(temp_h264, final_path)
-                                        
-                                # AI Bypass (Clean & Scramble)
-                                if processing_options.get('aiBypass') and final_path:
-                                    q.put({"status": f"{prefix}Applying AI Bypass (Scramble & Clean)..."})
-                                    from cleaner import clean_video, clean_photo, backup_file
-                                    
-                                    # Backup first
-                                    backup_file(final_path, DEFAULT_SAVE_DIR)
-                                    
-                                    ext = final_path.split('.')[-1].lower()
-                                    is_vid = ext in ['mp4', 'mov', 'm4v', 'webm', 'avi', 'mkv']
-                                    
-                                    if is_vid:
-                                        success, msg = clean_video(final_path, imageio_ffmpeg.get_ffmpeg_exe())
-                                    else:
-                                        success, msg = clean_photo(final_path)
-                                        
-                                    if not success:
-                                        q.put({"status": f"{prefix}AI Bypass Failed: {msg}"})
+                                # Backup first
+                                backup_file(final_path, DEFAULT_SAVE_DIR)
                                 
-                                # Add to history & save URL shortcut
-                                title = info.get('title', 'Unknown Title')
-                                uploader = info.get('uploader', 'Unknown')
-                                platform = info.get('extractor_key', 'Other')
-                                add_history_entry(url, title, uploader, final_path, platform)
-                                save_url_shortcut(final_path, url)
-                                if processing_options.get('extractFrame', True):
-                                    frame_path = base + "_first_frame.jpg"
-                                    save_url_shortcut(frame_path, url)
+                                ext = final_path.split('.')[-1].lower()
+                                is_vid = ext in ['mp4', 'mov', 'm4v', 'webm', 'avi', 'mkv']
+                                
+                                if is_vid:
+                                    success, msg = clean_video(final_path, imageio_ffmpeg.get_ffmpeg_exe())
+                                else:
+                                    success, msg = clean_photo(final_path)
+                                    
+                                if not success:
+                                    q.put({"status": f"{prefix}AI Bypass Failed: {msg}"})
                 except Exception as e:
                     error_msg = str(e)
                     error_msg = re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', error_msg)
                     q.put({"status": f"{prefix}Error: {error_msg}"})
                     
-            
+            invalidate_gallery_cache()
             if failed_count == 0:
                 q.put({"status": "All Downloads Complete!", "done": True, "file_path": last_final_path, "output_path": output_path})
             else:
@@ -1416,10 +1482,19 @@ def list_gallery():
         return jsonify(_gallery_cache["data"])
         
     base_dir = os.path.join(os.path.expanduser("~"), "Documents", "Media Grabber")
-    folders = ['YouTube', 'Instagram', 'TikTok', 'Twitter', 'Other', 'Conversions']
+    known_order = ['YouTube', 'Instagram', 'TikTok', 'Twitter', 'Conversions', 'AI Cleaned', 'Other']
+    
+    # Dynamically find all subfolders in Media Grabber
+    existing_dirs = []
+    if os.path.exists(base_dir):
+        existing_dirs = [d for d in os.listdir(base_dir) if os.path.isdir(os.path.join(base_dir, d))]
+        
+    folders = [f for f in known_order if f in existing_dirs] + [f for f in existing_dirs if f not in known_order]
+    if not folders:
+        folders = known_order
     
     media = []
-    history_data = load_history()
+    history_data = load_history(reconcile=False)
     
     for folder in folders:
         folder_path = os.path.join(base_dir, folder)
@@ -1455,35 +1530,68 @@ def list_gallery():
     _gallery_cache["data"] = media
     return jsonify(media)
 
-@app.route('/api/media/<folder>/<path:filename>')
-def serve_media(folder, filename):
+@app.route('/api/media/<path:filename>')
+def serve_media(filename):
     base_dir = os.path.join(os.path.expanduser("~"), "Documents", "Media Grabber")
-    safe_folder = os.path.basename(folder)
-    return send_from_directory(os.path.join(base_dir, safe_folder), filename)
+    norm = os.path.normpath(filename)
+    if norm.startswith('..') or norm.startswith('/') or norm.startswith('\\'):
+        abort(403)
+    full_path = os.path.join(base_dir, norm)
+    if not os.path.exists(full_path) or not os.path.isfile(full_path):
+        abort(404)
+    return send_from_directory(os.path.dirname(full_path), os.path.basename(full_path))
 
 @app.route('/api/open_folder', methods=['POST'])
 def open_folder():
-    path = request.json.get('path')
-    if not path or not os.path.exists(path) or not is_safe_path(path):
+    path = request.json.get('path') if request.json else None
+    if not path or not is_safe_path(path):
         return jsonify({"error": "Path not found or forbidden"}), 403
     
     abs_path = os.path.abspath(path)
-    if sys.platform == 'win32':
-        if os.path.isfile(abs_path):
-            subprocess.run(['explorer', '/select,', abs_path])
+    if not os.path.exists(abs_path):
+        # Fall back to parent folder if available
+        parent = os.path.dirname(abs_path)
+        if os.path.exists(parent):
+            abs_path = parent
         else:
+            return jsonify({"error": "Path not found"}), 404
+            
+    try:
+        if sys.platform == 'win32':
+            if os.path.isfile(abs_path):
+                subprocess.Popen(f'explorer /select,"{abs_path}"')
+            else:
+                os.startfile(abs_path)
+        elif sys.platform == 'darwin':
+            if os.path.isfile(abs_path):
+                subprocess.Popen(['open', '-R', abs_path])
+            else:
+                subprocess.Popen(['open', abs_path])
+        else:
+            # Linux
+            dir_to_open = os.path.dirname(abs_path) if os.path.isfile(abs_path) else abs_path
+            subprocess.Popen(['xdg-open', dir_to_open])
+        return jsonify({"success": True})
+    except Exception as e:
+        print(f"Error opening folder: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/open_file', methods=['POST'])
+def open_file():
+    path = request.json.get('path') if request.json else None
+    if not path or not is_safe_path(path) or not os.path.exists(path):
+        return jsonify({"error": "File not found or forbidden"}), 404
+    abs_path = os.path.abspath(path)
+    try:
+        if sys.platform == 'win32':
             os.startfile(abs_path)
-    elif sys.platform == 'darwin':
-        if os.path.isfile(abs_path):
-            subprocess.run(['open', '-R', abs_path])
+        elif sys.platform == 'darwin':
+            subprocess.Popen(['open', abs_path])
         else:
-            subprocess.run(['open', abs_path])
-    else:
-        # Linux
-        dir_to_open = os.path.dirname(abs_path) if os.path.isfile(abs_path) else abs_path
-        subprocess.run(['xdg-open', dir_to_open])
-        
-    return jsonify({"success": True})
+            subprocess.Popen(['xdg-open', abs_path])
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/extract_prompt', methods=['POST'])
 def extract_prompt():
@@ -1614,6 +1722,7 @@ def delete_gallery_item():
         except Exception as e:
             return jsonify({"error": str(e)}), 500
             
+    invalidate_gallery_cache()
     return jsonify({"success": True})
 
 @app.route('/api/gallery/set_url', methods=['POST'])

@@ -493,13 +493,14 @@
                     <div class="flex items-center space-x-2">
                         <input type="text" id="gallerySearch" placeholder="Search gallery..." class="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white focus:outline-none focus:border-pink-500 w-48" oninput="loadGallery()">
                         <select id="galleryFilter" class="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white focus:outline-none" onchange="loadGallery()">
-                            <option value="All">All Folders</option>
-                        <option value="YouTube">YouTube</option>
-                        <option value="Instagram">Instagram</option>
-                        <option value="TikTok">TikTok</option>
-                        <option value="Twitter">Twitter</option>
-                        <option value="Conversions">Conversions</option>
-                        <option value="Other">Other</option>
+                            <option value="All">All Media</option>
+                            <option value="YouTube">YouTube</option>
+                            <option value="Instagram">Instagram</option>
+                            <option value="TikTok">TikTok</option>
+                            <option value="Twitter">Twitter</option>
+                            <option value="Conversions">Conversions / Edits</option>
+                            <option value="AI Cleaned">AI Cleaned</option>
+                            <option value="Other">Other</option>
                         </select>
                     </div>
                 </div>
@@ -632,6 +633,77 @@
             <div style="display:flex; align-items:center; justify-content:flex-end; gap:0.75rem; padding:0.85rem 1.25rem; border-top:1px solid #27272a;">
                 <button onclick="closeBrowserModal()" style="padding:0.5rem 1.25rem; background:#18181b; border:1px solid #27272a; border-radius:0.75rem; color:#a1a1aa; font-size:0.7rem; font-weight:700; cursor:pointer; transition:all 0.15s;" onmouseover="this.style.borderColor='#52525b'" onmouseout="this.style.borderColor='#27272a'">Cancel</button>
                 <button id="browserSelectBtn" onclick="browserConfirmSelection()" style="padding:0.5rem 1.25rem; background:linear-gradient(to right,#ec4899,#a855f7); border:none; border-radius:0.75rem; color:white; font-size:0.7rem; font-weight:800; cursor:pointer; text-transform:uppercase; letter-spacing:0.05em; transition:all 0.15s;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">Select This Folder</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Media Preview Lightbox Modal -->
+    <div id="mediaPreviewModal" style="display:none; position:fixed; inset:0; z-index:99999; background:rgba(0,0,0,0.88); backdrop-filter:blur(12px); align-items:center; justify-content:center; flex-direction:column;" onclick="closeMediaPreview()">
+        <div class="relative w-full max-w-5xl max-h-[92vh] flex flex-col bg-[#0d0d10] border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden m-4" onclick="event.stopPropagation()">
+            <!-- Modal Header -->
+            <div class="flex items-center justify-between px-5 py-3 border-b border-zinc-800/80 bg-black/40">
+                <div class="flex items-center space-x-3 overflow-hidden pr-3">
+                    <span id="previewModalBadge" class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-pink-500/20 text-pink-400 border border-pink-500/30 shrink-0">Video</span>
+                    <span id="previewModalTitle" class="text-sm font-semibold text-zinc-100 truncate" title="">File Name</span>
+                    <span id="previewModalMeta" class="text-[11px] text-zinc-500 shrink-0"></span>
+                </div>
+                <div class="flex items-center space-x-2 shrink-0">
+                    <button id="previewModalCloseBtn" onclick="closeMediaPreview()" class="w-8 h-8 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center transition" title="Close (Esc)">
+                        <i class="fa-solid fa-xmark text-sm"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Media Container -->
+            <div class="relative flex-1 bg-black flex items-center justify-center p-2 min-h-[300px] max-h-[70vh] overflow-hidden select-none">
+                <!-- Video Viewer -->
+                <video id="previewModalVideo" controls autoplay playsinline class="max-h-[68vh] max-w-full rounded object-contain shadow-2xl" style="display:none;"></video>
+                <!-- Image Viewer -->
+                <img id="previewModalImage" class="max-h-[68vh] max-w-full object-contain rounded shadow-2xl" style="display:none;" />
+                <!-- Audio Viewer -->
+                <div id="previewModalAudioContainer" class="flex flex-col items-center justify-center p-8 space-y-4 w-full max-w-md" style="display:none;">
+                    <div class="w-20 h-20 rounded-2xl bg-gradient-to-tr from-pink-500/20 to-purple-500/20 border border-pink-500/30 flex items-center justify-center shadow-lg">
+                        <i class="fa-solid fa-music text-3xl text-pink-400 animate-pulse"></i>
+                    </div>
+                    <span id="previewModalAudioName" class="text-sm font-bold text-zinc-200 text-center break-all"></span>
+                    <audio id="previewModalAudio" controls class="w-full mt-2"></audio>
+                </div>
+
+                <!-- Nav Buttons on Modal -->
+                <button id="previewModalPrevBtn" onclick="navigateMediaPreview(-1)" class="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/60 hover:bg-pink-600/80 text-white flex items-center justify-center backdrop-blur transition border border-white/10 shadow-lg" title="Previous (Left Arrow)">
+                    <i class="fa-solid fa-chevron-left text-sm"></i>
+                </button>
+                <button id="previewModalNextBtn" onclick="navigateMediaPreview(1)" class="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/60 hover:bg-pink-600/80 text-white flex items-center justify-center backdrop-blur transition border border-white/10 shadow-lg" title="Next (Right Arrow)">
+                    <i class="fa-solid fa-chevron-right text-sm"></i>
+                </button>
+            </div>
+
+            <!-- Modal Footer Toolbar -->
+            <div class="flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-t border-zinc-800/80 bg-zinc-950/60">
+                <div class="flex items-center space-x-2 text-[11px] text-zinc-400 font-mono truncate max-w-md" id="previewModalPath">
+                    <!-- Path display -->
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button id="previewModalFolderBtn" class="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 hover:border-zinc-700 text-xs font-bold transition flex items-center space-x-1.5 shadow" title="Open Enclosing Folder in Explorer">
+                        <i class="fa-solid fa-folder-open text-pink-500"></i>
+                        <span>Folder</span>
+                    </button>
+                    <button id="previewModalOpenFileBtn" class="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 hover:border-zinc-700 text-xs font-bold transition flex items-center space-x-1.5 shadow" title="Open in Windows Default Player">
+                        <i class="fa-solid fa-arrow-up-right-from-square text-cyan-400"></i>
+                        <span>Open File</span>
+                    </button>
+                    <button id="previewModalPostBtn" class="px-3 py-1.5 rounded-lg bg-pink-600/90 hover:bg-pink-500 text-white text-xs font-bold transition flex items-center space-x-1.5 shadow" style="display:none;" title="Visit Source Post">
+                        <i class="fa-solid fa-globe"></i>
+                        <span>Visit Post</span>
+                    </button>
+                    <button id="previewModalPromptBtn" class="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-emerald-500 text-zinc-200 hover:text-white border border-zinc-800 text-xs font-bold transition flex items-center space-x-1.5 shadow" title="Extract AI Prompt">
+                        <i class="fa-solid fa-wand-magic-sparkles text-emerald-400"></i>
+                        <span>AI Prompt</span>
+                    </button>
+                    <button id="previewModalDeleteBtn" class="w-8 h-8 rounded-lg bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white flex items-center justify-center transition" title="Delete File">
+                        <i class="fa-solid fa-trash text-xs"></i>
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -844,167 +916,331 @@
             return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
         }
 
-        async function loadGallery() {
-            const filter = document.getElementById('galleryFilter').value;
-            const query = (document.getElementById('gallerySearch')?.value || '').toLowerCase();
-            const res = await fetch('/api/gallery');
-            const data = await res.json();
-            const grid = document.getElementById('galleryGrid');
-            if(!grid) return;
-            grid.innerHTML = '';
+        window.currentGalleryItems = [];
+        window.currentPreviewIndex = -1;
+
+        function openMediaPreview(index) {
+            if (!window.currentGalleryItems || !window.currentGalleryItems[index]) return;
+            window.currentPreviewIndex = index;
+            const item = window.currentGalleryItems[index];
+            const modal = document.getElementById('mediaPreviewModal');
+            if (!modal) return;
+
+            const url = '/api/media/' + item.path.split('/').map(encodeURIComponent).join('/');
             
-            data.forEach(item => {
-                if (filter !== 'All' && item.folder !== filter) return;
-                if (query && !item.name.toLowerCase().includes(query)) return;
-                
-                const url = '/api/media/' + item.path.split('/').map(encodeURIComponent).join('/');
-                const el = document.createElement('div');
-                el.className = 'relative aspect-[9/16] rounded-xl overflow-hidden border border-zinc-800 bg-black group';
-                
-                if (item.type === 'video') {
-                    el.innerHTML = `<video src="${url}" class="w-full h-full object-cover" controls preload="none"></video>`;
-                } else if (item.type === 'image') {
-                    el.innerHTML = `<img src="${url}" class="w-full h-full object-cover" loading="lazy" />`;
-                } else {
-                    el.innerHTML = `<div class="w-full h-full flex items-center justify-center text-xs text-zinc-500 break-all p-2 text-center bg-zinc-900 audio-title"></div>
-                    <audio src="${url}" controls class="absolute bottom-0 left-0 w-full h-10"></audio>`;
-                    el.querySelector('.audio-title').textContent = item.name;
-                }
-                
-                const safePath = item.full_path || '';
-                
-                const hoverOverlay = document.createElement('div');
-                hoverOverlay.className = 'absolute top-0 left-0 w-full h-full bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-2 pointer-events-none';
-                
-                const topBar = document.createElement('div');
-                topBar.className = 'flex items-center justify-between pointer-events-auto';
-                
-                const sizeBadge = document.createElement('span');
-                sizeBadge.className = 'bg-black/80 text-white text-[9px] px-1.5 py-0.5 rounded font-bold';
-                sizeBadge.textContent = formatBytes(item.size);
-                
-                const deleteBtn = document.createElement('button');
-                deleteBtn.className = 'w-7 h-7 rounded bg-red-500/80 hover:bg-red-500 text-white flex items-center justify-center transition shadow-lg';
-                deleteBtn.innerHTML = '<i class="fa-solid fa-trash text-[10px]"></i>';
-                deleteBtn.title = 'Delete File';
-                deleteBtn.onclick = () => deleteGalleryItem(safePath);
-                
-                topBar.appendChild(sizeBadge);
-                if (item.uploader) {
-                    const authorBadge = document.createElement('span');
-                    authorBadge.className = 'bg-pink-500/20 text-pink-300 border border-pink-500/30 text-[9px] px-1.5 py-0.5 rounded font-bold truncate max-w-[110px]';
-                    authorBadge.textContent = `@${item.uploader}`;
-                    authorBadge.title = `Influencer: @${item.uploader}`;
-                    topBar.appendChild(authorBadge);
-                }
-                topBar.appendChild(deleteBtn);
-                
-                const bottomBar = document.createElement('div');
-                bottomBar.className = 'pointer-events-auto flex items-center space-x-1.5';
-                
-                const openFolderBtn = document.createElement('button');
-                openFolderBtn.className = 'flex-1 py-1.5 bg-zinc-900/90 hover:bg-zinc-800 text-white rounded text-[10px] font-bold uppercase tracking-wider transition shadow-lg backdrop-blur flex items-center justify-center space-x-1 border border-zinc-800/80';
-                openFolderBtn.innerHTML = '<i class="fa-solid fa-folder-open text-pink-500"></i> <span>Folder</span>';
-                openFolderBtn.title = 'Open enclosing folder';
-                openFolderBtn.onclick = (e) => {
+            // Set header info
+            const badge = document.getElementById('previewModalBadge');
+            badge.textContent = item.folder || item.type.toUpperCase();
+            
+            const title = document.getElementById('previewModalTitle');
+            title.textContent = item.name;
+            title.title = item.name;
+            
+            const meta = document.getElementById('previewModalMeta');
+            const dateStr = item.timestamp ? new Date(item.timestamp * 1000).toLocaleDateString() : '';
+            meta.textContent = `${formatBytes(item.size)}${dateStr ? ' • ' + dateStr : ''}`;
+
+            const pathEl = document.getElementById('previewModalPath');
+            pathEl.textContent = item.full_path || '';
+            pathEl.title = item.full_path || '';
+
+            // Media viewers
+            const vid = document.getElementById('previewModalVideo');
+            const img = document.getElementById('previewModalImage');
+            const audioCont = document.getElementById('previewModalAudioContainer');
+            const aud = document.getElementById('previewModalAudio');
+
+            vid.style.display = 'none';
+            img.style.display = 'none';
+            audioCont.style.display = 'none';
+
+            vid.pause();
+            aud.pause();
+            vid.src = '';
+            aud.src = '';
+
+            if (item.type === 'video') {
+                vid.src = url;
+                vid.style.display = 'block';
+                vid.load();
+                vid.play().catch(() => {});
+            } else if (item.type === 'image') {
+                img.src = url;
+                img.style.display = 'block';
+            } else {
+                document.getElementById('previewModalAudioName').textContent = item.name;
+                aud.src = url;
+                audioCont.style.display = 'flex';
+                aud.load();
+                aud.play().catch(() => {});
+            }
+
+            // Buttons
+            document.getElementById('previewModalFolderBtn').onclick = (e) => {
+                e.stopPropagation();
+                openFolder(item.full_path);
+            };
+
+            document.getElementById('previewModalOpenFileBtn').onclick = (e) => {
+                e.stopPropagation();
+                openFile(item.full_path);
+            };
+
+            const postBtn = document.getElementById('previewModalPostBtn');
+            if (item.source_url) {
+                postBtn.style.display = 'flex';
+                postBtn.onclick = (e) => {
                     e.stopPropagation();
-                    openFolder(safePath);
+                    window.open(item.source_url, '_blank');
                 };
-                bottomBar.appendChild(openFolderBtn);
+            } else {
+                postBtn.style.display = 'none';
+            }
 
-                const postLinkBtn = document.createElement('button');
-                if (item.source_url) {
-                    postLinkBtn.className = 'flex-1 py-1.5 bg-pink-600/90 hover:bg-pink-500 text-white rounded text-[10px] font-bold uppercase tracking-wider transition shadow-lg backdrop-blur flex items-center justify-center space-x-1';
-                    postLinkBtn.innerHTML = '<i class="fa-solid fa-arrow-up-right-from-square"></i> <span>Visit Post</span>';
-                    postLinkBtn.title = `Source: ${item.source_url}${item.uploader ? ' (@' + item.uploader + ')' : ''}`;
-                    postLinkBtn.onclick = (e) => {
-                        e.stopPropagation();
-                        window.open(item.source_url, '_blank');
-                    };
+            document.getElementById('previewModalPromptBtn').onclick = (e) => {
+                e.stopPropagation();
+                extractPromptForItem(item.full_path);
+            };
+
+            document.getElementById('previewModalDeleteBtn').onclick = async (e) => {
+                e.stopPropagation();
+                if (await deleteGalleryItem(item.full_path)) {
+                    closeMediaPreview();
+                }
+            };
+
+            modal.style.display = 'flex';
+        }
+
+        function closeMediaPreview() {
+            const modal = document.getElementById('mediaPreviewModal');
+            if (modal) modal.style.display = 'none';
+            const vid = document.getElementById('previewModalVideo');
+            const aud = document.getElementById('previewModalAudio');
+            if (vid) { vid.pause(); vid.src = ''; }
+            if (aud) { aud.pause(); aud.src = ''; }
+        }
+
+        function navigateMediaPreview(direction) {
+            if (!window.currentGalleryItems || window.currentGalleryItems.length === 0) return;
+            let next = window.currentPreviewIndex + direction;
+            if (next < 0) next = window.currentGalleryItems.length - 1;
+            if (next >= window.currentGalleryItems.length) next = 0;
+            openMediaPreview(next);
+        }
+
+        window.addEventListener('keydown', (e) => {
+            const modal = document.getElementById('mediaPreviewModal');
+            if (modal && modal.style.display === 'flex') {
+                if (e.key === 'Escape') closeMediaPreview();
+                else if (e.key === 'ArrowLeft') navigateMediaPreview(-1);
+                else if (e.key === 'ArrowRight') navigateMediaPreview(1);
+            }
+        });
+
+        async function openFile(path) {
+            if (!path) return;
+            try {
+                const res = await fetch('/api/open_file', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: path })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('Open File', 'Opening file in default application');
                 } else {
-                    postLinkBtn.className = 'flex-1 py-1.5 bg-zinc-900/90 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 rounded text-[10px] font-bold uppercase tracking-wider transition shadow-lg backdrop-blur flex items-center justify-center space-x-1 border border-zinc-800/80';
-                    postLinkBtn.innerHTML = '<i class="fa-solid fa-link"></i> <span>+ Link</span>';
-                    postLinkBtn.title = 'Attach or save source post URL';
-                    postLinkBtn.onclick = async (e) => {
+                    showToast('Open File Error', data.error || 'Failed to open file');
+                }
+            } catch (e) {
+                console.error("Failed to open file", e);
+                showToast('Open File Error', e.message);
+            }
+        }
+
+        async function extractPromptForItem(safePath) {
+            if (currentAiStatus && !currentAiStatus.all_installed && !currentAiStatus.torch) {
+                openAiInstallModal('BLIP Vision Prompt Extractor');
+                return;
+            }
+            showToast('AI Prompter', 'Extracting prompt with BLIP...');
+            try {
+                const res = await fetch('/api/extract_prompt', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: safePath })
+                });
+                const result = await res.json();
+                if (result.prompt) {
+                    promptModal(result.prompt);
+                } else if (result.error === 'ai_pack_required') {
+                    openAiInstallModal('BLIP Vision Prompt Extractor');
+                } else {
+                    alert('Extraction failed: ' + (result.error || 'Unknown error'));
+                }
+            } catch (e) {
+                alert('Extraction failed: ' + e.message);
+            }
+        }
+
+        async function loadGallery() {
+            const filter = document.getElementById('galleryFilter')?.value || 'All';
+            const query = (document.getElementById('gallerySearch')?.value || '').toLowerCase();
+            const grid = document.getElementById('galleryGrid');
+            if (!grid) return;
+            
+            try {
+                const res = await fetch('/api/gallery');
+                const data = await res.json();
+                
+                const filtered = data.filter(item => {
+                    if (filter !== 'All' && item.folder !== filter) return false;
+                    if (query && !item.name.toLowerCase().includes(query)) return false;
+                    return true;
+                });
+                
+                window.currentGalleryItems = filtered;
+                grid.innerHTML = '';
+                
+                if (filtered.length === 0) {
+                    grid.innerHTML = '<div class="col-span-full py-16 text-center text-zinc-500 text-xs">No media found in gallery. Download or convert media to view here.</div>';
+                    return;
+                }
+                
+                filtered.forEach((item, index) => {
+                    const url = '/api/media/' + item.path.split('/').map(encodeURIComponent).join('/');
+                    const safePath = item.full_path || '';
+                    
+                    const el = document.createElement('div');
+                    el.className = 'group relative aspect-[9/16] rounded-xl overflow-hidden border border-zinc-800 bg-[#070709] hover:border-pink-500/50 transition cursor-pointer select-none shadow-lg';
+                    
+                    // Card Media
+                    if (item.type === 'video') {
+                        el.innerHTML = `
+                            <video src="${url}#t=0.5" class="w-full h-full object-cover pointer-events-none" preload="metadata" muted playsinline></video>
+                            <div class="absolute inset-0 flex items-center justify-center pointer-events-none z-[4] transition-transform duration-200 group-hover:scale-110">
+                                <div class="w-11 h-11 rounded-full bg-black/60 backdrop-blur border border-white/20 flex items-center justify-center text-white shadow-xl">
+                                    <i class="fa-solid fa-play text-xs ml-0.5"></i>
+                                </div>
+                            </div>
+                        `;
+                    } else if (item.type === 'image') {
+                        el.innerHTML = `<img src="${url}" class="w-full h-full object-cover pointer-events-none transition-transform duration-200 group-hover:scale-105" loading="lazy" />`;
+                    } else {
+                        el.innerHTML = `
+                            <div class="w-full h-full flex flex-col items-center justify-center text-xs text-zinc-400 p-4 text-center bg-zinc-900 pointer-events-none">
+                                <i class="fa-solid fa-music text-3xl text-pink-500 mb-2"></i>
+                                <span class="truncate w-full font-bold text-zinc-300 audio-name"></span>
+                            </div>
+                        `;
+                        el.querySelector('.audio-name').textContent = item.name;
+                    }
+                    
+                    // Overlay Container
+                    const overlay = document.createElement('div');
+                    overlay.className = 'absolute inset-0 bg-black/65 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-between p-2.5 z-10';
+                    
+                    // Top Bar
+                    const topBar = document.createElement('div');
+                    topBar.className = 'flex items-center justify-between';
+                    
+                    const sizeBadge = document.createElement('span');
+                    sizeBadge.className = 'bg-black/80 text-white text-[9px] px-1.5 py-0.5 rounded font-bold border border-white/10';
+                    sizeBadge.textContent = formatBytes(item.size);
+                    topBar.appendChild(sizeBadge);
+                    
+                    if (item.uploader) {
+                        const authorBadge = document.createElement('span');
+                        authorBadge.className = 'bg-pink-500/20 text-pink-300 border border-pink-500/30 text-[9px] px-1.5 py-0.5 rounded font-bold truncate max-w-[100px]';
+                        authorBadge.textContent = `@${item.uploader}`;
+                        authorBadge.title = `Influencer: @${item.uploader}`;
+                        topBar.appendChild(authorBadge);
+                    } else if (item.folder) {
+                        const folderBadge = document.createElement('span');
+                        folderBadge.className = 'bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[9px] px-1.5 py-0.5 rounded font-bold';
+                        folderBadge.textContent = item.folder;
+                        topBar.appendChild(folderBadge);
+                    }
+                    
+                    const delBtn = document.createElement('button');
+                    delBtn.className = 'w-7 h-7 rounded bg-red-500/80 hover:bg-red-500 text-white flex items-center justify-center transition shadow-lg';
+                    delBtn.innerHTML = '<i class="fa-solid fa-trash text-[10px]"></i>';
+                    delBtn.title = 'Delete File';
+                    delBtn.onclick = (e) => {
                         e.stopPropagation();
-                        const inputUrl = prompt('Enter or paste the source post URL for this media:');
-                        if (inputUrl && inputUrl.trim()) {
-                            try {
-                                const res = await fetch('/api/gallery/set_url', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ path: safePath, url: inputUrl.trim() })
-                                });
-                                const resData = await res.json();
-                                if (resData.success) {
-                                    loadGallery();
-                                } else {
-                                    alert('Could not save URL: ' + (resData.error || 'Unknown error'));
-                                }
-                            } catch (err) {
-                                alert('Failed to save URL: ' + err.message);
-                            }
-                        }
+                        deleteGalleryItem(safePath);
                     };
-                }
-                bottomBar.appendChild(postLinkBtn);
-                
-                hoverOverlay.appendChild(topBar);
-                hoverOverlay.appendChild(bottomBar);
+                    topBar.appendChild(delBtn);
+                    overlay.appendChild(topBar);
 
-                // Add AI Prompt Button
-                const midBar = document.createElement('div');
-                midBar.className = 'pointer-events-auto flex items-center space-x-2 mt-2';
-                const aiBtn = document.createElement('button');
-                aiBtn.className = 'flex-1 py-1.5 bg-zinc-900/90 hover:bg-emerald-500 text-white rounded text-[10px] font-bold uppercase tracking-wider transition shadow-lg backdrop-blur flex items-center justify-center space-x-1';
-                aiBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> <span>Extract Prompt</span>';
-                aiBtn.onclick = async () => {
-                    if (currentAiStatus && !currentAiStatus.all_installed && !currentAiStatus.torch) {
-                        openAiInstallModal('BLIP Vision Prompt Extractor');
-                        return;
+                    // Center Preview Button
+                    const centerDiv = document.createElement('div');
+                    centerDiv.className = 'flex items-center justify-center';
+                    const previewBtn = document.createElement('button');
+                    previewBtn.className = 'px-3 py-1.5 rounded-lg bg-pink-600/90 hover:bg-pink-500 text-white text-xs font-bold shadow-xl flex items-center space-x-1.5 transition transform hover:scale-105 backdrop-blur';
+                    previewBtn.innerHTML = '<i class="fa-solid fa-expand text-[10px]"></i> <span>Preview</span>';
+                    previewBtn.title = 'Open Fullscreen Preview';
+                    previewBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        openMediaPreview(index);
+                    };
+                    centerDiv.appendChild(previewBtn);
+                    overlay.appendChild(centerDiv);
+                    
+                    // Bottom Section
+                    const bottomContainer = document.createElement('div');
+                    bottomContainer.className = 'space-y-1.5';
+                    
+                    // Filename Label
+                    const label = document.createElement('div');
+                    label.className = 'text-[10px] text-white truncate font-medium bg-black/60 px-1.5 py-0.5 rounded';
+                    label.textContent = item.name;
+                    label.title = item.name;
+                    bottomContainer.appendChild(label);
+                    
+                    // Action Buttons Row
+                    const bottomBar = document.createElement('div');
+                    bottomBar.className = 'flex items-center space-x-1.5';
+                    
+                    const folderBtn = document.createElement('button');
+                    folderBtn.className = 'flex-1 py-1.5 bg-zinc-900/90 hover:bg-zinc-800 text-white rounded text-[10px] font-bold uppercase tracking-wider transition shadow-lg backdrop-blur flex items-center justify-center space-x-1 border border-zinc-800/80';
+                    folderBtn.innerHTML = '<i class="fa-solid fa-folder-open text-pink-500"></i> <span>Folder</span>';
+                    folderBtn.title = 'Open enclosing folder in Windows Explorer';
+                    folderBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        openFolder(safePath);
+                    };
+                    bottomBar.appendChild(folderBtn);
+                    
+                    if (item.source_url) {
+                        const postBtn = document.createElement('button');
+                        postBtn.className = 'flex-1 py-1.5 bg-pink-600/90 hover:bg-pink-500 text-white rounded text-[10px] font-bold uppercase tracking-wider transition shadow-lg backdrop-blur flex items-center justify-center space-x-1';
+                        postBtn.innerHTML = '<i class="fa-solid fa-arrow-up-right-from-square"></i> <span>Post</span>';
+                        postBtn.title = `Source: ${item.source_url}`;
+                        postBtn.onclick = (e) => {
+                            e.stopPropagation();
+                            window.open(item.source_url, '_blank');
+                        };
+                        bottomBar.appendChild(postBtn);
                     }
-                    const originalText = aiBtn.innerHTML;
-                    aiBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>Extracting...</span>';
-                    aiBtn.disabled = true;
-                    try {
-                        const res = await fetch('/api/extract_prompt', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ path: safePath })
-                        });
-                        const result = await res.json();
-                        if (result.prompt) {
-                            promptModal(result.prompt);
-                        } else if (result.error === 'ai_pack_required') {
-                            openAiInstallModal('BLIP Vision Prompt Extractor');
-                        } else {
-                            alert('Extraction failed: ' + (result.error || 'Unknown error'));
-                        }
-                    } catch (e) {
-                        alert('Extraction failed: ' + e.message);
-                    } finally {
-                        aiBtn.innerHTML = originalText;
-                        aiBtn.disabled = false;
-                    }
-                };
-                if (item.type === 'video' || item.type === 'image') {
-                    midBar.appendChild(aiBtn);
-                    hoverOverlay.insertBefore(midBar, bottomBar);
-                }
-
-                el.appendChild(hoverOverlay);
-                
-                const label = document.createElement('div');
-                label.className = 'absolute bottom-10 left-0 w-full p-2 bg-gradient-to-t from-black/80 to-transparent text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity truncate pointer-events-none';
-                label.textContent = item.name;
-                el.appendChild(label);
-                
-                grid.appendChild(el);
-            });
+                    
+                    bottomContainer.appendChild(bottomBar);
+                    overlay.appendChild(bottomContainer);
+                    el.appendChild(overlay);
+                    
+                    // Click on whole card opens preview modal
+                    el.onclick = () => openMediaPreview(index);
+                    
+                    grid.appendChild(el);
+                });
+            } catch (err) {
+                console.error("Gallery loading failed:", err);
+                grid.innerHTML = '<div class="col-span-full py-8 text-center text-red-400 text-xs">Failed to load gallery items.</div>';
+            }
         }
         
         async function deleteGalleryItem(path) {
-            if (!confirm('Delete this file? (Moved to Trash/Recycle Bin)')) return;
+            if (!confirm('Delete this file? (Moved to Trash/Recycle Bin)')) return false;
             try {
                 const res = await fetch('/api/gallery/delete', {
                     method: 'POST',
@@ -1013,56 +1249,113 @@
                 });
                 const data = await res.json();
                 if (data.success) {
+                    showToast('Deleted', 'File moved to recycle bin');
                     loadGallery();
+                    return true;
                 } else {
                     alert('Delete failed: ' + (data.error || 'Unknown error'));
+                    return false;
                 }
             } catch (err) {
                 alert('Delete failed: ' + err.message);
+                return false;
             }
         }
         
         async function loadHistory() {
-            const query = document.getElementById('historySearch').value.toLowerCase();
-            const res = await fetch('/api/history');
-            const data = await res.json();
+            const query = (document.getElementById('historySearch')?.value || '').toLowerCase();
             const list = document.getElementById('historyList');
             if (!list) return;
-            list.innerHTML = '';
             
-            if (data.length === 0) {
-                list.innerHTML = '<div class="text-center text-zinc-500 text-xs py-8">No download history found.</div>';
-                return;
-            }
+            try {
+                const res = await fetch('/api/history');
+                const data = await res.json();
+                list.innerHTML = '';
+                
+                if (!data || data.length === 0) {
+                    list.innerHTML = '<div class="text-center text-zinc-500 text-xs py-8">No download history found.</div>';
+                    return;
+                }
 
-            data.forEach(item => {
-                if (query && !item.title.toLowerCase().includes(query) && !item.url.toLowerCase().includes(query)) return;
-                
-                const dateStr = new Date(item.timestamp * 1000).toLocaleString();
-                const safePath = item.file_path ? item.file_path.replace(/\\/g, '\\\\') : '';
-                
-                const el = document.createElement('div');
-                el.className = 'p-3 rounded-xl bg-[#080809] border border-zinc-800 flex items-center justify-between group';
-                el.innerHTML = `
-                    <div class="flex-1 overflow-hidden pr-4">
+                let displayed = 0;
+                data.forEach(item => {
+                    const titleStr = (item.title || '').toLowerCase();
+                    const urlStr = (item.url || '').toLowerCase();
+                    if (query && !titleStr.includes(query) && !urlStr.includes(query)) return;
+                    displayed++;
+                    
+                    const dateStr = item.timestamp ? new Date(item.timestamp * 1000).toLocaleString() : '';
+                    
+                    const el = document.createElement('div');
+                    el.className = 'p-3 rounded-xl bg-[#080809] border border-zinc-800 hover:border-zinc-700/80 flex items-center justify-between group transition shadow-sm';
+                    
+                    const leftDiv = document.createElement('div');
+                    leftDiv.className = 'flex-1 overflow-hidden pr-4';
+                    leftDiv.innerHTML = `
                         <div class="flex items-center space-x-2 mb-1">
-                            <span class="px-1.5 py-0.5 rounded bg-pink-500/20 text-pink-400 text-[9px] font-bold uppercase tracking-wider">${item.platform}</span>
-                            <span class="text-xs font-bold text-zinc-200 truncate flex-1">${item.title}</span>
+                            <span class="px-1.5 py-0.5 rounded bg-pink-500/20 text-pink-400 text-[9px] font-bold uppercase tracking-wider">${item.platform || 'Other'}</span>
+                            <span class="text-xs font-bold text-zinc-200 truncate flex-1 title-text"></span>
                         </div>
                         <div class="flex items-center space-x-3 text-[10px] text-zinc-500">
-                            <span class="truncate max-w-[200px]"><i class="fa-solid fa-link"></i> ${item.url}</span>
-                            <span><i class="fa-solid fa-clock"></i> ${dateStr}</span>
+                            <span class="truncate max-w-[280px] text-zinc-400 url-link cursor-pointer hover:underline hover:text-pink-400" title="${item.url || ''}"><i class="fa-solid fa-link mr-1"></i>${item.url || 'No URL'}</span>
+                            <span><i class="fa-solid fa-clock mr-1"></i>${dateStr}</span>
                         </div>
-                    </div>
-                    <div class="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        ${safePath ? `<button onclick="openFolder('${safePath}')" class="w-8 h-8 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-pink-400 flex items-center justify-center transition" title="Open Folder"><i class="fa-solid fa-folder-open"></i></button>` : ''}
-                        <button onclick="deleteHistoryItem('${item.id}')" class="w-8 h-8 rounded-lg bg-zinc-900 hover:bg-red-500/20 text-zinc-500 hover:text-red-400 flex items-center justify-center transition" title="Remove from History">
-                            <i class="fa-solid fa-trash"></i>
-                        </button>
-                    </div>
-                `;
-                list.appendChild(el);
-            });
+                    `;
+                    leftDiv.querySelector('.title-text').textContent = item.title || 'Untitled Download';
+                    if (item.url && item.url.startsWith('http')) {
+                        leftDiv.querySelector('.url-link').onclick = (e) => {
+                            e.stopPropagation();
+                            window.open(item.url, '_blank');
+                        };
+                    }
+                    
+                    const rightDiv = document.createElement('div');
+                    rightDiv.className = 'flex items-center space-x-2 shrink-0';
+                    
+                    if (item.file_path) {
+                        const folderBtn = document.createElement('button');
+                        folderBtn.className = 'px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-pink-400 hover:text-pink-300 border border-zinc-800 text-xs font-bold flex items-center space-x-1.5 transition shadow';
+                        folderBtn.innerHTML = '<i class="fa-solid fa-folder-open"></i> <span class="text-[10px] uppercase">Folder</span>';
+                        folderBtn.title = 'Open Enclosing Folder in Explorer';
+                        folderBtn.onclick = (e) => {
+                            e.stopPropagation();
+                            openFolder(item.file_path);
+                        };
+                        rightDiv.appendChild(folderBtn);
+
+                        const openBtn = document.createElement('button');
+                        openBtn.className = 'w-8 h-8 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-cyan-400 flex items-center justify-center transition border border-zinc-800';
+                        openBtn.innerHTML = '<i class="fa-solid fa-play text-[10px]"></i>';
+                        openBtn.title = 'Open File in Default Media Player';
+                        openBtn.onclick = (e) => {
+                            e.stopPropagation();
+                            openFile(item.file_path);
+                        };
+                        rightDiv.appendChild(openBtn);
+                    }
+                    
+                    const delBtn = document.createElement('button');
+                    delBtn.className = 'w-8 h-8 rounded-lg bg-zinc-900 hover:bg-red-500/20 text-zinc-500 hover:text-red-400 flex items-center justify-center transition border border-zinc-800';
+                    delBtn.innerHTML = '<i class="fa-solid fa-trash text-xs"></i>';
+                    delBtn.title = 'Remove from History';
+                    delBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        deleteHistoryItem(item.id);
+                    };
+                    rightDiv.appendChild(delBtn);
+                    
+                    el.appendChild(leftDiv);
+                    el.appendChild(rightDiv);
+                    list.appendChild(el);
+                });
+                
+                if (displayed === 0) {
+                    list.innerHTML = '<div class="text-center text-zinc-500 text-xs py-8">No matching downloads found.</div>';
+                }
+            } catch (err) {
+                console.error("History loading failed:", err);
+                list.innerHTML = '<div class="text-center text-red-400 text-xs py-8">Failed to load history.</div>';
+            }
         }
         
         async function clearHistory() {
@@ -1289,6 +1582,7 @@
                                     row.appendChild(actionBtn);
                                 }
                                 if (typeof loadGallery === 'function') loadGallery();
+                                if (typeof loadHistory === 'function') loadHistory();
                                 finished = true;
                                 break;
                             }
@@ -1632,6 +1926,22 @@
                                     statusText.className = 'text-emerald-400 font-bold uppercase tracking-widest text-[10px]';
                                     statusIcon.className = 'fa-solid fa-circle-check text-emerald-400';
                                     progressBar.style.width = '100%';
+                                    
+                                    showToast('Conversion Complete', data.file_path ? `Saved to ${data.file_path}` : 'File converted successfully.');
+                                    
+                                    const oldBtn = statusContainer.querySelector('.conv-folder-btn');
+                                    if (oldBtn) oldBtn.remove();
+                                    
+                                    if (data.file_path) {
+                                        const actionBtn = document.createElement('button');
+                                        actionBtn.type = 'button';
+                                        actionBtn.className = 'conv-folder-btn mt-2 text-[10px] text-purple-400 hover:text-purple-300 font-bold uppercase tracking-wider flex items-center space-x-1 transition';
+                                        actionBtn.innerHTML = '<i class="fa-solid fa-folder-open text-xs"></i> <span>Open Folder</span>';
+                                        actionBtn.onclick = () => openFolder(data.file_path);
+                                        statusContainer.appendChild(actionBtn);
+                                    }
+                                    
+                                    if (typeof loadGallery === 'function') loadGallery();
                                     break;
                                 }
                             } catch (err) {}
@@ -1755,6 +2065,7 @@
                         }
                     }
                 }
+                if (typeof loadGallery === 'function') loadGallery();
             } catch (err) {
                 terminal.textContent += `[Error] ${err.message}\n`;
             } finally {
