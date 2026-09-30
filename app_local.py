@@ -427,9 +427,10 @@ def _get_face_cascade():
         print(f"[Face Cascade Init Warning] Could not load face detector: {e}")
     return None
 
-def dynamic_auto_crop(input_path, output_path, q=None, prefix=""):
+def dynamic_auto_crop(input_path, output_path, q=None, prefix="", tracking_mode="largest"):
     try:
         import cv2
+        import numpy as np
         face_cascade = _get_face_cascade()
         if face_cascade is None:
             if q: q.put({"status": f"{prefix}Face detector unavailable, falling back to center crop..."})
@@ -453,12 +454,26 @@ def dynamic_auto_crop(input_path, output_path, q=None, prefix=""):
             cap.release()
             return False
             
-        if q: q.put({"status": f"{prefix}Scanning video for face tracking..."})
+        mode_names = {
+            "largest": "Dominant Subject",
+            "left": "Left Person (Speaker 1)",
+            "right": "Right Person (Speaker 2)",
+            "center": "Center Framing (Both Subjects)",
+            "split_screen": "Podcast Split-Screen (Stacked 9:16)"
+        }
+        mode_label = mode_names.get(tracking_mode, "Dominant Subject")
+        
+        if q: q.put({"status": f"{prefix}Scanning video for {mode_label}..."})
         
         keyframe_interval = max(1, int(fps / 2)) # Twice a second
         frame_centers = []
+        frame_centers_p1 = []
+        frame_centers_p2 = []
         frame_idx = 0
+        
         last_center = width // 2
+        last_c1 = width // 3
+        last_c2 = (2 * width) // 3
         
         while cap.isOpened() and frame_idx < total_frames:
             ret, frame = cap.read()
@@ -469,34 +484,81 @@ def dynamic_auto_crop(input_path, output_path, q=None, prefix=""):
                 small = cv2.resize(gray, (0,0), fx=0.5, fy=0.5)
                 faces = face_cascade.detectMultiScale(small, 1.1, 4)
                 if len(faces) > 0:
-                    faces = sorted(faces, key=lambda f: f[2]*f[3], reverse=True)
-                    (x, y, w, h) = faces[0]
-                    last_center = (x + w//2) * 2
-                frame_centers.append((frame_idx, last_center))
+                    faces_by_x = sorted(faces, key=lambda f: f[0] + f[2]//2)
+                    faces_by_area = sorted(faces, key=lambda f: f[2]*f[3], reverse=True)
+                    
+                    if tracking_mode == "split_screen":
+                        if len(faces_by_x) >= 2:
+                            last_c1 = (faces_by_x[0][0] + faces_by_x[0][2]//2) * 2
+                            last_c2 = (faces_by_x[-1][0] + faces_by_x[-1][2]//2) * 2
+                        else:
+                            single_x = (faces_by_x[0][0] + faces_by_x[0][2]//2) * 2
+                            if single_x < width // 2:
+                                last_c1 = single_x
+                            else:
+                                last_c2 = single_x
+                    elif tracking_mode == "left":
+                        last_center = (faces_by_x[0][0] + faces_by_x[0][2]//2) * 2
+                    elif tracking_mode == "right":
+                        last_center = (faces_by_x[-1][0] + faces_by_x[-1][2]//2) * 2
+                    elif tracking_mode == "center":
+                        left_x = (faces_by_x[0][0] + faces_by_x[0][2]//2) * 2
+                        right_x = (faces_by_x[-1][0] + faces_by_x[-1][2]//2) * 2
+                        last_center = (left_x + right_x) // 2
+                    else:  # largest
+                        (x, y, w, h) = faces_by_area[0]
+                        last_center = (x + w//2) * 2
+                        
+                if tracking_mode == "split_screen":
+                    frame_centers_p1.append((frame_idx, last_c1))
+                    frame_centers_p2.append((frame_idx, last_c2))
+                else:
+                    frame_centers.append((frame_idx, last_center))
+                    
             frame_idx += 1
         cap.release()
         
-        if not frame_centers: return False
-        
-        smoothed_centers = []
-        all_centers = [width//2] * frame_idx
-        for i in range(len(frame_centers) - 1):
-            idx1, c1 = frame_centers[i]
-            idx2, c2 = frame_centers[i+1]
-            for j in range(idx1, idx2):
-                all_centers[j] = int(c1 + (c2 - c1) * (j - idx1) / (idx2 - idx1))
-        if frame_centers:
-            idx_last, c_last = frame_centers[-1]
-            for j in range(idx_last, frame_idx): all_centers[j] = c_last
+        def interpolate_and_smooth(centers_list, target_box_w, default_val):
+            if not centers_list:
+                return [default_val] * frame_idx
+            all_c = [default_val] * frame_idx
+            for i in range(len(centers_list) - 1):
+                idx1, c1 = centers_list[i]
+                idx2, c2 = centers_list[i+1]
+                for j in range(idx1, idx2):
+                    all_c[j] = int(c1 + (c2 - c1) * (j - idx1) / (idx2 - idx1))
+            idx_last, c_last = centers_list[-1]
+            for j in range(idx_last, frame_idx):
+                all_c[j] = c_last
+                
+            alpha = 0.05
+            curr = all_c[0]
+            smoothed = []
+            for c in all_c:
+                curr = alpha * c + (1 - alpha) * curr
+                clamped = max(target_box_w // 2, min(width - target_box_w // 2, int(curr)))
+                smoothed.append(clamped)
+            return smoothed
+
+        half_h = height // 2
+        if tracking_mode == "split_screen":
+            if not frame_centers_p1 or not frame_centers_p2: return False
+            crop_aspect = target_width / half_h
+            if width / height >= crop_aspect:
+                crop_h = height
+                crop_w = int(crop_h * crop_aspect)
+            else:
+                crop_w = width
+                crop_h = int(crop_w / crop_aspect)
+            crop_w = (crop_w // 2) * 2
+            crop_h = (crop_h // 2) * 2
+            smoothed_p1 = interpolate_and_smooth(frame_centers_p1, crop_w, width // 3)
+            smoothed_p2 = interpolate_and_smooth(frame_centers_p2, crop_w, (2 * width) // 3)
+        else:
+            if not frame_centers: return False
+            smoothed_centers = interpolate_and_smooth(frame_centers, target_width, width // 2)
             
-        alpha = 0.05
-        current_smooth = all_centers[0]
-        for c in all_centers:
-            current_smooth = alpha * c + (1 - alpha) * current_smooth
-            clamped = max(target_width // 2, min(width - target_width // 2, int(current_smooth)))
-            smoothed_centers.append(clamped)
-            
-        if q: q.put({"status": f"{prefix}Rendering dynamic face-tracked video..."})
+        if q: q.put({"status": f"{prefix}Rendering {mode_label} video..."})
         
         cap = cv2.VideoCapture(input_path)
         ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe() if imageio_ffmpeg else "ffmpeg"
@@ -516,20 +578,44 @@ def dynamic_auto_crop(input_path, output_path, q=None, prefix=""):
             ret, frame = cap.read()
             if not ret: break
             
-            c = smoothed_centers[frame_idx] if frame_idx < len(smoothed_centers) else smoothed_centers[-1]
-            x_start = max(0, min(width - target_width, c - target_width // 2))
-            cropped = frame[0:height, x_start:x_start+target_width]
-            if cropped.shape[1] != target_width or cropped.shape[0] != height:
-                cropped = cv2.resize(cropped, (target_width, height))
+            if tracking_mode == "split_screen":
+                c1 = smoothed_p1[frame_idx] if frame_idx < len(smoothed_p1) else smoothed_p1[-1]
+                c2 = smoothed_p2[frame_idx] if frame_idx < len(smoothed_p2) else smoothed_p2[-1]
+                
+                # Person 1 (Top Half)
+                x1 = max(0, min(width - crop_w, c1 - crop_w // 2))
+                y1 = max(0, min(height - crop_h, (height - crop_h) // 2))
+                crop_top = frame[y1:y1+crop_h, x1:x1+crop_w]
+                if crop_top.shape[1] != target_width or crop_top.shape[0] != half_h:
+                    crop_top = cv2.resize(crop_top, (target_width, half_h))
+                    
+                # Person 2 (Bottom Half)
+                x2 = max(0, min(width - crop_w, c2 - crop_w // 2))
+                y2 = max(0, min(height - crop_h, (height - crop_h) // 2))
+                crop_bottom = frame[y2:y2+crop_h, x2:x2+crop_w]
+                if crop_bottom.shape[1] != target_width or crop_bottom.shape[0] != (height - half_h):
+                    crop_bottom = cv2.resize(crop_bottom, (target_width, height - half_h))
+                    
+                # Clean 2px modern separator border line
+                crop_top[-2:, :] = (35, 35, 42)
+                crop_bottom[:1, :] = (35, 35, 42)
+                
+                rendered_frame = np.vstack([crop_top, crop_bottom])
+            else:
+                c = smoothed_centers[frame_idx] if frame_idx < len(smoothed_centers) else smoothed_centers[-1]
+                x_start = max(0, min(width - target_width, c - target_width // 2))
+                rendered_frame = frame[0:height, x_start:x_start+target_width]
+                if rendered_frame.shape[1] != target_width or rendered_frame.shape[0] != height:
+                    rendered_frame = cv2.resize(rendered_frame, (target_width, height))
             
             try:
                 if process.stdin:
-                    process.stdin.write(cropped.tobytes())
+                    process.stdin.write(rendered_frame.tobytes())
             except Exception: break
             frame_idx += 1
             if q and frame_idx % int(fps * 2) == 0 and total_frames > 0:
                 pct = int(frame_idx/total_frames*100)
-                q.put({"status": f"{prefix}Rendering face-tracked video... ({pct}%)"})
+                q.put({"status": f"{prefix}Rendering {mode_label} video... ({pct}%)"})
                 
         cap.release()
         try: 
@@ -687,6 +773,7 @@ def convert_media():
     resize = request.form.get('resize')
     format_opt = request.form.get('format')
     autocrop = request.form.get('autocrop') == 'true'
+    tracking_mode = request.form.get('tracking_mode', 'largest')
     burn_subtitles = request.form.get('burn_subtitles') == 'true'
     export_subtitles = request.form.get('export_subtitles') == 'true'
     translate_lang = request.form.get('translate_lang', 'none')
@@ -778,7 +865,7 @@ def convert_media():
                     # 1. Smart Auto-Crop or Aspect Ratio Crop/Pad
                     if autocrop and format_opt not in ["mp3", "wav"] and input_ext not in [".mp3", ".wav", ".jpg", ".png", ".webp"]:
                         temp_crop_path = os.path.join(shared_temp_dir, f"{uuid.uuid4().hex}_precrop.mp4")
-                        if dynamic_auto_crop(input_path, temp_crop_path, q, prefix):
+                        if dynamic_auto_crop(input_path, temp_crop_path, q, prefix, tracking_mode=tracking_mode):
                             input_path = temp_crop_path
                             # dynamic_auto_crop already crops to 9:16
                         else:

@@ -13,6 +13,12 @@ All notable changes to the AI Influencer Media Grabber project will be documente
 - **Media Preview Lightbox Modal**: Clicking any card in the Output Gallery opens a responsive lightbox modal with embedded video, audio, and image playback, quick action buttons, and keyboard navigation (`Escape`, `ArrowLeft`, `ArrowRight`).
 - **Download History Auto-Reconciliation**: Automatically scans and backfills missing files into `history.json` on startup, with downloads strictly ordered newest-first.
 - **Non-blocking Windows Explorer Integration**: Folder buttons across the gallery, history, and converter now use non-blocking explorer selection with directory fallback.
+- **Multi-Person Face Tracking Target Selection**: Media Tools converter now supports smart focus selection when multiple subjects are in frame:
+  - 👑 **Dominant Subject**: Automatically tracks and centers the primary speaker based on face size.
+  - 👈 **Left Person (Speaker 1)**: Locks onto and follows the person on the left side of the frame.
+  - 👉 **Right Person (Speaker 2)**: Locks onto and follows the person on the right side of the frame.
+  - 👥 **Center Framing**: Frames both speakers together, smoothly panning to keep both subjects visible in 9:16.
+- **🎙️ Podcast Split-Screen Mode (Stacked 9:16)**: Added Opus Clip & CapCut style stacked layout for two-person interviews and podcasts. Simultaneously crops Speaker 1 on the top half and Speaker 2 on the bottom half with a crisp divider line, formatted directly into vertical 9:16 with zero audio re-encoding loss.
 
 ### Fixed
 - **Frame-Accurate Clip Trimming Bug**: Fixed FFmpeg duration calculation when trimming clips (`-ss <start> -t <duration>`). Setting timestamps like `00:00:14` to `00:00:28` now produces an exact 14.0-second clip instead of taking 28 seconds.

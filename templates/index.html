@@ -355,6 +355,21 @@
                                         <span>Dynamic Face-Tracking Crop to 9:16</span>
                                     </div>
                                 </label>
+
+                                <!-- Dynamic Face Tracking Target Selector & Podcast Split-Screen -->
+                                <div id="convTrackingOptions" class="hidden ml-5 pl-3 py-2.5 my-1.5 border-l-2 border-purple-500/50 bg-zinc-900/60 rounded-r-lg space-y-2 transition-all">
+                                    <div class="flex items-center justify-between space-x-2">
+                                        <label for="convTrackingMode" class="text-[11px] text-zinc-400 font-medium">Tracking Focus & Layout:</label>
+                                        <select id="convTrackingMode" class="px-2.5 py-1 bg-zinc-900 border border-zinc-700/80 rounded text-xs text-zinc-200 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all cursor-pointer">
+                                            <option value="largest">👑 Dominant Subject (Largest Face)</option>
+                                            <option value="left">👈 Left Person (Speaker 1)</option>
+                                            <option value="right">👉 Right Person (Speaker 2)</option>
+                                            <option value="center">👥 Center (Both Subjects in Frame)</option>
+                                            <option value="split_screen">🎙️ Podcast Split-Screen (Stacked 9:16)</option>
+                                        </select>
+                                    </div>
+                                    <p id="convTrackingHint" class="text-[10.5px] text-purple-300/80 leading-tight">Automatically tracks and centers the primary speaker in 9:16 vertical video.</p>
+                                </div>
                                 <label class="flex items-center justify-between space-x-2 text-xs text-zinc-300 cursor-pointer mb-2">
                                     <div class="flex items-center space-x-2">
                                         <input type="checkbox" id="convBurnSubtitles" class="form-checkbox text-purple-500 rounded border-zinc-700 bg-zinc-900 focus:ring-purple-500">
@@ -1870,6 +1885,7 @@
             e.preventDefault();
             const formData = new FormData(e.target);
             formData.set('autocrop', document.getElementById('convAutoCrop').checked);
+            formData.set('tracking_mode', document.getElementById('convTrackingMode') ? document.getElementById('convTrackingMode').value : 'largest');
             formData.set('burn_subtitles', document.getElementById('convBurnSubtitles').checked);
             formData.set('export_subtitles', document.getElementById('convExportSubtitles').checked);
             formData.set('translate_lang', document.getElementById('convTranslateLang').value);
@@ -2092,7 +2108,7 @@
             // Restore settings
             const settingsIds = [
                 'browser', 'convResize', 'convCompress', 'convFormat', 
-                'convAutoCrop', 'convBurnSubtitles', 'convExportSubtitles', 
+                'convAutoCrop', 'convTrackingMode', 'convBurnSubtitles', 'convExportSubtitles', 
                 'burnSubtitles', 'exportSubtitlesDownloader', 'injectExif',
                 'autoExtractPrompt', 'aiSummarize', 'llmModelDownloader', 'convTranslateLang', 'llmModelConverter'
             ];
@@ -2109,6 +2125,41 @@
                     });
                 }
             });
+
+            // Dynamic Face Tracking Mode UI & Hints
+            const convAutoCropEl = document.getElementById('convAutoCrop');
+            const convTrackingOptionsEl = document.getElementById('convTrackingOptions');
+            const convTrackingModeEl = document.getElementById('convTrackingMode');
+            const convTrackingHintEl = document.getElementById('convTrackingHint');
+
+            const trackingHints = {
+                'largest': 'Automatically tracks and centers the primary speaker in 9:16 vertical video.',
+                'left': 'Locks onto and follows the person on the left side of the frame (Speaker 1).',
+                'right': 'Locks onto and follows the person on the right side of the frame (Speaker 2).',
+                'center': 'Smoothly pans to keep both speakers visible in the 9:16 frame.',
+                'split_screen': 'Stacks both speakers vertically (Speaker 1 on top, Speaker 2 on bottom) in 9:16 — Opus Clip podcast style.'
+            };
+
+            function syncTrackingUI() {
+                if (convAutoCropEl && convTrackingOptionsEl) {
+                    if (convAutoCropEl.checked) {
+                        convTrackingOptionsEl.classList.remove('hidden');
+                    } else {
+                        convTrackingOptionsEl.classList.add('hidden');
+                    }
+                }
+                if (convTrackingModeEl && convTrackingHintEl) {
+                    convTrackingHintEl.textContent = trackingHints[convTrackingModeEl.value] || trackingHints['largest'];
+                }
+            }
+
+            if (convAutoCropEl) {
+                convAutoCropEl.addEventListener('change', syncTrackingUI);
+            }
+            if (convTrackingModeEl) {
+                convTrackingModeEl.addEventListener('change', syncTrackingUI);
+            }
+            syncTrackingUI();
 
             // Keyboard Shortcuts
             window.addEventListener('keydown', (e) => {
