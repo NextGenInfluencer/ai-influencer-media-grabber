@@ -322,118 +322,147 @@ def llm_generate(prompt, system_prompt="You are a helpful AI assistant.", model_
         return (content or "").strip()
     return ""
 
-# Cache the face detection cascade globally but initialize lazily
+# Cache the face detection cascade globally but initialize lazily and defensively
 _face_cascade = None
 
-def dynamic_auto_crop(input_path, output_path, q=None, prefix=""):
-    import cv2
-    import cv2.data # type: ignore
+def _get_face_cascade():
     global _face_cascade
-    if _face_cascade is None:
-        _face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml') # type: ignore
+    if _face_cascade is not None:
+        return _face_cascade
+    try:
+        import cv2
+        cascade_cls = None
+        if hasattr(cv2, 'CascadeClassifier'):
+            cascade_cls = getattr(cv2, 'CascadeClassifier')
+        elif hasattr(cv2, 'xobjdetect') and hasattr(getattr(cv2, 'xobjdetect'), 'CascadeClassifier'):
+            cascade_cls = getattr(getattr(cv2, 'xobjdetect'), 'CascadeClassifier')
         
-    cap = cv2.VideoCapture(input_path)
-    if not cap.isOpened():
-        return False
-        
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    if fps <= 0: fps = 30
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    
-    target_width = int(height * (9 / 16))
-    if target_width > width: target_width = width
-    if width <= height:
-        cap.release()
-        return False
-        
-    face_cascade = _face_cascade
-    
-    if q: q.put({"status": f"{prefix}Scanning video for face tracking..."})
-    
-    keyframe_interval = max(1, int(fps / 2)) # Twice a second
-    frame_centers = []
-    frame_idx = 0
-    last_center = width // 2
-    
-    while cap.isOpened() and frame_idx < total_frames:
-        ret, frame = cap.read()
-        if not ret: break
-        
-        if frame_idx % keyframe_interval == 0:
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            small = cv2.resize(gray, (0,0), fx=0.5, fy=0.5)
-            faces = face_cascade.detectMultiScale(small, 1.1, 4)
-            if len(faces) > 0:
-                faces = sorted(faces, key=lambda f: f[2]*f[3], reverse=True)
-                (x, y, w, h) = faces[0]
-                last_center = (x + w//2) * 2
-            frame_centers.append((frame_idx, last_center))
-        frame_idx += 1
-    cap.release()
-    
-    if not frame_centers: return False
-    
-    smoothed_centers = []
-    all_centers = [width//2] * frame_idx
-    for i in range(len(frame_centers) - 1):
-        idx1, c1 = frame_centers[i]
-        idx2, c2 = frame_centers[i+1]
-        for j in range(idx1, idx2):
-            all_centers[j] = int(c1 + (c2 - c1) * (j - idx1) / (idx2 - idx1))
-    if frame_centers:
-        idx_last, c_last = frame_centers[-1]
-        for j in range(idx_last, frame_idx): all_centers[j] = c_last
-        
-    alpha = 0.05
-    current_smooth = all_centers[0]
-    for c in all_centers:
-        current_smooth = alpha * c + (1 - alpha) * current_smooth
-        clamped = max(target_width // 2, min(width - target_width // 2, int(current_smooth)))
-        smoothed_centers.append(clamped)
-        
-    if q: q.put({"status": f"{prefix}Rendering dynamic face-tracked video..."})
-    
-    cap = cv2.VideoCapture(input_path)
-    ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe() if imageio_ffmpeg else "ffmpeg"
-    
-    cmd = [
-        ffmpeg_exe, '-y', '-f', 'rawvideo', '-vcodec', 'rawvideo',
-        '-s', f'{target_width}x{height}', '-pix_fmt', 'bgr24', '-r', str(fps),
-        '-i', '-', '-i', input_path, '-map', '0:v', '-map', '1:a?', 
-        '-c:v', 'libx264', '-preset', 'fast', '-crf', '17', '-c:a', 'copy',
-        output_path
-    ]
-    
-    process = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    
-    frame_idx = 0
-    while True:
-        ret, frame = cap.read()
-        if not ret: break
-        
-        c = smoothed_centers[frame_idx] if frame_idx < len(smoothed_centers) else smoothed_centers[-1]
-        x_start = c - target_width // 2
-        cropped = frame[:, x_start:x_start+target_width]
-        
-        try:
-            if process.stdin:
-                process.stdin.write(cropped.tobytes())
-        except Exception: break
-        frame_idx += 1
-        if q and frame_idx % int(fps * 2) == 0 and total_frames > 0:
-            pct = int(frame_idx/total_frames*100)
-            q.put({"status": f"{prefix}Rendering face-tracked video... ({pct}%)"})
+        if cascade_cls is not None:
+            xml_path = None
+            if hasattr(cv2, 'data') and hasattr(cv2.data, 'haarcascades'):
+                p = os.path.join(cv2.data.haarcascades, 'haarcascade_frontalface_default.xml')
+                if os.path.isfile(p):
+                    xml_path = p
+            if xml_path:
+                detector = cascade_cls(xml_path)
+                if hasattr(detector, 'empty') and not detector.empty():
+                    _face_cascade = detector
+                    return _face_cascade
+    except Exception as e:
+        print(f"[Face Cascade Init Warning] Could not load face detector: {e}")
+    return None
+
+def dynamic_auto_crop(input_path, output_path, q=None, prefix=""):
+    try:
+        import cv2
+        face_cascade = _get_face_cascade()
+        if face_cascade is None:
+            if q: q.put({"status": f"{prefix}Face detector unavailable, falling back to center crop..."})
+            return False
             
-    cap.release()
-    try: 
-        if process.stdin:
-            process.stdin.close()
-        process.wait()
-    except Exception: pass
-    
-    return os.path.exists(output_path) and os.path.getsize(output_path) > 0
+        cap = cv2.VideoCapture(input_path)
+        if not cap.isOpened():
+            return False
+            
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        if fps <= 0: fps = 30
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        
+        target_width = int(height * (9 / 16))
+        if target_width > width: target_width = width
+        if width <= height:
+            cap.release()
+            return False
+            
+        if q: q.put({"status": f"{prefix}Scanning video for face tracking..."})
+        
+        keyframe_interval = max(1, int(fps / 2)) # Twice a second
+        frame_centers = []
+        frame_idx = 0
+        last_center = width // 2
+        
+        while cap.isOpened() and frame_idx < total_frames:
+            ret, frame = cap.read()
+            if not ret: break
+            
+            if frame_idx % keyframe_interval == 0:
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                small = cv2.resize(gray, (0,0), fx=0.5, fy=0.5)
+                faces = face_cascade.detectMultiScale(small, 1.1, 4)
+                if len(faces) > 0:
+                    faces = sorted(faces, key=lambda f: f[2]*f[3], reverse=True)
+                    (x, y, w, h) = faces[0]
+                    last_center = (x + w//2) * 2
+                frame_centers.append((frame_idx, last_center))
+            frame_idx += 1
+        cap.release()
+        
+        if not frame_centers: return False
+        
+        smoothed_centers = []
+        all_centers = [width//2] * frame_idx
+        for i in range(len(frame_centers) - 1):
+            idx1, c1 = frame_centers[i]
+            idx2, c2 = frame_centers[i+1]
+            for j in range(idx1, idx2):
+                all_centers[j] = int(c1 + (c2 - c1) * (j - idx1) / (idx2 - idx1))
+        if frame_centers:
+            idx_last, c_last = frame_centers[-1]
+            for j in range(idx_last, frame_idx): all_centers[j] = c_last
+            
+        alpha = 0.05
+        current_smooth = all_centers[0]
+        for c in all_centers:
+            current_smooth = alpha * c + (1 - alpha) * current_smooth
+            clamped = max(target_width // 2, min(width - target_width // 2, int(current_smooth)))
+            smoothed_centers.append(clamped)
+            
+        if q: q.put({"status": f"{prefix}Rendering dynamic face-tracked video..."})
+        
+        cap = cv2.VideoCapture(input_path)
+        ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe() if imageio_ffmpeg else "ffmpeg"
+        
+        cmd = [
+            ffmpeg_exe, '-y', '-f', 'rawvideo', '-vcodec', 'rawvideo',
+            '-s', f'{target_width}x{height}', '-pix_fmt', 'bgr24', '-r', str(fps),
+            '-i', '-', '-i', input_path, '-map', '0:v', '-map', '1:a?', 
+            '-c:v', 'libx264', '-preset', 'fast', '-crf', '17', '-c:a', 'copy',
+            output_path
+        ]
+        
+        process = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+        frame_idx = 0
+        while True:
+            ret, frame = cap.read()
+            if not ret: break
+            
+            c = smoothed_centers[frame_idx] if frame_idx < len(smoothed_centers) else smoothed_centers[-1]
+            x_start = c - target_width // 2
+            cropped = frame[:, x_start:x_start+target_width]
+            
+            try:
+                if process.stdin:
+                    process.stdin.write(cropped.tobytes())
+            except Exception: break
+            frame_idx += 1
+            if q and frame_idx % int(fps * 2) == 0 and total_frames > 0:
+                pct = int(frame_idx/total_frames*100)
+                q.put({"status": f"{prefix}Rendering face-tracked video... ({pct}%)"})
+                
+        cap.release()
+        try: 
+            if process.stdin:
+                process.stdin.close()
+            process.wait()
+        except Exception: pass
+        
+        return os.path.exists(output_path) and os.path.getsize(output_path) > 0
+    except Exception as e:
+        print(f"[dynamic_auto_crop error] {e}")
+        return False
 
 app = Flask(__name__)
 # Allow large file uploads (500MB max)
