@@ -377,7 +377,9 @@ def dynamic_auto_crop(input_path, output_path, q=None, prefix=""):
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         
         target_width = int(height * (9 / 16))
-        if target_width > width: target_width = width
+        target_width = (target_width // 2) * 2  # Must be divisible by 2 for H.264
+        if target_width > width: target_width = (width // 2) * 2
+        height = (height // 2) * 2  # Ensure height is also divisible by 2
         if width <= height:
             cap.release()
             return False
@@ -434,7 +436,7 @@ def dynamic_auto_crop(input_path, output_path, q=None, prefix=""):
             ffmpeg_exe, '-y', '-f', 'rawvideo', '-vcodec', 'rawvideo',
             '-s', f'{target_width}x{height}', '-pix_fmt', 'bgr24', '-r', str(fps),
             '-i', '-', '-i', input_path, '-map', '0:v', '-map', '1:a?', 
-            '-c:v', 'libx264', '-preset', 'fast', '-crf', '17', '-c:a', 'copy',
+            '-c:v', 'libx264', '-preset', 'fast', '-crf', '17', '-pix_fmt', 'yuv420p', '-c:a', 'copy',
             output_path
         ]
         
@@ -446,8 +448,10 @@ def dynamic_auto_crop(input_path, output_path, q=None, prefix=""):
             if not ret: break
             
             c = smoothed_centers[frame_idx] if frame_idx < len(smoothed_centers) else smoothed_centers[-1]
-            x_start = c - target_width // 2
-            cropped = frame[:, x_start:x_start+target_width]
+            x_start = max(0, min(width - target_width, c - target_width // 2))
+            cropped = frame[0:height, x_start:x_start+target_width]
+            if cropped.shape[1] != target_width or cropped.shape[0] != height:
+                cropped = cv2.resize(cropped, (target_width, height))
             
             try:
                 if process.stdin:
@@ -702,22 +706,22 @@ def convert_media():
                             input_path = temp_crop_path
                             # dynamic_auto_crop already crops to 9:16
                         else:
-                            vf_filters.append("crop=ih*9/16:ih")
+                            vf_filters.append("crop=trunc(ih*9/16/2)*2:trunc(ih/2)*2")
                     elif resize and resize != "none" and format_opt not in ["mp3", "wav"]:
                         if resize == "crop_9_16":
-                            vf_filters.append("crop=ih*9/16:ih")
+                            vf_filters.append("crop=trunc(ih*9/16/2)*2:trunc(ih/2)*2")
                         elif resize == "pad_9_16":
                             vf_filters.append("scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2")
                         elif resize == "crop_16_9":
-                            vf_filters.append("crop=iw:iw*9/16")
+                            vf_filters.append("crop=trunc(iw/2)*2:trunc(iw*9/16/2)*2")
                         elif resize == "pad_16_9":
                             vf_filters.append("scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2")
                         elif resize == "crop_1_1":
-                            vf_filters.append("crop=min(iw\\,ih):min(iw\\,ih)")
+                            vf_filters.append("crop=trunc(min(iw\\,ih)/2)*2:trunc(min(iw\\,ih)/2)*2")
                         elif resize == "crop_4_5":
-                            vf_filters.append("crop=ih*4/5:ih")
+                            vf_filters.append("crop=trunc(ih*4/5/2)*2:trunc(ih/2)*2")
                         elif resize == "pad_blur_9_16":
-                            vf_filters.append("split[original][copy];[copy]scale=-1:1920,crop=1080:1920,boxblur=20:5[bg];[original]scale=1080:1920:force_original_aspect_ratio=decrease[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2")
+                            vf_filters.append("split[original][copy];[copy]scale=-2:1920,crop=1080:1920,boxblur=20:5[bg];[original]scale=1080:1920:force_original_aspect_ratio=decrease[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2")
 
                     # 2. File Size & Resolution Scaling (MB Reduction)
                     if compress_opt and compress_opt != "none" and format_opt not in ["mp3", "wav"]:
@@ -815,6 +819,8 @@ def convert_media():
                                     print("Subtitle error:", e)
 
                         cmd = [ffmpeg_exe, "-y", "-i", input_path]
+                        if format_opt in ["mp4", "mkv", "mov", "avi"]:
+                            vf_filters.append("scale=trunc(iw/2)*2:trunc(ih/2)*2")
                         if vf_filters:
                             cmd.extend(["-vf", ",".join(vf_filters)])
                             
@@ -849,7 +855,7 @@ def convert_media():
                     failed_count += 1
                     err_msg = str(e)
                     q.put({"status": f"{prefix}Error converting file."})
-                    with open(os.path.join(DEFAULT_SAVE_DIR, "converter_debug.log"), "a") as f:
+                    with open(os.path.join(DEFAULT_SAVE_DIR, "converter_debug.log"), "a", encoding="utf-8", errors="replace") as f:
                         f.write(f"Conversion Error:\n{traceback.format_exc()}\n")
                     time.sleep(3)
                     
