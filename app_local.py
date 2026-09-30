@@ -583,6 +583,21 @@ def list_files_endpoint():
     except Exception as e:
         return jsonify({"error": str(e), "path": path, "entries": []}), 200
 
+def parse_time_seconds(time_str: Optional[str]) -> Optional[float]:
+    if not time_str or not time_str.strip():
+        return None
+    parts = time_str.strip().split(':')
+    try:
+        if len(parts) == 3:
+            return float(parts[0]) * 3600 + float(parts[1]) * 60 + float(parts[2])
+        elif len(parts) == 2:
+            return float(parts[0]) * 60 + float(parts[1])
+        elif len(parts) == 1:
+            return float(parts[0])
+    except ValueError:
+        return None
+    return None
+
 @app.route('/api/convert', methods=['POST'])
 def convert_media():
     if 'files' not in request.files:
@@ -650,17 +665,33 @@ def convert_media():
                     counter += 1
                 
                 ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
-                cmd = [ffmpeg_exe, "-y"]
-                
-                if trim_start and trim_start.strip() and total == 1:
-                    cmd.extend(["-ss", trim_start.strip()])
-                    
-                cmd.extend(["-i", input_path])
-                
-                if trim_end and trim_end.strip() and total == 1:
-                    cmd.extend(["-to", trim_end.strip()])
                 
                 try:
+                    # 0. Frame-Accurate Clip Trimming (Calculates exact duration from start to end)
+                    if total == 1 and (trim_start or trim_end):
+                        start_s = parse_time_seconds(trim_start)
+                        end_s = parse_time_seconds(trim_end)
+                        if (start_s is not None and start_s > 0) or end_s is not None:
+                            trimmed_temp_path = os.path.join(shared_temp_dir, f"{uuid.uuid4().hex}_trimmed.mp4")
+                            q.put({"status": f"{prefix}Trimming clip ({trim_start or '00:00:00'} to {trim_end or 'End'})..."})
+                            
+                            trim_cmd = [ffmpeg_exe, "-y"]
+                            if start_s is not None and start_s > 0:
+                                trim_cmd.extend(["-ss", str(start_s)])
+                            if end_s is not None:
+                                if start_s is not None and start_s > 0:
+                                    duration_s = max(0.1, end_s - start_s)
+                                    trim_cmd.extend(["-t", str(duration_s)])
+                                else:
+                                    trim_cmd.extend(["-t", str(end_s)])
+                            
+                            trim_cmd.extend(["-i", input_path, "-c:v", "libx264", "-preset", "ultrafast", "-crf", "17", "-c:a", "aac", trimmed_temp_path])
+                            
+                            res = subprocess.run(trim_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+                            if res.returncode == 0 and os.path.exists(trimmed_temp_path) and os.path.getsize(trimmed_temp_path) > 0:
+                                input_path = trimmed_temp_path
+                            else:
+                                print(f"Trim notice: {res.stderr}")
                     vf_filters = []
                     crf_val = "23" # Default standard quality
                     
@@ -727,6 +758,7 @@ def convert_media():
                     
                     # Audio formats (ignore video filters)
                     if format_opt in ["mp3", "wav"]:
+                        cmd = [ffmpeg_exe, "-y", "-i", input_path]
                         if format_opt == "mp3":
                             cmd.extend(["-vn", "-acodec", "libmp3lame", "-q:a", "2"])
                         else:
@@ -753,11 +785,11 @@ def convert_media():
                                         result = model.transcribe(temp_audio, verbose=False)
                                     
                                         def format_time(seconds):
-                                            m, s = divmod(seconds, 60)
-                                            h, m = divmod(m, 60)
-                                            ms = int((s - int(s)) * 1000)
-                                            return f"{int(h):02d}:{int(m):02d}:{int(s):02d},{ms:03d}"
-                                        
+                                             m, s = divmod(seconds, 60)
+                                             h, m = divmod(m, 60)
+                                             ms = int((s - int(s)) * 1000)
+                                             return f"{int(h):02d}:{int(m):02d}:{int(s):02d},{ms:03d}"
+                                         
                                         with open(temp_srt, 'w', encoding='utf-8') as f:
                                             for i, segment in enumerate(result.get('segments', [])):
                                                 f.write(f"{i + 1}\n")
@@ -782,6 +814,7 @@ def convert_media():
                                 except Exception as e:
                                     print("Subtitle error:", e)
 
+                        cmd = [ffmpeg_exe, "-y", "-i", input_path]
                         if vf_filters:
                             cmd.extend(["-vf", ",".join(vf_filters)])
                             
@@ -918,8 +951,20 @@ def download_video():
     def generate():
         yield f"data: {json.dumps({'status': 'Fetching metadata...'})}\n\n"
         
+        quality = processing_options.get('quality', 'max')
+        force_h264 = processing_options.get('forceH264', False)
+        
+        # Build format selector based on user preference
+        if quality == 'audio_only':
+            fmt_str = 'bestaudio/best'
+        elif quality in ['2160', '1440', '1080', '720', '480']:
+            h = quality
+            fmt_str = f'bestvideo[height<={h}]+bestaudio/best[height<={h}]/best'
+        else: # 'max' / default: True maximum resolution available (4K, 1440p, 1080p60)
+            fmt_str = 'bestvideo+bestaudio/best'
+
         ydl_opts: dict[str, Any] = {
-            'format': 'bestvideo+bestaudio/best' if processing_options.get('forceH264') else 'bestvideo[vcodec^=avc]+bestaudio[acodec^=mp4a]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best',
+            'format': fmt_str,
             'merge_output_format': 'mp4',
             'outtmpl': os.path.join(output_path, '%(playlist_title,uploader)s', '%(playlist_index|)s%(playlist_index& - |)s%(title)s_%(id)s.%(ext)s'),
             'quiet': True,
@@ -928,12 +973,26 @@ def download_video():
             'retries': 10,
             'fragment_retries': 10,
             'socket_timeout': 30,
+            'js_runtimes': {'node': {}},
+            'remote_components': ['ejs:github'],
             'extractor_args': {
                 'youtube': {
-                    'player_client': ['ios', 'android', 'web']
+                    'player_client': ['web', 'tv', 'android']
                 }
             }
         }
+
+        if quality == 'audio_only':
+            ydl_opts['postprocessors'] = [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '320'
+            }]
+        elif force_h264:
+            ydl_opts['postprocessors'] = [{
+                'key': 'FFmpegVideoConvertor',
+                'preferedformat': 'mp4'
+            }]
 
         if custom_name:
             clean_name = sanitize_filename(custom_name)

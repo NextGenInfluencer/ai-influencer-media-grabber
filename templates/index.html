@@ -132,7 +132,29 @@
                         <textarea id="url" name="url" rows="4" class="w-full px-4 py-3 bg-[#080809] border border-zinc-800 rounded-2xl text-xs text-zinc-200 focus:outline-none focus:border-pink-500 focus:ring-1 focus:ring-pink-500 transition shadow-inner placeholder-zinc-600 resize-none font-mono" placeholder="https://www.tiktok.com/@username/video/...\nhttps://www.instagram.com/reel/..."></textarea>
                     </div>
 
-                    <div class="grid grid-cols-2 gap-4">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <!-- Quality / Resolution Select -->
+                        <div class="space-y-2">
+                            <label class="block text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center justify-between">
+                                <span>Quality / Resolution</span>
+                                <span class="text-[9px] text-pink-400 font-bold bg-pink-500/10 px-1.5 py-0.5 rounded">Pre-Selected</span>
+                            </label>
+                            <div class="relative">
+                                <select id="videoQuality" name="quality" class="w-full px-4 py-3 bg-[#080809] border border-pink-500/30 rounded-xl text-xs font-semibold text-zinc-200 focus:outline-none focus:border-pink-500 appearance-none shadow-inner cursor-pointer hover:border-pink-500/60 transition">
+                                    <option value="max" selected>🔥 Max Quality (4K / 2K / Best)</option>
+                                    <option value="2160">4K Ultra HD (2160p)</option>
+                                    <option value="1440">2K Quad HD (1440p)</option>
+                                    <option value="1080">1080p Full HD</option>
+                                    <option value="720">720p HD (Faster)</option>
+                                    <option value="480">480p SD (Compact)</option>
+                                    <option value="audio_only">🎵 Audio Only (MP3)</option>
+                                </select>
+                                <div class="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
+                                    <i class="fa-solid fa-chevron-down text-zinc-600 text-xs"></i>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Auth Select -->
                         <div class="space-y-2">
                             <label class="block text-xs font-bold text-zinc-400 uppercase tracking-widest">Browser Auth (Optional)</label>
@@ -265,6 +287,13 @@
                                         <button type="button" onclick="setTime('end')" class="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-xs transition" title="Set current timestamp"><i class="fa-solid fa-location-crosshairs"></i></button>
                                     </div>
                                 </div>
+                            </div>
+                            <div id="trimDurationBadge" class="hidden mt-3 p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-between text-xs">
+                                <span class="text-zinc-400 flex items-center space-x-1.5">
+                                    <i class="fa-solid fa-scissors text-purple-400"></i>
+                                    <span>Cut Clip Length:</span>
+                                </span>
+                                <span id="trimDurationValue" class="font-bold text-purple-300 font-mono">00:00:14 (14s)</span>
                             </div>
                         </div>
                     </div>
@@ -1355,6 +1384,7 @@
             if (urls.length === 0) return;
 
             const baseFormData = new FormData(e.target);
+            baseFormData.set('quality', document.getElementById('videoQuality')?.value || 'max');
             baseFormData.set('forceH264', document.getElementById('forceH264').checked);
             baseFormData.set('extractFrame', document.getElementById('extractFrame').checked);
             baseFormData.set('aiBypass', document.getElementById('aiBypass').checked);
@@ -1375,6 +1405,7 @@
                     browser: document.getElementById('browser').value,
                     task_id: taskId,
                     processing_options: {
+                        quality: document.getElementById('videoQuality')?.value || 'max',
                         forceH264: document.getElementById('forceH264').checked,
                         extractFrame: document.getElementById('extractFrame').checked,
                         aiBypass: document.getElementById('aiBypass').checked,
@@ -1461,6 +1492,60 @@
             }
         });
 
+        // Remember user's preferred quality setting
+        try {
+            const savedQuality = localStorage.getItem('preferred_video_quality');
+            if (savedQuality && document.getElementById('videoQuality')) {
+                document.getElementById('videoQuality').value = savedQuality;
+            }
+            document.getElementById('videoQuality')?.addEventListener('change', (e) => {
+                localStorage.setItem('preferred_video_quality', e.target.value);
+            });
+        } catch (e) {
+            console.warn('localStorage access failed:', e);
+        }
+
+        function parseTimeToSec(t) {
+            if (!t) return null;
+            const parts = t.split(':').map(Number);
+            if (parts.length === 3 && !parts.some(isNaN)) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+            if (parts.length === 2 && !parts.some(isNaN)) return parts[0] * 60 + parts[1];
+            if (parts.length === 1 && !isNaN(parts[0])) return parts[0];
+            return null;
+        }
+
+        function updateTrimDurationDisplay() {
+            const startVal = document.getElementById('trimStart')?.value || '';
+            const endVal = document.getElementById('trimEnd')?.value || '';
+            const startSec = parseTimeToSec(startVal);
+            const endSec = parseTimeToSec(endVal);
+            const badge = document.getElementById('trimDurationBadge');
+            const valEl = document.getElementById('trimDurationValue');
+            if (!badge || !valEl) return;
+
+            if (endSec !== null && startSec !== null && endSec <= startSec) {
+                badge.className = 'mt-3 p-2.5 rounded-xl bg-red-500/10 border border-red-500/30 flex items-center justify-between text-xs';
+                valEl.className = 'font-bold text-red-400 font-mono text-[11px]';
+                valEl.textContent = 'End time must be after start time';
+                badge.classList.remove('hidden');
+            } else if (endSec !== null && startSec !== null && endSec > startSec) {
+                badge.className = 'mt-3 p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-between text-xs';
+                valEl.className = 'font-bold text-purple-300 font-mono';
+                const diff = Math.round((endSec - startSec) * 10) / 10;
+                const m = Math.floor(diff / 60);
+                const s = Math.floor(diff % 60);
+                valEl.textContent = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')} (${diff}s total)`;
+                badge.classList.remove('hidden');
+            } else if (endSec !== null && (startSec === null || startSec === 0)) {
+                badge.className = 'mt-3 p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-between text-xs';
+                valEl.className = 'font-bold text-purple-300 font-mono';
+                valEl.textContent = `${endVal} (${endSec}s total)`;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+
         function setTime(type) {
             const time = videoPreview.currentTime;
             const hours = Math.floor(time / 3600).toString().padStart(2, '0');
@@ -1473,7 +1558,11 @@
             } else {
                 document.getElementById('trimEnd').value = formatted;
             }
+            updateTrimDurationDisplay();
         }
+
+        document.getElementById('trimStart')?.addEventListener('input', updateTrimDurationDisplay);
+        document.getElementById('trimEnd')?.addEventListener('input', updateTrimDurationDisplay);
 
         document.getElementById('converterForm').addEventListener('submit', async (e) => {
             e.preventDefault();
