@@ -10,11 +10,16 @@ All notable changes to the AI Influencer Media Grabber project will be documente
 - **Universal Audio Pairing**: Video streams now pair automatically with `bestaudio[ext=m4a]` (AAC), ensuring native playback on Windows Media Player, QuickTime, and Premiere Pro without extra codecs.
 - **Persistent User Preferences**: Quality choices and codec options are now automatically remembered across sessions in `localStorage`.
 - **Live Trim Duration Badge & Validation**: Video Trimmer displays a live cut-duration badge with real-time feedback and validation to prevent invalid end timestamps.
+- **Media Preview Lightbox Modal**: Clicking any card in the Output Gallery opens a responsive lightbox modal with embedded video, audio, and image playback, quick action buttons, and keyboard navigation (`Escape`, `ArrowLeft`, `ArrowRight`).
+- **Download History Auto-Reconciliation**: Automatically scans and backfills missing files into `history.json` on startup, with downloads strictly ordered newest-first.
+- **Non-blocking Windows Explorer Integration**: Folder buttons across the gallery, history, and converter now use non-blocking explorer selection with directory fallback.
 
 ### Fixed
 - **Frame-Accurate Clip Trimming Bug**: Fixed FFmpeg duration calculation when trimming clips (`-ss <start> -t <duration>`). Setting timestamps like `00:00:14` to `00:00:28` now produces an exact 14.0-second clip instead of taking 28 seconds.
 - **4K Face Tracking Divisibility by 2 Error**: Fixed `libx264` encoder failure (`width not divisible by 2 (1215x2160)`) on 4K 9:16 vertical face crops by enforcing even pixel dimensions (`1214x2160`) and adding an automatic even-dimension scaling filter.
 - **Unicode UTF-8 Logging Error**: Fixed `UnicodeEncodeError` in converter debug logging when handling filenames containing special characters or fullwidth symbols (e.g. `｜`).
+- **Desktop Launcher Offline Detection Bug**: Fixed COM exception handling in `launch-silent.vbs` where an offline server check was falsely detected as online due to non-short-circuiting logic, ensuring the Python backend boots reliably on launch.
+- **Download History Indentation Bug**: Fixed download completion handler in `app_local.py` so downloads without frame extraction are immediately indexed into history.
 
 ## [v2.1] - 2026-09-13
 
