@@ -2010,13 +2010,36 @@ def api_update_status():
     resp["completed"] = (app_updater_state.get("status") == "complete")
     return jsonify(resp)
 
-if __name__ == '__main__':
+def open_desktop_window(url="http://127.0.0.1:5000"):
+    import subprocess
+    candidates = [
+        os.path.expandvars(r'%ProgramFiles%\Google\Chrome\Application\chrome.exe'),
+        os.path.expandvars(r'%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe'),
+        os.path.expandvars(r'%ProgramFiles%\Microsoft\Edge\Application\msedge.exe'),
+        os.path.expandvars(r'%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe'),
+        os.path.expandvars(r'%LocalAppData%\Google\Chrome\Application\chrome.exe'),
+    ]
+    for exe in candidates:
+        if os.path.exists(exe):
+            try:
+                subprocess.Popen([
+                    exe,
+                    f"--app={url}",
+                    "--window-size=1380,880",
+                    "--app-id=AiriStudioMediaGrabber"
+                ])
+                return
+            except Exception:
+                pass
     import webbrowser
+    webbrowser.open(url)
+
+if __name__ == '__main__':
     import threading
     from waitress import serve
     print("\n" + "="*50, flush=True)
     print(" SERVER ONLINE AND READY! http://127.0.0.1:5000 ", flush=True)
     print("="*50 + "\n", flush=True)
     if "--no-browser" not in sys.argv:
-        threading.Timer(1.25, lambda: webbrowser.open("http://127.0.0.1:5000")).start()
+        threading.Timer(1.25, open_desktop_window).start()
     serve(app, host='127.0.0.1', port=5000, threads=8)

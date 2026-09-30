@@ -76,10 +76,10 @@ End If
 appUrl = "http://127.0.0.1:5000"
 windowArgs = " --app=" & appUrl & " --window-size=1380,880 --app-id=AiriStudioMediaGrabber"
 
-If fso.FileExists(edgePath) Then
-    WshShell.Run """" & edgePath & """" & windowArgs, 1, False
-ElseIf fso.FileExists(chromePath) Then
+If fso.FileExists(chromePath) Then
     WshShell.Run """" & chromePath & """" & windowArgs, 1, False
+ElseIf fso.FileExists(edgePath) Then
+    WshShell.Run """" & edgePath & """" & windowArgs, 1, False
 Else
     WshShell.Run appUrl, 1, False
 End If
