@@ -18,7 +18,7 @@ from shazamio import Shazam
 import time
 import numpy as np
 import yt_dlp
-from typing import Any, Optional, Dict, List, Union
+from typing import Any, Optional, Dict, List, Union, cast
 
 # --- Live Server Log Capture (Tee stdout & stderr for In-App Live Console) ---
 class LogCapture:
@@ -832,7 +832,7 @@ def preview_url():
             'dump_single_json': True,
             'skip_download': True
         }
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        with yt_dlp.YoutubeDL(cast(Any, ydl_opts)) as ydl:
             info = ydl.extract_info(url, download=False)
             
             return jsonify({
@@ -943,12 +943,12 @@ def download_video():
                 prefix = f"[{idx}/{total}] " if total > 1 else ""
                 q.put({"status": f"{prefix}Starting download..."})
                 try:
-                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    with yt_dlp.YoutubeDL(cast(Any, ydl_opts)) as ydl:
                         try:
                             # Pre-flight check for file collisions to add (1) to filename
                             info_dict = ydl.extract_info(url, download=False)
                             if info_dict:
-                                temp_final = ydl.prepare_filename(info_dict)
+                                temp_final = ydl.prepare_filename(cast(Any, info_dict))
                                 base, ext = os.path.splitext(temp_final)
                                 if os.path.exists(temp_final) or os.path.exists(base + ".mp4"):
                                     orig_base = base
@@ -958,7 +958,7 @@ def download_video():
                                     
                                     local_opts: dict[str, Any] = ydl_opts.copy()
                                     local_opts['outtmpl'] = f"{orig_base} ({c}).%(ext)s"
-                                    with yt_dlp.YoutubeDL(local_opts) as local_ydl:
+                                    with yt_dlp.YoutubeDL(cast(Any, local_opts)) as local_ydl:
                                         info: Any = local_ydl.extract_info(url, download=True)
                                 else:
                                     info: Any = ydl.extract_info(url, download=True)
@@ -1040,7 +1040,7 @@ def download_video():
                             if isinstance(req_dl, dict) and req_dl.get('filepath'):
                                 final_path = str(req_dl['filepath'])
                         if not final_path and isinstance(info, dict):
-                            fn = info.get('_filename') or ydl.prepare_filename(info)
+                            fn = info.get('_filename') or ydl.prepare_filename(cast(Any, info))
                             if fn:
                                 final_path = str(fn)
                             
@@ -1199,10 +1199,17 @@ def download_video():
                                                     return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
                                                     
                                                 with open(srt_path, "w", encoding="utf-8") as srt_f:
-                                                    for i, segment in enumerate(result.get("segments", []), start=1):
+                                                    raw_segs = result.get("segments", [])
+                                                    segments = raw_segs if isinstance(raw_segs, list) else []
+                                                    for i, segment in enumerate(segments, start=1):
+                                                        if not isinstance(segment, dict):
+                                                            continue
+                                                        seg_start = float(segment.get('start', 0.0))
+                                                        seg_end = float(segment.get('end', 0.0))
+                                                        seg_text = str(segment.get('text', '')).strip()
                                                         srt_f.write(f"{i}\n")
-                                                        srt_f.write(f"{format_timestamp(segment['start'])} --> {format_timestamp(segment['end'])}\n")
-                                                        srt_f.write(f"{segment['text'].strip()}\n\n")
+                                                        srt_f.write(f"{format_timestamp(seg_start)} --> {format_timestamp(seg_end)}\n")
+                                                        srt_f.write(f"{seg_text}\n\n")
                                                         
                                                 if want_burn:
                                                     q.put({"status": f"{prefix}Burning subtitles into video..."})
