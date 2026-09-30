@@ -2,6 +2,20 @@
 
 All notable changes to the AI Influencer Media Grabber project will be documented in this file.
 
+## [v2.2] - 2026-09-30
+
+### Added & Improved
+- **YouTube Max Quality (4K Ultra HD & 2K) Support**: Added a prominent **Quality / Resolution** selector pre-selected to **🔥 Max Quality (4K / 2K / Best)** by default, with choices for 4K (2160p), 2K (1440p), 1080p, 720p, 480p, and MP3 audio.
+- **Node.js JavaScript Challenge Solver**: Integrated automated Node.js challenge solving (`js_runtimes` & `remote_components: ejs:github`) into `yt-dlp` to bypass YouTube signature deciphering restrictions, unlocking pristine 4K streams without fallback throttling.
+- **Universal Audio Pairing**: Video streams now pair automatically with `bestaudio[ext=m4a]` (AAC), ensuring native playback on Windows Media Player, QuickTime, and Premiere Pro without extra codecs.
+- **Persistent User Preferences**: Quality choices and codec options are now automatically remembered across sessions in `localStorage`.
+- **Live Trim Duration Badge & Validation**: Video Trimmer displays a live cut-duration badge with real-time feedback and validation to prevent invalid end timestamps.
+
+### Fixed
+- **Frame-Accurate Clip Trimming Bug**: Fixed FFmpeg duration calculation when trimming clips (`-ss <start> -t <duration>`). Setting timestamps like `00:00:14` to `00:00:28` now produces an exact 14.0-second clip instead of taking 28 seconds.
+- **4K Face Tracking Divisibility by 2 Error**: Fixed `libx264` encoder failure (`width not divisible by 2 (1215x2160)`) on 4K 9:16 vertical face crops by enforcing even pixel dimensions (`1214x2160`) and adding an automatic even-dimension scaling filter.
+- **Unicode UTF-8 Logging Error**: Fixed `UnicodeEncodeError` in converter debug logging when handling filenames containing special characters or fullwidth symbols (e.g. `｜`).
+
 ## [v2.1] - 2026-09-13
 
 ### Added
