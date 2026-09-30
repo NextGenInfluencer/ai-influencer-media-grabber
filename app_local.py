@@ -959,9 +959,9 @@ def download_video():
             fmt_str = 'bestaudio/best'
         elif quality in ['2160', '1440', '1080', '720', '480']:
             h = quality
-            fmt_str = f'bestvideo[height<={h}]+bestaudio/best[height<={h}]/best'
+            fmt_str = f'bestvideo[height<={h}]+bestaudio[ext=m4a]/bestvideo[height<={h}]+bestaudio/best[height<={h}]/best'
         else: # 'max' / default: True maximum resolution available (4K, 1440p, 1080p60)
-            fmt_str = 'bestvideo+bestaudio/best'
+            fmt_str = 'bestvideo+bestaudio[ext=m4a]/bestvideo+bestaudio/best'
 
         ydl_opts: dict[str, Any] = {
             'format': fmt_str,
@@ -974,12 +974,7 @@ def download_video():
             'fragment_retries': 10,
             'socket_timeout': 30,
             'js_runtimes': {'node': {}},
-            'remote_components': ['ejs:github'],
-            'extractor_args': {
-                'youtube': {
-                    'player_client': ['web', 'tv', 'android']
-                }
-            }
+            'remote_components': ['ejs:github']
         }
 
         if quality == 'audio_only':

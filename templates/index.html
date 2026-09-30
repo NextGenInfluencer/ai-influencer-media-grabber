@@ -190,7 +190,7 @@
                         <label class="block text-xs font-bold text-zinc-300 uppercase tracking-widest mb-3"><span class="text-pink-500 mr-1.5">02.</span> Processing Options</label>
                         <div class="space-y-3 bg-[#080809] p-4 rounded-2xl border border-zinc-800/80">
                             <label class="flex items-center space-x-3 text-xs text-zinc-300 cursor-pointer">
-                                <input type="checkbox" id="forceH264" class="form-checkbox text-pink-500 rounded border-zinc-700 bg-zinc-900 focus:ring-pink-500" checked>
+                                <input type="checkbox" id="forceH264" class="form-checkbox text-pink-500 rounded border-zinc-700 bg-zinc-900 focus:ring-pink-500">
                                 <span class="font-medium">Force Standard H.264 Encoding (Fixes import glitches in Kling & Premiere)</span>
                             </label>
                             <div class="grid grid-cols-2 gap-3 pt-2 border-t border-zinc-800/50">
@@ -1492,7 +1492,7 @@
             }
         });
 
-        // Remember user's preferred quality setting
+        // Remember user's preferred quality and codec settings
         try {
             const savedQuality = localStorage.getItem('preferred_video_quality');
             if (savedQuality && document.getElementById('videoQuality')) {
@@ -1500,6 +1500,14 @@
             }
             document.getElementById('videoQuality')?.addEventListener('change', (e) => {
                 localStorage.setItem('preferred_video_quality', e.target.value);
+            });
+
+            const savedH264 = localStorage.getItem('preferred_force_h264');
+            if (savedH264 !== null && document.getElementById('forceH264')) {
+                document.getElementById('forceH264').checked = (savedH264 === 'true');
+            }
+            document.getElementById('forceH264')?.addEventListener('change', (e) => {
+                localStorage.setItem('preferred_force_h264', e.target.checked);
             });
         } catch (e) {
             console.warn('localStorage access failed:', e);
