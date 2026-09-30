@@ -33,3 +33,6 @@ ai_models/
 *.mp3
 *.url
 dist/
+pyrightconfig.json
+scratch/
+test_dl_dir/

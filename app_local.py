@@ -4,10 +4,12 @@ import sys
 import string
 import subprocess
 import threading
+import traceback
 import uuid
-import collections
+from collections import deque
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify, Response, send_file, send_from_directory
+from werkzeug.utils import secure_filename
 import queue
 import json
 import imageio_ffmpeg
@@ -16,14 +18,19 @@ import tempfile
 import shutil
 from shazamio import Shazam
 import time
-import numpy as np
 import yt_dlp
-from typing import Any, Optional, Dict, List, Union, cast
+from typing import Any, Optional, cast
+
+# --- Constants ---
+MAX_UPLOAD_BYTES = 500 * 1024 * 1024  # 500 MB
+UPDATE_CHECK_INTERVAL = 86400  # 24 hours in seconds
+MODEL_UNLOAD_TIMEOUT = 600  # 10 minutes before unloading AI models
+GALLERY_CACHE_TTL = 2  # seconds
 
 # --- Live Server Log Capture (Tee stdout & stderr for In-App Live Console) ---
 class LogCapture:
     def __init__(self, maxlen=1000):
-        self.logs = collections.deque(maxlen=maxlen)
+        self.logs = deque(maxlen=maxlen)
         self.lock = threading.RLock()
         self.subscribers = []
         self._orig_stdout = sys.stdout
@@ -242,7 +249,7 @@ def get_whisper():
             return None
         print("Loading Whisper model (this may take a moment)...")
         whisper_model = whisper.load_model("base")
-    _whisper_timer = threading.Timer(600, unload_whisper)
+    _whisper_timer = threading.Timer(MODEL_UNLOAD_TIMEOUT, unload_whisper)
     _whisper_timer.daemon = True
     _whisper_timer.start()
     return whisper_model
@@ -300,7 +307,7 @@ def get_llm(model_id="llama-3.2-1b"):
         )
         _current_llm_id = model_id
         
-    _llm_timer = threading.Timer(600, unload_llm)
+    _llm_timer = threading.Timer(MODEL_UNLOAD_TIMEOUT, unload_llm)
     _llm_timer.daemon = True
     _llm_timer.start()
     return llm_model
@@ -475,15 +482,14 @@ def dynamic_auto_crop(input_path, output_path, q=None, prefix=""):
         return False
 
 app = Flask(__name__)
-# Allow large file uploads (500MB max)
-app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024
+app.config['MAX_CONTENT_LENGTH'] = MAX_UPLOAD_BYTES
 
 # Auto-update yt-dlp once per day
 update_flag_file = os.path.join(DEFAULT_SAVE_DIR, ".last_update")
 should_update = True
 if os.path.exists(update_flag_file):
     last_update = os.path.getmtime(update_flag_file)
-    if time.time() - last_update < 86400: # 24 hours
+    if time.time() - last_update < UPDATE_CHECK_INTERVAL:
         should_update = False
 
 if should_update:
@@ -497,6 +503,14 @@ else:
 def sanitize_filename(name):
     # Remove illegal characters for Windows/Linux/Mac
     return re.sub(r'[\\/*?:"<>|]', "", name)
+
+def format_srt_timestamp(seconds: float) -> str:
+    """Format seconds into SRT timestamp format: HH:MM:SS,mmm"""
+    ms = int((seconds - int(seconds)) * 1000)
+    s = int(seconds) % 60
+    m = int(seconds / 60) % 60
+    h = int(seconds / 3600)
+    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
 
 def is_safe_path(path):
     try:
@@ -788,16 +802,12 @@ def convert_media():
                                     else:
                                         result = model.transcribe(temp_audio, verbose=False)
                                     
-                                        def format_time(seconds):
-                                             m, s = divmod(seconds, 60)
-                                             h, m = divmod(m, 60)
-                                             ms = int((s - int(s)) * 1000)
-                                             return f"{int(h):02d}:{int(m):02d}:{int(s):02d},{ms:03d}"
+
                                          
                                         with open(temp_srt, 'w', encoding='utf-8') as f:
                                             for i, segment in enumerate(result.get('segments', [])):
                                                 f.write(f"{i + 1}\n")
-                                                f.write(f"{format_time(segment['start'])} --> {format_time(segment['end'])}\n")
+                                                f.write(f"{format_srt_timestamp(segment['start'])} --> {format_srt_timestamp(segment['end'])}\n")
                                                 f.write(f"{segment['text'].strip()}\n\n")
                                             
                                     if translate_lang and translate_lang != 'none' and llm_model and llm_model != 'none':
@@ -850,7 +860,6 @@ def convert_media():
                     except Exception: pass
                     
                 except Exception as e:
-                    import traceback
                     traceback.print_exc()
                     failed_count += 1
                     err_msg = str(e)
@@ -864,7 +873,7 @@ def convert_media():
             else:
                 q.put({"error": f"{failed_count} file(s) failed to convert. Check console logs."})
             
-            import shutil
+
             try: shutil.rmtree(shared_temp_dir)
             except Exception: pass
 
@@ -1281,17 +1290,10 @@ def download_video():
                                                     except Exception as e:
                                                         print(f"LLM Summarize Error: {e}")
                                                 
-                                            want_burn = processing_options.get('burn_subtitles')
-                                            want_export = processing_options.get('export_subtitles')
                                             
                                             if (want_burn or want_export) and final_path and final_path.endswith(('.mp4', '.mkv', '.mov')) and result:
                                                 srt_path = base + "_subtitles.srt"
-                                                def format_timestamp(seconds):
-                                                    ms = int((seconds - int(seconds)) * 1000)
-                                                    s = int(seconds) % 60
-                                                    m = int(seconds / 60) % 60
-                                                    h = int(seconds / 3600)
-                                                    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+
                                                     
                                                 with open(srt_path, "w", encoding="utf-8") as srt_f:
                                                     raw_segs = result.get("segments", [])
@@ -1303,7 +1305,7 @@ def download_video():
                                                         seg_end = float(segment.get('end', 0.0))
                                                         seg_text = str(segment.get('text', '')).strip()
                                                         srt_f.write(f"{i}\n")
-                                                        srt_f.write(f"{format_timestamp(seg_start)} --> {format_timestamp(seg_end)}\n")
+                                                        srt_f.write(f"{format_srt_timestamp(seg_start)} --> {format_srt_timestamp(seg_end)}\n")
                                                         srt_f.write(f"{seg_text}\n\n")
                                                         
                                                 if want_burn:
@@ -1322,7 +1324,7 @@ def download_video():
                                                 
                                                 if not want_export and os.path.exists(srt_path):
                                                     try: os.remove(srt_path)
-                                                    except: pass
+                                                    except Exception: pass
                                                     
                                         except Exception as e:
                                             print("Whisper error:", e)
@@ -1410,7 +1412,7 @@ _gallery_cache: dict[str, Any] = {"time": 0.0, "data": []}
 @app.route('/api/gallery', methods=['GET'])
 def list_gallery():
     global _gallery_cache
-    if time.time() - _gallery_cache["time"] < 2:
+    if time.time() - _gallery_cache["time"] < GALLERY_CACHE_TTL:
         return jsonify(_gallery_cache["data"])
         
     base_dir = os.path.join(os.path.expanduser("~"), "Documents", "Media Grabber")
@@ -1563,7 +1565,7 @@ def batch_clean_upload():
         
     inject_exif = request.form.get('inject_exif', 'false').lower() == 'true'
         
-    from werkzeug.utils import secure_filename
+
     upload_folder = os.path.join(DEFAULT_SAVE_DIR, "AI Cleaned", f"Uploaded_{int(time.time())}")
     os.makedirs(upload_folder, exist_ok=True)
     
@@ -2077,7 +2079,6 @@ def api_update_status():
     return jsonify(resp)
 
 def open_desktop_window(url="http://127.0.0.1:5000"):
-    import subprocess
     candidates = [
         os.path.expandvars(r'%ProgramFiles%\Google\Chrome\Application\chrome.exe'),
         os.path.expandvars(r'%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe'),
@@ -2101,7 +2102,6 @@ def open_desktop_window(url="http://127.0.0.1:5000"):
     webbrowser.open(url)
 
 if __name__ == '__main__':
-    import threading
     from waitress import serve
     print("\n" + "="*50, flush=True)
     print(" SERVER ONLINE AND READY! http://127.0.0.1:5000 ", flush=True)
