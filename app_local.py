@@ -331,6 +331,11 @@ def _get_face_cascade():
         return _face_cascade
     try:
         import cv2
+        try:
+            import cv2.data as cv2_data # type: ignore
+        except Exception:
+            cv2_data = None
+
         cascade_cls = None
         if hasattr(cv2, 'CascadeClassifier'):
             cascade_cls = getattr(cv2, 'CascadeClassifier')
@@ -339,8 +344,9 @@ def _get_face_cascade():
         
         if cascade_cls is not None:
             xml_path = None
-            if hasattr(cv2, 'data') and hasattr(cv2.data, 'haarcascades'):
-                p = os.path.join(cv2.data.haarcascades, 'haarcascade_frontalface_default.xml')
+            haarcascades_dir = getattr(cv2_data, 'haarcascades', None)
+            if haarcascades_dir:
+                p = os.path.join(haarcascades_dir, 'haarcascade_frontalface_default.xml')
                 if os.path.isfile(p):
                     xml_path = p
             if xml_path:
