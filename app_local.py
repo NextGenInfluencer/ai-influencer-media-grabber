@@ -35,6 +35,11 @@ class LogCapture:
         self.subscribers = []
         self._orig_stdout = sys.stdout
         self._orig_stderr = sys.stderr
+        self.encoding = getattr(sys.stdout, 'encoding', 'utf-8') or 'utf-8'
+        self.errors = 'replace'
+
+    def isatty(self):
+        return False
 
     def write(self, message):
         if self._orig_stdout:

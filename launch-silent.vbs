@@ -7,24 +7,27 @@
 Set WshShell = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
 
-' Get project root directory
 scriptDir = fso.GetParentFolderName(WScript.ScriptFullName)
 WshShell.CurrentDirectory = scriptDir
 
 ' 0. Python Runner Detection: Check for embedded python runtime first, then .venv
-pythonwExe = ""
-If fso.FileExists(scriptDir & "\python_runtime\pythonw.exe") Then
-    pythonwExe = scriptDir & "\python_runtime\pythonw.exe"
+pythonExe = ""
+If fso.FileExists(scriptDir & "\python_runtime\python.exe") Then
+    pythonExe = scriptDir & "\python_runtime\python.exe"
+ElseIf fso.FileExists(scriptDir & "\python_runtime\pythonw.exe") Then
+    pythonExe = scriptDir & "\python_runtime\pythonw.exe"
+ElseIf fso.FileExists(scriptDir & "\python\python.exe") Then
+    pythonExe = scriptDir & "\python\python.exe"
 ElseIf fso.FileExists(scriptDir & "\python\pythonw.exe") Then
-    pythonwExe = scriptDir & "\python\pythonw.exe"
+    pythonExe = scriptDir & "\python\pythonw.exe"
 Else
     ' Fallback to virtual environment (Original / Developer mode)
     If Not fso.FileExists(scriptDir & "\.venv\Scripts\python.exe") Then
         WshShell.Run """" & scriptDir & "\run.bat"" --setup-only", 1, True
     End If
-    pythonwExe = scriptDir & "\.venv\Scripts\pythonw.exe"
-    If Not fso.FileExists(pythonwExe) Then
-        pythonwExe = scriptDir & "\.venv\Scripts\python.exe"
+    pythonExe = scriptDir & "\.venv\Scripts\python.exe"
+    If Not fso.FileExists(pythonExe) Then
+        pythonExe = scriptDir & "\.venv\Scripts\pythonw.exe"
     End If
 End If
 
@@ -32,15 +35,17 @@ appPy = scriptDir & "\app_local.py"
 
 ' Helper function: Check if http://127.0.0.1:5000 is answering
 Function IsServerOnline()
+    IsServerOnline = False
     On Error Resume Next
+    Dim http
     Set http = CreateObject("MSXML2.ServerXMLHTTP.6.0")
     http.setTimeouts 500, 500, 500, 500
     http.open "GET", "http://127.0.0.1:5000/api/health_check", False
     http.send
-    If Err.Number = 0 And http.Status = 200 Then
-        IsServerOnline = True
-    Else
-        IsServerOnline = False
+    If Err.Number = 0 Then
+        If http.Status = 200 Then
+            IsServerOnline = True
+        End If
     End If
     Set http = Nothing
     On Error Goto 0
@@ -48,8 +53,8 @@ End Function
 
 ' 1. Start Python engine silently if not already running
 If Not IsServerOnline() Then
-    ' Run pythonw with window mode 0 (completely hidden), no console window
-    WshShell.Run """" & pythonwExe & """ """ & appPy & """ --no-browser", 0, False
+    cmd = """" & pythonExe & """ """ & appPy & """ --no-browser"
+    WshShell.Run cmd, 0, False
     
     ' Wait up to 30 seconds for waitress server to become responsive
     For i = 1 To 60
