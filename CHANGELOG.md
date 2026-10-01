@@ -21,6 +21,8 @@ All notable changes to the AI Influencer Media Grabber project will be documente
   - 👥 **Center Framing**: Frames both speakers together, smoothly panning to keep both subjects visible in 9:16.
 - **🎙️ Podcast Split-Screen Mode (Stacked 9:16)**: Added Opus Clip & CapCut style stacked layout for two-person interviews and podcasts. Simultaneously crops Speaker 1 on the top half and Speaker 2 on the bottom half with a crisp divider line, formatted directly into vertical 9:16 with zero audio re-encoding loss.
 - **Temporal Centroid Tracking & Stability Fix**: Fixed sudden camera jitter and erratic switching between subjects by adding spatial-temporal continuity to the face tracker. If a subject tilts their head or looks away, the crop smoothly holds position instead of jumping across the room to other people.
+- **Clean Desktop Lifecycle & Auto-Shutdown Watchdog**: Closing the app window now cleanly terminates the background Python engine after a grace period, releasing port `5000` and immediately freeing ~700 MB of system RAM. Ongoing downloads or conversions are guarded to complete safely before shutdown.
+- **Smart Launcher Hot-Reload Detection**: `launch-silent.vbs` and `/api/health_check` compare on-disk file modification times with server uptime. If code files were updated, the launcher automatically reboots the server to load the latest code seamlessly.
 
 ### Fixed
 - **Frame-Accurate Clip Trimming Bug**: Fixed FFmpeg duration calculation when trimming clips (`-ss <start> -t <duration>`). Setting timestamps like `00:00:14` to `00:00:28` now produces an exact 14.0-second clip instead of taking 28 seconds.

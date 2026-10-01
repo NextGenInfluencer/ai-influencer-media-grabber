@@ -2845,11 +2845,24 @@
                     statusText.textContent = 'Update failed: ' + st.error;
                     statusText.className = 'font-bold text-red-400 truncate max-w-[320px]';
                     showToast('Update Failed', st.error);
-                }
             } catch (e) {
                 console.error("Error polling update status:", e);
             }
         }
+
+        // --- Client Heartbeat & Auto-Shutdown Watchdog ---
+        function sendClientHeartbeat(closing = false) {
+            const url = closing ? '/api/heartbeat?closing=true' : '/api/heartbeat';
+            if (closing && navigator.sendBeacon) {
+                navigator.sendBeacon(url);
+            } else {
+                fetch(url, { method: 'POST', keepalive: true }).catch(() => {});
+            }
+        }
+        setInterval(() => sendClientHeartbeat(false), 6000);
+        sendClientHeartbeat(false);
+        window.addEventListener('pagehide', () => sendClientHeartbeat(true));
+        window.addEventListener('beforeunload', () => sendClientHeartbeat(true));
     </script>
 
     <!-- AI Engine Pack Modal -->

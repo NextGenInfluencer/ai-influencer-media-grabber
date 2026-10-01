@@ -719,6 +719,36 @@ def shazam_file(audio_path):
         return None
 
 APP_VERSION = "2.2"
+SERVER_START_TIME = time.time()
+
+# --- Active Job & Auto-Shutdown Watchdog State ---
+HEARTBEAT_TIMEOUT = 18.0  # Seconds without client heartbeat before auto-shutdown
+_last_heartbeat = time.time()
+_has_received_heartbeat = False
+_active_jobs_lock = threading.Lock()
+_active_jobs_count = 0
+_quick_shutdown_timer = None
+_quick_shutdown_lock = threading.Lock()
+
+def increment_active_job():
+    global _active_jobs_count
+    with _active_jobs_lock:
+        _active_jobs_count += 1
+
+def decrement_active_job():
+    global _active_jobs_count
+    with _active_jobs_lock:
+        _active_jobs_count = max(0, _active_jobs_count - 1)
+
+def is_busy():
+    with _active_jobs_lock:
+        installer_busy = False
+        if "ai_installer_state" in globals():
+            installer_busy = ai_installer_state.get("is_installing", False)
+        updater_busy = False
+        if "update_state" in globals():
+            updater_busy = update_state.get("is_updating", False)
+        return _active_jobs_count > 0 or installer_busy or updater_busy
 
 @app.route('/')
 def index():
@@ -856,7 +886,7 @@ def convert_media():
         yield f"data: {json.dumps({'status': 'Starting conversion...'})}\n\n"
         q = queue.Queue()
         
-        def run_conv():
+        def _run_conv_worker():
             total = len(saved_files)
             failed_count = 0
             
@@ -1075,6 +1105,13 @@ def convert_media():
             try: shutil.rmtree(shared_temp_dir)
             except Exception: pass
 
+        def run_conv():
+            increment_active_job()
+            try:
+                _run_conv_worker()
+            finally:
+                decrement_active_job()
+
         t = threading.Thread(target=run_conv, daemon=True)
         t.start()
         
@@ -1237,7 +1274,7 @@ def download_video():
 
         ydl_opts['progress_hooks'] = [hook]
 
-        def run_dl():
+        def _run_dl_worker():
             total = len(urls)
             failed_count = 0
             last_final_path = None
@@ -1589,6 +1626,13 @@ def download_video():
                 q.put({"status": "All Downloads Complete!", "done": True, "file_path": last_final_path, "output_path": output_path})
             else:
                 q.put({"status": f"Complete! ({failed_count} failed)", "done": True, "file_path": last_final_path, "output_path": output_path})
+
+        def run_dl():
+            increment_active_job()
+            try:
+                _run_dl_worker()
+            finally:
+                decrement_active_job()
 
         t = threading.Thread(target=run_dl, daemon=True)
         t.start()
@@ -2029,6 +2073,43 @@ def api_install_ai():
     t.start()
     return jsonify({"status": "started"})
 
+@app.route('/api/heartbeat', methods=['GET', 'POST'])
+def heartbeat():
+    global _last_heartbeat, _has_received_heartbeat, _quick_shutdown_timer
+    _last_heartbeat = time.time()
+    _has_received_heartbeat = True
+    
+    closing = request.args.get('closing') == 'true'
+    if closing:
+        # Window closed by user: schedule a 4-second exit if no other tab reconnects
+        with _quick_shutdown_lock:
+            if _quick_shutdown_timer is None:
+                def quick_exit():
+                    time.sleep(4)
+                    if time.time() - _last_heartbeat >= 3.5 and not is_busy():
+                        print("[Watchdog] App window closed. Shutting down server...", flush=True)
+                        os._exit(0)
+                _quick_shutdown_timer = threading.Thread(target=quick_exit, daemon=True)
+                _quick_shutdown_timer.start()
+    else:
+        with _quick_shutdown_lock:
+            _quick_shutdown_timer = None
+            
+    return jsonify({"status": "alive", "busy": is_busy()})
+
+def _watchdog_loop():
+    time.sleep(25)  # Initial grace period for desktop window launch
+    while True:
+        time.sleep(3)
+        if _has_received_heartbeat:
+            elapsed = time.time() - _last_heartbeat
+            if elapsed > HEARTBEAT_TIMEOUT:
+                if not is_busy():
+                    print(f"[Watchdog] No client heartbeat for {int(elapsed)}s. Shutting down cleanly...", flush=True)
+                    os._exit(0)
+
+threading.Thread(target=_watchdog_loop, daemon=True).start()
+
 @app.route('/api/shutdown', methods=['POST'])
 def shutdown_app():
     def do_shutdown():
@@ -2040,7 +2121,21 @@ def shutdown_app():
 
 @app.route('/api/health_check', methods=['GET'])
 def health_check():
-    return jsonify({"status": "ok", "version": APP_VERSION})
+    needs_restart = False
+    try:
+        app_mtime = os.path.getmtime(os.path.abspath(__file__))
+        tpl_mtime = os.path.getmtime(os.path.join(os.path.dirname(__file__), 'templates', 'index.html'))
+        if max(app_mtime, tpl_mtime) > (SERVER_START_TIME + 2):
+            needs_restart = True
+    except Exception:
+        pass
+        
+    return jsonify({
+        "status": "ok", 
+        "version": APP_VERSION,
+        "started_at": int(SERVER_START_TIME),
+        "needs_restart": needs_restart
+    })
 
 @app.route('/api/restart', methods=['POST'])
 def restart_server():

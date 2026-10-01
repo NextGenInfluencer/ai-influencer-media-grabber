@@ -33,7 +33,7 @@ End If
 
 appPy = scriptDir & "\app_local.py"
 
-' Helper function: Check if http://127.0.0.1:5000 is answering
+' Helper function: Check if http://127.0.0.1:5000 is answering and up to date
 Function IsServerOnline()
     IsServerOnline = False
     On Error Resume Next
@@ -44,7 +44,14 @@ Function IsServerOnline()
     http.send
     If Err.Number = 0 Then
         If http.Status = 200 Then
-            IsServerOnline = True
+            If InStr(http.responseText, """needs_restart"":true") > 0 Then
+                http.open "POST", "http://127.0.0.1:5000/api/shutdown", False
+                http.send
+                WScript.Sleep 1000
+                IsServerOnline = False
+            Else
+                IsServerOnline = True
+            End If
         End If
     End If
     Set http = Nothing
