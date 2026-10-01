@@ -2,6 +2,27 @@
 
 All notable changes to the AI Influencer Media Grabber project will be documented in this file.
 
+## [v2.3] - 2026-10-01
+
+### Added & Improved
+- **100% Automatic Lossless Stream-Copy (`-c copy`)**: Trimming a video without changing aspect ratio or burning subtitles now automatically executes a bit-exact stream copy in ~0.1s with 0.000% generational quality loss.
+- **Pro Master Formats**: Added dedicated high-fidelity export formats to Media Tools:
+  - **`MP4 (4K / H.265 Master)`**: Modern HEVC compression with Apple and Windows compatible `hvc1` tags, preserving micro-details on 4K footage.
+  - **`MOV (Apple ProRes 422 Studio Master)`**: 10-bit intra-frame master quality (HQ) for professional editing in Premiere Pro, DaVinci Resolve, and Final Cut.
+  - **`MKV (Matroska Master)`**: Universal lossless container preserving full-fidelity audio and video streams.
+  - **`WAV (Lossless PCM Audio)`**: Uncompressed 16-bit audio output.
+- **Master Quality Profiles**: Added clear, intuitive quality presets in the converter:
+  - **💎 Maximum Quality (Visually Lossless — 100% Detail)**: CRF 14 default, ensuring AI facial generation details, skin textures, and 4K resolution remain crisp without compression artifacts.
+  - **👑 Pure Lossless (CRF 0 — Bit-Exact Copy)**: True mathematical lossless encoding pass.
+  - **Standard Web (Balanced Quality)**: Standard web-optimized compression (CRF 22).
+- **Interactive Click-to-Track Seamless Playback & Non-blocking Controls**:
+  - Interactive face tracking overlay positioned with bottom clearance (`bottom-12`), leaving native HTML5 video controls (scrubber bar, play/pause, timecode, volume) 100% unobstructed.
+  - Auto-synchronization with HTML5 video `play`, `pause`, and `seeked` events: pauses automatically to inspect clear frames, or allows clicking faces directly while playing.
+  - Reticle marker decoupled from overlay layer so locked target pin remains visible during subsequent playback.
+- **Auto-Shutdown Watchdog & Port Management**:
+  - Client heartbeat beacon shuts down the background Python engine when the window is closed, freeing port `5000` and releasing system RAM cleanly.
+- **High-Bitrate Audio Default**: AAC and MP3 encoding upgraded to 320 kbps studio bitrate.
+
 ## [v2.2] - 2026-09-30
 
 ### Added & Improved

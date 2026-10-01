@@ -1,6 +1,6 @@
-# AI Influencer Media Grabber v2.2
+# AI Influencer Media Grabber v2.3
 
-![Version 2.2](https://img.shields.io/badge/Version-2.2-blue?style=for-the-badge) ![UI Preview](https://img.shields.io/badge/UI-Media_Grabber-f472b6?style=for-the-badge) ![Windows](https://img.shields.io/badge/Platform-Windows_10%2F11-0078D4?style=for-the-badge&logo=windows)
+![Version 2.3](https://img.shields.io/badge/Version-2.3-blue?style=for-the-badge) ![UI Preview](https://img.shields.io/badge/UI-Media_Grabber-f472b6?style=for-the-badge) ![Windows](https://img.shields.io/badge/Platform-Windows_10%2F11-0078D4?style=for-the-badge&logo=windows)
 
 ## 🌟 What is the AI Influencer Media Grabber?
 
@@ -73,7 +73,7 @@ You can choose between the **1-Click Windows Setup (`.exe`)** or the **Original 
 | :--- | :--- | :--- |
 | **Best For** | Regular users, quick setup, zero terminal | Creators who want to customize code, inspect source, or run portably |
 | **Requires Python Installed?** | ❌ **No** (Bundles self-contained Python 3.10 runtime) | ⚙️ **Yes** (Python 3.10+ with `Add to PATH`) |
-| **Initial Download Size** | ~76 MB (`AI-Influencer-Media-Grabber-v2.2-Setup.exe`) | ~50 MB (Full source repo / ZIP) |
+| **Initial Download Size** | ~76 MB (`AI-Influencer-Media-Grabber-v2.3-Setup.exe`) | ~50 MB (Full source repo / ZIP) |
 | **Initial Setup Time** | ~15 seconds | ~20 seconds |
 | **Shortcuts & Desktop Integration** | Automatic Start Menu & Desktop shortcuts | 1-Click shortcut creator (`create_shortcut.bat`) |
 | **Window Mode** | Dedicated frameless desktop app (zero black CMD windows) | Dedicated frameless desktop app (`launch-silent.vbs`) |
@@ -87,7 +87,7 @@ You can choose between the **1-Click Windows Setup (`.exe`)** or the **Original 
 > **No Python installation required! Zero setup hassle.**
 
 1. Head to the **[Releases](https://github.com/NextGenInfluencer/ai-influencer-media-grabber/releases)** page.
-2. Download **`AI-Influencer-Media-Grabber-v2.2-Setup.exe`** (~76 MB).
+2. Download **`AI-Influencer-Media-Grabber-v2.3-Setup.exe`** (~76 MB).
 3. Double-click the installer and follow the standard wizard (**Next -> Install**).
 4. **Done!** The installer places a branded **AI Influencer Media Grabber** shortcut on your Desktop and Start Menu.
 5. Launch the app: it opens immediately in its own native, frameless desktop window with **zero background terminal windows**.
@@ -127,7 +127,7 @@ Both Option A and Option B feature our **Modular AI Engine**:
 If you are a developer using Option B and want to compile your own `.exe` installer:
 1. Ensure Inno Setup 6 is installed (the build script will offer to install it automatically via `winget` if missing).
 2. Run **`build_installer.bat`** (or `python build_staging.py`).
-3. The script will automatically stage the embedded portable runtime, install core requirements, and compile `dist\AI-Influencer-Media-Grabber-v2.2-Setup.exe`.
+3. The script will automatically stage the embedded portable runtime, install core requirements, and compile `dist\AI-Influencer-Media-Grabber-v2.3-Setup.exe`.
 
 
 ### Highlights 🎉
@@ -141,9 +141,16 @@ If you are a developer using Option B and want to compile your own `.exe` instal
 
 ## 📜 Changelog
 
-### v2.2 (Max 4K Quality & Precision Trimming Release) - Current
+### v2.3 (Master Quality & Lossless Trimming Release) - Current
+- **100% Automatic Lossless Stream-Copy (`-c copy`)**: Trimming time without cropping aspect ratio or subtitles now executes in ~0.1s with bit-exact 0.000% quality loss.
+- **Pro Master Formats**: Added **MP4 4K / H.265 (HEVC)** with Apple/Windows compatible `hvc1` tags, **MOV Apple ProRes 422 Studio Master** (10-bit intra-frame for Premiere/Resolve), **MKV Master**, and **WAV Lossless PCM**.
+- **Master Quality Profiles**: Added **💎 Maximum Quality (Visually Lossless CRF 14)** preserving micro-details on 4K & Kling AI models, and **👑 Pure Lossless (CRF 0)**.
+- **Interactive Click-to-Track & Non-blocking Player Controls**: Decoupled face-selection overlay from native video controls, auto-activating on pause/scrubbing and supporting live clicks during playback.
+- **Auto-Shutdown Watchdog**: Client heartbeat beacon terminates background Python engine upon window close, releasing port `5000` and RAM cleanly.
+
+### v2.2 (Max 4K Quality & Multi-Person Tracking Release)
 - **YouTube Max Quality (4K Ultra HD & 2K)**: Prominent quality selector pre-selected to **🔥 Max Quality (4K / 2K / Best)** with Node.js challenge solving unlocking high-bitrate AV1/VP9 streams.
-- **Universal Audio stream (`m4a` / AAC)**: Auto-paired with AAC audio inside MP4 containers for universal playback without codec issues.
+- **Multi-Person Face Tracking Layouts**: Added Dominant Subject, Left Person, Right Person, Center/Both, and Podcast Split-Screen (stacked 9:16) with temporal continuity.
 - **Frame-Accurate Video Clip Trimming**: Accurate `-ss <start> -t <duration>` trimming calculation producing exact clip durations with live visual duration badge.
 - **4K Face Tracking Divisibility by 2**: Auto-enforced even dimensions for vertical 9:16 face-tracking crops on 4K sources.
 - **Unicode UTF-8 Logging**: Crash protection for titles with special characters and symbols.
