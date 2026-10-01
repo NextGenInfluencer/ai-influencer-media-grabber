@@ -870,7 +870,7 @@ def convert_media():
         
     files = request.files.getlist('files')
     resize = request.form.get('resize')
-    format_opt = request.form.get('format')
+    format_opt = request.form.get('format') or "mp4"
     autocrop = request.form.get('autocrop') == 'true'
     tracking_mode = request.form.get('tracking_mode', 'largest')
     target_x_raw = request.form.get('target_x')
@@ -941,7 +941,7 @@ def convert_media():
                     "jpg": "jpg",
                     "webp": "webp"
                 }
-                target_ext = ext_map.get(format_opt, format_opt)
+                target_ext = ext_map.get(format_opt, format_opt or "mp4")
                 output_name = f"{base_name}_converted.{target_ext}"
                 output_path = os.path.join(output_dir, output_name)
                 
