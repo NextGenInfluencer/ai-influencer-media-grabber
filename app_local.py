@@ -101,6 +101,31 @@ def invalidate_gallery_cache():
 HISTORY_FILE = os.path.join(DEFAULT_SAVE_DIR, "history.json")
 history_lock = threading.RLock()
 
+FAVORITES_FILE = os.path.join(DEFAULT_SAVE_DIR, "favorites.json")
+favorites_lock = threading.RLock()
+
+def load_favorites() -> set[str]:
+    """Load set of favorited / liked file paths (normalized lowercase)."""
+    with favorites_lock:
+        if os.path.exists(FAVORITES_FILE):
+            try:
+                with open(FAVORITES_FILE, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if isinstance(data, list):
+                        return {os.path.normpath(p).lower() for p in data if p}
+            except Exception:
+                pass
+        return set()
+
+def save_favorites(fav_set: set[str]):
+    """Persist favorited / liked file paths to favorites.json."""
+    with favorites_lock:
+        try:
+            with open(FAVORITES_FILE, "w", encoding="utf-8") as f:
+                json.dump(sorted(list(fav_set)), f, indent=2)
+        except Exception as e:
+            print(f"Error saving favorites: {e}")
+
 def reconcile_download_history(data):
     """Scan download directories for any media files not yet recorded in history and add them."""
     try:
@@ -1740,6 +1765,7 @@ def list_gallery():
     
     media = []
     history_data = load_history(reconcile=False)
+    fav_set = load_favorites()
     
     for folder in folders:
         folder_path = os.path.join(base_dir, folder)
@@ -1757,6 +1783,7 @@ def list_gallery():
                                 item_path = f"{rel_dir}/{file}".replace('\\', '/')
                             
                             source_url, uploader = resolve_source_url(file_path, history_data)
+                            norm_fp = os.path.normpath(file_path).lower()
                             
                             media.append({
                                 "name": file,
@@ -1767,7 +1794,8 @@ def list_gallery():
                                 "timestamp": os.path.getmtime(file_path),
                                 "size": os.path.getsize(file_path),
                                 "source_url": source_url,
-                                "uploader": uploader
+                                "uploader": uploader,
+                                "liked": norm_fp in fav_set
                             })
                         
     media.sort(key=lambda x: x['timestamp'], reverse=True)
@@ -1967,8 +1995,46 @@ def delete_gallery_item():
         except Exception as e:
             return jsonify({"error": str(e)}), 500
             
+    norm_path = os.path.normpath(path).lower()
+    fav_set = load_favorites()
+    if norm_path in fav_set:
+        fav_set.discard(norm_path)
+        save_favorites(fav_set)
+
     invalidate_gallery_cache()
     return jsonify({"success": True})
+
+@app.route('/api/gallery/like', methods=['POST'])
+def toggle_gallery_like():
+    data = request.json or {}
+    path = data.get('path')
+    if not path or not os.path.exists(path) or not is_safe_path(path):
+        return jsonify({"error": "File not found or forbidden"}), 400
+    
+    norm = os.path.normpath(path).lower()
+    fav_set = load_favorites()
+    
+    explicit_liked = data.get('liked')
+    if explicit_liked is not None:
+        want_liked = bool(explicit_liked)
+    else:
+        want_liked = norm not in fav_set
+        
+    if want_liked:
+        fav_set.add(norm)
+    else:
+        fav_set.discard(norm)
+        
+    save_favorites(fav_set)
+    
+    # Invalidate or sync memory cache
+    global _gallery_cache
+    if _gallery_cache.get("data"):
+        for item in _gallery_cache["data"]:
+            if os.path.normpath(item.get("full_path", "")).lower() == norm:
+                item["liked"] = want_liked
+                
+    return jsonify({"success": True, "path": path, "liked": want_liked, "total_liked": len(fav_set)})
 
 @app.route('/api/gallery/set_url', methods=['POST'])
 def set_gallery_url():

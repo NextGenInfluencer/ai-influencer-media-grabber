@@ -553,11 +553,18 @@
             <!-- SECTION 4: GALLERY -->
             <div id="section-gallery" class="hidden flex-1 overflow-y-auto space-y-4">
                 <div class="sticky top-0 bg-[#0c0c0e] z-10 py-2 border-b border-zinc-800 flex items-center justify-between">
-                    <span class="text-xs font-bold text-zinc-300 uppercase tracking-wider">Output Gallery</span>
+                    <div class="flex items-center space-x-2.5">
+                        <span class="text-xs font-bold text-zinc-300 uppercase tracking-wider">Output Gallery</span>
+                        <button id="galleryFavoritesBtn" onclick="toggleFavoritesFilter()" class="px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-rose-400 text-[11px] font-medium transition flex items-center space-x-1.5 cursor-pointer shadow-sm" title="Show only liked / favorited media">
+                            <i id="galleryFavoritesIcon" class="fa-regular fa-heart text-rose-400 text-xs"></i>
+                            <span id="galleryFavoritesCount">Liked (0)</span>
+                        </button>
+                    </div>
                     <div class="flex items-center space-x-2">
                         <input type="text" id="gallerySearch" placeholder="Search gallery..." class="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white focus:outline-none focus:border-pink-500 w-48" oninput="loadGallery()">
                         <select id="galleryFilter" class="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white focus:outline-none" onchange="loadGallery()">
                             <option value="All">All Media</option>
+                            <option value="Favorites">❤️ Liked Only</option>
                             <option value="YouTube">YouTube</option>
                             <option value="Instagram">Instagram</option>
                             <option value="TikTok">TikTok</option>
@@ -748,6 +755,10 @@
                     <!-- Path display -->
                 </div>
                 <div class="flex items-center space-x-2">
+                    <button id="previewModalLikeBtn" class="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-rose-500/20 text-zinc-200 border border-zinc-800 hover:border-rose-500/40 text-xs font-bold transition flex items-center space-x-1.5 shadow" title="Favorite / Like this file">
+                        <i id="previewModalLikeIcon" class="fa-regular fa-heart text-rose-400"></i>
+                        <span id="previewModalLikeText">Like</span>
+                    </button>
                     <button id="previewModalFolderBtn" class="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 hover:border-zinc-700 text-xs font-bold transition flex items-center space-x-1.5 shadow" title="Open Enclosing Folder in Explorer">
                         <i class="fa-solid fa-folder-open text-pink-500"></i>
                         <span>Folder</span>
@@ -1038,8 +1049,38 @@
                 aud.load();
                 aud.play().catch(() => {});
             }
-
+ 
             // Buttons
+            const modalLikeBtn = document.getElementById('previewModalLikeBtn');
+            const modalLikeIcon = document.getElementById('previewModalLikeIcon');
+            const modalLikeText = document.getElementById('previewModalLikeText');
+
+            function updateModalLikeUI(isLiked) {
+                if (!modalLikeBtn) return;
+                if (isLiked) {
+                    modalLikeBtn.className = 'px-3 py-1.5 rounded-lg bg-rose-500/20 border border-rose-500/40 text-rose-300 hover:bg-rose-500/30 text-xs font-bold transition flex items-center space-x-1.5 shadow';
+                    if (modalLikeIcon) modalLikeIcon.className = 'fa-solid fa-heart text-rose-400';
+                    if (modalLikeText) modalLikeText.textContent = 'Liked';
+                    modalLikeBtn.title = 'Unlike (Remove from Liked)';
+                } else {
+                    modalLikeBtn.className = 'px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-rose-500/20 text-zinc-200 hover:text-rose-400 border border-zinc-800 hover:border-rose-500/40 text-xs font-bold transition flex items-center space-x-1.5 shadow';
+                    if (modalLikeIcon) modalLikeIcon.className = 'fa-regular fa-heart text-rose-400';
+                    if (modalLikeText) modalLikeText.textContent = 'Like';
+                    modalLikeBtn.title = 'Like (Save to Liked)';
+                }
+            }
+            updateModalLikeUI(!!item.liked);
+
+            if (modalLikeBtn) {
+                modalLikeBtn.onclick = async (e) => {
+                    e.stopPropagation();
+                    const nextState = !item.liked;
+                    item.liked = nextState;
+                    updateModalLikeUI(nextState);
+                    await toggleGalleryLike(item.full_path, nextState);
+                };
+            }
+
             document.getElementById('previewModalFolderBtn').onclick = (e) => {
                 e.stopPropagation();
                 openFolder(item.full_path);
@@ -1147,18 +1188,73 @@
             }
         }
 
+        function toggleFavoritesFilter() {
+            const select = document.getElementById('galleryFilter');
+            if (!select) return;
+            if (select.value === 'Favorites') {
+                select.value = 'All';
+            } else {
+                select.value = 'Favorites';
+            }
+            loadGallery();
+        }
+
+        async function toggleGalleryLike(path, wantLiked) {
+            if (!path) return;
+            try {
+                if (window.currentGalleryItems) {
+                    const it = window.currentGalleryItems.find(x => (x.full_path || '') === path);
+                    if (it) it.liked = wantLiked;
+                }
+                const res = await fetch('/api/gallery/like', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path, liked: wantLiked })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.liked ? 'Added to Liked' : 'Removed from Liked', data.liked ? 'Saved to quick access favorites' : 'Removed from favorites');
+                    loadGallery();
+                }
+            } catch (err) {
+                console.error("Toggle like failed:", err);
+            }
+        }
+
         async function loadGallery() {
             const filter = document.getElementById('galleryFilter')?.value || 'All';
             const query = (document.getElementById('gallerySearch')?.value || '').toLowerCase();
             const grid = document.getElementById('galleryGrid');
             if (!grid) return;
             
+            // Sync Quick Filter pill button styling
+            const favBtn = document.getElementById('galleryFavoritesBtn');
+            const favIcon = document.getElementById('galleryFavoritesIcon');
+            if (favBtn) {
+                if (filter === 'Favorites') {
+                    favBtn.className = 'px-2.5 py-1 rounded-full bg-rose-500/20 border border-rose-500/40 text-rose-300 font-bold text-[11px] transition flex items-center space-x-1.5 cursor-pointer shadow-[0_0_12px_rgba(244,63,94,0.25)]';
+                    if (favIcon) favIcon.className = 'fa-solid fa-heart text-rose-400 text-xs';
+                } else {
+                    favBtn.className = 'px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-rose-400 text-[11px] font-medium transition flex items-center space-x-1.5 cursor-pointer shadow-sm';
+                    if (favIcon) favIcon.className = 'fa-regular fa-heart text-rose-400 text-xs';
+                }
+            }
+
             try {
                 const res = await fetch('/api/gallery');
                 const data = await res.json();
                 
+                // Compute total liked
+                const totalLiked = data.filter(item => item.liked).length;
+                const countEl = document.getElementById('galleryFavoritesCount');
+                if (countEl) countEl.textContent = `Liked (${totalLiked})`;
+
                 const filtered = data.filter(item => {
-                    if (filter !== 'All' && item.folder !== filter) return false;
+                    if (filter === 'Favorites') {
+                        if (!item.liked) return false;
+                    } else if (filter !== 'All' && item.folder !== filter) {
+                        return false;
+                    }
                     if (query && !item.name.toLowerCase().includes(query)) return false;
                     return true;
                 });
@@ -1167,7 +1263,11 @@
                 grid.innerHTML = '';
                 
                 if (filtered.length === 0) {
-                    grid.innerHTML = '<div class="col-span-full py-16 text-center text-zinc-500 text-xs">No media found in gallery. Download or convert media to view here.</div>';
+                    if (filter === 'Favorites') {
+                        grid.innerHTML = '<div class="col-span-full py-16 text-center text-zinc-500 text-xs flex flex-col items-center justify-center space-y-2"><i class="fa-regular fa-heart text-2xl text-zinc-600 mb-1"></i><span>No liked media found. Click the heart icon on any card to add it to quick access!</span></div>';
+                    } else {
+                        grid.innerHTML = '<div class="col-span-full py-16 text-center text-zinc-500 text-xs">No media found in gallery. Download or convert media to view here.</div>';
+                    }
                     return;
                 }
                 
@@ -1199,6 +1299,14 @@
                         `;
                         el.querySelector('.audio-name').textContent = item.name;
                     }
+
+                    // Pinned heart badge on card if liked (visible without hover)
+                    if (item.liked) {
+                        const pinnedHeart = document.createElement('div');
+                        pinnedHeart.className = 'absolute top-2 right-2 z-[6] w-6 h-6 rounded-full bg-rose-600/90 shadow-md flex items-center justify-center text-white text-[10px] pointer-events-none drop-shadow group-hover:opacity-0 transition-opacity';
+                        pinnedHeart.innerHTML = '<i class="fa-solid fa-heart"></i>';
+                        el.appendChild(pinnedHeart);
+                    }
                     
                     // Overlay Container
                     const overlay = document.createElement('div');
@@ -1226,6 +1334,19 @@
                         topBar.appendChild(folderBadge);
                     }
                     
+                    const actionBtns = document.createElement('div');
+                    actionBtns.className = 'flex items-center space-x-1.5';
+
+                    const likeBtn = document.createElement('button');
+                    likeBtn.className = `w-7 h-7 rounded ${item.liked ? 'bg-rose-500 text-white shadow-[0_0_10px_rgba(244,63,94,0.6)]' : 'bg-black/80 hover:bg-rose-500/30 text-zinc-300 hover:text-rose-400 border border-white/10'} flex items-center justify-center transition shadow-lg`;
+                    likeBtn.innerHTML = item.liked ? '<i class="fa-solid fa-heart text-[10px]"></i>' : '<i class="fa-regular fa-heart text-[10px]"></i>';
+                    likeBtn.title = item.liked ? 'Unlike (Remove from Liked)' : 'Like (Add to Liked)';
+                    likeBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        toggleGalleryLike(safePath, !item.liked);
+                    };
+                    actionBtns.appendChild(likeBtn);
+
                     const delBtn = document.createElement('button');
                     delBtn.className = 'w-7 h-7 rounded bg-red-500/80 hover:bg-red-500 text-white flex items-center justify-center transition shadow-lg';
                     delBtn.innerHTML = '<i class="fa-solid fa-trash text-[10px]"></i>';
@@ -1234,7 +1355,8 @@
                         e.stopPropagation();
                         deleteGalleryItem(safePath);
                     };
-                    topBar.appendChild(delBtn);
+                    actionBtns.appendChild(delBtn);
+                    topBar.appendChild(actionBtns);
                     overlay.appendChild(topBar);
 
                     // Center Preview Button

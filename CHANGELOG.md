@@ -21,6 +21,7 @@ All notable changes to the AI Influencer Media Grabber project will be documente
   - Reticle marker decoupled from overlay layer so locked target pin remains visible during subsequent playback.
 - **Auto-Shutdown Watchdog & Port Management**:
   - Client heartbeat beacon shuts down the background Python engine when the window is closed, freeing port `5000` and releasing system RAM cleanly.
+- **Gallery Likes & Quick-Access Favorites**: Added 1-click heart favoriting on all gallery media cards and in the fullscreen preview modal. Includes persistent on-disk storage (`favorites.json`), a live header counter badge (`Liked (X)`), pinned heart badges on favorited cards, and 1-click quick-filtering to access liked media instantly.
 - **High-Bitrate Audio Default**: AAC and MP3 encoding upgraded to 320 kbps studio bitrate.
 
 ## [v2.2] - 2026-09-30
