@@ -925,8 +925,9 @@ def convert_media():
             for idx, file_data in enumerate(saved_files, 1):
                 prefix = f"[{idx}/{total}] " if total > 1 else ""
                 q.put({"status": f"{prefix}Processing {file_data['original_name']}..."})
-                
+                input_path = file_data['path']
                 input_ext = file_data['input_ext']
+                base_name = file_data['base_name']
                 ext_map = {
                     "mp4": "mp4",
                     "mp4_hevc": "mp4",
