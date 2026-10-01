@@ -2912,6 +2912,7 @@
                     statusText.textContent = 'Update failed: ' + st.error;
                     statusText.className = 'font-bold text-red-400 truncate max-w-[320px]';
                     showToast('Update Failed', st.error);
+                }
             } catch (e) {
                 console.error("Error polling update status:", e);
             }

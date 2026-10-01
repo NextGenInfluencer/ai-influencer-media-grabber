@@ -579,6 +579,12 @@ def dynamic_auto_crop(input_path, output_path, q=None, prefix="", tracking_mode=
             return smoothed
 
         half_h = height // 2
+        crop_w = target_width
+        crop_h = height
+        smoothed_p1 = []
+        smoothed_p2 = []
+        smoothed_centers = []
+
         if tracking_mode == "split_screen":
             if not frame_centers_p1 or not frame_centers_p2: return False
             crop_aspect = target_width / half_h
@@ -744,10 +750,10 @@ def is_busy():
     with _active_jobs_lock:
         installer_busy = False
         if "ai_installer_state" in globals():
-            installer_busy = ai_installer_state.get("is_installing", False)
+            installer_busy = globals()["ai_installer_state"].get("is_installing", False)
         updater_busy = False
-        if "update_state" in globals():
-            updater_busy = update_state.get("is_updating", False)
+        if "app_updater_state" in globals():
+            updater_busy = globals()["app_updater_state"].get("is_updating", False)
         return _active_jobs_count > 0 or installer_busy or updater_busy
 
 @app.route('/')
@@ -889,6 +895,7 @@ def convert_media():
         def _run_conv_worker():
             total = len(saved_files)
             failed_count = 0
+            output_path = None
             
             for idx, file_data in enumerate(saved_files, 1):
                 prefix = f"[{idx}/{total}] " if total > 1 else ""
@@ -1096,7 +1103,7 @@ def convert_media():
                     
             invalidate_gallery_cache()
             if failed_count == 0:
-                last_path = output_path if 'output_path' in locals() and os.path.exists(output_path) else output_dir
+                last_path = output_path if output_path and os.path.exists(output_path) else output_dir
                 q.put({"status": f"Successfully saved to {output_dir}", "done": True, "file_path": last_path, "output_path": output_dir})
             else:
                 q.put({"error": f"{failed_count} file(s) failed to convert. Check console logs."})
@@ -1407,6 +1414,7 @@ def download_video():
                                 
                         if final_path and os.path.exists(final_path):
                             base, _ = os.path.splitext(final_path)
+                            frame_path = None
                             # Extract first frame
                             if processing_options.get('extractFrame', True):
                                 q.put({"status": f"{prefix}Extracting frame..."})
@@ -1425,7 +1433,7 @@ def download_video():
                                 q.put({"status": f"{prefix}Extracting AI Prompt (BLIP)..."})
                                 try:
                                     from ai_prompter import extract_prompt_from_image
-                                    target_image = frame_path if os.path.exists(frame_path) else final_path
+                                    target_image = frame_path if frame_path and os.path.exists(frame_path) else final_path
                                     if os.path.exists(target_image):
                                         prompt_text = extract_prompt_from_image(target_image)
                                         
