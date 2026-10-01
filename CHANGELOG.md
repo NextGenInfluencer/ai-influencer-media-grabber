@@ -14,11 +14,13 @@ All notable changes to the AI Influencer Media Grabber project will be documente
 - **Download History Auto-Reconciliation**: Automatically scans and backfills missing files into `history.json` on startup, with downloads strictly ordered newest-first.
 - **Non-blocking Windows Explorer Integration**: Folder buttons across the gallery, history, and converter now use non-blocking explorer selection with directory fallback.
 - **Multi-Person Face Tracking Target Selection**: Media Tools converter now supports smart focus selection when multiple subjects are in frame:
-  - 👑 **Dominant Subject**: Automatically tracks and centers the primary speaker based on face size.
-  - 👈 **Left Person (Speaker 1)**: Locks onto and follows the person on the left side of the frame.
-  - 👉 **Right Person (Speaker 2)**: Locks onto and follows the person on the right side of the frame.
+  - 👑 **Dominant Subject**: Automatically tracks and centers the primary speaker based on face size with proximity hysteresis.
+  - 🎯 **Interactive Click-to-Track**: Preview your video and click directly on any speaker's face to place a glowing purple target reticle; locks tracking onto that exact person regardless of who else speaks or moves in the scene.
+  - 👈 **Left Person (Speaker 1)**: Locks onto and follows the person on the left side of the frame with left-half boundary clamping.
+  - 👉 **Right Person (Speaker 2)**: Locks onto and follows the person on the right side of the frame with right-half boundary clamping.
   - 👥 **Center Framing**: Frames both speakers together, smoothly panning to keep both subjects visible in 9:16.
 - **🎙️ Podcast Split-Screen Mode (Stacked 9:16)**: Added Opus Clip & CapCut style stacked layout for two-person interviews and podcasts. Simultaneously crops Speaker 1 on the top half and Speaker 2 on the bottom half with a crisp divider line, formatted directly into vertical 9:16 with zero audio re-encoding loss.
+- **Temporal Centroid Tracking & Stability Fix**: Fixed sudden camera jitter and erratic switching between subjects by adding spatial-temporal continuity to the face tracker. If a subject tilts their head or looks away, the crop smoothly holds position instead of jumping across the room to other people.
 
 ### Fixed
 - **Frame-Accurate Clip Trimming Bug**: Fixed FFmpeg duration calculation when trimming clips (`-ss <start> -t <duration>`). Setting timestamps like `00:00:14` to `00:00:28` now produces an exact 14.0-second clip instead of taking 28 seconds.

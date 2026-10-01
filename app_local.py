@@ -427,7 +427,7 @@ def _get_face_cascade():
         print(f"[Face Cascade Init Warning] Could not load face detector: {e}")
     return None
 
-def dynamic_auto_crop(input_path, output_path, q=None, prefix="", tracking_mode="largest"):
+def dynamic_auto_crop(input_path, output_path, q=None, prefix="", tracking_mode="largest", target_x=None):
     try:
         import cv2
         import numpy as np
@@ -456,12 +456,15 @@ def dynamic_auto_crop(input_path, output_path, q=None, prefix="", tracking_mode=
             
         mode_names = {
             "largest": "Dominant Subject",
+            "custom_point": "Interactive Click-to-Track",
             "left": "Left Person (Speaker 1)",
             "right": "Right Person (Speaker 2)",
             "center": "Center Framing (Both Subjects)",
             "split_screen": "Podcast Split-Screen (Stacked 9:16)"
         }
         mode_label = mode_names.get(tracking_mode, "Dominant Subject")
+        if tracking_mode == "custom_point" and target_x is not None:
+            mode_label += f" ({int(target_x * 100)}% X)"
         
         if q: q.put({"status": f"{prefix}Scanning video for {mode_label}..."})
         
@@ -471,9 +474,19 @@ def dynamic_auto_crop(input_path, output_path, q=None, prefix="", tracking_mode=
         frame_centers_p2 = []
         frame_idx = 0
         
-        last_center = width // 2
+        if tracking_mode == "custom_point" and target_x is not None:
+            last_center = int(target_x * width)
+        else:
+            last_center = width // 2
+            
         last_c1 = width // 3
         last_c2 = (2 * width) // 3
+        
+        def face_cx(f):
+            return int((f[0] + f[2] / 2) * 2)
+
+        def face_area(f):
+            return f[2] * f[3]
         
         while cap.isOpened() and frame_idx < total_frames:
             ret, frame = cap.read()
@@ -484,30 +497,55 @@ def dynamic_auto_crop(input_path, output_path, q=None, prefix="", tracking_mode=
                 small = cv2.resize(gray, (0,0), fx=0.5, fy=0.5)
                 faces = face_cascade.detectMultiScale(small, 1.1, 4)
                 if len(faces) > 0:
-                    faces_by_x = sorted(faces, key=lambda f: f[0] + f[2]//2)
-                    faces_by_area = sorted(faces, key=lambda f: f[2]*f[3], reverse=True)
-                    
-                    if tracking_mode == "split_screen":
-                        if len(faces_by_x) >= 2:
-                            last_c1 = (faces_by_x[0][0] + faces_by_x[0][2]//2) * 2
-                            last_c2 = (faces_by_x[-1][0] + faces_by_x[-1][2]//2) * 2
-                        else:
-                            single_x = (faces_by_x[0][0] + faces_by_x[0][2]//2) * 2
-                            if single_x < width // 2:
-                                last_c1 = single_x
-                            else:
-                                last_c2 = single_x
+                    if tracking_mode == "custom_point":
+                        # Find face closest to last_center (or initial clicked target_x)
+                        closest = min(faces, key=lambda f: abs(face_cx(f) - last_center))
+                        dist = abs(face_cx(closest) - last_center)
+                        # Lock on initial detection or track smoothly within reach
+                        if not frame_centers or dist < width * 0.35:
+                            last_center = face_cx(closest)
+                    elif tracking_mode == "split_screen":
+                        # Speaker 1 (Left Half / Top Panel)
+                        left_candidates = [f for f in faces if face_cx(f) < width * 0.60]
+                        if left_candidates:
+                            best_p1 = min(left_candidates, key=lambda f: face_cx(f))
+                            last_c1 = face_cx(best_p1)
+                        # Speaker 2 (Right Half / Bottom Panel)
+                        right_candidates = [f for f in faces if face_cx(f) > width * 0.40]
+                        if right_candidates:
+                            best_p2 = max(right_candidates, key=lambda f: face_cx(f))
+                            last_c2 = face_cx(best_p2)
                     elif tracking_mode == "left":
-                        last_center = (faces_by_x[0][0] + faces_by_x[0][2]//2) * 2
+                        # Only track candidates on left side to avoid jumping across the room
+                        left_candidates = [f for f in faces if face_cx(f) < width * 0.65]
+                        if left_candidates:
+                            best_left = min(left_candidates, key=lambda f: face_cx(f))
+                            last_center = face_cx(best_left)
                     elif tracking_mode == "right":
-                        last_center = (faces_by_x[-1][0] + faces_by_x[-1][2]//2) * 2
+                        # Only track candidates on right side
+                        right_candidates = [f for f in faces if face_cx(f) > width * 0.35]
+                        if right_candidates:
+                            best_right = max(right_candidates, key=lambda f: face_cx(f))
+                            last_center = face_cx(best_right)
                     elif tracking_mode == "center":
-                        left_x = (faces_by_x[0][0] + faces_by_x[0][2]//2) * 2
-                        right_x = (faces_by_x[-1][0] + faces_by_x[-1][2]//2) * 2
+                        faces_by_x = sorted(faces, key=lambda f: face_cx(f))
+                        left_x = face_cx(faces_by_x[0])
+                        right_x = face_cx(faces_by_x[-1])
                         last_center = (left_x + right_x) // 2
-                    else:  # largest
-                        (x, y, w, h) = faces_by_area[0]
-                        last_center = (x + w//2) * 2
+                    else:  # 'largest' (Dominant Subject)
+                        faces_by_area = sorted(faces, key=face_area, reverse=True)
+                        largest = faces_by_area[0]
+                        # Spatial continuity: if currently locked on a subject, check if still nearby
+                        nearby = [f for f in faces if abs(face_cx(f) - last_center) < width * 0.30]
+                        if nearby:
+                            best_nearby = max(nearby, key=face_area)
+                            # Only switch if another subject is much larger (prevents rapid jitter)
+                            if face_area(best_nearby) >= face_area(largest) * 0.65:
+                                last_center = face_cx(best_nearby)
+                            else:
+                                last_center = face_cx(largest)
+                        else:
+                            last_center = face_cx(largest)
                         
                 if tracking_mode == "split_screen":
                     frame_centers_p1.append((frame_idx, last_c1))
@@ -531,7 +569,7 @@ def dynamic_auto_crop(input_path, output_path, q=None, prefix="", tracking_mode=
             for j in range(idx_last, frame_idx):
                 all_c[j] = c_last
                 
-            alpha = 0.05
+            alpha = 0.07
             curr = all_c[0]
             smoothed = []
             for c in all_c:
@@ -774,6 +812,15 @@ def convert_media():
     format_opt = request.form.get('format')
     autocrop = request.form.get('autocrop') == 'true'
     tracking_mode = request.form.get('tracking_mode', 'largest')
+    target_x_raw = request.form.get('target_x')
+    target_x = None
+    if target_x_raw:
+        try:
+            target_x_val = float(target_x_raw)
+            if 0.0 <= target_x_val <= 1.0:
+                target_x = target_x_val
+        except ValueError:
+            target_x = None
     burn_subtitles = request.form.get('burn_subtitles') == 'true'
     export_subtitles = request.form.get('export_subtitles') == 'true'
     translate_lang = request.form.get('translate_lang', 'none')
@@ -865,7 +912,7 @@ def convert_media():
                     # 1. Smart Auto-Crop or Aspect Ratio Crop/Pad
                     if autocrop and format_opt not in ["mp3", "wav"] and input_ext not in [".mp3", ".wav", ".jpg", ".png", ".webp"]:
                         temp_crop_path = os.path.join(shared_temp_dir, f"{uuid.uuid4().hex}_precrop.mp4")
-                        if dynamic_auto_crop(input_path, temp_crop_path, q, prefix, tracking_mode=tracking_mode):
+                        if dynamic_auto_crop(input_path, temp_crop_path, q, prefix, tracking_mode=tracking_mode, target_x=target_x):
                             input_path = temp_crop_path
                             # dynamic_auto_crop already crops to 9:16
                         else:

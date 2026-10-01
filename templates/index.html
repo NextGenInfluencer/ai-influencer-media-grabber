@@ -271,7 +271,30 @@
                     <div id="trimmerContainer" class="space-y-2 hidden">
                         <label class="block text-xs font-bold text-zinc-300 uppercase tracking-widest"><span class="text-purple-500 mr-1.5">02.</span> Video Trimmer & Preview</label>
                         <div class="bg-[#080809] border border-zinc-800 rounded-2xl p-4 shadow-inner">
-                            <video id="videoPreview" class="w-full rounded-xl mb-4 bg-black max-h-[220px] object-contain" controls></video>
+                            <div class="relative w-full rounded-xl mb-4 bg-black overflow-hidden flex items-center justify-center group">
+                                <video id="videoPreview" class="w-full max-h-[250px] object-contain block mx-auto" controls></video>
+                                
+                                <!-- Click-to-Track Interactive Overlay -->
+                                <div id="clickTrackOverlay" class="absolute inset-0 cursor-crosshair hidden select-none z-10 transition-all bg-purple-950/20 hover:bg-purple-900/15">
+                                    <!-- Dynamic Glowing Crosshair Pin -->
+                                    <div id="clickTrackReticle" class="absolute hidden -translate-x-1/2 -translate-y-1/2 pointer-events-none transition-all duration-100 ease-out z-20">
+                                        <div class="relative flex items-center justify-center">
+                                            <span class="animate-ping absolute inline-flex h-9 w-9 rounded-full bg-purple-400 opacity-75"></span>
+                                            <div class="w-8 h-8 rounded-full border-2 border-purple-400 bg-purple-600/40 flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.9)] backdrop-blur-sm">
+                                                <div class="w-2 h-2 rounded-full bg-white shadow-sm"></div>
+                                            </div>
+                                            <div class="absolute -top-7 px-2.5 py-0.5 rounded-full bg-zinc-950/90 border border-purple-500/60 text-[9px] font-bold text-purple-200 tracking-wider uppercase whitespace-nowrap shadow-xl">
+                                                <i class="fa-solid fa-crosshairs mr-1 text-purple-400"></i><span id="clickTrackBadgeLabel">Target Locked</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <!-- Instructional Top Banner -->
+                                    <div class="absolute top-2.5 left-1/2 -translate-x-1/2 px-3.5 py-1.5 rounded-full bg-zinc-950/90 border border-purple-500/60 text-[11px] text-purple-200 font-medium backdrop-blur-md pointer-events-none flex items-center space-x-2 shadow-2xl z-10">
+                                        <i class="fa-solid fa-crosshairs text-purple-400 animate-pulse"></i>
+                                        <span id="clickTrackBanner">Click directly on the person's face to lock target</span>
+                                    </div>
+                                </div>
+                            </div>
                             <div class="grid grid-cols-2 gap-4">
                                 <div>
                                     <label class="block text-[10px] text-zinc-400 font-bold uppercase mb-1">Start Time (HH:MM:SS)</label>
@@ -362,6 +385,7 @@
                                         <label for="convTrackingMode" class="text-[11px] text-zinc-400 font-medium">Tracking Focus & Layout:</label>
                                         <select id="convTrackingMode" class="px-2.5 py-1 bg-zinc-900 border border-zinc-700/80 rounded text-xs text-zinc-200 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all cursor-pointer">
                                             <option value="largest">👑 Dominant Subject (Largest Face)</option>
+                                            <option value="custom_point">🎯 Interactive Click-to-Track (Pick on Video)</option>
                                             <option value="left">👈 Left Person (Speaker 1)</option>
                                             <option value="right">👉 Right Person (Speaker 2)</option>
                                             <option value="center">👥 Center (Both Subjects in Frame)</option>
@@ -369,6 +393,23 @@
                                         </select>
                                     </div>
                                     <p id="convTrackingHint" class="text-[10.5px] text-purple-300/80 leading-tight">Automatically tracks and centers the primary speaker in 9:16 vertical video.</p>
+
+                                    <!-- Interactive Target Info Bar (Visible when custom_point is active) -->
+                                    <div id="clickTrackInfoBar" class="hidden flex items-center justify-between p-2 rounded-lg bg-purple-950/40 border border-purple-500/30 text-xs mt-1.5">
+                                        <div class="flex items-center space-x-2 overflow-hidden">
+                                            <i class="fa-solid fa-crosshairs text-purple-400 shrink-0"></i>
+                                            <span id="clickTrackStatusText" class="text-zinc-300 font-mono text-[10.5px] truncate">No target locked (click video above)</span>
+                                        </div>
+                                        <div class="flex items-center space-x-1.5 shrink-0">
+                                            <button type="button" id="btnToggleOverlay" class="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-[10px] text-zinc-200 border border-zinc-700 transition" title="Toggle overlay to play/pause video">
+                                                <i class="fa-solid fa-play-pause mr-1"></i><span>Play/Pause</span>
+                                            </button>
+                                            <button type="button" id="btnResetTrackPoint" class="px-2 py-0.5 rounded bg-purple-600/30 hover:bg-purple-600/50 text-[10px] text-purple-200 border border-purple-500/40 transition">
+                                                Reset
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <input type="hidden" id="convTargetX" name="target_x" value="">
                                 </div>
                                 <label class="flex items-center justify-between space-x-2 text-xs text-zinc-300 cursor-pointer mb-2">
                                     <div class="flex items-center space-x-2">
@@ -1772,9 +1813,11 @@
                 const url = URL.createObjectURL(file);
                 videoPreview.src = url;
                 trimmerContainer.classList.remove('hidden');
+                setTimeout(() => { if (typeof syncTrackingUI === 'function') syncTrackingUI(); }, 100);
             } else {
                 trimmerContainer.classList.add('hidden');
                 videoPreview.src = '';
+                if (typeof syncTrackingUI === 'function') syncTrackingUI();
             }
         }
 
@@ -1886,6 +1929,7 @@
             const formData = new FormData(e.target);
             formData.set('autocrop', document.getElementById('convAutoCrop').checked);
             formData.set('tracking_mode', document.getElementById('convTrackingMode') ? document.getElementById('convTrackingMode').value : 'largest');
+            formData.set('target_x', document.getElementById('convTargetX') ? document.getElementById('convTargetX').value : '');
             formData.set('burn_subtitles', document.getElementById('convBurnSubtitles').checked);
             formData.set('export_subtitles', document.getElementById('convExportSubtitles').checked);
             formData.set('translate_lang', document.getElementById('convTranslateLang').value);
@@ -2132,8 +2176,19 @@
             const convTrackingModeEl = document.getElementById('convTrackingMode');
             const convTrackingHintEl = document.getElementById('convTrackingHint');
 
+            const clickTrackOverlay = document.getElementById('clickTrackOverlay');
+            const clickTrackReticle = document.getElementById('clickTrackReticle');
+            const clickTrackInfoBar = document.getElementById('clickTrackInfoBar');
+            const clickTrackStatusText = document.getElementById('clickTrackStatusText');
+            const clickTrackBanner = document.getElementById('clickTrackBanner');
+            const convTargetX = document.getElementById('convTargetX');
+            const btnResetTrackPoint = document.getElementById('btnResetTrackPoint');
+            const btnToggleOverlay = document.getElementById('btnToggleOverlay');
+            const videoPreviewEl = document.getElementById('videoPreview');
+
             const trackingHints = {
                 'largest': 'Automatically tracks and centers the primary speaker in 9:16 vertical video.',
+                'custom_point': 'Click directly on any speaker’s face in the preview video above to lock tracking on them.',
                 'left': 'Locks onto and follows the person on the left side of the frame (Speaker 1).',
                 'right': 'Locks onto and follows the person on the right side of the frame (Speaker 2).',
                 'center': 'Smoothly pans to keep both speakers visible in the 9:16 frame.',
@@ -2141,16 +2196,114 @@
             };
 
             function syncTrackingUI() {
-                if (convAutoCropEl && convTrackingOptionsEl) {
-                    if (convAutoCropEl.checked) {
+                const isAutoCrop = convAutoCropEl && convAutoCropEl.checked;
+                if (convTrackingOptionsEl) {
+                    if (isAutoCrop) {
                         convTrackingOptionsEl.classList.remove('hidden');
                     } else {
                         convTrackingOptionsEl.classList.add('hidden');
                     }
                 }
-                if (convTrackingModeEl && convTrackingHintEl) {
-                    convTrackingHintEl.textContent = trackingHints[convTrackingModeEl.value] || trackingHints['largest'];
+                const mode = convTrackingModeEl ? convTrackingModeEl.value : 'largest';
+                if (convTrackingHintEl) {
+                    convTrackingHintEl.textContent = trackingHints[mode] || trackingHints['largest'];
                 }
+
+                // Show/hide interactive overlay based on custom_point mode
+                const isCustomPoint = isAutoCrop && mode === 'custom_point';
+                if (clickTrackOverlay) {
+                    if (isCustomPoint && videoPreviewEl && videoPreviewEl.src) {
+                        clickTrackOverlay.classList.remove('hidden');
+                    } else {
+                        clickTrackOverlay.classList.add('hidden');
+                    }
+                }
+                if (clickTrackInfoBar) {
+                    if (isCustomPoint) {
+                        clickTrackInfoBar.classList.remove('hidden');
+                    } else {
+                        clickTrackInfoBar.classList.add('hidden');
+                    }
+                }
+            }
+
+            // Click-to-track click handler on overlay
+            if (clickTrackOverlay && videoPreviewEl) {
+                clickTrackOverlay.addEventListener('click', (e) => {
+                    const rect = clickTrackOverlay.getBoundingClientRect();
+                    const clickX = e.clientX - rect.left;
+                    const clickY = e.clientY - rect.top;
+                    
+                    // Account for object-contain letterboxing in video tag
+                    let renderWidth = rect.width;
+                    let renderHeight = rect.height;
+                    let offsetX = 0;
+                    let offsetY = 0;
+                    
+                    if (videoPreviewEl.videoWidth && videoPreviewEl.videoHeight) {
+                        const videoRatio = videoPreviewEl.videoWidth / videoPreviewEl.videoHeight;
+                        const containerRatio = rect.width / rect.height;
+                        if (containerRatio > videoRatio) {
+                            renderWidth = rect.height * videoRatio;
+                            offsetX = (rect.width - renderWidth) / 2;
+                        } else {
+                            renderHeight = rect.width / videoRatio;
+                            offsetY = (rect.height - renderHeight) / 2;
+                        }
+                    }
+                    
+                    const clampedX = Math.max(0, Math.min(renderWidth, clickX - offsetX));
+                    const normX = clampedX / renderWidth;
+                    
+                    if (convTargetX) {
+                        convTargetX.value = normX.toFixed(3);
+                    }
+                    
+                    if (clickTrackReticle) {
+                        clickTrackReticle.style.left = `${clickX}px`;
+                        clickTrackReticle.style.top = `${clickY}px`;
+                        clickTrackReticle.classList.remove('hidden');
+                    }
+                    
+                    const pctX = Math.round(normX * 100);
+                    if (clickTrackStatusText) {
+                        clickTrackStatusText.textContent = `🎯 Target locked at ${pctX}% X (Click video to re-target)`;
+                        clickTrackStatusText.className = 'text-purple-300 font-mono text-[10.5px] font-bold truncate';
+                    }
+                    if (clickTrackBanner) {
+                        clickTrackBanner.textContent = `Target locked at ${pctX}% X (Click to change)`;
+                    }
+                });
+            }
+
+            if (btnResetTrackPoint) {
+                btnResetTrackPoint.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    if (convTargetX) convTargetX.value = '';
+                    if (clickTrackReticle) clickTrackReticle.classList.add('hidden');
+                    if (clickTrackStatusText) {
+                        clickTrackStatusText.textContent = 'No target locked (click video above)';
+                        clickTrackStatusText.className = 'text-zinc-300 font-mono text-[10.5px] truncate';
+                    }
+                    if (clickTrackBanner) {
+                        clickTrackBanner.textContent = "Click directly on the person's face to lock target";
+                    }
+                });
+            }
+
+            if (btnToggleOverlay && clickTrackOverlay) {
+                btnToggleOverlay.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    if (videoPreviewEl) {
+                        if (videoPreviewEl.paused) {
+                            videoPreviewEl.play();
+                            clickTrackOverlay.classList.add('opacity-0', 'pointer-events-none');
+                        } else {
+                            videoPreviewEl.pause();
+                            clickTrackOverlay.classList.remove('opacity-0', 'pointer-events-none');
+                        }
+                    }
+                });
             }
 
             if (convAutoCropEl) {
