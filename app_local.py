@@ -611,7 +611,7 @@ def dynamic_auto_crop(input_path, output_path, q=None, prefix="", tracking_mode=
             ffmpeg_exe, '-y', '-f', 'rawvideo', '-vcodec', 'rawvideo',
             '-s', f'{target_width}x{height}', '-pix_fmt', 'bgr24', '-r', str(fps),
             '-i', '-', '-i', input_path, '-map', '0:v', '-map', '1:a?', 
-            '-c:v', 'libx264', '-preset', 'fast', '-crf', '17', '-pix_fmt', 'yuv420p', '-c:a', 'copy',
+            '-c:v', 'libx264', '-preset', 'medium', '-crf', '14', '-pix_fmt', 'yuv420p', '-c:a', 'copy',
             output_path
         ]
         
@@ -902,49 +902,90 @@ def convert_media():
                 q.put({"status": f"{prefix}Processing {file_data['original_name']}..."})
                 
                 input_ext = file_data['input_ext']
-                base_name = file_data['base_name']
-                input_path = file_data['path']
-                
-                output_name = f"{base_name}_converted.{format_opt}"
+                ext_map = {
+                    "mp4": "mp4",
+                    "mp4_hevc": "mp4",
+                    "mov_prores": "mov",
+                    "mov": "mov",
+                    "mkv": "mkv",
+                    "gif": "gif",
+                    "mp3": "mp3",
+                    "wav": "wav",
+                    "png": "png",
+                    "jpg": "jpg",
+                    "webp": "webp"
+                }
+                target_ext = ext_map.get(format_opt, format_opt)
+                output_name = f"{base_name}_converted.{target_ext}"
                 output_path = os.path.join(output_dir, output_name)
                 
                 # Prevent overwriting existing files in bulk directory
                 counter = 1
                 while os.path.exists(output_path):
-                    output_name = f"{base_name}_converted_{counter}.{format_opt}"
+                    output_name = f"{base_name}_converted_{counter}.{target_ext}"
                     output_path = os.path.join(output_dir, output_name)
                     counter += 1
                 
                 ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
                 
                 try:
-                    # 0. Frame-Accurate Clip Trimming (Calculates exact duration from start to end)
-                    if total == 1 and (trim_start or trim_end):
-                        start_s = parse_time_seconds(trim_start)
-                        end_s = parse_time_seconds(trim_end)
-                        if (start_s is not None and start_s > 0) or end_s is not None:
-                            trimmed_temp_path = os.path.join(shared_temp_dir, f"{uuid.uuid4().hex}_trimmed.mp4")
-                            q.put({"status": f"{prefix}Trimming clip ({trim_start or '00:00:00'} to {trim_end or 'End'})..."})
-                            
-                            trim_cmd = [ffmpeg_exe, "-y"]
+                    # 0. Check for 100% Automatic Lossless Stream-Copy
+                    start_s = parse_time_seconds(trim_start) if (total == 1 and (trim_start or trim_end)) else None
+                    end_s = parse_time_seconds(trim_end) if (total == 1 and (trim_start or trim_end)) else None
+                    is_trim_requested = (start_s is not None and start_s > 0) or (end_s is not None)
+
+                    can_stream_copy = (
+                        is_trim_requested and
+                        not autocrop and
+                        (resize in ["none", "", None]) and
+                        (not burn_subtitles) and
+                        (compress_opt in ["none", "quality_master", "quality_lossless", "quality_standard", "", None]) and
+                        (format_opt in ["mp4", "mp4_hevc", "mkv", "mov"] and input_ext in [".mp4", ".mov", ".m4v", ".mkv"])
+                    )
+
+                    if can_stream_copy:
+                        q.put({"status": f"{prefix}Lossless Instant Trim (100% original quality, 0% loss)..."})
+                        trim_cmd = [ffmpeg_exe, "-y"]
+                        if start_s is not None and start_s > 0:
+                            trim_cmd.extend(["-ss", str(start_s)])
+                        if end_s is not None:
                             if start_s is not None and start_s > 0:
-                                trim_cmd.extend(["-ss", str(start_s)])
-                            if end_s is not None:
-                                if start_s is not None and start_s > 0:
-                                    duration_s = max(0.1, end_s - start_s)
-                                    trim_cmd.extend(["-t", str(duration_s)])
-                                else:
-                                    trim_cmd.extend(["-t", str(end_s)])
-                            
-                            trim_cmd.extend(["-i", input_path, "-c:v", "libx264", "-preset", "ultrafast", "-crf", "17", "-c:a", "aac", trimmed_temp_path])
-                            
-                            res = subprocess.run(trim_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
-                            if res.returncode == 0 and os.path.exists(trimmed_temp_path) and os.path.getsize(trimmed_temp_path) > 0:
-                                input_path = trimmed_temp_path
+                                duration_s = max(0.1, end_s - start_s)
+                                trim_cmd.extend(["-t", str(duration_s)])
                             else:
-                                print(f"Trim notice: {res.stderr}")
+                                trim_cmd.extend(["-t", str(end_s)])
+                        trim_cmd.extend(["-i", input_path, "-c", "copy", output_path])
+                        res = subprocess.run(trim_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+                        if res.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+                            try: os.remove(input_path)
+                            except Exception: pass
+                            continue
+
+                    # If re-encoding is needed (crop/subtitles/format/compress), perform high-fidelity intermediate trim
+                    if is_trim_requested:
+                        trimmed_temp_path = os.path.join(shared_temp_dir, f"{uuid.uuid4().hex}_trimmed.mp4")
+                        q.put({"status": f"{prefix}Trimming clip ({trim_start or '00:00:00'} to {trim_end or 'End'})..."})
+                        
+                        trim_cmd = [ffmpeg_exe, "-y"]
+                        if start_s is not None and start_s > 0:
+                            trim_cmd.extend(["-ss", str(start_s)])
+                        if end_s is not None:
+                            if start_s is not None and start_s > 0:
+                                duration_s = max(0.1, end_s - start_s)
+                                trim_cmd.extend(["-t", str(duration_s)])
+                            else:
+                                trim_cmd.extend(["-t", str(end_s)])
+                        
+                        # High-quality intermediate CRF 12 so subsequent crop never degrades
+                        trim_cmd.extend(["-i", input_path, "-c:v", "libx264", "-preset", "medium", "-crf", "12", "-c:a", "aac", "-b:a", "320k", trimmed_temp_path])
+                        
+                        res = subprocess.run(trim_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+                        if res.returncode == 0 and os.path.exists(trimmed_temp_path) and os.path.getsize(trimmed_temp_path) > 0:
+                            input_path = trimmed_temp_path
+                        else:
+                            print(f"Trim notice: {res.stderr}")
                     vf_filters = []
-                    crf_val = "23" # Default standard quality
+                    crf_val = "14" # Default studio master quality (visually lossless)
                     
                     # 1. Smart Auto-Crop or Aspect Ratio Crop/Pad
                     if autocrop and format_opt not in ["mp3", "wav"] and input_ext not in [".mp3", ".wav", ".jpg", ".png", ".webp"]:
@@ -970,48 +1011,53 @@ def convert_media():
                         elif resize == "pad_blur_9_16":
                             vf_filters.append("split[original][copy];[copy]scale=-2:1920,crop=1080:1920,boxblur=20:5[bg];[original]scale=1080:1920:force_original_aspect_ratio=decrease[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2")
 
-                    # 2. File Size & Resolution Scaling (MB Reduction)
-                    if compress_opt and compress_opt != "none" and format_opt not in ["mp3", "wav"]:
+                    # 2. File Size & Resolution Scaling (MB Reduction or Master Quality)
+                    if compress_opt == "quality_lossless":
+                        crf_val = "0" # Pure 100% mathematical bit-exact copy
+                    elif compress_opt in ["quality_master", "none", "", None]:
+                        crf_val = "14" # Studio Master / Visually Lossless (Pristine 4K & AI detail)
+                    elif compress_opt == "quality_standard":
+                        crf_val = "22" # Standard Web (Balanced)
+                    elif compress_opt == "compress_high":
+                        crf_val = "28" # ~50% MB size reduction
+                    elif compress_opt == "compress_web":
+                        crf_val = "32" # ~75% MB size reduction
+                    elif compress_opt == "compress_80":
+                        crf_val = "33" # ~80% MB size reduction
+                    elif compress_opt == "compress_85":
+                        crf_val = "34" # ~85% MB size reduction
+                    elif compress_opt == "compress_extreme":
+                        crf_val = "36" # ~90% MB size reduction
+                    
+                    if compress_opt in ["scale_1080p", "scale_720p", "scale_480p", "scale_50", "scale_25"]:
                         if compress_opt == "scale_1080p":
                             vf_filters.append("scale='min(1080,iw)':'min(1920,ih)':force_original_aspect_ratio=decrease")
+                            crf_val = "16"
                         elif compress_opt == "scale_720p":
                             vf_filters.append("scale='min(720,iw)':'min(1280,ih)':force_original_aspect_ratio=decrease")
-                            crf_val = "26"
+                            crf_val = "20"
                         elif compress_opt == "scale_480p":
                             vf_filters.append("scale='min(480,iw)':'min(854,ih)':force_original_aspect_ratio=decrease")
-                            crf_val = "28"
+                            crf_val = "24"
                         elif compress_opt == "scale_50":
                             vf_filters.append("scale=iw*0.5:ih*0.5")
-                            crf_val = "26"
+                            crf_val = "18"
                         elif compress_opt == "scale_25":
                             vf_filters.append("scale=iw*0.25:ih*0.25")
-                            crf_val = "28"
-                        elif compress_opt == "compress_high":
-                            crf_val = "28" # ~50% MB size reduction
-                            if format_opt == "gif":
-                                vf_filters.append("scale=iw*0.5:ih*0.5")
-                        elif compress_opt == "compress_web":
-                            crf_val = "32" # ~75% MB size reduction (Web/Discord)
-                            if format_opt == "gif":
-                                vf_filters.append("scale=iw*0.33:ih*0.33")
-                        elif compress_opt == "compress_80":
-                            crf_val = "33" # ~80% MB size reduction
-                            if format_opt == "gif":
-                                vf_filters.append("scale=iw*0.27:ih*0.27")
-                        elif compress_opt == "compress_85":
-                            crf_val = "34" # ~85% MB size reduction
-                            if format_opt == "gif":
-                                vf_filters.append("scale=iw*0.21:ih*0.21")
-                        elif compress_opt == "compress_extreme":
-                            crf_val = "36" # ~90% MB size reduction
-                            if format_opt == "gif":
-                                vf_filters.append("scale=iw*0.15:ih*0.15")
+                            crf_val = "22"
+                    
+                    if format_opt == "gif":
+                        if compress_opt == "compress_high": vf_filters.append("scale=iw*0.5:ih*0.5")
+                        elif compress_opt == "compress_web": vf_filters.append("scale=iw*0.33:ih*0.33")
+                        elif compress_opt == "compress_80": vf_filters.append("scale=iw*0.27:ih*0.27")
+                        elif compress_opt == "compress_85": vf_filters.append("scale=iw*0.21:ih*0.21")
+                        elif compress_opt == "compress_extreme": vf_filters.append("scale=iw*0.15:ih*0.15")
                     
                     # Audio formats (ignore video filters)
                     if format_opt in ["mp3", "wav"]:
                         cmd = [ffmpeg_exe, "-y", "-i", input_path]
                         if format_opt == "mp3":
-                            cmd.extend(["-vn", "-acodec", "libmp3lame", "-q:a", "2"])
+                            cmd.extend(["-vn", "-acodec", "libmp3lame", "-b:a", "320k"])
                         else:
                             cmd.extend(["-vn", "-acodec", "pcm_s16le"])
                     else:
@@ -1062,22 +1108,30 @@ def convert_media():
                                     print("Subtitle error:", e)
 
                         cmd = [ffmpeg_exe, "-y", "-i", input_path]
-                        if format_opt in ["mp4", "mkv", "mov", "avi"]:
+                        if format_opt in ["mp4", "mp4_hevc", "mov_prores", "mov", "mkv", "avi"]:
                             vf_filters.append("scale=trunc(iw/2)*2:trunc(ih/2)*2")
                         if vf_filters:
                             cmd.extend(["-vf", ",".join(vf_filters)])
                             
-                        if format_opt in ["mp4", "mkv", "mov", "avi"]:
-                            cmd.extend(["-c:v", "libx264", "-preset", "fast", "-crf", crf_val, "-c:a", "aac", "-pix_fmt", "yuv420p"])
+                        if format_opt in ["mp4", "mkv", "avi"]:
+                            cmd.extend(["-c:v", "libx264", "-preset", "slow" if crf_val in ["0", "14"] else "medium", "-crf", crf_val, "-c:a", "aac", "-b:a", "320k", "-pix_fmt", "yuv420p"])
+                        elif format_opt == "mp4_hevc":
+                            # 4K HEVC Master with Apple/Windows compatible hvc1 tag
+                            cmd.extend(["-c:v", "libx265", "-preset", "medium", "-crf", crf_val, "-tag:v", "hvc1", "-c:a", "aac", "-b:a", "320k", "-pix_fmt", "yuv420p"])
+                        elif format_opt == "mov_prores":
+                            # Apple ProRes 422 Studio Master (HQ)
+                            cmd.extend(["-c:v", "prores_ks", "-profile:v", "3", "-c:a", "pcm_s16le"])
+                        elif format_opt == "mov":
+                            cmd.extend(["-c:v", "libx264", "-preset", "slow" if crf_val in ["0", "14"] else "medium", "-crf", crf_val, "-c:a", "aac", "-b:a", "320k", "-pix_fmt", "yuv420p"])
                         elif format_opt == "webm":
-                            cmd.extend(["-c:v", "libvpx", "-c:a", "libvorbis", "-crf", crf_val])
+                            cmd.extend(["-c:v", "libvpx-vp9", "-crf", crf_val, "-b:v", "0", "-c:a", "libopus"])
                         elif format_opt == "gif":
                             cmd.extend(["-r", "15"]) 
                         elif format_opt in ["jpg", "png", "webp"]:
                             if input_ext in ['.mp4', '.mov', '.mkv', '.webm', '.avi']:
                                 cmd.extend(["-vframes", "1"])
                         else:
-                            raise Exception("Invalid format")
+                            raise Exception(f"Invalid format: {format_opt}")
                             
                     cmd.append(output_path)
                     
