@@ -11,6 +11,7 @@ from unittest.mock import patch
 class FullAppTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        (Path(__file__).resolve().parents[1] / 'audit_artifacts').mkdir(exist_ok=True)
         cls.temp = tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parents[1] / 'audit_artifacts')
         cls.root = Path(cls.temp.name)
         with patch.dict(os.environ, MEDIA_GRABBER_DATA_DIR=str(cls.root)):

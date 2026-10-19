@@ -11,6 +11,7 @@ from ai_runtime import translate_srt
 
 class UpdateTests(unittest.TestCase):
     def setUp(self):
+        (Path(__file__).resolve().parents[1] / 'audit_artifacts').mkdir(exist_ok=True)
         self.temp = tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parents[1] / 'audit_artifacts')
         self.root = Path(self.temp.name)
         (self.root / 'requirements.txt').write_text('Flask==3.0.0')
