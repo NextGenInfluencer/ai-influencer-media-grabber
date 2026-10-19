@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Local Media Grabber, Anti-AI Watermark & Converter Suite">
+    <meta name="description" content="Local Media Grabber, Metadata Cleanup & Converter Suite">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎬</text></svg>">
     <title>AI Influencer Media Grabber</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="/static/vendor/tailwind-3.4.17.js"></script>
+    <link href="/static/vendor/css/fontawesome-6.4.0.min.css" rel="stylesheet">
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -30,7 +30,7 @@
         }
     </script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
         
         body { font-family: 'Inter', sans-serif; background-color: #080809; color: #fff; }
         
@@ -54,7 +54,7 @@
 <body class="flex flex-col h-screen overflow-hidden bg-[#080809]">
 
     <!-- Top Navigation Header -->
-    <header class="w-full bg-[#0c0c0e] border-b border-zinc-800 px-8 py-3.5 flex items-center justify-between z-20 shrink-0 shadow-lg">
+    <header class="w-full bg-[#0c0c0e] border-b border-zinc-800 px-8 py-3.5 flex flex-wrap gap-3 items-center justify-between z-20 shrink-0 shadow-lg">
         <div class="flex items-center space-x-3">
             <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-pink-500 to-purple-600 flex items-center justify-center shadow-[0_0_15px_rgba(244,114,182,0.4)]">
                 <i class="fa-solid fa-play text-white text-base"></i>
@@ -64,7 +64,7 @@
                     <i class="fa-solid fa-wand-magic-sparkles text-pink-500 mr-3 shadow-pink-500/50 drop-shadow-md"></i>AI Influencer Media Grabber
                     <span class="ml-2 text-[10px] font-mono bg-pink-500/20 text-pink-400 px-2 py-0.5 rounded-full align-middle">v{{ version }}</span>
                 </h1>
-                <p class="text-[11px] text-zinc-400 font-medium">Local Media Grabber, Anti-AI Watermark & Converter Suite</p>
+                <p class="text-[11px] text-zinc-400 font-medium">Local Media Grabber, Metadata Cleanup & Converter Suite</p>
             </div>
         </div>
 
@@ -79,6 +79,7 @@
             <button id="tab-cleaner" onclick="switchTab('cleaner')" class="px-6 py-2 rounded-xl text-xs font-bold uppercase tracking-wider text-zinc-400 hover:text-pink-400 hover:bg-zinc-900 transition-all flex items-center">
                 <i class="fa-solid fa-shield-halved text-pink-500 mr-2 text-xs"></i> AI Cleaner
             </button>
+            <button onclick="openReferencePrep()" class="px-4 py-2 rounded-xl text-xs font-bold text-purple-300 hover:bg-zinc-900 transition-all">Kling Prep</button>
             <button id="tab-gallery" onclick="switchTab('gallery')" class="px-6 py-2 rounded-xl text-xs font-bold uppercase tracking-wider text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 transition-all flex items-center">
                 <i class="fa-solid fa-images mr-2"></i> Gallery
             </button>
@@ -94,6 +95,7 @@
             <div id="aiEngineBadgeContainer"></div>
             <div id="appUpdateBadgeContainer"></div>
 
+            <button onclick="stopAllJobs()" class="px-3 py-1.5 rounded-full border border-zinc-700 text-xs text-zinc-300">Stop jobs</button>
             <button onclick="exitApp()" class="px-3 py-1.5 rounded-full bg-red-500/10 border border-red-500/30 hover:bg-red-500/20 text-red-400 font-bold transition-all flex items-center space-x-1.5" title="Quit Application & Stop Server">
                 <i class="fa-solid fa-xmark text-xs"></i>
                 <span class="text-[11px]">Exit</span>
@@ -101,7 +103,7 @@
 
             <div class="flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-zinc-900/80 border border-zinc-800">
                 <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                <span class="text-[11px] font-bold text-zinc-300">Engine Online (100% Local)</span>
+                <span class="text-[11px] font-bold text-zinc-300">Engine Online (Local Processing)</span>
             </div>
         </div>
     </header>
@@ -200,7 +202,7 @@
                                 </label>
                                 <label class="flex items-center space-x-2.5 text-xs text-zinc-400 cursor-pointer">
                                     <input type="checkbox" id="aiBypass" class="form-checkbox text-pink-500 rounded border-zinc-700 bg-zinc-900">
-                                    <span>Clean AI Metadata (Bypass)</span>
+                                    <span>Clean Metadata (Creates Backup)</span>
                                 </label>
                                 <label class="flex items-center space-x-2.5 text-xs text-zinc-400 cursor-pointer">
                                     <input type="checkbox" id="identifySong" class="form-checkbox text-pink-500 rounded border-zinc-700 bg-zinc-900" checked>
@@ -220,7 +222,7 @@
                                 </label>
                                 <label class="flex items-center space-x-2.5 text-xs text-zinc-400 cursor-pointer">
                                     <input type="checkbox" id="autoExtractPrompt" class="form-checkbox text-pink-500 rounded border-zinc-700 bg-zinc-900">
-                                    <span>Auto-Extract AI Prompt (.txt)</span>
+                                    <span>Describe Scene for AI Editing (.txt)</span>
                                 </label>
                                 <label class="flex items-center space-x-2.5 text-xs text-zinc-400 cursor-pointer">
                                     <input type="checkbox" id="aiSummarize" class="form-checkbox text-pink-500 rounded border-zinc-700 bg-zinc-900">
@@ -355,16 +357,16 @@
                                 <label class="block text-[10px] font-bold text-zinc-400 uppercase">Quality & File Size</label>
                                 <select id="convCompress" name="compress" class="w-full px-3 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-zinc-200 focus:outline-none focus:border-purple-500 appearance-none">
                                     <optgroup label="Master & Lossless Quality">
-                                        <option value="none" selected>💎 Maximum Quality (Visually Lossless — 100% Detail)</option>
-                                        <option value="quality_lossless">👑 Pure Lossless (CRF 0 — Bit-Exact Copy)</option>
+                                        <option value="none" selected>💎 High Quality (Larger Files)</option>
+                                        <option value="quality_lossless">👑 Maximum Encoder Quality (Large Files)</option>
                                         <option value="quality_standard">Standard Web (Balanced Quality)</option>
                                     </optgroup>
                                     <optgroup label="MB File Size Compression (Reduce MB)">
-                                        <option value="compress_high">Compress MB (~50% Smaller File)</option>
-                                        <option value="compress_web">Compress for Web (~75% Smaller MB)</option>
-                                        <option value="compress_80">Compress (~80% Smaller MB)</option>
-                                        <option value="compress_85">Compress (~85% Smaller MB)</option>
-                                        <option value="compress_extreme">Compress Extreme (~90% Smaller MB)</option>
+                                        <option value="compress_high">Higher Compression</option>
+                                        <option value="compress_web">Web Compression</option>
+                                        <option value="compress_80">Compress (Strong Smaller MB)</option>
+                                        <option value="compress_85">Compress (Very Strong Smaller MB)</option>
+                                        <option value="compress_extreme">Compress Extreme (Maximum Smaller MB)</option>
                                     </optgroup>
                                     <optgroup label="Resolution Downscaling">
                                         <option value="scale_1080p">Downscale to 1080p Full HD</option>
@@ -491,15 +493,15 @@
                 <div class="p-5 rounded-2xl bg-gradient-to-br from-pink-500/10 via-purple-500/5 to-transparent border border-pink-500/30">
                     <div class="flex items-center space-x-2 text-pink-400 font-extrabold text-xs uppercase tracking-wider mb-1.5">
                         <i class="fa-solid fa-shield-halved text-sm"></i>
-                        <span>Bypass Social Media AI Detection Scanners</span>
+                        <span>Metadata Cleanup & Export Copies</span>
                     </div>
                     <p class="text-xs text-zinc-300 leading-relaxed mb-3">
-                        Clean your AI-generated photos & videos (from Kling AI, Midjourney, Stable Diffusion, Nano Banana, Veo) before uploading to Instagram, TikTok, or YouTube Shorts.
+                        Create cleaned copies of your photos and videos. This does not guarantee removal of watermarks, AI labels, or detection signals. Downloading media, fetching models, updates, music identification, use network services.
                     </p>
                     <div class="grid grid-cols-2 gap-2 text-[11px] text-zinc-400">
-                        <div class="flex items-center space-x-2"><i class="fa-solid fa-check text-pink-500 text-xs"></i><span>Strips C2PA, EXIF, & XMP Metadata</span></div>
-                        <div class="flex items-center space-x-2"><i class="fa-solid fa-check text-pink-500 text-xs"></i><span>Shaves 0.5% Edges (Grid Shift)</span></div>
-                        <div class="flex items-center space-x-2"><i class="fa-solid fa-check text-pink-500 text-xs"></i><span>Injects Micro Gaussian Noise (SynthID Scatter)</span></div>
+                        <div class="flex items-center space-x-2"><i class="fa-solid fa-check text-pink-500 text-xs"></i><span>Removes supported metadata on export</span></div>
+                        <div class="flex items-center space-x-2"><i class="fa-solid fa-check text-pink-500 text-xs"></i><span>Crops a small amount from the edges</span></div>
+                        <div class="flex items-center space-x-2"><i class="fa-solid fa-check text-pink-500 text-xs"></i><span>Adds subtle noise; changes image pixels</span></div>
                         <div class="flex items-center space-x-2"><i class="fa-solid fa-shield text-emerald-400 text-xs"></i><span class="text-emerald-400 font-semibold">Non-Destructive (Copies saved to AI Cleaned)</span></div>
                     </div>
                     
@@ -625,7 +627,7 @@
                 </div>
                 
                 <div id="rightHeaderActionsQueue" class="flex items-center">
-                    <button onclick="document.getElementById('queueContainer').innerHTML=''" class="text-[10px] text-zinc-500 hover:text-zinc-300 font-bold uppercase transition">Clear Completed</button>
+                    <button onclick="document.querySelectorAll('#queueContainer > div').forEach(row => { if (!row.querySelector('.task-stop')) row.remove(); })" class="text-[10px] text-zinc-500 hover:text-zinc-300 font-bold uppercase transition">Clear Completed</button>
                 </div>
                 <div id="rightHeaderActionsConsole" class="hidden flex items-center space-x-2">
                     <label class="flex items-center space-x-1 text-[10px] text-zinc-400 cursor-pointer select-none">
@@ -650,7 +652,7 @@
                         </div>
                         <div class="pt-3 border-t border-zinc-800/60 text-[10px] text-zinc-400 space-y-2 text-left">
                             <div class="flex items-center justify-between"><span class="text-zinc-500">Default Save Location:</span><span class="font-mono text-zinc-300">Documents/Media Grabber</span></div>
-                            <div class="flex items-center justify-between"><span class="text-zinc-500">Anti-AI Output:</span><span class="font-mono text-emerald-400">AI Cleaned/</span></div>
+                            <div class="flex items-center justify-between"><span class="text-zinc-500">Cleaned Copies:</span><span class="font-mono text-emerald-400">AI Cleaned/</span></div>
                         </div>
                     </div>
                 </div>
@@ -783,8 +785,20 @@
         </div>
     </div>
 
+    <meta name="media-token" content="{{ api_token }}">
+    <script src="{{ url_for('static', filename='media_stream.js') }}"></script>
     <!-- Scripts -->
     <script>
+        const nativeFetch = window.fetch.bind(window);
+        window.fetch = (input, options = {}) => {
+            const url = new URL(typeof input === 'string' ? input : input.url, location.href);
+            if (url.origin === location.origin) {
+                const headers = new Headers(options.headers || (input instanceof Request ? input.headers : undefined));
+                headers.set('X-Media-Token', document.querySelector('meta[name="media-token"]').content);
+                options = {...options, headers};
+            }
+            return nativeFetch(input, options);
+        };
         // ─── Browser Modal State ───
         let _browserCurrentPath = '';
         let _browserMode = 'folder'; // 'folder' or 'file'
@@ -872,7 +886,7 @@
                     };
 
                     if (isDir) {
-                        row.innerHTML = `<i class="fa-solid fa-folder" style="color:#f59e0b; font-size:0.85rem; width:1.2rem; text-align:center;"></i><span style="font-size:0.75rem; color:#d4d4d8; font-weight:500;">${item.name}</span>`;
+                        row.innerHTML = `<i class="fa-solid fa-folder" style="color:#f59e0b; font-size:0.85rem; width:1.2rem; text-align:center;"></i><span style="font-size:0.75rem; color:#d4d4d8; font-weight:500;">${escapeHtml(item.name)}</span>`;
                         row.ondblclick = () => browserNavigate(item.path);
                         row.onclick = () => {
                             if (_browserMode === 'folder') {
@@ -887,7 +901,7 @@
                         const isImg = ['jpg','jpeg','png','webp'].includes(ext);
                         const iconClass = isImg ? 'fa-solid fa-image' : 'fa-solid fa-file-video';
                         const iconColor = isImg ? '#22d3ee' : '#a78bfa';
-                        row.innerHTML = `<i class="${iconClass}" style="color:${iconColor}; font-size:0.85rem; width:1.2rem; text-align:center;"></i><span style="font-size:0.75rem; color:#d4d4d8; font-weight:500;">${item.name}</span>`;
+                        row.innerHTML = `<i class="${iconClass}" style="color:${iconColor}; font-size:0.85rem; width:1.2rem; text-align:center;"></i><span style="font-size:0.75rem; color:#d4d4d8; font-weight:500;">${escapeHtml(item.name)}</span>`;
                         row.onclick = () => {
                             // Deselect previous
                             container.querySelectorAll('div').forEach(r => { r.style.background = 'transparent'; r.style.borderColor = 'transparent'; });
@@ -901,7 +915,7 @@
                     container.appendChild(row);
                 });
             } catch(e) {
-                container.innerHTML = `<div style="color:#ef4444; font-size:0.75rem; text-align:center; padding:2rem;">Error: ${e.message}</div>`;
+                container.innerHTML = `<div style="color:#ef4444; font-size:0.75rem; text-align:center; padding:2rem;">Error: ${escapeHtml(e.message)}</div>`;
             }
         }
 
@@ -1001,7 +1015,7 @@
             const modal = document.getElementById('mediaPreviewModal');
             if (!modal) return;
 
-            const url = '/api/media/' + item.path.split('/').map(encodeURIComponent).join('/');
+            const url = item.url || '/api/media/' + item.path.split('/').map(encodeURIComponent).join('/');
             
             // Set header info
             const badge = document.getElementById('previewModalBadge');
@@ -1165,7 +1179,7 @@
 
         async function extractPromptForItem(safePath) {
             if (currentAiStatus && !currentAiStatus.all_installed && !currentAiStatus.torch) {
-                openAiInstallModal('BLIP Vision Prompt Extractor');
+                openAiInstallModal('BLIP Scene Description');
                 return;
             }
             showToast('AI Prompter', 'Extracting prompt with BLIP...');
@@ -1179,7 +1193,7 @@
                 if (result.prompt) {
                     promptModal(result.prompt);
                 } else if (result.error === 'ai_pack_required') {
-                    openAiInstallModal('BLIP Vision Prompt Extractor');
+                    openAiInstallModal('BLIP Scene Description');
                 } else {
                     alert('Extraction failed: ' + (result.error || 'Unknown error'));
                 }
@@ -1272,7 +1286,7 @@
                 }
                 
                 filtered.forEach((item, index) => {
-                    const url = '/api/media/' + item.path.split('/').map(encodeURIComponent).join('/');
+                    const url = item.url || '/api/media/' + item.path.split('/').map(encodeURIComponent).join('/');
                     const safePath = item.full_path || '';
                     
                     const el = document.createElement('div');
@@ -1281,7 +1295,7 @@
                     // Card Media
                     if (item.type === 'video') {
                         el.innerHTML = `
-                            <video src="${url}#t=0.5" class="w-full h-full object-cover pointer-events-none" preload="metadata" muted playsinline></video>
+                            <video src="${escapeHtml(url)}#t=0.5" class="w-full h-full object-cover pointer-events-none" preload="metadata" muted playsinline></video>
                             <div class="absolute inset-0 flex items-center justify-center pointer-events-none z-[4] transition-transform duration-200 group-hover:scale-110">
                                 <div class="w-11 h-11 rounded-full bg-black/60 backdrop-blur border border-white/20 flex items-center justify-center text-white shadow-xl">
                                     <i class="fa-solid fa-play text-xs ml-0.5"></i>
@@ -1289,7 +1303,7 @@
                             </div>
                         `;
                     } else if (item.type === 'image') {
-                        el.innerHTML = `<img src="${url}" class="w-full h-full object-cover pointer-events-none transition-transform duration-200 group-hover:scale-105" loading="lazy" />`;
+                        el.innerHTML = `<img src="${escapeHtml(url)}" class="w-full h-full object-cover pointer-events-none transition-transform duration-200 group-hover:scale-105" loading="lazy" />`;
                     } else {
                         el.innerHTML = `
                             <div class="w-full h-full flex flex-col items-center justify-center text-xs text-zinc-400 p-4 text-center bg-zinc-900 pointer-events-none">
@@ -1479,11 +1493,11 @@
                     leftDiv.className = 'flex-1 overflow-hidden pr-4';
                     leftDiv.innerHTML = `
                         <div class="flex items-center space-x-2 mb-1">
-                            <span class="px-1.5 py-0.5 rounded bg-pink-500/20 text-pink-400 text-[9px] font-bold uppercase tracking-wider">${item.platform || 'Other'}</span>
+                            <span class="px-1.5 py-0.5 rounded bg-pink-500/20 text-pink-400 text-[9px] font-bold uppercase tracking-wider">${escapeHtml(item.platform || 'Other')}</span>
                             <span class="text-xs font-bold text-zinc-200 truncate flex-1 title-text"></span>
                         </div>
                         <div class="flex items-center space-x-3 text-[10px] text-zinc-500">
-                            <span class="truncate max-w-[280px] text-zinc-400 url-link cursor-pointer hover:underline hover:text-pink-400" title="${item.url || ''}"><i class="fa-solid fa-link mr-1"></i>${item.url || 'No URL'}</span>
+                            <span class="truncate max-w-[280px] text-zinc-400 url-link cursor-pointer hover:underline hover:text-pink-400" title="${escapeHtml(item.url || '')}"><i class="fa-solid fa-link mr-1"></i>${escapeHtml(item.url || 'No URL')}</span>
                             <span><i class="fa-solid fa-clock mr-1"></i>${dateStr}</span>
                         </div>
                     `;
@@ -1632,7 +1646,7 @@
                                 </div>
                                 <div class="flex-1 overflow-hidden">
                                     <div class="text-[10px] font-bold text-red-400 truncate">Preview Failed</div>
-                                    <div class="text-[10px] text-zinc-500 truncate mt-1">${url}</div>
+                                    <div class="text-[10px] text-zinc-500 truncate mt-1">${escapeHtml(url)}</div>
                                 </div>
                             `;
                             return;
@@ -1647,12 +1661,12 @@
                         
                         actualCard.innerHTML = `
                             <div class="relative w-20 h-14 bg-zinc-900 rounded-xl overflow-hidden shrink-0">
-                                ${data.thumbnail ? `<img src="${data.thumbnail}" class="w-full h-full object-cover" />` : '<div class="w-full h-full flex items-center justify-center"><i class="fa-solid fa-video text-zinc-600"></i></div>'}
+                                ${data.thumbnail ? `<img src="${escapeHtml(safeWebUrl(data.thumbnail))}" class="w-full h-full object-cover" />` : '<div class="w-full h-full flex items-center justify-center"><i class="fa-solid fa-video text-zinc-600"></i></div>'}
                                 ${durationStr ? `<div class="absolute bottom-1 right-1 bg-black/80 px-1 py-0.5 rounded text-[8px] text-white font-mono">${durationStr}</div>` : ''}
                             </div>
                             <div class="flex-1 overflow-hidden pr-2">
-                                <div class="text-xs font-bold text-zinc-200 truncate">${data.title}</div>
-                                <div class="text-[10px] text-zinc-400 truncate mt-1"><i class="fa-solid fa-user text-pink-500 mr-1"></i> ${data.uploader || 'Unknown'}</div>
+                                <div class="text-xs font-bold text-zinc-200 truncate">${escapeHtml(data.title)}</div>
+                                <div class="text-[10px] text-zinc-400 truncate mt-1"><i class="fa-solid fa-user text-pink-500 mr-1"></i> ${escapeHtml(data.uploader || 'Unknown')}</div>
                             </div>
                             <div class="shrink-0">
                                 <button onclick="document.getElementById('${previewId}').remove()" class="text-zinc-600 hover:text-zinc-400 transition">
@@ -1688,10 +1702,21 @@
         const downloadQueue = [];
         let isQueueRunning = false;
 
+        async function stopAllJobs() {
+            downloadQueue.forEach(task => { task.cancelled = true; });
+            const response = await fetch('/api/cancel_all', { method: 'POST' });
+            const result = await response.json();
+            showToast('Stopping jobs', result.status || result.error);
+        }
+        async function restartUpdatedApp() {
+            const response = await fetch('/api/restart', { method: 'POST' });
+            if (!response.ok) { showToast('Restart unavailable', 'Wait for active jobs to stop.'); return; }
+            showToast('Restarting', 'The update will be applied before the app opens.');
+            setTimeout(() => location.reload(), 6000);
+        }
         async function cancelDownload(taskId) {
             if (activeDownloads[taskId]) {
-                activeDownloads[taskId].abort();
-                delete activeDownloads[taskId];
+                // Keep reading until the worker confirms it has stopped.
             } else {
                 const queuedTask = downloadQueue.find(t => t.taskId === taskId);
                 if(queuedTask) {
@@ -1704,7 +1729,7 @@
             const row = document.getElementById(`task-${taskId}`);
             if(row) {
                 const status = row.querySelector('.task-status');
-                status.textContent = 'Cancelled by user';
+                status.textContent = activeDownloads[taskId] ? 'Stopping… waiting for the current step' : 'Cancelled by user';
                 status.className = 'task-status text-[10px] font-bold uppercase tracking-widest text-red-500 mt-2 block';
                 row.querySelector('.task-icon').className = 'task-icon fa-solid fa-circle-xmark text-red-500';
                 row.querySelector('.task-progress').className = 'task-progress bg-red-500 h-1 rounded-full transition-all duration-300';
@@ -1715,15 +1740,14 @@
 
         async function handleSSEStream(response, taskId, row, controller, stopBtn, statusText, statusIcon, progressBar) {
             const reader = response.body.getReader();
-            const decoder = new TextDecoder();
+            const decoder = new MediaEventDecoder();
             let finished = false;
 
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
                 
-                const chunk = decoder.decode(value);
-                const lines = chunk.split('\n\n');
+                const lines = decoder.decode(value);
 
                 for (const line of lines) {
                     if (line.startsWith('data: ')) {
@@ -1906,7 +1930,7 @@
                     <div class="flex items-center justify-between">
                         <div class="flex items-center space-x-3 overflow-hidden pr-2">
                             <i class="task-icon fa-solid fa-clock text-zinc-500"></i>
-                            <span class="text-xs font-bold text-zinc-200 truncate">${singleUrl}</span>
+                            <span class="text-xs font-bold text-zinc-200 truncate">${escapeHtml(singleUrl)}</span>
                         </div>
                         <button type="button" onclick="cancelDownload('${taskId}')" class="task-stop text-zinc-500 hover:text-red-400 transition text-xs shrink-0" title="Cancel Download">
                             <i class="fa-solid fa-circle-xmark"></i>
@@ -2086,14 +2110,13 @@
                 }
 
                 const reader = response.body.getReader();
-                const decoder = new TextDecoder();
+                const decoder = new MediaEventDecoder();
 
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
 
-                    const chunk = decoder.decode(value);
-                    const lines = chunk.split('\n\n');
+                    const lines = decoder.decode(value);
 
                     for (const line of lines) {
                         if (line.startsWith('data: ')) {
@@ -2234,14 +2257,13 @@
                 }
 
                 const reader = response.body.getReader();
-                const decoder = new TextDecoder();
+                const decoder = new MediaEventDecoder();
 
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
 
-                    const chunk = decoder.decode(value);
-                    const lines = chunk.split('\n\n');
+                    const lines = decoder.decode(value);
 
                     for (const line of lines) {
                         if (line.startsWith('data: ')) {
@@ -2566,8 +2588,9 @@
         async function exitApp() {
             if (!confirm("Exit Media Grabber and stop backend engine?")) return;
             try {
-                await fetch('/api/shutdown', { method: 'POST' });
-            } catch (e) {}
+                const response = await fetch('/api/shutdown', { method: 'POST' });
+                if (!response.ok) { const data = await response.json(); showToast('Cannot exit yet', data.error); return; }
+            } catch (e) { showToast('Exit failed', e.message); return; }
             window.close();
         }
 
@@ -2788,8 +2811,12 @@
             }
         }
 
+        function safeWebUrl(value) {
+            try { const u = new URL(value); return ['https:', 'http:'].includes(u.protocol) ? u.href : ''; }
+            catch { return ''; }
+        }
         function escapeHtml(str) {
-            return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return String(str ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
         }
 
         // Initialize AI Status on startup
@@ -2801,7 +2828,7 @@
                 { id: 'transcribeAudio', name: 'Whisper Audio Transcription' },
                 { id: 'burnSubtitles', name: 'Whisper Subtitles' },
                 { id: 'exportSubtitlesDownloader', name: 'Subtitle (.srt) Export' },
-                { id: 'autoExtractPrompt', name: 'BLIP Vision Prompt Extractor' },
+                { id: 'autoExtractPrompt', name: 'BLIP Scene Description' },
                 { id: 'aiSummarize', name: 'AI Smart Summarizer' },
                 { id: 'convBurnSubtitles', name: 'Burn Subtitles (Whisper AI)' }
             ];
@@ -3024,7 +3051,7 @@
                         badge.innerHTML = `
                             <div class="px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold text-[10px] flex items-center space-x-1">
                                 <i class="fa-solid fa-check text-[10px]"></i>
-                                <span>Updated! Restart required</span>
+                                <span>Update ready — restart to apply</span>
                             </div>
                         `;
                     }
@@ -3050,17 +3077,15 @@
         // --- Client Heartbeat & Auto-Shutdown Watchdog ---
         function sendClientHeartbeat(closing = false) {
             const url = closing ? '/api/heartbeat?closing=true' : '/api/heartbeat';
-            if (closing && navigator.sendBeacon) {
-                navigator.sendBeacon(url);
-            } else {
-                fetch(url, { method: 'POST', keepalive: true }).catch(() => {});
-            }
+            fetch(url, { method: 'POST', keepalive: true }).catch(() => {});
         }
         setInterval(() => sendClientHeartbeat(false), 6000);
         sendClientHeartbeat(false);
         window.addEventListener('pagehide', () => sendClientHeartbeat(true));
         window.addEventListener('beforeunload', () => sendClientHeartbeat(true));
     </script>
+
+    {% include 'reference_prep.html' %}
 
     <!-- AI Engine Pack Modal -->
     <div id="aiInstallModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4">
@@ -3095,7 +3120,7 @@
                         </div>
                         <div class="flex-1 min-w-0">
                             <div class="text-xs font-bold text-zinc-200">Local Whisper Speech AI</div>
-                            <div class="text-[10px] text-zinc-400">100% offline audio transcription & auto-burned video subtitles (.srt export)</div>
+                            <div class="text-[10px] text-zinc-400">Local audio transcription (model download required) & auto-burned video subtitles (.srt export)</div>
                         </div>
                     </div>
 
@@ -3104,7 +3129,7 @@
                             <i class="fa-solid fa-eye text-xs"></i>
                         </div>
                         <div class="flex-1 min-w-0">
-                            <div class="text-xs font-bold text-zinc-200">BLIP Vision Prompt Extractor</div>
+                            <div class="text-xs font-bold text-zinc-200">BLIP Scene Description</div>
                             <div class="text-[10px] text-zinc-400">Extracts photorealistic prompts formatted for Nano Banana 2/Pro & GPT Image 2</div>
                         </div>
                     </div>
@@ -3122,7 +3147,7 @@
 
                 <div class="flex items-center justify-between text-[11px] text-zinc-400 px-1">
                     <span><i class="fa-solid fa-hard-drive mr-1.5 text-zinc-500"></i>Download Size: <strong class="text-zinc-200">~1.2 GB - 1.8 GB</strong></span>
-                    <span><i class="fa-solid fa-shield-check mr-1.5 text-emerald-400"></i>Runs 100% locally</span>
+                    <span><i class="fa-solid fa-shield-check mr-1.5 text-emerald-400"></i>Media processing is local; downloads and updates use the internet</span>
                 </div>
 
                 <!-- Live Installation Progress (Hidden when idle) -->
@@ -3237,9 +3262,9 @@
                         <i class="fa-solid fa-cloud-arrow-down"></i>
                         <span id="updateActionBtnText">Update Now (1-Click)</span>
                     </button>
-                    <button id="updateRestartBtn" onclick="exitApp()" class="hidden px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider text-white bg-emerald-600 hover:bg-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all flex items-center space-x-2">
+                    <button id="updateRestartBtn" onclick="restartUpdatedApp()" class="hidden px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider text-white bg-emerald-600 hover:bg-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all flex items-center space-x-2">
                         <i class="fa-solid fa-power-off"></i>
-                        <span>Close & Restart App</span>
+                        <span>Apply & Restart App</span>
                     </button>
                 </div>
             </div>

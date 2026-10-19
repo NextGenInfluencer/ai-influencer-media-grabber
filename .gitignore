@@ -36,3 +36,8 @@ dist/
 pyrightconfig.json
 scratch/
 test_dl_dir/
+audit_artifacts/
+
+.updates/
+*.update.zip
+*.update-tmp

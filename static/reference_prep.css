@@ -1,0 +1,21 @@
+#referenceDialog { width:min(1080px,94vw); max-height:92vh; padding:0; border:1px solid #3f3f46; border-radius:18px; background:#111113; color:#f4f4f5; box-shadow:0 24px 80px #0009; }
+#referenceDialog::backdrop { background:#000b; backdrop-filter:blur(4px); }
+#referenceDialog .ref-heading { display:flex; justify-content:space-between; align-items:start; gap:20px; padding:24px; border-bottom:1px solid #3f3f46; }
+#referenceDialog h2 { font-size:22px; font-weight:750; margin:0 0 8px; }
+#referenceDialog h3 { font-size:16px; font-weight:650; margin:16px 0 12px; }
+#referenceDialog p, #referenceDialog figcaption { font-size:13px; line-height:1.6; color:#a1a1aa; margin:10px 0; }
+#referenceDialog .ref-body { padding:20px 24px; }
+#referenceDialog .ref-columns { display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+#referenceDialog label { display:block; font-size:13px; margin:12px 0; }
+#referenceDialog input:not([type=checkbox]), #referenceDialog select { display:block; max-width:100%; padding:8px; margin-top:8px; background:#18181b; color:#fafafa; border:1px solid #52525b; border-radius:7px; }
+#referenceDialog select { width:100%; }
+#referenceDialog button, #referenceDialog a { display:inline-block; font-size:13px; padding:9px 12px; border:1px solid #52525b; border-radius:8px; background:#27272a; color:#fafafa; cursor:pointer; text-decoration:none; }
+#referenceDialog [hidden] { display:none !important; }
+#referenceDialog :disabled { opacity:.45; cursor:not-allowed; }
+#referenceDialog .ref-primary { background:#9333ea; border-color:#c084fc; }
+#referenceDialog :focus-visible { outline:2px solid #f0abfc; outline-offset:3px; }
+#referenceDialog .ref-actions { display:flex; gap:8px; flex-wrap:wrap; margin:12px 0; }
+#referenceDialog video { width:100%; max-height:260px; background:#09090b; margin-top:12px; border-radius:8px; }
+#referenceDialog .ref-comparison img { width:100%; height:340px; object-fit:contain; background:#09090b; border:1px solid #3f3f46; border-radius:10px; }
+#referenceDialog #referenceStatus { padding:12px; background:#18181b; border-radius:8px; color:#e9d5ff; }
+@media(max-width:700px) { #referenceDialog .ref-columns { grid-template-columns:1fr; } }

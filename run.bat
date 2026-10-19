@@ -9,13 +9,17 @@ echo ==============================================
 if not exist ".venv" (
     echo Creating Python virtual environment...
     python -m venv .venv
+    if errorlevel 1 exit /b 1
 )
 
 echo Activating virtual environment...
 call .venv\Scripts\activate.bat
 
-echo Verifying core dependencies...
-python -m pip install -q -r requirements.txt
+if not exist ".venv\.core-ready" (
+    python -m pip install -r requirements.txt
+    if errorlevel 1 exit /b 1
+    echo ready> .venv\.core-ready
+)
 
 if /i "%~1"=="--setup-only" goto setup_complete
 goto start_server

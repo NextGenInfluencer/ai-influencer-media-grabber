@@ -1,3 +1,4 @@
+from ai_runtime import serialized
 import os
 import threading
 import gc
@@ -15,6 +16,7 @@ def is_ai_vision_available():
     except ImportError:
         return False
 
+@serialized
 def unload_blip():
     global _blip_processor, _blip_model, _blip_timer
     if _blip_model is not None:
@@ -30,6 +32,7 @@ def unload_blip():
         gc.collect()
     _blip_timer = None
 
+@serialized
 def get_blip_model():
     global _blip_processor, _blip_model, _blip_timer
     
@@ -59,6 +62,7 @@ def get_blip_model():
     _blip_timer.start()
     return _blip_processor, _blip_model
 
+@serialized
 def extract_prompt_from_image(image_path):
     if not is_ai_vision_available():
         return "Error: AI Pack not installed. Please install the AI Engine pack to use prompt extraction."

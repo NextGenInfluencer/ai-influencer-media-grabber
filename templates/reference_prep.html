@@ -1,0 +1,43 @@
+<link rel="stylesheet" href="{{ url_for('static', filename='reference_prep.css') }}">
+<dialog id="referenceDialog" aria-labelledby="referenceTitle">
+    <div class="ref-heading">
+        <div><h2 id="referenceTitle">Prepare for Kling</h2><p>Reference video → first frame → your Nano Banana edit → matched reference set</p></div>
+        <button type="button" id="referenceClose" aria-label="Close reference preparation">Close</button>
+    </div>
+    <div class="ref-body">
+        <label>Continue a saved reference set <select id="referenceProjects"><option value="">New reference set</option></select></label>
+        <div class="ref-columns">
+            <section>
+                <h3>1. Choose your reference video</h3>
+                <input id="referenceVideoInput" type="file" accept="video/*,.mkv,.avi">
+                <video id="referenceVideoPreview" controls preload="metadata"></video>
+                <div class="ref-actions">
+                    <button type="button" id="referenceFirstFrame">Use first frame</button>
+                    <button type="button" id="referenceCurrentFrame">Use current position</button>
+                </div>
+                <label>Reference starts at (seconds) <input id="referenceStart" type="number" value="0" min="0" step="0.001"></label>
+                <p id="referenceStartHint">First frame selected. Your original video is copied without re-encoding.</p>
+                <button type="button" id="referencePrepare" class="ref-primary">Prepare video &amp; first frame</button>
+            </section>
+            <section>
+                <h3>2. Replace the character in Nano Banana</h3>
+                <p>Save the extracted PNG and use it as your editing reference. Keep the pose, framing, and image dimensions aligned.</p>
+                <a id="referenceFrameDownload" hidden download="first_frame.png">Save first_frame.png</a>
+                <h3>3. Add your edited influencer image</h3>
+                <input id="referenceImageInput" type="file" accept="image/png,image/jpeg,image/webp" disabled>
+                <label class="ref-check"><input id="referenceResizeImage" type="checkbox"> Resize to match if the aspect ratio is the same</label>
+                <p>Compare the two images below. This app checks dimensions; you check the pose and framing.</p>
+                <div class="ref-actions">
+                    <a id="referenceExport" class="ref-primary" hidden>Download matched set (.zip)</a>
+                    <button type="button" id="referenceOpenFolder" disabled>Open project folder</button>
+                </div>
+            </section>
+        </div>
+        <p id="referenceStatus" role="status" aria-live="polite">Choose a video. The first frame is selected by default.</p>
+        <div class="ref-columns ref-comparison">
+            <figure><figcaption>Original reference frame</figcaption><img id="referenceOriginalImage" alt="First frame of the prepared reference video" hidden></figure>
+            <figure><figcaption>Your influencer image</figcaption><img id="referenceEditedImage" alt="Your edited influencer reference" hidden></figure>
+        </div>
+    </div>
+</dialog>
+<script src="{{ url_for('static', filename='reference_prep.js') }}"></script>
