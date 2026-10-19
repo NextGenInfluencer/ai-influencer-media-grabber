@@ -1,4 +1,6 @@
 #!/bin/bash
+set -e
+cd "$(dirname "$0")"
 echo "=============================================="
 echo "AI Influencer Media Grabber - Startup Script"
 echo "=============================================="
@@ -11,14 +13,15 @@ fi
 echo "Activating virtual environment..."
 source .venv/bin/activate
 
-echo "Installing dependencies..."
-pip install -q -r requirements.txt
+if [ ! -f .venv/.core-ready ]; then
+    python -m pip install -r requirements.txt
+    touch .venv/.core-ready
+fi
 
 while true; do
     echo "Starting Flask server..."
-    python app_local.py
-    
-    EXIT_CODE=$?
+    EXIT_CODE=0
+    python app_local.py || EXIT_CODE=$?
     if [ $EXIT_CODE -eq 42 ]; then
         echo "Restart code received. Restarting..."
         sleep 1

@@ -1,3 +1,7 @@
+# v2.4.0
+
+See [release notes](RELEASE_NOTES.md) for the reference-preparation workflow, safety/reliability changes, runtime migration, and validation limits.
+
 # Changelog
 
 All notable changes to the AI Influencer Media Grabber project will be documented in this file.

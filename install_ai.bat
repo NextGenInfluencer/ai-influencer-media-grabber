@@ -9,22 +9,17 @@ echo  - PyTorch ^& Transformers (BLIP Vision Prompt Extractor)
 echo  - OpenAI Whisper (Local Audio Transcription ^& Subtitles)
 echo  - LLaMA GGUF (Local AI Assistant ^& Summarization)
 echo.
-echo Total download size: approx. 1.2 GB - 1.8 GB.
+echo Total download size: several GB, plus model files.
 echo.
 
-if not exist ".venv" (
-    echo [ERROR] Virtual environment (.venv) not found.
-    echo Please run run.bat first to initialize the core app!
-    pause
+cd /d "%~dp0"
+set "APP_PYTHON=%~dp0python_runtime\python.exe"
+if not exist "%APP_PYTHON%" set "APP_PYTHON=%~dp0.venv\Scripts\python.exe"
+if not exist "%APP_PYTHON%" (
+    echo Run the core setup first.
     exit /b 1
 )
-
-echo Activating Python virtual environment...
-call .venv\Scripts\activate.bat
-
-echo.
-echo Installing AI Engine dependencies (this may take a few minutes)...
-pip install -r requirements-ai.txt
+"%APP_PYTHON%" -m pip install -r requirements-ai.txt
 
 if %ERRORLEVEL% NEQ 0 (
     echo.

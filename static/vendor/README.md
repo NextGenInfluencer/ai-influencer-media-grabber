@@ -1,0 +1,1 @@
+Vendored UI assets: Tailwind CSS browser runtime 3.4.17 (cdn.tailwindcss.com/3.4.17), Font Awesome Free 6.4.0 CSS and WOFF2 fonts (cdnjs.cloudflare.com). Licenses are included alongside these files. System fonts are used; no Google Fonts request is made.
