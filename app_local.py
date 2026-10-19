@@ -734,7 +734,7 @@ def protect_local_service():
             abort(403)
         if request.method not in {'GET', 'HEAD'} and request.headers.get('X-Media-Token') != session.get('api_token'):
             abort(403)
-    if request.method == 'POST' and request.path in {'/api/download', '/api/convert', '/api/clean', '/api/clean_upload', '/api/reference/prepare'}:
+    if request.method == 'POST' and request.path in {'/api/download', '/api/convert', '/api/batch_clean', '/api/batch_clean_upload', '/api/extract_prompt', '/api/reference/prepare'}:
         if globals().get('ai_installer_state', {}).get('is_installing') or globals().get('app_updater_state', {}).get('is_updating'):
             return jsonify(error='Wait for installation or update preparation to finish.'), 409
 
