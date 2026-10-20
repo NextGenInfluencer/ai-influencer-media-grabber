@@ -14,4 +14,5 @@ jobs:
       - run: "python -m pip install --only-binary=:all: -r requirements.txt"
       - run: python -m unittest discover -s tests -v
       - run: node tests/test_stream.js
+      - run: node tests/test_caption_timing.js
       - run: node --check static/captions.js

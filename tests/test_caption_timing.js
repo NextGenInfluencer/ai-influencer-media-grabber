@@ -1,0 +1,12 @@
+'use strict';
+const assert=require('node:assert/strict');
+const {validate}=require('../static/caption_timing.js');
+const line=(start,end,words=[])=>({start,end,words});
+assert.throws(()=>validate([line(185.54,3)],185.54),/start before/);
+assert.throws(()=>validate([line(0,3,[line(185.54,94.27),line(94.27,3)])],185.54),/Word timings/);
+assert.throws(()=>validate([line(0,3),line(2,4)],10),/overlap/);
+assert.throws(()=>validate([line(0,3,[line(0,2),line(1,3)])],10),/Word timings/);
+assert.throws(()=>validate([line(NaN,3)],10),/start before/);
+assert.doesNotThrow(()=>validate([line(12.74,15.74,[line(12.74,14.24),line(14.24,15.74)])],185.54));
+assert.doesNotThrow(()=>validate([line(0,3)],185.54));
+console.log('Caption timing regression checks passed.');
