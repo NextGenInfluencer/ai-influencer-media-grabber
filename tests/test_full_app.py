@@ -29,7 +29,7 @@ class FullAppTests(unittest.TestCase):
         response = self.client.get('/')
         self.assertEqual(response.status_code, 200)
         self.assertNotIn(b'https://cdn.tailwindcss.com', response.data)
-        self.assertEqual(self.client.get('/api/health_check').json['version'], '2.4.0')
+        self.assertEqual(self.client.get('/api/health_check').json['version'], self.module.APP_VERSION)
         with self.client.get('/static/vendor/tailwind-3.4.17.js') as asset:
             self.assertEqual(asset.status_code, 200)
 

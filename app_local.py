@@ -776,7 +776,7 @@ def shazam_file(audio_path):
         print("Shazam error:", e)
         return None
 
-APP_VERSION = "2.4.0"
+APP_VERSION = "2.4.1"
 SERVER_START_TIME = time.time()
 
 # --- Active Job & Auto-Shutdown Watchdog State ---
@@ -1526,7 +1526,7 @@ def download_video():
                                             llm_model_choice = processing_options.get('llmModel', 'none')
                                             if llm_model_choice and llm_model_choice != 'none':
                                                 q.put({"status": f"{prefix}Enhancing prompt with Local LLM..."})
-                                                sys_p = "You are an expert AI prompt engineer. Take the basic image description and rewrite it into a highly detailed, professional prompt optimized for Nano Banana Pro and Nano Banana 2 image generation models. Focus on lighting, mood, camera angles, and high quality keywords. Output ONLY the prompt text, nothing else."
+                                                sys_p = "Polish this image-editing instruction for clarity only. It is a character identity replacement in an existing first frame for Kling motion control, not new scene generation. Preserve every constraint and the Image 1 / Image 2 reference roles, including original pose, proportions, clothing, composition, dimensions, background, lighting, and other people. Keep the instruction to clarify an ambiguous target. Keep the automatic caption explicitly uncertain and subordinate to the actual images. Do not invent visual details or add cinematic, beauty, quality, resolution, or camera keywords. Output ONLY the complete editing prompt."
                                                 try:
                                                     prompt_text = llm_generate(prompt_text, sys_p, llm_model_choice)
                                                 except Exception as e:

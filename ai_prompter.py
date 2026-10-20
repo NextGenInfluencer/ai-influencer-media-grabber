@@ -76,22 +76,39 @@ def extract_prompt_from_image(image_path):
         raw_image = Image.open(image_path).convert('RGB')
         device = "cuda" if torch.cuda.is_available() else "cpu"
         
-        text_prefix = "a highly detailed, cinematic photorealistic shot of "
+        text_prefix = "a photo of "
         inputs_desc = processor(raw_image, text=text_prefix, return_tensors="pt").to(device)  # type: ignore
         out_desc = model.generate(
             **inputs_desc, 
             max_length=150,
-            min_length=20,
             num_beams=4,
             repetition_penalty=1.5
         )
         detailed_caption = processor.decode(out_desc[0], skip_special_tokens=True)
         
         prompt = (
-            f"Generate a photorealistic image matching this exact scene: {detailed_caption}. "
-            f"The main subject is [YOUR CHARACTER NAME/REFERENCE]. "
-            f"Please maintain the exact same pose, lighting, mood, and framing as described. "
-            f"High quality, highly detailed, 8k resolution, masterpiece."
+            "Edit Image 1, the original first frame from my motion-reference video. "
+            "Use Image 2 (and any additional influencer reference images) only as the "
+            "identity reference for my AI influencer. Return one edited image.\n\n"
+            "Replace the main foreground person's identity with my influencer's identity: "
+            "match the reference face, facial features, skin tone, and hair. Adapt those "
+            "features naturally to the original head angle, expression, gaze, and lighting. "
+            "Do not copy the reference image's pose, clothes, background, or lighting. "
+            "If several people are equally prominent, ask me which person to replace.\n\n"
+            "Preserve Image 1's pose, body placement and scale, head angle, expression, "
+            "gaze direction, hand positions, and visible body proportions. Keep the "
+            "original clothing, accessories, and held objects. Fit the influencer's hair "
+            "naturally around the existing pose and preserve foreground overlaps.\n\n"
+            "Keep the camera angle, perspective, crop, framing, aspect ratio, and canvas "
+            "dimensions unchanged. Preserve the background, other people, objects, text, "
+            "and the scene's existing lighting, shadows, colors, focus, and texture. "
+            "Only adjust the replaced person's appearance and necessary boundary blending. "
+            "Do not recompose, zoom, beautify the scene, add objects, or apply cinematic styling.\n\n"
+            "This image will be paired with the original video for Kling motion control. "
+            "Prioritize alignment with the first frame over creative changes.\n\n"
+            "Optional automatically generated scene description (may be inaccurate; "
+            "use the actual images as the authority and ignore conflicting details):\n"
+            f"{detailed_caption}"
         )
         return prompt
         

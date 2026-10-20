@@ -1,3 +1,12 @@
+# v2.4.1 — Nano Banana character-swap prompts
+
+- Generated prompts now assign the original first frame and influencer reference distinct roles.
+- Preserve pose, framing, original clothing, background, and lighting while replacing identity.
+- Remove cinematic styling and invented quality keywords; automatic scene captions are explicitly secondary to the images.
+- Optional local AI rewriting now preserves the editing constraints.
+
+Compatible with the v2.4.0 in-app updater; restart after applying. Existing prompt text files are unchanged. Prompt output still needs validation with your own images in Nano Banana.
+
 # v2.4.0 — Reference preparation and reliability
 
 Use the Windows installer for the upgrade from v2.3. This release includes Python 3.13.16, Node 26.9.0, and a pinned core dependency set. The old v2.3 source updater cannot migrate its bundled runtime safely.
