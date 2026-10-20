@@ -1,19 +1,118 @@
-# AI Influencer Media Grabber v2.5.0
+# AI Influencer Media Grabber
 
-Download reference media, edit/convert files locally, and prepare matching video/image sets for your Nano Banana → Kling workflow.
+![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D4?style=for-the-badge&logo=windows)
+![Local editing](https://img.shields.io/badge/Editing-Local-f472b6?style=for-the-badge)
 
-For an existing v2.3 or v2.4.x installation, use the v2.5.0 Windows installer. This updates the bundled runtime as well as the app. Your Documents/Media Grabber library is retained. See [release notes](RELEASE_NOTES.md) and [workflow details](IMPLEMENTATION_NOTES.md).
+**A Windows desktop toolkit for downloading reference media, editing videos and photos, and creating captioned content for Reels, TikTok and YouTube Shorts.**
 
-Source development requires Python 3.13 and Node 26. Install `requirements.txt`, then run `app_local.py`. Run `python -m unittest discover -s tests -v` and `node tests/test_stream.js` before release. Build with `python build_staging.py`; Inno Setup 6 produces the Windows installer. Cached runtime downloads are verified against pinned SHA-256 values.
+Save a reference clip, extract its first frame, prepare a character replacement for Nano Banana and Kling, or work on your own footage. The app brings downloading, conversion, a media library, and editable captions into one place.
 
-The optional AI Pack requires additional downloads and several GB of storage. Media processing is local; downloads, model acquisition, release checks, and music recognition use online services. Metadata cleanup does not guarantee removal of watermarks or AI detection signals.
+[Download the latest Windows release](https://github.com/NextGenInfluencer/ai-influencer-media-grabber/releases/latest) · [Release notes](RELEASE_NOTES.md) · [Implementation details](IMPLEMENTATION_NOTES.md)
 
-## Captions & Lyrics
+## A look inside
 
-Open **Captions & Lyrics** from the Studio navigation. Upload a video or select one from the library, then auto-transcribe with the optional AI Pack, paste lyrics, or import SRT/LRC subtitles. Edit text and timing on the waveform timeline; select fonts, colors, position, backgrounds, or karaoke highlighting while watching the live preview. Changes autosave; undo/redo remains available for the current editing session.
+<div align="center">
+  <img src="assets/ui_downloader.png" width="49%" alt="Studio Downloader: reference links and processing options" />
+  <img src="assets/ui_converter.png" width="49%" alt="Media Tools: video conversion, cropping and trimming" />
+  <br>
+  <img src="assets/ui_gallery_preview.png" width="49%" alt="Output Gallery: browse saved media and revisit source posts" />
+  <img src="assets/ui_cleaner.png" width="49%" alt="Metadata cleanup tools" />
+</div>
 
-Pasted lyrics and the **Estimate word timings** button distribute text evenly. They do **not** align lyrics to vocals. Adjust these estimates manually while listening. Automatic transcription supplies word timings when available, but both its words and timings need review, especially for songs. Editing a caption's text clears its old word timings.
+*Studio screenshots show the earlier interface; available controls can differ by version.*
 
-Use **Render 5-second check** at the playhead to inspect actual export typography, which may differ from browser layout. **Export captioned MP4** creates a new full-resolution H.264 video; original files remain unchanged. SRT export contains text and timing, not styling. Projects and exports live under `Caption Projects` in the media library. The first version supports videos up to two hours, 8192 pixels per dimension, and 5,000 caption lines.
+## What you can do
 
-Upgrade to v2.5.0 using the Windows installer: the v2.4.1 updater's old file allowlist does not include the new `captions.py` module. See [implementation plan](CAPTIONS_PLAN.md).
+### Download reference media
+
+- Download videos from TikTok, YouTube and YouTube Shorts, Instagram Reels, and other sites supported by the download engines.
+- Save Instagram photos and carousel media, with a gallery-dl fallback where applicable.
+- Choose the best available source quality, including higher-resolution YouTube streams when available. The source platform determines the maximum quality.
+- Extract audio to MP3, or save the first video frame as an image.
+- Optionally convert to standard H.264 for import compatibility. This re-encodes the video; it does not improve character recognition or recover missing detail.
+- Keep source-post links alongside your downloads and revisit posts from the gallery.
+
+TikTok downloads use the available source stream, which can avoid the additional watermark on TikTok's normal downloaded copy. Watermarks already embedded in the source cannot simply be removed. Private, restricted or changed platform endpoints may require cookies or may not be available.
+
+### Edit your own videos and pictures
+
+Use **Media Tools** for conversion, trimming, crop/resize, vertical framing, blurred padding, GIF creation, audio extraction and frame sequences. Output choices include common sharing formats and higher-quality editing formats. Face-tracking framing options help turn suitable footage into vertical clips.
+
+The **Output Gallery** keeps downloaded and generated media together, with previews, file actions and prompt extraction. Local uploads can be used without downloading anything first.
+
+### Prepare Nano Banana → Kling references
+
+Extract a first frame, replace the person with your influencer in your image tool, then use the matching reference video in Kling. The prompt helper describes the scene while instructing the image tool to preserve pose, framing, clothing and lighting. **Kling Prep** helps prepare compatible, matching video/frame outputs; it does not run Kling or guarantee generation quality.
+
+### Captions & Lyrics
+
+![Captions editor with aligned lyrics and live font styling](assets/ui_captions.png)
+
+Open **Captions & Lyrics** from the Studio navigation:
+
+1. Upload a video or choose one from the media library.
+2. Auto-transcribe with the optional AI Pack, paste lyrics, or import SRT/LRC.
+3. Edit the words and timing on the waveform timeline. Move or resize caption blocks, split/merge lines, loop a line, adjust playback speed, and undo edits.
+4. Choose a font, colours, size, outline, position, background and word-by-word highlighting. Watch changes in the live preview.
+5. Use **Render 5-second check** to see actual export typography, then export a captioned H.264 MP4 or an SRT file.
+
+Projects autosave under `Caption Projects` in your media library. SRT carries text and timing, not fonts or effects. Automatic transcription needs review, especially for songs. Browser text layout is an approximation; the rendered check shows the final result.
+
+### New in the source checkout (not yet in the v2.5.0 installer)
+
+- **Sync pasted lyrics to audio:** keeps your supplied text and line breaks, with editable word timings. Choose the language and the section of audio containing those lyrics. Standalone Suno labels such as `[Verse]` are ignored; repeated sung lines must still be included. Uses local Whisper with stable-ts. Singing and repeated choruses can need corrections.
+- **Create video from a song:** start with MP3, WAV, M4A, FLAC or OGG. Choose portrait, square or landscape; use a colour, uploaded photo/video or a library background. Short video backgrounds loop and fill the frame with a centre crop. The song replaces background audio.
+- **Audio-reactive waveform:** optionally add a waveform along the bottom of the song video. Background and waveform are prepared into the new base video; caption styling remains editable. Create another version to change the background.
+- **Bundled fonts:** Oswald, Lobster and Bangers from Google Fonts, with their open-font licenses, work locally in preview and export. Glyph coverage varies; Greek may use a fallback.
+- **Background discovery links:** open Pexels or Pixabay, download a suitable asset, then import it. There is no integrated stock search or automatic asset import yet.
+
+Song creation and lyric alignment support up to 20 minutes per operation. Use only the lyrics for the selected audio section. Existing captions are preserved if alignment fails or is cancelled. Manual estimates remain available without AI.
+
+### Optional AI tools and metadata cleanup
+
+The AI Pack enables Whisper transcription, BLIP image descriptions and optional local language-model features. Model files require additional downloads and storage. Music identification uses an online service.
+
+Metadata tools can clean embedded tags and create processed copies. They do **not** guarantee removal of visible/invisible watermarks or prevention of AI detection.
+
+## Install and launch
+
+### Windows installer
+
+1. Open [Releases](https://github.com/NextGenInfluencer/ai-influencer-media-grabber/releases).
+2. Download the latest `Setup.exe`, run it, and launch the desktop shortcut.
+3. Enable the optional AI Pack when you need transcription or image analysis.
+
+The installer bundles the core runtime. You do not need a separate Python installation for that copy. Your media library normally lives in `Documents/Media Grabber`.
+
+### Run from source
+
+Use Python 3.13 and Node 26 for the supported build/test configuration. Install `requirements.txt`, then run `app_local.py`, or use `run.bat` on Windows. `create_shortcut.bat` creates a shortcut; `launch-silent.vbs` opens the app from the folder containing that launcher.
+
+For AI features, install `requirements-ai.txt` into the **same environment** used by the launcher. Existing AI installations need the updated pack for automatic lyric alignment. Restart after installing it.
+
+**A source shortcut and an installed desktop shortcut can point at different app copies.** After updating files, fully exit the running app and reopen the matching shortcut. The launcher reuses an already-running local server.
+
+## Updates
+
+The in-app GitHub updater checks published releases and validates staged changes before applying them. Updates that change dependencies require the release installer. In particular, use the v2.5.0 installer when upgrading an older installed copy to the first Captions & Lyrics release. New source features listed above are not available through the published v2.5.0 installer yet.
+
+| Version | Highlights |
+| --- | --- |
+| Source changes | Supplied-lyric alignment, song-to-video creation, waveform visualizer and bundled fonts |
+| v2.5.0 | Captions & Lyrics editor, waveform timeline, live styling, karaoke and rendered exports |
+| v2.4.1 | Improved Nano Banana character-replacement prompt |
+| v2.4.0 | Kling reference workflow and reliability/security fixes |
+| v2.3 | Higher-quality output formats and trimming improvements |
+| v2.2 | Higher-resolution downloads and expanded framing options |
+| v2.1 | In-app release checking and updating |
+| v2.0 | Windows installer, silent desktop launcher and optional AI Pack |
+
+See [full release notes](RELEASE_NOTES.md) for current releases and [GitHub release history](https://github.com/NextGenInfluencer/ai-influencer-media-grabber/releases) for earlier downloads.
+
+## Development
+
+Run `python -m unittest discover -s tests -v`, `node tests/test_stream.js` and `node --check static/captions.js`. Build staging with `python build_staging.py`; Inno Setup 6 produces the Windows installer. Cached runtime downloads are checked against pinned SHA-256 values.
+
+See [caption implementation and next steps](CAPTIONS_PLAN.md). This is a focused creator toolkit: a full multitrack editor, integrated stock search, editable motion templates and advanced text animation remain future work.
+
+Media processing runs locally. Downloads, model acquisition, release checks and music recognition use online services. Use media you own or have permission to reuse and check stock-asset licensing before publishing.

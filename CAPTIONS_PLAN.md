@@ -17,8 +17,8 @@ Build a local editor alongside the existing downloader and Media Tools. Keep sou
 
 ## Follow-up work
 
-- Automatic alignment of supplied lyrics to singing: evaluate with real Suno and other songs before selecting or bundling an aligner. Uniform estimated timings are not audio alignment.
-- Separate song audio with an offset, vocal separation, advanced text animation, and long-media performance refinements.
+- Evaluate the implemented stable-ts lyric alignment on real Suno and other songs. Uniform manual estimates remain separate from audio alignment.
+- Editable background/audio layers with an audio offset, integrated stock search/import, vocal separation, animated text presets, and long-media performance refinements.
 - A larger transcription-model selector after compatibility and resource testing.
 
 ## Validation / release gate
@@ -32,3 +32,11 @@ The first usable release above is implemented. 46 Python tests pass in the devel
 Browser checks used isolated portrait and landscape test videos and mixed Greek/English text. Confirmed paste, styling, word timing controls, preview rendering, full export, reopening, resizing blocks, undo and autosave. A generated export frame was visually checked for Greek glyphs. Real vocal recognition and automated alignment of supplied lyrics are not certified by these checks. Automatic lyric alignment remains follow-up work; this version labels pasted timings as estimates.
 
 The v2.4.1 source updater will reject an archive that imports the new module without including it, because its old allowlist omits that file. Use a new installer for the first captions release; the updated allowlist supports subsequent updates.
+
+## Source upgrade after v2.5.0
+
+Implemented supplied-text alignment with stable-ts 2.19.1 using the existing shared Whisper model. Language and audio-range selection, section-label removal, preserved line breaks/repeated lyrics, validated word timing and cancellation without replacing saved captions. Installed and exercised the real aligner locally with generated speech; song accuracy still needs real vocal samples.
+
+Implemented song-to-video creation (MP3/WAV/M4A/FLAC/OGG), 1080p portrait/square/landscape, colour/photo/looped-video backgrounds from upload or library, and optional audio-reactive waveform. Composition is prepared into the base video, not an editable multitrack timeline. Original audio/background uploads are retained. Added three locally bundled Google Fonts with licenses. Stock-library links are discovery links only, not API search/import.
+
+The optional AI requirements changed. A future packaged release needs an installer; do not promise that the v2.5.0 source updater can apply this dependency migration. The local source environment already has the new dependency.

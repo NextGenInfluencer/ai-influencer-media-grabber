@@ -1,5 +1,6 @@
 # Optional AI Engine Dependencies (Whisper, BLIP Vision Prompter, LLaMA)
 openai-whisper>=20231117
+stable-ts==2.19.1
 torch>=2.0.0
 torchvision>=0.15.0
 transformers>=4.30.0

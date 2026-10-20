@@ -12,11 +12,27 @@ from unittest.mock import patch
 
 from flask import Flask
 import imageio_ffmpeg
-from captions import DEFAULT_STYLE, ass_text, parse_subtitles, register_captions, srt_text, validate_edit
+from captions import DEFAULT_STYLE, ass_text, parse_subtitles, register_captions, srt_text, validate_edit, lyric_lines, aligned_cues
 import job_process
 
 
 class CaptionDataTests(unittest.TestCase):
+    def test_lyrics_preserve_repetition_and_unicode_and_skip_section_headers(self):
+        self.assertEqual(lyric_lines('[Verse 1]\nΓεια σου\n\n[Chorus]\nΓεια σου'), ['Γεια σου','Γεια σου'])
+        for text in ['', '[Verse]', 'x'*1001, 42]:
+            with self.assertRaises(ValueError): lyric_lines(text)
+
+    def test_alignment_keeps_text_line_breaks_and_offsets(self):
+        result={'segments':[{'words':[{'word':' Γεια','start':.1,'end':.3},{'word':' σου','start':.3,'end':.6},
+                                    {'word':' Γεια','start':1,'end':1.2},{'word':' σου','start':1.2,'end':1.5}]}]}
+        cues=aligned_cues(result,['Γεια σου','Γεια σου'],3,6,2)
+        self.assertEqual([c['text'] for c in cues],['Γεια σου','Γεια σου'])
+        self.assertEqual(cues[0]['start'],3.1)
+        self.assertEqual(cues[1]['end'],4.5)
+        with self.assertRaises(ValueError): aligned_cues(result,['Different text'],0,6,2)
+        result['segments'][0]['words'][0]['end']=.1
+        with self.assertRaises(ValueError): aligned_cues(result,['Γεια σου','Γεια σου'],0,6,2)
+
     def test_unicode_roundtrip_and_lrc_repeated_lines(self):
         text = '1\n00:00:00,100 --> 00:00:01,500\nΓεια σου\nHello\n'
         cues = parse_subtitles(text, 4)
@@ -50,6 +66,59 @@ class CaptionDataTests(unittest.TestCase):
 
 
 class CaptionWorkflowTests(unittest.TestCase):
+    def test_song_composition_backgrounds_visualizer_and_font_export(self):
+        from PIL import Image
+        audio=self.root/'song.wav'
+        subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(),'-y','-i',str(self.source),'-vn',str(audio)],capture_output=True,check=True)
+        image=io.BytesIO();Image.new('RGB',(120,80),'green').save(image,format='PNG')
+        for background in [None, (image.getvalue(),'photo.png'), (self.source.read_bytes(),'clip.mp4')]:
+            payload={'audio':(io.BytesIO(audio.read_bytes()),'song.wav'),'shape':'square','visualizer':'true','color':'#123456'}
+            if background: payload['background']=(io.BytesIO(background[0]),background[1])
+            response=self.client.post('/api/captions',data=payload)
+            self.assertEqual(response.status_code,202,response.json)
+            pid=response.json['id'];data=self.wait(pid)
+            self.assertEqual((data['width'],data['height']),(1080,1080))
+            self.assertAlmostEqual(data['duration'],2,delta=.1)
+            self.assertTrue(data['composition']['visualizer'])
+            folder=self.root/'library'/'Caption Projects'/pid
+            self.assertEqual((folder/'song.wav').read_bytes(),audio.read_bytes())
+        self.assertEqual(self.client.post(f'/api/captions/{pid}/render',json={'preview':True}).status_code,202)
+        data=self.wait(pid)
+        self.assertTrue(data['last_render'])
+        data['cues']=[dict(start=0,end=1,text='Hello music',words=[])]
+        data['style']['font']='Oswald'
+        self.assertEqual(self.client.put('/api/captions/'+pid,json=data).status_code,200)
+        self.assertEqual(self.client.post(f'/api/captions/{pid}/render',json={'preview':True}).status_code,202)
+        self.assertTrue(self.wait(pid)['last_render'])
+
+    def test_alignment_failure_success_and_cancellation_preserve_saved_text(self):
+        response=self.client.post('/api/captions',data={'video':(io.BytesIO(self.source.read_bytes()),'sample.mp4')})
+        pid=response.json['id'];data=self.wait(pid)
+        data['cues']=[dict(start=0,end=1,text='Keep me',words=[])]
+        self.client.put('/api/captions/'+pid,json=data)
+        options=dict(text='Hello world',language='en',start=.2,end=1.8)
+        self.assertEqual(self.client.post(f'/api/captions/{pid}/align',json={**options,'language':''}).status_code,400)
+        result={'segments':[{'words':[dict(word='Hello',start=.1,end=.5),dict(word=' world',start=.6,end=1)]}]}
+        with patch('captions.align_lyrics',side_effect=ValueError('Cannot align')):
+            self.client.post(f'/api/captions/{pid}/align',json=options)
+            self.assertEqual(self.wait(pid,'error')['cues'][0]['text'],'Keep me')
+        with patch('captions.align_lyrics',return_value=result):
+            self.client.post(f'/api/captions/{pid}/align',json=options)
+            data=self.wait(pid)
+            self.assertEqual(data['timing'],'aligned')
+            self.assertAlmostEqual(data['cues'][0]['start'],.3)
+            self.assertEqual(data['cues'][0]['text'],'Hello world')
+        entered,release=threading.Event(),threading.Event()
+        def blocked(*args):
+            entered.set();release.wait(5);return result
+        with patch('captions.align_lyrics',side_effect=blocked):
+            self.client.post(f'/api/captions/{pid}/align',json=options)
+            try:
+                self.assertTrue(entered.wait(5));job_process.cancel_all()
+            finally: release.set()
+            self.assertEqual(self.wait(pid,'error')['cues'],data['cues'])
+        self.assertFalse((self.root/'library'/'Caption Projects'/pid/'alignment.wav').exists())
+
     def setUp(self):
         artifacts=Path(__file__).resolve().parents[1]/'audit_artifacts'
         artifacts.mkdir(exist_ok=True)
@@ -108,6 +177,8 @@ class CaptionWorkflowTests(unittest.TestCase):
 
     def test_arbitrary_path_is_rejected(self):
         response=self.client.post('/api/captions',data={'path':str(self.source)})
+        self.assertEqual(response.status_code,400)
+        response=self.client.post('/api/captions',data={'audio':(io.BytesIO(b'fake'),'song.wav'),'background_path':str(self.source)})
         self.assertEqual(response.status_code,400)
 
     def test_cancelled_transcription_keeps_saved_captions(self):

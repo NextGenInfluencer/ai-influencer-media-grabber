@@ -2128,6 +2128,7 @@ ai_installer_state: dict[str, Any] = {
 def get_ai_status():
     st = {
         "whisper": False,
+        "lyric_alignment": False,
         "torch": False,
         "transformers": False,
         "llama": False,
@@ -2153,7 +2154,11 @@ def get_ai_status():
         st["llama"] = True
     except ImportError: pass
 
-    st["all_installed"] = st["whisper"] and st["torch"] and st["transformers"] and st["llama"]
+    try:
+        import stable_whisper
+        st["lyric_alignment"] = True
+    except ImportError: pass
+    st["all_installed"] = st["whisper"] and st["lyric_alignment"] and st["torch"] and st["transformers"] and st["llama"]
     return st
 
 def run_ai_install_worker():

@@ -20,6 +20,20 @@ def serialized(function):
 def transcribe(model, *args, **kwargs):
     return model.transcribe(*args, **kwargs)
 
+@serialized
+def align_lyrics(model, audio, text, language):
+    """Use the shared Whisper model without changing its transcription methods."""
+    try:
+        from stable_whisper.alignment import align
+    except ImportError as exc:
+        raise ValueError('Lyric timing needs the updated AI Pack. Install it from the Studio, then restart the app.') from exc
+    result = align(model, audio, text, language=language, original_split=True,
+                   regroup=False, verbose=None, remove_instant_words=False,
+                   progress_callback=lambda *_: check_cancelled())
+    if result is None:
+        raise ValueError('Could not align these lyrics. Check the words, language and selected audio range.')
+    return result.to_dict()
+
 def translate_srt(text, generate, model_id, language='English'):
     """Translate bounded cue groups; keep original cue IDs and times outside the model."""
     cues = re.split(r'\n\s*\n', text.strip())

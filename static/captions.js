@@ -7,7 +7,10 @@
     const styleKeys = ['font','size','color','highlight','outline','position','background','karaoke'];
     let project = null, selected = -1, history = [], future = [], dirty = false;
     let saveTimer, pollTimer, saving = null, generation = 0, busy = false, dragging = false, pendingPreview = false;
-    const say = (text, error = false) => { $('status').textContent = text; $('status').classList.toggle('error', error); };
+    const say = (text, error = false) => {
+        $('status').textContent = text; $('status').classList.toggle('error', error);
+        document.querySelectorAll('dialog[open] .dialogStatus').forEach(node=>{node.textContent=error?text:'';});
+    };
     const media = name => `/api/captions/${project.id}/media/${encodeURIComponent(name)}`;
     const snapshot = () => copy({cues:project.cues, style:project.style, timing:project.timing});
     const current = () => project?.cues[selected];
@@ -52,7 +55,7 @@
     function setBusy(value) {
         busy=value;
         for(const node of document.querySelectorAll('.style input,.style select,.style button,#selection input,#selection textarea,#selection button,.toolbar button,.toolbar select,#export,#renderCheck,#srt,#save,#paste,#subtitleFile,#videoFile,#openLibrary,#projects,#reload,#undo,#redo')) node.disabled=value || !project;
-        $('videoFile').disabled=value; $('projects').disabled=value; $('openLibrary').disabled=value;
+        $('videoFile').disabled=value; $('projects').disabled=value; $('openLibrary').disabled=value;$('newSong').disabled=value;
     }
     async function listProjects() {
         const items=await api('/api/captions');
@@ -92,6 +95,7 @@
             manual:'Add captions, paste lyrics, or transcribe the audio.',
             estimated:'Evenly spaced estimates — adjust timing while listening. These lyrics have not been aligned to the audio.',
             automatic:'Automatic transcription — review words and timing, especially for songs.',
+            aligned:'Lyrics matched to audio — review timing, especially sustained notes and repeated choruses. Every word remains editable.',
             imported:'Imported timings — review synchronization with this video.',
             edited:'Review timing while listening. Word timings are editable below.'
         })[project.timing] || 'Review timing while listening.';
@@ -219,6 +223,15 @@
         catch(e){setBusy(false);throw e;}
     }
     $('videoFile').onchange=act(async()=>{const file=$('videoFile').files[0];if(file){const f=new FormData();f.append('video',file);await create(f);}$('videoFile').value='';});
+    $('newSong').onclick=()=>$('songDialog').showModal();
+    $('cancelSong').onclick=()=>$('songDialog').close();
+    $('createSong').onclick=act(async()=>{
+        const song=$('songFile').files[0];if(!song)throw Error('Choose your song first.');
+        const form=new FormData();form.append('audio',song);form.append('shape',$('songShape').value);form.append('color',$('songColor').value);form.append('visualizer',$('songVisualizer').checked);
+        const bg=$('songBackground').files[0];if(bg)form.append('background',bg);else if($('songLibrary').value)form.append('background_path',$('songLibrary').value);
+        $('createSong').disabled=true;
+        try {await create(form);$('songDialog').close();} finally {$('createSong').disabled=false;}
+    });
     $('openLibrary').onclick=act(async()=>{if(!$('library').value)throw Error('Choose a library video.');const f=new FormData();f.append('path',$('library').value);await create(f);});
     $('projects').onchange=act(async()=>{if($('projects').value)await load($('projects').value);});
     $('reload').onclick=act(async()=>{if(!project)return;if(dirty&&!confirm('Discard unsaved edits and reload the saved project?'))return;dirty=false;await load(project.id);});
@@ -278,7 +291,15 @@
         dest.push(snapshot());Object.assign(project,source.pop());selected=Math.min(selected,project.cues.length-1);changed();refresh();
     }
     $('undo').onclick=()=>undo();$('redo').onclick=()=>undo(true);
-    $('paste').onclick=()=>{if(project)$('lyricsDialog').showModal();};
+    $('paste').onclick=()=>{if(project){$('alignStart').value=0;$('alignEnd').value=project.duration.toFixed(3);$('alignLanguage').value=$('language').value||'en';$('lyricsDialog').showModal();}};
+    $('useCurrentLyrics').onclick=()=>{$('lyrics').value=project.cues.map(c=>c.text).join('\n');};
+    $('alignLyrics').onclick=act(async()=>{
+        if(!$('lyrics').value.trim())throw Error('Paste the lyrics sung in this video first.');
+        if(project.cues.length&&!confirm('Replace the current captions with aligned lyrics? You can undo this after alignment.'))return;
+        const options={text:$('lyrics').value,language:$('alignLanguage').value,start:Number($('alignStart').value),end:Number($('alignEnd').value)};
+        $('alignLyrics').disabled=true;
+        try {checkpoint();await job('align',options);$('lyricsDialog').close();} finally {$('alignLyrics').disabled=false;}
+    });
     $('cancelLyrics').onclick=()=>$('lyricsDialog').close();
     $('applyLyrics').onclick=act(()=>{
         const lines=$('lyrics').value.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
@@ -322,5 +343,6 @@
         await listProjects();
         const entries=await api('/api/gallery');
         $('library').replaceChildren(new Option('Choose from library…',''),...entries.filter(e=>e.type==='video'&&e.folder!=='Caption Projects').map(e=>new Option(e.name,e.full_path)));
+        $('songLibrary').replaceChildren(new Option('Use colour / uploaded background',''),...entries.filter(e=>['image','video'].includes(e.type)&&e.folder!=='Caption Projects').map(e=>new Option(e.name,e.full_path)));
     })().catch(e=>say(e.message,true));
 })();

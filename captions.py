@@ -9,6 +9,7 @@ import shutil
 import threading
 import time
 import uuid
+import wave
 
 import cv2
 import imageio_ffmpeg
@@ -16,11 +17,14 @@ import numpy as np
 from PIL import ImageFont
 from flask import Blueprint, jsonify, request, send_file, render_template, session
 import job_process as process
-from ai_runtime import transcribe
+from ai_runtime import transcribe, align_lyrics
 
 DEFAULT_STYLE = dict(font='Arial', size=5, color='#ffffff', highlight='#ffdc55',
                      outline=2, position=85, background=False, karaoke=False)
 FONTS = {'Arial', 'Verdana', 'Georgia', 'Impact', 'Trebuchet MS'}
+BUNDLED_FONTS = {'Oswald': 'Oswald[wght].ttf', 'Lobster': 'Lobster-Regular.ttf', 'Bangers': 'Bangers-Regular.ttf'}
+FONTS.update(BUNDLED_FONTS)
+FONT_DIR = Path(__file__).resolve().parent / 'static' / 'fonts'
 
 
 def number(value, low, high):
@@ -80,7 +84,8 @@ def font_scale(name):
     files = {'Arial':'arial.ttf', 'Verdana':'verdana.ttf', 'Georgia':'georgia.ttf',
              'Impact':'impact.ttf', 'Trebuchet MS':'trebuc.ttf'}
     try:
-        font = ImageFont.truetype(str(Path(os.environ.get('WINDIR', 'C:/Windows')) / 'Fonts' / files[name]), 1000)
+        path = FONT_DIR / BUNDLED_FONTS[name] if name in BUNDLED_FONTS else Path(os.environ.get('WINDIR', 'C:/Windows')) / 'Fonts' / files[name]
+        font = ImageFont.truetype(str(path), 1000)
         return sum(font.getmetrics()) / 1000
     except (OSError, KeyError):
         return 1.0
@@ -171,6 +176,58 @@ def parse_subtitles(text, duration):
                 cues.append(dict(start=start, end=end, text=content, words=[]))
     if not cues:
         raise ValueError('No timed captions found. Import SRT or LRC, or use Paste lyrics.')
+    return validate_edit(dict(cues=cues), duration)['cues']
+
+
+def lyric_lines(text):
+    if not isinstance(text, str) or len(text) > 50000:
+        raise ValueError('Use at most 50,000 characters of lyrics.')
+    # Suno exports often include unspoken section labels.
+    lines = [line.strip() for line in text.splitlines() if line.strip()
+             and not re.fullmatch(r'\s*\[[^\]\n]+\]\s*', line)]
+    if not lines or len(lines) > 1000 or any(len(line) > 1000 for line in lines):
+        raise ValueError('Paste 1–1,000 lyric lines, with at most 1,000 characters per line.')
+    if any(len(word) > 100 for line in lines for word in line.split()):
+        raise ValueError('Each lyric word must be at most 100 characters.')
+    return lines
+
+
+def aligned_cues(result, lines, offset, duration, limit):
+    """Rejoin token fragments while preserving supplied spelling and line breaks."""
+    pieces = [w for s in result.get('segments', []) for w in s.get('words', [])
+              if str(w.get('word', '')).strip()]
+    expected = ''.join(''.join(line.split()) for line in lines)
+    if ''.join(''.join(str(w['word']).split()) for w in pieces) != expected:
+        raise ValueError('Some lyrics could not be aligned. Check that the pasted words match this audio range.')
+    spans, cursor = [], 0
+    previous = 0
+    for piece in pieces:
+        a = number(piece['start'], 0, limit)
+        b = number(piece['end'], 0, limit)
+        if b <= a or a < previous - .001:
+            raise ValueError('Some words have uncertain timing. Try a shorter audio range with only its matching lyrics.')
+        a = max(a, previous)
+        previous = b
+        length = len(''.join(piece['word'].split()))
+        spans.append((cursor, cursor + length, a + offset, b + offset))
+        cursor += length
+    cues, cursor, index = [], 0, 0
+    for line in lines:
+        words = []
+        for text in line.split():
+            end = cursor + len(text)
+            while index < len(spans) and spans[index][1] <= cursor:
+                index += 1
+            matches = []
+            j = index
+            while j < len(spans) and spans[j][0] < end:
+                matches.append(spans[j])
+                j += 1
+            if not matches:
+                raise ValueError('Missing word timings. Try a shorter section.')
+            words.append(dict(text=text, start=matches[0][2], end=matches[-1][3]))
+            cursor = end
+        cues.append(dict(text=line, start=words[0]['start'], end=words[-1]['end'], words=words))
     return validate_edit(dict(cues=cues), duration)['cues']
 
 
@@ -265,23 +322,74 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
         pid = uuid.uuid4().hex
         destination = folder(pid)
         upload = request.files.get('video')
+        song = request.files.get('audio')
         path = request.form.get('path', '')
         source = Path(path) if path else None
-        if not upload and (not source or not allowed_path(str(source)) or not source.is_file()):
+        if not song and not upload and (not source or not allowed_path(str(source)) or not source.is_file()):
             raise ValueError('Choose a video from your library or upload one.')
-        name = upload.filename if upload else source.name
+        name = song.filename if song else upload.filename if upload else source.name
         extension = Path(name).suffix.lower()
-        if extension not in {'.mp4', '.mkv', '.mov', '.webm', '.avi', '.m4v'}:
+        if song and extension not in {'.mp3', '.wav', '.m4a', '.flac', '.ogg'}:
+            raise ValueError('Choose MP3, WAV, M4A, FLAC or OGG audio.')
+        if not song and extension not in {'.mp4', '.mkv', '.mov', '.webm', '.avi', '.m4v'}:
             raise ValueError('Choose a supported video file.')
+        composition = None
+        if song:
+            shapes = {'portrait': (1080,1920), 'square': (1080,1080), 'landscape': (1920,1080)}
+            shape = request.form.get('shape', 'portrait')
+            if shape not in shapes:
+                raise ValueError('Choose portrait, square or landscape.')
+            color = request.form.get('color', '#141526')
+            if not re.fullmatch(r'#[0-9a-fA-F]{6}', color):
+                raise ValueError('Choose a valid background color.')
+            background = request.files.get('background')
+            bg_path = request.form.get('background_path', '')
+            if bg_path and (not allowed_path(bg_path) or not Path(bg_path).is_file()):
+                raise ValueError('Choose a background from your library.')
+            bg_ext = Path(background.filename if background else bg_path).suffix.lower()
+            if (background or bg_path) and bg_ext not in {'.png','.jpg','.jpeg','.webp','.mp4','.mov','.mkv','.webm'}:
+                raise ValueError('Choose a photo or video background.')
+            composition = dict(shape=shape, color=color, visualizer=request.form.get('visualizer') == 'true')
         destination.mkdir(parents=True)
-        media = destination / ('original' + extension)
-        if upload:
+        media = destination / ('original.mp4' if song else 'original' + extension)
+        if song:
+            song_file = destination / ('song' + extension)
+            song.save(song_file)
+            bg_file = destination / ('background' + bg_ext) if background or bg_path else None
+            if background:
+                background.save(bg_file)
+            elif bg_path:
+                shutil.copy2(bg_path, bg_file)
+        elif upload:
             upload.save(media)
         else:
             shutil.copy2(source, media)
         data = dict(id=pid, name=name[:200], source=media.name, state='busy', status='Preparing video',
                     revision=0, cues=[], style=dict(DEFAULT_STYLE), width=0, height=0, duration=0, peaks=[], timing='manual', exports=[])
         def prepare(d, f):
+            if song:
+                # Decode a bounded audio file first: arbitrary metadata durations cannot create runaway renders.
+                ffmpeg(['-i', song_file.name, '-t', '1200.1', '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', 'duration.wav'], f)
+                try:
+                    with wave.open(str(f / 'duration.wav'), 'rb') as audio:
+                        seconds = audio.getnframes() / audio.getframerate()
+                    number(seconds, .1, 1200)
+                finally:
+                    (f / 'duration.wav').unlink(missing_ok=True)
+                width, height = shapes[shape]
+                args = ['-i', song_file.name]
+                if bg_file:
+                    args += (['-loop','1'] if bg_ext in {'.png','.jpg','.jpeg','.webp'} else ['-stream_loop','-1']) + ['-i',bg_file.name]
+                else:
+                    args += ['-f','lavfi','-i',f'color=c={color}:s={width}x{height}:r=30']
+                graph = f'[1:v]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1,fps=30[bg]'
+                if composition['visualizer']:
+                    graph += f';[0:a]showwaves=s={width}x{height//5}:mode=cline:rate=30:colors=0xbba6ff:scale=sqrt[wave];[bg][wave]overlay=0:H-h:shortest=1[out]'
+                else:
+                    graph += ';[bg]null[out]'
+                ffmpeg([*args,'-filter_complex',graph,'-map','[out]','-map','0:a:0','-t',str(seconds),'-c:v','libx264','-preset','veryfast','-crf','18','-pix_fmt','yuv420p','-c:a','aac','-b:a','256k','-movflags','+faststart',media.name], f)
+                d['composition'] = composition
+                d['style']['position'] = 65
             capture = cv2.VideoCapture(str(media))
             try:
                 fps = capture.get(cv2.CAP_PROP_FPS)
@@ -313,7 +421,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             data.update(validate_edit(incoming, data['duration']))
             data['revision'] += 1
             data['timing'] = incoming.get('timing', 'edited')
-            if data['timing'] not in {'manual', 'estimated', 'automatic', 'imported', 'edited'}:
+            if data['timing'] not in {'manual', 'estimated', 'automatic', 'aligned', 'imported', 'edited'}:
                 data['timing'] = 'edited'
             write(data)
         return jsonify(data)
@@ -369,6 +477,41 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                     (f / 'speech.wav').unlink(missing_ok=True)
             return launch(data, 'Transcribing audio (existing captions are kept if this fails)…', work)
 
+    @bp.post('/api/captions/<pid>/align')
+    def align(pid):
+        with lock:
+            data = read(pid)
+            if data['state'] == 'busy':
+                return jsonify(error='Wait for the current task.'), 409
+            options = request.get_json()
+            lines = lyric_lines(options.get('text', ''))
+            language = options.get('language', '')
+            if language not in {'en', 'el', 'es', 'fr', 'de'}:
+                raise ValueError('Choose the lyric language: English, Greek, Spanish, French or German.')
+            start = number(options.get('start', 0), 0, data['duration'])
+            end = number(options.get('end', data['duration']), 0, data['duration'])
+            if end - start < .1 or end - start > 1200:
+                raise ValueError('Select an audio range between 0.1 seconds and 20 minutes.')
+            def work(d, f):
+                audio_file = f / 'alignment.wav'
+                try:
+                    ffmpeg(['-ss', str(start), '-i', d['source'], '-t', str(end-start),
+                            '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', audio_file.name], f)
+                    model = get_whisper()
+                    if model is None:
+                        raise ValueError('Install the AI Pack in the Studio to enable lyric timing.')
+                    with wave.open(str(audio_file), 'rb') as audio:
+                        samples = np.frombuffer(audio.readframes(audio.getnframes()), dtype='<i2').astype(np.float32) / 32768
+                    if not samples.size or np.max(np.abs(samples)) < .0001:
+                        raise ValueError('The selected audio range is silent. Choose a range with vocals.')
+                    result = align_lyrics(model, samples, '\n'.join(lines), language)
+                    cues = aligned_cues(result, lines, start, d['duration'], end-start)
+                    process.check_cancelled()
+                    d.update(cues=cues, timing='aligned')
+                finally:
+                    audio_file.unlink(missing_ok=True)
+            return launch(data, 'Matching your lyrics to the audio (existing captions are kept if this fails)…', work)
+
     @bp.post('/api/captions/<pid>/render')
     def render(pid):
         with lock:
@@ -376,7 +519,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             options = request.get_json()
             if data['state'] == 'busy':
                 return jsonify(error='Wait for the current task.'), 409
-            if not data['cues']:
+            if not data['cues'] and not data.get('composition'):
                 raise ValueError('Add and save captions before rendering.')
             start = number(options.get('start', 0), 0, data['duration'])
             preview = bool(options.get('preview'))
@@ -387,7 +530,11 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                 temporary = f / ('.working_' + output)
                 ass.write_text(ass_text(d), encoding='utf-8-sig')
                 try:
-                    args = ['-i', d['source'], '-map', '0:v:0', '-map', '0:a:0?', '-vf', f'ass={ass.name},scale=trunc(iw/2)*2:trunc(ih/2)*2']
+                    fonts = f / 'caption_fonts'
+                    fonts.mkdir(exist_ok=True)
+                    for filename in BUNDLED_FONTS.values():
+                        shutil.copy2(FONT_DIR / filename, fonts / filename)
+                    args = ['-i', d['source'], '-map', '0:v:0', '-map', '0:a:0?', '-vf', f'ass={ass.name}:fontsdir=caption_fonts,scale=trunc(iw/2)*2:trunc(ih/2)*2']
                     if preview:
                         args += ['-ss', str(start), '-t', str(min(5, d['duration']-start))]
                     ffmpeg([*args, '-c:v', 'libx264', '-preset', 'fast', '-crf', '18', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-movflags', '+faststart', temporary.name], f)
