@@ -76,7 +76,7 @@ def clean_directory(dir_path):
 
 def main():
     print("\n=======================================================")
-    print(" AI Influencer Media Grabber - Staging Builder v2.4.1")
+    print(" AI Influencer Media Grabber - Staging Builder v2.5.0")
     print("=======================================================\n")
 
     os.makedirs(CACHE_DIR, exist_ok=True)
@@ -148,6 +148,7 @@ def main():
         "job_process.py",
         "download_support.py",
         "reference_prep.py",
+        "captions.py",
         "launch-silent.vbs",
         "run.bat",
         "install_ai.bat",
@@ -156,7 +157,8 @@ def main():
         "README.md",
         "CHANGELOG.md",
         "IMPLEMENTATION_NOTES.md",
-        "RELEASE_NOTES.md"
+        "RELEASE_NOTES.md",
+        "CAPTIONS_PLAN.md"
     ]
     for fn in files_to_copy:
         src = os.path.join(ROOT_DIR, fn)
@@ -222,13 +224,13 @@ def compile_installer():
 
     iss_file = os.path.join(ROOT_DIR, "installer.iss")
     print(f"Compiler: {iscc}")
-    print("Building dist\\AI-Influencer-Media-Grabber-v2.4.1-Setup.exe ...")
+    print("Building dist\\AI-Influencer-Media-Grabber-v2.5.0-Setup.exe ...")
     res = subprocess.run([iscc, "/Q", iss_file], cwd=ROOT_DIR)
     if res.returncode != 0:
         print("[ERROR] Inno Setup compilation failed!")
         return False
 
-    output_exe = os.path.join(DIST_DIR, "AI-Influencer-Media-Grabber-v2.4.1-Setup.exe")
+    output_exe = os.path.join(DIST_DIR, "AI-Influencer-Media-Grabber-v2.5.0-Setup.exe")
     if os.path.exists(output_exe):
         size_mb = os.path.getsize(output_exe) / (1024 * 1024)
         print("\n=======================================================")

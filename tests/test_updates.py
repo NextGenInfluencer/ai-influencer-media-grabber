@@ -50,8 +50,12 @@ class UpdateTests(unittest.TestCase):
         self.assertFalse((self.root / '.updates/pending.json').exists())
 
     def test_missing_import_rejects_update_before_activation(self):
-        with self.assertRaisesRegex(ValueError, 'startup check'):
-            stage_archive(self.root, self.archive({'app_local.py': 'import missing_release_module_123'}), 'v3')
+        for source, message in [
+            ('import missing_release_module_123', 'missing_release_module_123'),
+            ('import sys; sys.stderr = sys.stdout; raise RuntimeError("installer required")', 'installer required'),
+        ]:
+            with self.assertRaisesRegex(ValueError, message):
+                stage_archive(self.root, self.archive({'app_local.py': source}), 'v3')
         self.assertIn('old', (self.root / 'app_local.py').read_text())
 
     def test_failed_activation_restores_previous_files(self):

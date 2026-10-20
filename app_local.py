@@ -734,7 +734,7 @@ def protect_local_service():
             abort(403)
         if request.method not in {'GET', 'HEAD'} and request.headers.get('X-Media-Token') != session.get('api_token'):
             abort(403)
-    if request.method == 'POST' and request.path in {'/api/download', '/api/convert', '/api/batch_clean', '/api/batch_clean_upload', '/api/extract_prompt', '/api/reference/prepare'}:
+    if request.method == 'POST' and (request.path.startswith('/api/captions') or request.path in {'/api/download', '/api/convert', '/api/batch_clean', '/api/batch_clean_upload', '/api/extract_prompt', '/api/reference/prepare'}):
         if globals().get('ai_installer_state', {}).get('is_installing') or globals().get('app_updater_state', {}).get('is_updating'):
             return jsonify(error='Wait for installation or update preparation to finish.'), 409
 
@@ -776,7 +776,7 @@ def shazam_file(audio_path):
         print("Shazam error:", e)
         return None
 
-APP_VERSION = "2.4.1"
+APP_VERSION = "2.5.0"
 SERVER_START_TIME = time.time()
 
 # --- Active Job & Auto-Shutdown Watchdog State ---
@@ -2532,6 +2532,13 @@ def open_desktop_window(url="http://127.0.0.1:5000"):
 
 from reference_prep import register_reference_prep
 register_reference_prep(app, DEFAULT_SAVE_DIR, increment_active_job, decrement_active_job, invalidate_gallery_cache)
+try:
+    from captions import register_captions
+except ModuleNotFoundError as exc:
+    if exc.name != 'captions':
+        raise
+    raise RuntimeError('Captions & Lyrics requires the new application component. Upgrade from v2.4.x using the Windows installer on the GitHub release page.') from None
+register_captions(app, DEFAULT_SAVE_DIR, increment_active_job, decrement_active_job, invalidate_gallery_cache, get_whisper, is_safe_path)
 
 
 if __name__ == '__main__':

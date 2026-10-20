@@ -1,3 +1,17 @@
+# v2.5.0 — Captions & Lyrics editor
+
+**Upgrade from v2.4.x using the Windows installer attached to this release.** The older in-app source updater cannot add the new captions component; its startup check will reject the update and preserve your existing app. Close the app before installing. Your media library is retained.
+
+- Open your own or downloaded videos in a dedicated editor with a live preview and waveform timeline.
+- Auto-transcribe with the optional AI Pack, paste lyrics, or import SRT/LRC files.
+- Correct text and timing, drag caption boundaries, split/merge lines, shift timings, loop playback, and undo edits.
+- Style captions with fonts, colors, outlines, backgrounds, positioning, and karaoke word highlighting. Save a reusable style in your browser.
+- Autosave projects, reopen them later, render a five-second appearance check, and export a new captioned H.264 video or SRT file without overwriting your original.
+
+Pasted lyrics and estimated word timings are evenly spaced starting points, not automatic alignment to vocals. Review automatic transcription, especially for singing. Browser typography can differ from export; use the rendered check. Separate song audio, automatic alignment of supplied lyrics, and advanced animations remain follow-up features.
+
+Validation includes automated regression checks, real FFmpeg exports, cancellation/restart recovery, and isolated browser editing checks. Transcription tests use fixtures; real song-recognition accuracy is not certified.
+
 # v2.4.1 — Nano Banana character-swap prompts
 
 - Generated prompts now assign the original first frame and influencer reference distinct roles.

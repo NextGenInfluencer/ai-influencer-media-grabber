@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="media-token" content="{{ api_token }}"><title>Captions & Lyrics — Media Grabber</title>
+<link rel="stylesheet" href="/static/captions.css"><script src="/static/captions.js" defer></script></head>
+<body>
+<header><a href="/">← Studio</a><div><h1>Captions & Lyrics</h1><small>Your words. Your timing. Your style.</small></div><span id="saveStatus" role="status">Open a video to begin</span><button id="save">Save now</button></header>
+<main>
+<section class="panel sources">
+<label class="upload">Open video<input id="videoFile" type="file" accept="video/*"></label>
+<select id="library" aria-label="Library video"><option value="">Choose from library…</option></select><button id="openLibrary">Open</button>
+<select id="projects" aria-label="Saved project"><option value="">Saved projects…</option></select>
+<button id="reload">Reload project</button>
+</section>
+<p id="status" role="status">Open a video, then transcribe its audio or add your own lyrics.</p>
+<div class="workspace">
+<section class="panel preview">
+<div id="stage"><video id="video" playsinline preload="metadata"></video><div id="guides" hidden></div><div id="caption"></div><div id="empty">Your video preview<br><small>Original files are kept unchanged</small></div></div>
+<div class="transport"><button id="play">▶ Play</button><span id="time">0:00.00</span><select id="speed" aria-label="Playback speed"><option value="0.5">0.5×</option><option value="0.75">0.75×</option><option selected value="1">1×</option><option value="1.25">1.25×</option></select><label><input type="checkbox" id="loop"> Loop selected line</label><label><input type="checkbox" id="safe"> Safe-area guide</label></div>
+<p class="hint">Live preview · Use “Render 5-second check” to verify the exact exported appearance.</p>
+</section>
+<section class="panel style">
+<h2>Make it yours</h2>
+<div class="presets"><button data-preset="clean">Clean</button><button data-preset="bold">Bold</button><button data-preset="lyrics">Lyrics</button><button data-preset="karaoke">Karaoke</button></div>
+<label>Font<select id="font"><option>Arial</option><option>Verdana</option><option>Georgia</option><option>Impact</option><option>Trebuchet MS</option></select></label>
+<label>Size<input id="size" type="range" min="2" max="12" step=".25" value="5"></label>
+<div class="row"><label>Text<input id="color" type="color" value="#ffffff"></label><label>Highlight<input id="highlight" type="color" value="#ffdc55"></label></div>
+<label>Outline<input id="outline" type="range" min="0" max="5" step=".25" value="2"></label>
+<label>Vertical position<input id="position" type="range" min="10" max="95" step="1" value="85"></label>
+<label><input id="background" type="checkbox"> Text background</label><label><input id="karaoke" type="checkbox"> Highlight the current word</label>
+<div class="row"><button id="saveStyle">Save my style</button><button id="loadStyle">Use my style</button></div>
+<p class="hint">Fonts use your computer’s installed versions. Greek and English can be mixed. Karaoke requires word timings.</p>
+</section>
+</div>
+<section class="panel">
+<div class="toolbar"><h2>Words & timing</h2><button id="undo">Undo</button><button id="redo">Redo</button><label>Zoom <input id="zoom" type="range" min="1" max="20" value="1"></label><span class="hint">Drag a block to move it; drag its edges to resize.</span></div>
+<div id="timelineScroll"><div id="timeline"><canvas id="waveform"></canvas><div id="blocks"></div><div id="playhead"></div></div></div>
+<div class="toolbar"><select id="language" aria-label="Transcription language"><option value="">Auto language</option><option value="en">English</option><option value="el">Greek</option><option value="es">Spanish</option><option value="fr">French</option><option value="de">German</option></select><button id="transcribe">Auto-transcribe</button><button id="paste">Paste lyrics</button><label class="upload">Import SRT / LRC<input id="subtitleFile" type="file" accept=".srt,.lrc"></label><button id="add">Add line here</button><label>Shift all (seconds)<input id="shift" type="number" value="0" step=".1"></label><button id="shiftAll">Apply shift</button></div>
+<p id="timingNote" class="hint">Automatic timings should be reviewed, especially for singing.</p>
+<div class="editarea"><div id="cueList" aria-label="Caption lines"></div><div id="selection">
+<h3>Selected line</h3><textarea id="text" rows="3" maxlength="1000" placeholder="Select a caption to edit it" aria-label="Caption text"></textarea>
+<div class="row"><label>Start (seconds)<input id="start" type="number" min="0" step=".01"></label><label>End (seconds)<input id="end" type="number" min="0" step=".01"></label></div>
+<div class="toolbar"><button id="setStart">Start at playhead</button><button id="setEnd">End at playhead</button><button id="split">Split at playhead</button><button id="merge">Merge next</button><button id="delete">Delete line</button></div>
+<details><summary>Word timings for karaoke</summary><p class="hint">Editing line text clears old word timings. Estimated timings divide the line evenly; adjust them while listening.</p><button id="estimateWords">Estimate word timings</button><div id="words"></div></details>
+</div></div>
+</section>
+<section class="panel exports"><h2>Finish your video</h2><button id="renderCheck">Render 5-second check</button><button id="export" class="primary">Export captioned MP4</button><button id="srt">Download SRT</button><button id="stop">Stop processing</button><div id="downloads"></div></section>
+</main>
+<dialog id="lyricsDialog"><h2>Paste your lyrics</h2><p>One caption per line. These are evenly spaced estimates, not automatic audio alignment.</p><textarea id="lyrics" rows="12" placeholder="Paste your lyrics here" aria-label="Lyrics"></textarea><div class="row"><button id="cancelLyrics">Cancel</button><button id="applyLyrics" class="primary">Create editable lines</button></div></dialog>
+<dialog id="renderDialog"><h2>Rendered preview</h2><video id="renderVideo" controls></video><button id="closeRender">Close preview</button></dialog>
+</body></html>

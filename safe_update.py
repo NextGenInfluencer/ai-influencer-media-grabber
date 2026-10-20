@@ -11,7 +11,7 @@ import uuid
 import zipfile
 
 MAX_BYTES = 100 * 1024 * 1024
-FILES = {'app_local.py', 'ai_prompter.py', 'cleaner.py', 'media_safety.py',
+FILES = {'app_local.py', 'ai_prompter.py', 'cleaner.py', 'media_safety.py', 'captions.py',
          'reference_prep.py', 'safe_update.py', 'ai_runtime.py', 'job_process.py', 'download_support.py', 'requirements.txt', 'requirements-ai.txt',
          'README.md', 'CHANGELOG.md'}
 DIRECTORIES = {'templates', 'static', 'assets'}
@@ -82,7 +82,9 @@ def stage_archive(root, archive, version):
                                cwd=stage, env=environment, capture_output=True, text=True, timeout=60,
                                creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
         if probe.returncode:
-            raise ValueError('Updated app failed its startup check: ' + probe.stderr[-1000:])
+            # The app's console capture sends startup tracebacks to stdout too.
+            details = (probe.stderr + '\n' + probe.stdout).strip()
+            raise ValueError('Updated app failed its startup check: ' + details[-1000:])
         atomic_json(updates / 'pending.json', {'stage': stage.name, 'files': selected, 'version': version})
     except BaseException:
         shutil.rmtree(stage)
