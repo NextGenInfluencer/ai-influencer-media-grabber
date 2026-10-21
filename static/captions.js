@@ -450,6 +450,10 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();undo(e.shiftKey);}
     });
     setInterval(()=>fetch('/api/heartbeat').catch(()=>{}),2000);
+    async function checkRestart() {
+        try {const health=await api('/api/health_check');$('restartNotice').hidden=!health.needs_restart;} catch {}
+    }
+    checkRestart();setInterval(checkRestart,30000);
     setBusy(false);tick();
     (async()=>{
         await listProjects();

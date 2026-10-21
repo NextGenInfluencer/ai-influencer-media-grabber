@@ -33,6 +33,16 @@ class FullAppTests(unittest.TestCase):
         with self.client.get('/static/vendor/tailwind-3.4.17.js') as asset:
             self.assertEqual(asset.status_code, 200)
 
+    def test_restart_detection_includes_caption_backend_and_editor(self):
+        for filename in ('captions.py','ai_runtime.py','creator_composition.py','captions.js','captions.html'):
+            with self.subTest(filename=filename):
+                def mtime(path):
+                    return self.module.SERVER_START_TIME + (10 if Path(path).name==filename else -10)
+                with patch.object(self.module.os.path,'getmtime',side_effect=mtime):
+                    self.assertTrue(self.client.get('/api/health_check').json['needs_restart'])
+        with patch.object(self.module.os.path,'getmtime',return_value=self.module.SERVER_START_TIME-10):
+            self.assertFalse(self.client.get('/api/health_check').json['needs_restart'])
+
     def test_playlist_processes_every_video(self):
         entries = []
         for number in range(2):

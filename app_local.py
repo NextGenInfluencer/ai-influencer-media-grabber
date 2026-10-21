@@ -1,3 +1,4 @@
+from pathlib import Path
 # Apply staged files before importing application dependencies.
 if __name__ == '__main__':
     import os as _os, sys as _sys
@@ -2297,10 +2298,10 @@ def shutdown_app():
 def health_check():
     needs_restart = False
     try:
-        app_mtime = os.path.getmtime(os.path.abspath(__file__))
-        tpl_mtime = os.path.getmtime(os.path.join(os.path.dirname(__file__), 'templates', 'index.html'))
-        if max(app_mtime, tpl_mtime) > (SERVER_START_TIME + 2):
-            needs_restart = True
+        root = Path(__file__).resolve().parent
+        paths = [*root.glob('*.py'), *root.glob('templates/*.html'),
+                 *root.glob('static/*.js'), *root.glob('static/*.css')]
+        needs_restart = any(os.path.getmtime(path) > SERVER_START_TIME + 2 for path in paths)
     except Exception:
         pass
 
