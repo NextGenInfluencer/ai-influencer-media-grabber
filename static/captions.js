@@ -836,6 +836,40 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
     }
     $('stockSearch').onclick=act(runStockSearch);
     $('stockQuery').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('stockSearch').click();}};
+    document.querySelectorAll('[data-stock-chip]').forEach(b=>{
+        b.onclick=()=>{
+            $('stockQuery').value=b.dataset.stockChip;
+            runStockSearch().catch(e=>say(e.message,true));
+        };
+    });
+    async function grabSocialClip(inputEl, btnEl) {
+        const url=(inputEl?.value||'').trim();
+        if(!url) throw Error('Paste a TikTok, Instagram Reel, or YouTube Short URL first.');
+        const origText=btnEl.textContent;
+        btnEl.disabled=true; btnEl.textContent='Grabbing…';
+        say('Downloading video clip without watermark…');
+        try {
+            const saved=await api('/api/captions/stock/grab-url','POST',{url});
+            inputEl.value='';
+            await refreshLibraries();
+            if(project?.studio) {
+                clipSequence.push({path:saved.path,name:saved.title||saved.name,duration:0});
+                drawSequenceLists();
+                if($('stockStatus')) $('stockStatus').textContent=`Grabbed "${saved.title||saved.name}" and added to your clip sequence (${clipSequence.length} clips total)! Click "✨ Apply" to render.`;
+                say(`Grabbed "${saved.title||saved.name}" and added to your video sequence (${clipSequence.length} clips). Click "✨ Apply Clip Sequence to Video" to render!`);
+            } else {
+                if(![...$('songLibrary').options].some(o=>o.value===saved.path)) $('songLibrary').append(new Option(saved.name,saved.path));
+                $('songLibrary').value=saved.path;
+                say(`Grabbed "${saved.title||saved.name}" into your library! Open or create a project to use it.`);
+            }
+        } finally {
+            btnEl.disabled=false; btnEl.textContent=origText;
+        }
+    }
+    if($('grabClipBtn')) $('grabClipBtn').onclick=act(()=>grabSocialClip($('grabClipUrl'),$('grabClipBtn')));
+    if($('grabClipUrl')) $('grabClipUrl').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('grabClipBtn').click();}};
+    if($('grabStockBtn')) $('grabStockBtn').onclick=act(()=>grabSocialClip($('grabStockUrl'),$('grabStockBtn')));
+    if($('grabStockUrl')) $('grabStockUrl').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('grabStockBtn').click();}};
     $('restoreComposition').onclick=act(async()=>{
         if(!project||!confirm('Restore the previous composition and its captions? The current version will become the restore point.'))return;
         await save();video.pause();project=await api(`/api/captions/${project.id}/restore-composition`,'POST',{revision:project.revision});history=[];future=[];selected=0;mountVideo();refresh();

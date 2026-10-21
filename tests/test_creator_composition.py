@@ -302,4 +302,47 @@ class CompositionDataTests(unittest.TestCase):
         self.assertEqual(len(sched), 4)
         self.assertEqual([s['asset'] for s in sched], ['background', 'clip_a1b2c3d4', 'background', 'clip_a1b2c3d4'])
 
+    def test_pixabay_portrait_dance_search_sorts_vertical_first_and_keeps_hd_clips(self):
+        pixabay_payload = {
+            'hits': [
+                {
+                    'id': 501,
+                    'duration': 12,
+                    'tags': 'street dance, hip hop',
+                    'user': 'DancerA',
+                    'pageURL': 'https://pixabay.com/videos/id-501/',
+                    'videos': {
+                        'large': {
+                            'url': 'https://cdn.pixabay.com/vimeo/501/dance_1920.mp4',
+                            'width': 1920,
+                            'height': 1080,
+                            'thumbnail': 'https://cdn.pixabay.com/vimeo/501/thumb.jpg'
+                        }
+                    }
+                },
+                {
+                    'id': 502,
+                    'duration': 10,
+                    'tags': 'vertical dance, tiktok vibe',
+                    'user': 'DancerB',
+                    'pageURL': 'https://pixabay.com/videos/id-502/',
+                    'videos': {
+                        'large': {
+                            'url': 'https://cdn.pixabay.com/vimeo/502/dance_vertical.mp4',
+                            'width': 1080,
+                            'height': 1920,
+                            'thumbnail': 'https://cdn.pixabay.com/vimeo/502/thumb.jpg'
+                        }
+                    }
+                }
+            ]
+        }
+        opener = _FakeOpener(_FakeResponse(json.dumps(pixabay_payload).encode('utf-8')))
+        results = comp.search_stock('pixabay', 'dance', kind='video', orientation='portrait',
+                                    max_duration=60, api_key='pix-key', opener=opener)
+        self.assertEqual(len(results), 2)
+        self.assertEqual(results[0]['id'], '502')
+        self.assertEqual(results[1]['id'], '501')
+
+
 

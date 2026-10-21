@@ -500,7 +500,7 @@ def search_stock(provider: str, query: str, kind: str = 'video', orientation: st
     else:
         key_enc = urllib.parse.quote(api_key)
         if kind == 'video':
-            url = f'https://pixabay.com/api/videos/?key={key_enc}&q={q_enc}&per_page=18&safesearch=true'
+            url = f'https://pixabay.com/api/videos/?key={key_enc}&q={q_enc}&per_page=40&safesearch=true'
         else:
             px_orient = 'vertical' if orientation == 'portrait' else 'horizontal' if orientation == 'landscape' else 'all'
             url = f'https://pixabay.com/api/?key={key_enc}&q={q_enc}&orientation={px_orient}&image_type=photo&per_page=18&safesearch=true'
@@ -599,9 +599,9 @@ def search_stock(provider: str, query: str, kind: str = 'video', orientation: st
                 if not chosen.get('url'):
                     continue
                 vw, vh = int(chosen.get('width') or 0), int(chosen.get('height') or 0)
-                if orientation == 'portrait' and vw > vh > 0:
+                if False and orientation == 'portrait' and vw > vh > 0:
                     continue
-                if orientation == 'landscape' and vh > vw > 0:
+                if False and orientation == 'landscape' and vh > vw > 0:
                     continue
                 try:
                     dl_url = validate_stock_url(chosen['url'], 'pixabay')
@@ -652,6 +652,12 @@ def search_stock(provider: str, query: str, kind: str = 'video', orientation: st
                     attribution=f'Photo by {creator} on Pixabay'
                 ))
 
+    if provider == 'pixabay' and kind == 'video':
+        if orientation == 'portrait':
+            results.sort(key=lambda r: (1 if r['height'] >= r['width'] > 0 else 0), reverse=True)
+        elif orientation == 'landscape':
+            results.sort(key=lambda r: (1 if r['width'] >= r['height'] > 0 else 0), reverse=True)
+        results = results[:24]
     if opener is None:
         _STOCK_CACHE[cache_key] = (time.time(), copy.deepcopy(results))
     return results

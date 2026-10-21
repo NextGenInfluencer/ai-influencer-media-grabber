@@ -1519,6 +1519,51 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
         refresh_gallery()
         return jsonify(path=str(dest), name=dest.name, kind=kind, provenance=prov)
 
+    @bp.post('/api/captions/stock/grab-url')
+    def stock_grab_url():
+        import yt_dlp
+        payload = request.get_json() or {}
+        if not isinstance(payload, dict):
+            raise ValueError('Invalid clip URL request.')
+        raw_url = str(payload.get('url') or '').strip()
+        parsed = urllib.parse.urlsplit(raw_url)
+        host = (parsed.hostname or '').lower()
+        if parsed.scheme not in {'http', 'https'} or not host or host in {'localhost', '127.0.0.1', '0.0.0.0', '::1'}:
+            raise ValueError('Paste a valid TikTok, Instagram, or YouTube video URL.')
+        stock_dir.mkdir(parents=True, exist_ok=True)
+        token = uuid.uuid4().hex[:8]
+        outtmpl = str(stock_dir / f'social_%(id)s_{token}.%(ext)s')
+        node_exe = Path(__file__).resolve().parent / 'node_runtime' / 'node.exe'
+        ydl_opts: dict[str, Any] = {
+            'format': 'bestvideo[height<=1920]+bestaudio[ext=m4a]/bestvideo[height<=1920]+bestaudio/best[height<=1920]/best',
+            'merge_output_format': 'mp4',
+            'outtmpl': outtmpl,
+            'noplaylist': True,
+            'quiet': True,
+            'no_warnings': True,
+            'ffmpeg_location': imageio_ffmpeg.get_ffmpeg_exe(),
+            'retries': 5,
+            'socket_timeout': 25,
+            'js_runtimes': {'node': {'path': str(node_exe)}} if node_exe.is_file() else {'node': {}},
+        }
+        process.begin_job()
+        try:
+            with yt_dlp.YoutubeDL(cast(Any, ydl_opts)) as ydl:
+                info = ydl.extract_info(raw_url, download=True) or {}
+        except Exception as exc:
+            msg = re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', str(exc))
+            raise ValueError(f'Could not grab video from URL: {msg[:200]}') from None
+        finally:
+            process.end_job()
+        matches = sorted(stock_dir.glob(f'*_{token}.*'), key=lambda p: p.stat().st_mtime, reverse=True)
+        video_matches = [p for p in matches if p.suffix.lower() in composition_model.VIDEOS]
+        if not video_matches:
+            raise ValueError('No video file was downloaded from that URL.')
+        found = video_matches[0]
+        title = str(info.get('title') or info.get('id') or found.stem).strip()[:80]
+        refresh_gallery()
+        return jsonify(path=str(found), name=found.name, title=title, kind='video')
+
     # A stopped process cannot resume its background thread after app restart.
     for path in root.glob('*/project.json'):
         try:

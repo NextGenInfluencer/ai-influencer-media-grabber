@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="media-token" content="{{ api_token }}">
 <title>Captions & Video Studio — Media Grabber</title>
-<link rel="stylesheet" href="/static/captions.css?v=capcut2">
-<script src="/static/captions.js?v=capcut2" defer></script>
+<link rel="stylesheet" href="/static/captions.css?v=capcut3">
+<script src="/static/captions.js?v=capcut3" defer></script>
 </head>
 <body class="capcutStudio">
 <header class="capcutHeader">
@@ -109,6 +109,10 @@
 
             <div id="sequenceBar" class="sequenceSection">
               <div class="row" style="margin-bottom:8px;">
+                <input id="grabClipUrl" type="text" maxlength="500" placeholder="Paste TikTok / Reel / YouTube dance video URL…" aria-label="TikTok or social video URL" style="flex:1;">
+                <button id="grabClipBtn" class="primary" type="button" title="Download TikTok/Reel without watermark and add to your video clips">⬇️ Grab Clip</button>
+              </div>
+              <div class="row" style="margin-bottom:8px;">
                 <button id="seqBrowseStock" class="primary" type="button">🌐 + Add from Pixabay</button>
                 <label class="upload">➕ Upload Clips<input id="seqUploadInput" type="file" multiple accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,.mkv,.webm"></label>
               </div>
@@ -166,6 +170,25 @@
           </div>
           <p id="stockStatus" class="dialogStatus" role="status"></p>
           <div class="subCard stackForm">
+            <h3>🔗 Grab TikTok / Instagram / YouTube Clip</h3>
+            <div class="row">
+              <input id="grabStockUrl" type="text" maxlength="500" placeholder="Paste TikTok dance video, Reel, or Short URL…" aria-label="Social video URL" style="flex:1;">
+              <button id="grabStockBtn" class="primary" type="button">⬇️ Grab &amp; Add</button>
+            </div>
+            <p class="hint" style="margin-top:2px;">Downloads any TikTok, Instagram Reel, or YouTube Short without watermark and adds it directly to your music video sequence (your song replaces the clip's audio).</p>
+          </div>
+          <div class="subCard stackForm">
+            <h3>🌐 Free Stock Dance &amp; Aesthetic Clips</h3>
+            <div class="filterPills">
+              <button type="button" data-stock-chip="woman dancing">💃 Dance</button>
+              <button type="button" data-stock-chip="street dance hip hop">🔥 Street Dance</button>
+              <button type="button" data-stock-chip="nightclub party dancing">🪩 Club &amp; Party</button>
+              <button type="button" data-stock-chip="contemporary dance">💃 Modern Dance</button>
+              <button type="button" data-stock-chip="neon lights girl">✨ Neon Aesthetic</button>
+              <button type="button" data-stock-chip="car night drive">🌆 Night Drive</button>
+              <button type="button" data-stock-chip="dj concert crowd">🎤 Concert / DJ</button>
+              <button type="button" data-stock-chip="sunset beach silhouette">🌊 Sunset Vibe</button>
+            </div>
             <div class="row">
               <label>Source
                 <select id="stockProvider">
