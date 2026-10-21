@@ -1,8 +1,8 @@
 ; Script generated for Inno Setup 6
-; AI Influencer Media Grabber v2.6.0 Installer Script
+; AI Influencer Media Grabber v2.6.1 Installer Script
 
 #define MyAppName "AI Influencer Media Grabber"
-#define MyAppVersion "2.6.0"
+#define MyAppVersion "2.6.1"
 #define MyAppPublisher "NextGenInfluencer"
 #define MyAppURL "https://github.com/NextGenInfluencer/ai-influencer-media-grabber"
 #define MyAppExeName "launch-silent.vbs"
@@ -20,14 +20,14 @@ DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 OutputDir=dist
-OutputBaseFilename=AI-Influencer-Media-Grabber-v2.6.0-Setup
+OutputBaseFilename=AI-Influencer-Media-Grabber-v2.6.1-Setup
 SetupIconFile=assets\app_icon.ico
 Compression=lzma2/normal
 SolidCompression=yes
 WizardStyle=modern
 ArchitecturesInstallIn64BitMode=x64compatible
 UninstallDisplayIcon={app}\assets\app_icon.ico
-VersionInfoVersion=2.6.0.0
+VersionInfoVersion=2.6.1.0
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoDescription={#MyAppName} Setup
 

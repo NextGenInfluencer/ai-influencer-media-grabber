@@ -1,3 +1,15 @@
+# v2.6.1 — Creator Studio stability fixes
+
+- Fixed the social clip grabber failing with `cast is not defined`.
+- Added cancellable download/search workers, time limits, failed-download cleanup and active-job tracking.
+- Restricted clip links to supported HTTPS platforms and blocked private/reserved network destinations in the Python worker.
+- Fixed long-song clip cycling stopping early; repeated clips reuse decoder inputs. Sequences above 600 cuts show a clear limit message.
+- YouTube search now respects the requested duration limit.
+
+Validation: 93 Python tests and JavaScript checks passed, including a real repeated portrait/landscape FFmpeg render. External providers may still require authentication or impose restrictions. Reversible effects, clip-audio behavior and stock metadata improvements remain separate work.
+
+Download the Windows Setup EXE below. Close the app before installing over your existing installation. This release does not modify your saved media or caption projects.
+
 # v2.6.0 — CapCut-Style Creator Studio, Multi-Clip Storyboard & Free Video Search
 
 - **CapCut-Style 4-Zone Desktop Studio (`/captions`)**: Redesigned the Captions & Lyrics workspace into a single-screen desktop editor with a Left Icon Dock (`🎬 Media & Clips`, `🌐 Free Videos`, `📝 Lyrics & AI`, `✨ Filters & FX`, `🎵 Audio & Voice`, `🎞️ Canvas & PiP`), Center Video Player Stage, Right Inspector (`⚡ All`, `💬 Lines & Words`, `🎨 Text Style`), and Bottom Multitrack Timeline (`🎬 Clips`, `🎵 Audio`, `💬 Lyrics`) with no blocking modal popups.

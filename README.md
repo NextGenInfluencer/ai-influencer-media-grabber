@@ -66,6 +66,10 @@ The alignment-language selector supports English, French, Korean, Greek, Spanish
 
 Failed lines retain their earlier words/timings. **Estimate missing timings** is an explicit approximate fallback, labelled for review. A cancelled operation preserves saved captions; **Restore previous karaoke version** restores the captions from before the last completed karaoke operation, including after reopening the project. Undo also works in the editing session. Long individual lines over 60 seconds need splitting before alignment.
 
+### New in v2.6.1
+
+Fixed the Creator Studio clip grabber, added cancellable download/search workers and safer URL handling, and corrected long-song clip cycling. See [release notes](RELEASE_NOTES.md).
+
 ### New in v2.6.0 (CapCut-Style Creator Studio)
 
 - **Sync pasted lyrics to audio & transcription correction:** keeps your supplied text and line breaks, with editable word timings. Choose **Correct transcription with my lyrics** to match your pasted lyrics directly to existing transcription line timings, or **Sync lyrics to audio** to run audio alignment using local Whisper with stable-ts. Pasted lyrics are auto-saved locally as a draft. Standalone Suno labels such as `[Verse]` are ignored; repeated sung lines must still be included. If individual words have invalid timing, usable timings are retained and uncertain gaps are estimated and flagged for review. The prior captions are retained as a restore point.
@@ -119,6 +123,7 @@ The in-app GitHub updater checks published releases and validates staged changes
 
 | Version | Highlights |
 | --- | --- |
+| v2.6.1 | Clip-grabber repair, download/search safeguards, cancellation and long-song cycling fixes |
 | v2.6.0 | CapCut-style 4-zone studio, Multi-Clip Video Sequence Storyboard, Free Mixkit HD Stock & YouTube Shorts search (no API key needed), direct TikTok/Reel/Short clip grabber, 1-click dance category chips, multilingual batch karaoke, CapCut video filters & audio effects (noise cancellation, voice isolation, echo/reverb), Carousel Studio & Kling contact sheets |
 | v2.5.0 | Captions & Lyrics editor, waveform timeline, live styling, karaoke and rendered exports |
 | v2.4.1 | Improved Nano Banana character-replacement prompt |
