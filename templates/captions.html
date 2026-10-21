@@ -1,169 +1,688 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="media-token" content="{{ api_token }}"><title>Captions & Lyrics — Media Grabber</title>
-<link rel="stylesheet" href="/static/captions.css?v=multiclip1"><script src="/static/captions.js?v=multiclip1" defer></script></head>
-<body>
-<header><a href="/">← Studio</a><div><h1>Captions & Lyrics</h1><small>Your words. Your timing. Your style.</small></div><span id="saveStatus" role="status">Open a video to begin</span><button id="save">Save now</button></header>
-<main>
-<p id="restartNotice" class="panel error" role="status" hidden>Update ready — this app is still running older code. Save your edits and copy any pasted lyrics somewhere safe, then restart the engine. <button id="restartNow" class="primary" style="margin-left:12px;">Restart app now</button></p>
-<section class="panel sources">
-<label class="upload">Open video<input id="videoFile" type="file" accept="video/*"></label>
-<button id="newSong">Create video from a song</button>
-<select id="library" aria-label="Library video"><option value="">Choose from library…</option></select><button id="openLibrary">Open</button>
-<select id="projects" aria-label="Saved project"><option value="">Saved projects…</option></select>
-<button id="reload">Reload project</button><button id="duplicateProject">Duplicate project</button><button id="recoverEdits">Recover unsaved captions</button>
-</section>
-<section class="panel" id="compositionPanel"><div class="toolbar"><h2>Background & audio</h2><button id="editComposition">Edit composition</button><button id="openStockBrowser">Browse Pixabay / stock</button><button id="restoreComposition">Restore previous composition</button></div><p id="compositionSummary" class="hint">Open a project to edit its background and audio.</p><div id="sequenceBar" class="sequenceSection" hidden><div class="toolbar"><strong style="font-size:13px;color:#dcd6f7;">Video Clips Sequence (Multi-Clip Storyboard)</strong><button id="seqBrowseStock" type="button">+ Add clip from Pixabay</button><label class="upload">+ Upload clips<input id="seqUploadInput" type="file" multiple accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,.mkv,.webm"></label><select id="seqLibrarySelect" aria-label="Add clip from library"><option value="">+ Add clip from library…</option></select><button id="seqEvenSplit" type="button" title="Set all clip durations to 0 (split song evenly)">Split evenly</button><button id="seqCycle10" type="button" title="Set each clip to 10s so clips cycle across the song">10s per clip</button><button id="applySequenceNow" class="primary" type="button">Apply clip sequence</button></div><div id="sequenceList" class="sequenceList" aria-label="Video clip sequence"></div><p class="hint" style="margin-top:6px;">Add multiple videos or photos from Pixabay, your library, or uploads to play one after another instead of looping a single clip. Duration <strong>0s</strong> splits the song evenly across clips; setting e.g. <strong>10s</strong> per clip cycles through your clips when looping is enabled.</p></div><p class="hint">Original media stays separate from your edits. Apply settings to prepare a synchronized preview. Lyric styling updates live.</p></section>
-<p id="status" role="status">Open a video, then transcribe its audio or add your own lyrics.</p>
-<div class="workspace">
-<section class="panel preview">
-<div id="stage"><video id="video" playsinline preload="metadata"></video><div id="stageVignette" hidden></div><canvas id="stageVisualizer" hidden></canvas><div id="guides" hidden></div><div id="caption"></div><div id="empty">Your video preview<br><small>Original files are kept unchanged</small></div></div>
-<p id="playingCaption" class="hint" role="status"></p><div class="transport"><button id="play">▶ Play</button><span id="time">0:00.00</span><select id="speed" aria-label="Playback speed"><option value="0.5">0.5×</option><option value="0.75">0.75×</option><option selected value="1">1×</option><option value="1.25">1.25×</option></select><label><input type="checkbox" id="loop"> Loop selected line</label><label><input type="checkbox" id="safe"> Safe-area guide</label></div>
-<p class="hint">Live preview · Use “Render 5-second check” to verify the exact exported appearance.</p>
-</section>
-<section class="panel style">
-<h2>Make it yours</h2>
-<div class="presets"><button data-preset="neon_karaoke">Neon Karaoke</button><button data-preset="cinematic_clean">Cinematic Clean</button><button data-preset="bold_pop">Bold Pop</button><button data-preset="minimalist_lyric">Minimalist Lyric</button><button data-preset="clean">Clean</button><button data-preset="bold">Bold</button><button data-preset="lyrics">Lyrics</button><button data-preset="karaoke">Karaoke</button></div>
-<label>Font<select id="font"><option>Arial</option><option>Verdana</option><option>Georgia</option><option>Impact</option><option>Trebuchet MS</option><option>Montserrat</option><option>Roboto</option><option>Noto Sans KR</option><option>Oswald</option><option>Lobster</option><option>Bangers</option></select></label>
-<label>Size<input id="size" type="range" min="2" max="12" step=".25" value="5"></label>
-<div class="row"><label>Text<input id="color" type="color" value="#ffffff"></label><label>Highlight<input id="highlight" type="color" value="#ffdc55"></label></div>
-<label>Outline<input id="outline" type="range" min="0" max="5" step=".25" value="2"></label>
-<label>Vertical position<input id="position" type="range" min="10" max="95" step="1" value="85"></label>
-<label><input id="background" type="checkbox"> High-contrast boxed captions</label><label><input id="karaoke" type="checkbox"> Highlight the current word</label>
-<label><input id="cumulative" type="checkbox"> Cumulative karaoke (keep words lit)</label><label><input id="word_pop" type="checkbox"> Active word pop (115% scale)</label>
-<label>Line animation<select id="animation"><option value="none">Instant (None)</option><option value="fade">Smooth Fade In/Out</option><option value="pop">Pop / Scale Entrance</option><option value="slide_up">Slide Up Entrance</option></select></label>
-<label>Neon glow<input id="glow" type="range" min="0" max="10" step="0.5" value="0"></label>
-<h3>Audio visualizer</h3>
-<label><input id="visualizer" type="checkbox"> Show audio-reactive visualizer</label>
-<label>Visualizer style<select id="visualizer_style"><option value="spectrum">Spectrum Bars</option><option value="waveform">Waveform</option></select></label>
-<label>Position<select id="visualizer_position"><option value="bottom">Bottom</option><option value="center">Center</option><option value="top">Top</option></select></label>
-<label>Height (%)<input id="visualizer_height" type="range" min="10" max="40" step="1" value="18"></label>
-<label>Sensitivity<input id="visualizer_sensitivity" type="range" min="0.5" max="3" step="0.1" value="1"></label>
-<label>Visualizer colour<input id="visualizer_color" type="color" value="#bba6ff"></label>
-<h3>Video filters & FX</h3>
-<label>Filter<select id="video_filter"><option value="none">None (Original)</option><option value="bw">Black & White</option><option value="sepia">Sepia</option><option value="vintage">Vintage Film</option><option value="cyberpunk">Cyberpunk Neon</option><option value="warm">Warm Golden Hour</option><option value="cool">Cool Cinema</option><option value="dramatic">Dramatic Contrast</option><option value="dreamy">Dreamy Soft Glow</option></select></label>
-<label><input id="vignette" type="checkbox"> Cinematic vignette</label>
-<label>Film grain<input id="film_grain" type="range" min="0" max="30" step="1" value="0"></label>
-<label>Sharpen<input id="sharpen" type="range" min="0" max="2" step="0.1" value="0"></label>
-<label>RGB shift (Glitch)<input id="chromatic" type="range" min="0" max="10" step="1" value="0"></label>
-<h3>Audio FX & cleanup</h3>
-<label><input id="noise_cancel" type="checkbox"> Noise cancellation (AI/FFT)</label>
-<label><input id="voice_isolation" type="checkbox"> Voice isolation & clarity</label>
-<label>Audio effect<select id="audio_effect"><option value="none">None</option><option value="slowed_reverb">Slowed + Reverb (TikTok)</option><option value="nightcore">Nightcore / High Pitch</option><option value="vocal_remover">Vocal Remover (Karaoke)</option><option value="echo">Echo</option><option value="concert_hall">Concert Hall Reverb</option><option value="studio_vocal">Studio Vocal Polish</option><option value="lofi_radio">Lo-Fi / Vintage Radio</option><option value="bass_boost">Bass Boost</option><option value="chorus">Vocal Chorus</option></select></label>
-<div class="row"><button id="saveStyle">Save my style</button><button id="loadStyle">Use my style</button></div>
-<p class="hint">Montserrat, Roboto, Noto Sans KR, Oswald, Lobster and Bangers are bundled Google Fonts with Greek, Korean and French support. Karaoke requires word timings.</p>
-</section>
-</div>
-<section class="panel">
-<div class="toolbar"><h2>Multitrack & word timing</h2><button id="undo">Undo</button><button id="redo">Redo</button><label>Zoom <input id="zoom" type="range" min="1" max="20" value="1"></label><label><input id="snapTimeline" type="checkbox" checked> Snap</label><span class="hint">Video/B-Roll, Audio & Captions tracks · Drag a block to move; drag edges to trim.</span></div>
-<div id="timelineScroll"><div id="timeline"><div id="videoTrackLane" aria-label="Video and B-roll track"></div><canvas id="waveform"></canvas><div id="blocks"></div><div id="playhead"></div></div></div>
-<div class="toolbar"><select id="language" aria-label="Transcription language"><option value="">Auto language</option>{% for code, label in languages.items() %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</select><button id="transcribe">Auto-transcribe</button><button id="paste">Paste lyrics</button><label class="upload">Import SRT / LRC<input id="subtitleFile" type="file" accept=".srt,.lrc"></label><button id="add">Add line here</button><label>Shift all (seconds)<input id="shift" type="number" value="0" step=".1"></label><button id="shiftAll">Apply shift</button></div>
-<div class="toolbar"><button id="karaokeAll" class="primary">Add karaoke timing to all subtitles</button><label>Alignment language<select id="karaokeLanguage"><option value="auto">Detect per line</option><option value="en-fr">English + French</option><option value="en-ko">Korean + English</option><option value="en-fr-ko">English + French + Korean</option>{% for code, label in languages.items() %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</select></label><button id="estimateMissing">Estimate missing timings</button><button id="nextReview">Next line to review</button><button id="restoreKaraoke">Restore previous karaoke version</button></div><p id="karaokeSummary" class="hint" role="status"></p><p class="hint">Adds word timings without moving your subtitle lines. Review singing timings even when no issue is flagged. Mixed-language modes detect each line from its audio where the script is ambiguous. Short or bilingual lines can be misidentified: choose a single language and retry that line when needed. Korean highlighting follows space-separated words. French/English switches within a line still need review.</p>
-<p id="timingNote" class="hint">Automatic timings should be reviewed, especially for singing.</p>
-<div class="editarea"><div id="cueList" aria-label="Caption lines"></div><div id="selection">
-<h3>Selected line</h3><p id="lineReview" class="hint"></p><div class="toolbar"><button id="karaokeLine">Retry karaoke for this line</button><button id="markReviewed">Mark timing reviewed</button></div><textarea id="text" rows="3" maxlength="1000" placeholder="Select a caption to edit it" aria-label="Caption text"></textarea>
-<div class="row"><label>Start (seconds)<input id="start" type="number" min="0" step=".01"></label><label>End (seconds)<input id="end" type="number" min="0" step=".01"></label></div>
-<div class="toolbar"><button id="setStart">Start at playhead</button><button id="setEnd">End at playhead</button><button id="split">Split at playhead</button><button id="merge">Merge next</button><button id="delete">Delete line</button></div>
-<details><summary>Word timings for karaoke</summary><p class="hint">Editing line text clears old word timings. Estimated timings divide the line evenly; adjust them while listening.</p><button id="estimateWords">Estimate word timings</button><div id="words"></div></details>
-</div></div>
-</section>
-<section class="panel exports"><h2>Finish your video</h2><label>Quality<select id="renderQuality"><option value="standard">Standard HD (1080p)</option><option value="high">Studio High Quality (CRF 15 · 320k)</option><option value="draft">Fast Proxy / Draft (720p)</option></select></label><button id="renderCheck">Render 5-second check</button><button id="export" class="primary">Export captioned MP4</button><button id="srt">Download SRT</button><button id="stop">Stop processing</button><div id="downloads"></div></section>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="media-token" content="{{ api_token }}">
+<title>Captions & Video Studio — Media Grabber</title>
+<link rel="stylesheet" href="/static/captions.css?v=capcut2">
+<script src="/static/captions.js?v=capcut2" defer></script>
+</head>
+<body class="capcutStudio">
+<header class="capcutHeader">
+  <div class="headerLeft">
+    <a href="/" class="backBtn">← Home</a>
+    <div class="brandTitle">
+      <h1>Creator Video Studio</h1>
+      <small>CapCut-style local multitrack editor</small>
+    </div>
+    <select id="projects" aria-label="Saved project"><option value="">Saved projects…</option></select>
+    <button id="reload" title="Reload saved project">↻ Reload</button>
+    <button id="duplicateProject" title="Duplicate project">Duplicate</button>
+    <button id="recoverEdits" title="Recover unsaved caption draft">Recover draft</button>
+  </div>
+  <div class="headerCenter">
+    <button id="undo" title="Undo (Ctrl+Z)">↶ Undo</button>
+    <button id="redo" title="Redo (Ctrl+Shift+Z)">↷ Redo</button>
+    <span id="saveStatus" role="status">Open a video or song to begin</span>
+    <button id="save">Save</button>
+  </div>
+  <div class="headerRight exports">
+    <h2 class="srOnly">Finish your video</h2>
+    <label>Quality
+      <select id="renderQuality">
+        <option value="standard">1080p HD</option>
+        <option value="high">Studio HQ (CRF 15)</option>
+        <option value="draft">Fast 720p Draft</option>
+      </select>
+    </label>
+    <button id="renderCheck" title="Render a 5-second MP4 check at the playhead">5s Check</button>
+    <button id="srt" title="Download SRT subtitles">SRT</button>
+    <button id="stop" title="Stop active processing job">Stop</button>
+    <button id="export" class="primary">Export MP4</button>
+  </div>
+</header>
+
+<p id="restartNotice" class="panel error" role="status" hidden>
+  Update ready — this app is still running older code. Save your edits, then restart the engine.
+  <button id="restartNow" class="primary" style="margin-left:12px;">Restart app now</button>
+</p>
+
+<div id="downloads" class="downloadsBar"></div>
+
+<main class="capcutMain">
+  <div class="capcutUpper">
+    <!-- LEFT CAPCUT TOOL DOCK + INLINE DRAWER (NO POPUPS) -->
+    <aside class="capcutLeft">
+      <nav class="dockRail" aria-label="Studio tools">
+        <button type="button" class="dockTab active" data-dock="media">
+          <span class="dockIcon">🎬</span>
+          <span>Media &amp; Clips</span>
+        </button>
+        <button type="button" class="dockTab" data-dock="stock">
+          <span class="dockIcon">🌐</span>
+          <span>Pixabay</span>
+        </button>
+        <button type="button" class="dockTab" data-dock="lyrics">
+          <span class="dockIcon">📝</span>
+          <span>Lyrics &amp; AI</span>
+        </button>
+        <button type="button" class="dockTab" data-dock="fx">
+          <span class="dockIcon">✨</span>
+          <span>Filters &amp; FX</span>
+        </button>
+        <button type="button" class="dockTab" data-dock="audio">
+          <span class="dockIcon">🎵</span>
+          <span>Audio &amp; Voice</span>
+        </button>
+        <button type="button" class="dockTab" data-dock="canvas">
+          <span class="dockIcon">🎞️</span>
+          <span>Canvas &amp; PiP</span>
+        </button>
+      </nav>
+
+      <div class="dockDrawer">
+        <!-- PANE 1: MEDIA & MULTI-CLIP SEQUENCE -->
+        <section class="dockPane active" data-dock-pane="media">
+          <div class="paneHeader">
+            <h2>Media &amp; Multi-Clip Storyboard</h2>
+          </div>
+
+          <div class="subCard sources">
+            <h3>1. Open or Start a Project</h3>
+            <div class="row">
+              <label class="upload primaryBtn">📂 Upload Video<input id="videoFile" type="file" accept="video/*"></label>
+              <button id="newSong" type="button">🎵 Create from Song</button>
+            </div>
+            <div class="row" style="margin-top:8px;">
+              <select id="library" aria-label="Library video"><option value="">Choose video from library…</option></select>
+              <button id="openLibrary" type="button">Open</button>
+            </div>
+          </div>
+
+          <div class="subCard" id="compositionPanel">
+            <div class="row" style="justify-content:space-between;margin-bottom:6px;">
+              <h3>2. Video Clips Sequence</h3>
+              <button id="restoreComposition" type="button" title="Undo last composition render">↶ Undo Render</button>
+            </div>
+            <p id="compositionSummary" class="hint" style="margin-top:0;">Open a project to add and arrange video clips.</p>
+
+            <div id="sequenceBar" class="sequenceSection">
+              <div class="row" style="margin-bottom:8px;">
+                <button id="seqBrowseStock" class="primary" type="button">🌐 + Add from Pixabay</button>
+                <label class="upload">➕ Upload Clips<input id="seqUploadInput" type="file" multiple accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,.mkv,.webm"></label>
+              </div>
+              <div class="row" style="margin-bottom:8px;">
+                <select id="seqLibrarySelect" aria-label="Add clip from library" style="flex:1;"><option value="">+ Add clip from library…</option></select>
+                <button id="seqEvenSplit" type="button" title="Set all clip durations to 0 (split song evenly)">Split evenly</button>
+                <button id="seqCycle10" type="button" title="Set each clip to 10s so clips cycle across the song">10s each</button>
+              </div>
+              <div id="sequenceList" class="sequenceList" aria-label="Video clip sequence"></div>
+              <div class="row" style="margin-top:10px;">
+                <button id="applySequenceNow" class="primary" type="button" style="width:100%;">✨ Apply Clip Sequence to Video</button>
+              </div>
+              <p class="hint">Add as many clips as you want so your video changes scenes instead of looping one clip. Duration <strong>0s</strong> splits the song evenly; <strong>10s</strong> cycles clips every 10s.</p>
+            </div>
+            <div class="row" style="margin-top:8px;">
+              <button id="editComposition" type="button">🎞️ Canvas &amp; B-Roll Settings</button>
+              <button id="openStockBrowser" type="button">🌐 Browse Pixabay</button>
+            </div>
+          </div>
+
+          <details class="subCard" id="songDialog">
+            <summary><strong>🎵 Create a New Music Video from Audio Song</strong></summary>
+            <p class="dialogStatus error" role="status"></p>
+            <div class="stackForm" style="margin-top:8px;">
+              <label>Song file<input id="songFile" type="file" accept=".mp3,.wav,.m4a,.flac,.ogg"></label>
+              <div class="row">
+                <label>Format
+                  <select id="songShape">
+                    <option value="portrait">Portrait 9:16 (Reels/TikTok)</option>
+                    <option value="square">Square 1:1</option>
+                    <option value="landscape">Landscape 16:9 (YouTube)</option>
+                  </select>
+                </label>
+                <label>Colour<input id="songColor" type="color" value="#141526"></label>
+              </div>
+              <label>Initial background (optional)<input id="songBackground" type="file" accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,.mkv,.webm" aria-label="Background file"></label>
+              <div class="row">
+                <select id="songLibrary" aria-label="Background from library" style="flex:1;"><option value="">Use colour / uploaded background</option></select>
+                <button id="browseStockSong" type="button">🌐 Pixabay</button>
+              </div>
+              <p id="songStockNotice" class="hint" hidden></p>
+              <label><input id="songVisualizer" type="checkbox"> Add audio-reactive waveform</label>
+              <div class="row">
+                <button id="cancelSong" type="button" hidden>Cancel</button>
+                <button id="createSong" class="primary" type="button" style="width:100%;">Create Music Video Project</button>
+              </div>
+            </div>
+          </details>
+        </section>
+
+        <!-- PANE 2: PIXABAY STOCK BROWSER (INLINE, NO POPUP!) -->
+        <section class="dockPane" data-dock-pane="stock" id="stockDialog">
+          <div class="paneHeader">
+            <h2>🌐 Pixabay &amp; Stock Videos</h2>
+          </div>
+          <p id="stockStatus" class="dialogStatus" role="status"></p>
+          <div class="subCard stackForm">
+            <div class="row">
+              <label>Source
+                <select id="stockProvider">
+                  <option value="pixabay" selected>Pixabay</option>
+                  <option value="pexels">Pexels (Existing keys)</option>
+                </select>
+              </label>
+              <label>Type
+                <select id="stockKind">
+                  <option value="video">Videos</option>
+                  <option value="image">Photos</option>
+                </select>
+              </label>
+            </div>
+            <div class="row">
+              <label>Ratio
+                <select id="stockOrientation">
+                  <option value="portrait">9:16 Portrait</option>
+                  <option value="landscape">16:9 Landscape</option>
+                  <option value="square">1:1 Square</option>
+                  <option value="all">All</option>
+                </select>
+              </label>
+              <label>Max (s)<input id="stockMaxDuration" type="number" min="0" max="600" step="5" value="60" style="width:70px;"></label>
+            </div>
+            <div class="row">
+              <input id="stockQuery" type="text" maxlength="100" placeholder="Search e.g. neon city, rain, dancer, beach…" aria-label="Stock search query" style="flex:1;">
+              <button id="stockSearch" class="primary" type="button">Search</button>
+            </div>
+            <details id="stockKeyDetails">
+              <summary id="stockKeySummary">API key setup</summary>
+              <p class="hint">Get an instant free key at <a href="https://pixabay.com/api/docs/" target="_blank" rel="noopener noreferrer">pixabay.com/api/docs</a> (under Parameters → key).</p>
+              <div class="row">
+                <input id="stockApiKey" type="password" maxlength="200" placeholder="Paste Pixabay API key" aria-label="Stock provider API key" style="flex:1;">
+                <button id="saveStockKey" type="button">Save key</button>
+              </div>
+            </details>
+          </div>
+          <div class="row" style="margin:8px 0;">
+            <button id="applyStockSequence" class="primary" type="button" style="width:100%;" hidden>✨ Apply clips to video now</button>
+            <button id="closeStock" type="button" hidden>Done</button>
+          </div>
+          <div id="stockResults" class="stockGrid" aria-label="Stock search results"></div>
+        </section>
+
+        <!-- PANE 3: LYRICS, TRANSCRIPTION & KARAOKE AI (INLINE, NO POPUP!) -->
+        <section class="dockPane" data-dock-pane="lyrics" id="lyricsDialog">
+          <div class="paneHeader">
+            <h2>📝 Lyrics, AI Sync &amp; Karaoke</h2>
+          </div>
+          <p class="dialogStatus error" role="status"></p>
+
+          <div class="subCard stackForm">
+            <h3>1. Auto-Transcribe or Import</h3>
+            <div class="row">
+              <select id="language" aria-label="Transcription language" style="flex:1;">
+                <option value="">Auto-detect language</option>
+                {% for code, label in languages.items() %}<option value="{{ code }}">{{ label }}</option>{% endfor %}
+              </select>
+              <button id="transcribe" class="primary" type="button">🎙️ Auto-Transcribe</button>
+            </div>
+            <div class="row">
+              <label class="upload">📄 Import SRT / LRC<input id="subtitleFile" type="file" accept=".srt,.lrc"></label>
+              <button id="paste" type="button" hidden>Paste lyrics</button>
+            </div>
+          </div>
+
+          <div class="subCard stackForm">
+            <h3>2. Paste &amp; Sync Your Exact Lyrics</h3>
+            <div class="row">
+              <button id="useCurrentLyrics" type="button">Load current captions</button>
+              <button id="clearLyricsDraft" type="button">Clear</button>
+            </div>
+            <textarea id="lyrics" rows="6" maxlength="50000" placeholder="Paste your song lyrics here (one caption line per row)…" aria-label="Lyrics"></textarea>
+            <div class="row">
+              <label>Language
+                <select id="alignLanguage">
+                  {% for code, label in languages.items() %}<option value="{{ code }}">{{ label }}</option>{% endfor %}
+                </select>
+              </label>
+              <label>From (s)<input id="alignStart" type="number" min="0" step=".01" style="width:70px;"></label>
+              <label>To (s)<input id="alignEnd" type="number" min="0" step=".01" style="width:70px;"></label>
+            </div>
+            <div class="row">
+              <button id="correctLyrics" class="primary" type="button" title="Keep current line timings and replace words with your exact lyrics">✨ Correct Transcription</button>
+              <button id="alignLyrics" class="primary" type="button" title="Run AI audio alignment to match lyrics to vocals">🎯 AI Sync to Audio</button>
+              <button id="applyLyrics" type="button" title="Divide pasted lines evenly across the song">Even Split</button>
+              <button id="cancelLyrics" type="button" hidden>Cancel</button>
+            </div>
+            <p class="hint"><strong>Correct Transcription</strong> replaces misheard Whisper words with your exact lyrics while keeping line timings. <strong>AI Sync to Audio</strong> aligns pasted lyrics directly to the audio.</p>
+          </div>
+
+          <div class="subCard stackForm">
+            <h3>3. Karaoke Word-by-Word Timing</h3>
+            <div class="row">
+              <label>Language
+                <select id="karaokeLanguage">
+                  <option value="auto">Detect per line</option>
+                  <option value="en-fr">English + French</option>
+                  <option value="en-ko">Korean + English</option>
+                  <option value="en-fr-ko">English + French + Korean</option>
+                  {% for code, label in languages.items() %}<option value="{{ code }}">{{ label }}</option>{% endfor %}
+                </select>
+              </label>
+            </div>
+            <div class="row">
+              <button id="karaokeAll" class="primary" type="button">🎤 Add Karaoke Timing to All Lines</button>
+              <button id="estimateMissing" type="button">Estimate Missing</button>
+              <button id="restoreKaraoke" type="button">↶ Undo Karaoke</button>
+            </div>
+            <p id="karaokeSummary" class="hint" role="status"></p>
+            <p id="timingNote" class="hint">Automatic timings should be reviewed while listening.</p>
+          </div>
+        </section>
+
+        <!-- PANE 4: VIDEO FILTERS, VISUAL FX & VISUALIZER -->
+        <section class="dockPane" data-dock-pane="fx">
+          <div class="paneHeader">
+            <h2>✨ Video Filters &amp; Visual FX</h2>
+          </div>
+
+          <div class="subCard stackForm style">
+            <h3>CapCut Video Filters (Live Preview)</h3>
+            <div class="filterPills" id="filterQuickPills">
+              <button type="button" data-filter-pill="none">Original</button>
+              <button type="button" data-filter-pill="bw">B&amp;W</button>
+              <button type="button" data-filter-pill="sepia">Sepia</button>
+              <button type="button" data-filter-pill="vintage">Vintage</button>
+              <button type="button" data-filter-pill="cyberpunk">Cyberpunk</button>
+              <button type="button" data-filter-pill="warm">Golden Hour</button>
+              <button type="button" data-filter-pill="cool">Cool Cinema</button>
+              <button type="button" data-filter-pill="dramatic">Dramatic</button>
+              <button type="button" data-filter-pill="dreamy">Dreamy Glow</button>
+            </div>
+            <label>Filter preset
+              <select id="video_filter">
+                <option value="none">None (Original)</option>
+                <option value="bw">Black &amp; White</option>
+                <option value="sepia">Sepia</option>
+                <option value="vintage">Vintage Film</option>
+                <option value="cyberpunk">Cyberpunk Neon</option>
+                <option value="warm">Warm Golden Hour</option>
+                <option value="cool">Cool Cinema</option>
+                <option value="dramatic">Dramatic Contrast</option>
+                <option value="dreamy">Dreamy Soft Glow</option>
+              </select>
+            </label>
+            <label><input id="vignette" type="checkbox"> Cinematic dark vignette</label>
+            <label>Film grain <input id="film_grain" type="range" min="0" max="30" step="1" value="0"></label>
+            <label>Sharpen <input id="sharpen" type="range" min="0" max="2" step="0.1" value="0"></label>
+            <label>RGB Glitch shift <input id="chromatic" type="range" min="0" max="10" step="1" value="0"></label>
+          </div>
+
+          <div class="subCard stackForm style">
+            <h3>Audio-Reactive Visualizer (Live)</h3>
+            <label><input id="visualizer" type="checkbox"> Show audio visualizer on video</label>
+            <label>Style
+              <select id="visualizer_style">
+                <option value="spectrum">Spectrum EQ Bars</option>
+                <option value="waveform">Waveform Line</option>
+              </select>
+            </label>
+            <label>Position
+              <select id="visualizer_position">
+                <option value="bottom">Bottom</option>
+                <option value="center">Center</option>
+                <option value="top">Top</option>
+              </select>
+            </label>
+            <label>Height (%) <input id="visualizer_height" type="range" min="10" max="40" step="1" value="18"></label>
+            <label>Sensitivity <input id="visualizer_sensitivity" type="range" min="0.5" max="3" step="0.1" value="1"></label>
+            <label>Colour <input id="visualizer_color" type="color" value="#bba6ff"></label>
+          </div>
+        </section>
+
+        <!-- PANE 5: AUDIO FX, CLEANUP & SONG TRIM -->
+        <section class="dockPane" data-dock-pane="audio">
+          <div class="paneHeader">
+            <h2>🎵 Audio FX, Cleanup &amp; Trim</h2>
+          </div>
+
+          <div class="subCard stackForm style">
+            <h3>1. Voice Cleanup &amp; TikTok/CapCut Audio FX</h3>
+            <label><input id="noise_cancel" type="checkbox"> AI / FFT Noise Cancellation</label>
+            <label><input id="voice_isolation" type="checkbox"> Voice Isolation &amp; Clarity Boost</label>
+            <label>Audio Effect
+              <select id="audio_effect">
+                <option value="none">None (Original Audio)</option>
+                <option value="slowed_reverb">Slowed + Reverb (TikTok)</option>
+                <option value="nightcore">Nightcore / High Pitch</option>
+                <option value="vocal_remover">Vocal Remover (Karaoke)</option>
+                <option value="echo">Echo</option>
+                <option value="concert_hall">Concert Hall Reverb</option>
+                <option value="studio_vocal">Studio Vocal Polish</option>
+                <option value="lofi_radio">Lo-Fi / Vintage Radio</option>
+                <option value="bass_boost">Bass Boost</option>
+                <option value="chorus">Vocal Chorus</option>
+              </select>
+            </label>
+            <p class="hint">Audio cleanup &amp; FX are automatically included when you export or run a 5s check.</p>
+          </div>
+
+          <div class="subCard stackForm">
+            <h3>2. Song Trim, Volume &amp; Fades</h3>
+            <p id="compositionAssets" class="hint"></p>
+            <label>Replace song<input id="compAudio" type="file" accept=".mp3,.wav,.m4a,.flac,.ogg,.mp4,.mov,.mkv,.webm"></label>
+            <div class="row">
+              <label>Start (s)<input id="comp_start" type="number" min="0" step=".01"></label>
+              <label>End (s)<input id="comp_end" type="number" min=".1" step=".01"></label>
+            </div>
+            <div class="row">
+              <label>Delay (s)<input id="comp_offset" type="number" min="0" max="120" step=".01"></label>
+              <label>Song vol<input id="comp_volume" type="number" min="0" max="2" step=".05"></label>
+            </div>
+            <div class="row">
+              <label>Fade in (s)<input id="comp_fade_in" type="number" min="0" max="60" step=".1"></label>
+              <label>Fade out (s)<input id="comp_fade_out" type="number" min="0" max="60" step=".1"></label>
+            </div>
+            <label>Clip audio vol (0–2)<input id="comp_background_volume" type="number" min="0" max="2" step=".05"></label>
+            <label><input id="comp_ducking" type="checkbox"> Auto-duck clip audio under song</label>
+            <button id="applyAudioComp" class="primary" type="button" style="width:100%;margin-top:8px;">✨ Apply Song Trim &amp; Audio</button>
+          </div>
+        </section>
+
+        <!-- PANE 6: CANVAS, CAMERA MOTION, TITLE CARD & B-ROLL (INLINE, NO POPUP!) -->
+        <section class="dockPane" data-dock-pane="canvas" id="compositionDialog">
+          <div class="paneHeader">
+            <h2>🎞️ Canvas, Camera &amp; B-Roll</h2>
+          </div>
+          <p class="dialogStatus error" role="status"></p>
+
+          <div class="subCard stackForm">
+            <h3>1. Aspect Ratio &amp; Canvas</h3>
+            <label>Format
+              <select id="comp_shape">
+                <option value="portrait">Portrait 9:16 (Reels/TikTok)</option>
+                <option value="landscape">Landscape 16:9 (YouTube)</option>
+                <option value="square">Square 1:1</option>
+              </select>
+            </label>
+            <label>Sizing
+              <select id="comp_fit">
+                <option value="fill">Fill / Centre Crop</option>
+                <option value="fit">Fit Whole Frame</option>
+              </select>
+            </label>
+            <div class="row">
+              <label>Canvas colour<input id="comp_color" type="color"></label>
+              <label><input id="compClear" type="checkbox"> Plain colour only</label>
+            </div>
+            <div class="sequenceSection" style="margin:6px 0;">
+              <div class="row" style="justify-content:space-between;margin-bottom:6px;">
+                <strong style="font-size:12px;">Clips in Sequence</strong>
+                <div class="row" style="margin:0;">
+                  <button id="browseStockComp" class="primary" type="button">🌐 + Pixabay</button>
+                  <label class="upload">+ Upload<input id="compSeqUpload" type="file" multiple accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,.mkv,.webm"></label>
+                </div>
+              </div>
+              <div id="compSequenceList" class="sequenceList"></div>
+            </div>
+            <label>Single background<input id="compBackground" type="file" accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,.mkv,.webm"></label>
+            <label>From library<select id="compLibrary"><option value="">Keep current / choose clip…</option></select></label>
+            <p id="compStockNotice" class="hint" hidden></p>
+          </div>
+
+          <div class="subCard stackForm">
+            <h3>2. Camera Motion, Speed &amp; Grading</h3>
+            <div class="row">
+              <label>Focus X (%)<input id="comp_x" type="number" min="0" max="100"></label>
+              <label>Focus Y (%)<input id="comp_y" type="number" min="0" max="100"></label>
+            </div>
+            <div class="row">
+              <label>Pan End X<input id="comp_keyframe_end_x" type="number" min="0" max="100"></label>
+              <label>Pan End Y<input id="comp_keyframe_end_y" type="number" min="0" max="100"></label>
+            </div>
+            <div class="row">
+              <label>Slow zoom<input id="comp_zoom" type="number" min="0" max=".2" step=".01"></label>
+              <label>Speed (×)<input id="comp_background_speed" type="number" min=".25" max="2" step=".05"></label>
+            </div>
+            <div class="row">
+              <label>Blur<input id="comp_blur" type="number" min="0" max="30"></label>
+              <label>Dimming<input id="comp_dim" type="number" min="0" max="1" step=".05"></label>
+            </div>
+            <div class="row">
+              <label>Tint<input id="comp_overlay" type="color"></label>
+              <label>Tint opacity<input id="comp_opacity" type="number" min="0" max="1" step=".05"></label>
+            </div>
+            <div class="row">
+              <label>Bright<input id="comp_brightness" type="number" min="-.5" max=".5" step=".05"></label>
+              <label>Contrast<input id="comp_contrast" type="number" min=".5" max="2" step=".05"></label>
+              <label>Sat<input id="comp_saturation" type="number" min="0" max="3" step=".1"></label>
+            </div>
+            <div class="row">
+              <label>Fade in (s)<input id="comp_transition_in" type="number" min="0" max="10" step=".1"></label>
+              <label>Fade out (s)<input id="comp_transition_out" type="number" min="0" max="10" step=".1"></label>
+            </div>
+            <label><input id="comp_loop" type="checkbox"> Loop video clips</label>
+            <div class="row">
+              <label>Clip start (s)<input id="comp_background_start" type="number" min="0" step=".01"></label>
+              <label>Clip dur (s)<input id="comp_background_duration" type="number" min="0" step=".01"></label>
+            </div>
+          </div>
+
+          <div class="subCard stackForm">
+            <h3>3. Intro Title Card &amp; B-Roll Overlay (PiP)</h3>
+            <label>Title text<input id="comp_title_text" type="text" maxlength="120" placeholder="Optional intro title / artist"></label>
+            <label>Title duration (s)<input id="comp_title_duration" type="number" min="0" max="15" step=".5"></label>
+            <hr style="border:0;border-top:1px solid #2e3040;margin:6px 0;">
+            <label>B-Roll file<input id="compBroll" type="file" accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,.mkv,.webm"></label>
+            <label>B-Roll library<select id="compBrollLibrary"><option value="">Keep current B-roll</option></select></label>
+            <label><input id="compClearBroll" type="checkbox"> Remove B-roll overlay</label>
+            <div class="row">
+              <label>Start (s)<input id="comp_broll_start" type="number" min="0" step=".1"></label>
+              <label>Dur (s)<input id="comp_broll_duration" type="number" min="0" step=".1"></label>
+            </div>
+            <div class="row">
+              <label>Scale (%)<input id="comp_broll_scale" type="number" min="20" max="100" step="5"></label>
+              <label>X (%)<input id="comp_broll_x" type="number" min="0" max="100"></label>
+              <label>Y (%)<input id="comp_broll_y" type="number" min="0" max="100"></label>
+            </div>
+            <div class="row">
+              <label>Opacity<input id="comp_broll_opacity" type="number" min=".1" max="1" step=".05"></label>
+              <label>Fade (s)<input id="comp_broll_fade" type="number" min="0" max="5" step=".1"></label>
+            </div>
+          </div>
+
+          <!-- Hidden synced composition mirrors for live FX & visualizer -->
+          <div hidden>
+            <select id="comp_video_filter"><option value="none">None</option><option value="bw">bw</option><option value="sepia">sepia</option><option value="vintage">vintage</option><option value="cyberpunk">cyberpunk</option><option value="warm">warm</option><option value="cool">cool</option><option value="dramatic">dramatic</option><option value="dreamy">dreamy</option></select>
+            <input id="comp_vignette" type="checkbox">
+            <input id="comp_film_grain" type="number" value="0">
+            <input id="comp_sharpen" type="number" value="0">
+            <input id="comp_chromatic" type="number" value="0">
+            <input id="comp_noise_cancel" type="checkbox">
+            <input id="comp_voice_isolation" type="checkbox">
+            <select id="comp_audio_effect"><option value="none">none</option><option value="slowed_reverb">slowed_reverb</option><option value="nightcore">nightcore</option><option value="vocal_remover">vocal_remover</option><option value="echo">echo</option><option value="concert_hall">concert_hall</option><option value="studio_vocal">studio_vocal</option><option value="lofi_radio">lofi_radio</option><option value="bass_boost">bass_boost</option><option value="chorus">chorus</option></select>
+            <input id="comp_visualizer" type="checkbox">
+            <select id="comp_visualizer_style"><option value="waveform">waveform</option><option value="spectrum">spectrum</option></select>
+            <select id="comp_visualizer_position"><option value="bottom">bottom</option><option value="center">center</option><option value="top">top</option></select>
+            <input id="comp_visualizer_height" type="number" value="18">
+            <input id="comp_visualizer_sensitivity" type="number" value="1">
+            <input id="comp_visualizer_color" type="color" value="#bba6ff">
+          </div>
+
+          <div class="row" style="margin-top:10px;">
+            <button id="resetCompositionDraft" type="button">Reset</button>
+            <button id="closeComposition" type="button" hidden>Close</button>
+            <button id="applyComposition" class="primary" type="button" style="flex:1;">✨ Apply Canvas &amp; Composition</button>
+          </div>
+        </section>
+      </div>
+    </aside>
+
+    <!-- CENTER VIDEO PLAYER STAGE -->
+    <section class="capcutCenter preview">
+      <div class="centerStatusRow">
+        <p id="status" role="status">Open a video or create from a song, then add clips, effects, and lyrics.</p>
+      </div>
+      <div id="stage">
+        <video id="video" playsinline preload="metadata"></video>
+        <div id="stageVignette" hidden></div>
+        <canvas id="stageVisualizer" hidden></canvas>
+        <div id="guides" hidden></div>
+        <div id="caption"></div>
+        <div id="empty">Your video preview<br><small>Pick media on the left to begin · Originals are kept untouched</small></div>
+      </div>
+      <p id="playingCaption" class="hint" role="status"></p>
+      <div class="transport">
+        <button id="play">▶ Play</button>
+        <span id="time">0:00.00</span>
+        <select id="speed" aria-label="Playback speed">
+          <option value="0.5">0.5×</option>
+          <option value="0.75">0.75×</option>
+          <option selected value="1">1×</option>
+          <option value="1.25">1.25×</option>
+        </select>
+        <label><input type="checkbox" id="loop"> Loop line</label>
+        <label><input type="checkbox" id="safe"> Safe guide</label>
+      </div>
+    </section>
+
+    <!-- RIGHT INSPECTOR PANEL: CAPTION LINES, WORD TIMINGS & TEXT STYLING -->
+    <aside class="capcutRight">
+      <div class="inspectorTabs">
+        <button type="button" class="inspTab active" data-insp="both">⚡ All</button>
+        <button type="button" class="inspTab" data-insp="lines">💬 Lines &amp; Words</button>
+        <button type="button" class="inspTab" data-insp="style">🎨 Text Style</button>
+      </div>
+
+      <div class="inspectorBody">
+        <!-- CAPTION LINES & WORD TIMING INSPECTOR -->
+        <div class="inspSection" data-insp-pane="lines">
+          <div class="subCard">
+            <div class="row" style="justify-content:space-between;margin-bottom:6px;">
+              <h3>Caption Lines</h3>
+              <button id="nextReview" type="button" style="font-size:11px;padding:4px 8px;">⚑ Next to review</button>
+            </div>
+            <div id="cueList" aria-label="Caption lines"></div>
+          </div>
+
+          <div class="subCard" id="selection">
+            <h3>Selected Line &amp; Word Timing</h3>
+            <p id="lineReview" class="hint" style="margin-top:0;"></p>
+            <textarea id="text" rows="2" maxlength="1000" placeholder="Select a caption line to edit its words" aria-label="Caption text"></textarea>
+            <div class="row">
+              <label>Start (s)<input id="start" type="number" min="0" step=".01"></label>
+              <label>End (s)<input id="end" type="number" min="0" step=".01"></label>
+            </div>
+            <div class="toolbar" style="margin:6px 0;">
+              <button id="setStart" type="button">Start=Playhead</button>
+              <button id="setEnd" type="button">End=Playhead</button>
+              <button id="split" type="button">✂️ Split</button>
+              <button id="merge" type="button">Merge</button>
+              <button id="delete" type="button">🗑️ Delete</button>
+            </div>
+            <div class="toolbar" style="margin:6px 0;">
+              <button id="karaokeLine" type="button">🎤 Retry line karaoke</button>
+              <button id="markReviewed" type="button">✓ Mark reviewed</button>
+            </div>
+            <details>
+              <summary>Word-by-word karaoke timings</summary>
+              <button id="estimateWords" type="button" style="margin:6px 0;">Estimate word timings</button>
+              <div id="words"></div>
+            </details>
+          </div>
+        </div>
+
+        <!-- TEXT STYLE & PRESETS INSPECTOR -->
+        <div class="inspSection style" data-insp-pane="style">
+          <div class="subCard stackForm">
+            <h3>1-Click Caption Presets</h3>
+            <div class="presets">
+              <button type="button" data-preset="neon_karaoke">Neon Karaoke</button>
+              <button type="button" data-preset="cinematic_clean">Cinematic Clean</button>
+              <button type="button" data-preset="bold_pop">Bold Pop</button>
+              <button type="button" data-preset="minimalist_lyric">Minimalist Lyric</button>
+              <button type="button" data-preset="clean">Clean</button>
+              <button type="button" data-preset="bold">Bold</button>
+              <button type="button" data-preset="lyrics">Lyrics</button>
+              <button type="button" data-preset="karaoke">Karaoke</button>
+            </div>
+            <label>Font
+              <select id="font">
+                <option>Montserrat</option>
+                <option>Roboto</option>
+                <option>Noto Sans KR</option>
+                <option>Oswald</option>
+                <option>Lobster</option>
+                <option>Bangers</option>
+                <option>Arial</option>
+                <option>Verdana</option>
+                <option>Georgia</option>
+                <option>Impact</option>
+                <option>Trebuchet MS</option>
+              </select>
+            </label>
+            <label>Size <input id="size" type="range" min="2" max="12" step=".25" value="5"></label>
+            <div class="row">
+              <label>Text <input id="color" type="color" value="#ffffff"></label>
+              <label>Highlight <input id="highlight" type="color" value="#ffdc55"></label>
+            </div>
+            <label>Outline <input id="outline" type="range" min="0" max="5" step=".25" value="2"></label>
+            <label>Vertical pos <input id="position" type="range" min="10" max="95" step="1" value="85"></label>
+            <label><input id="background" type="checkbox"> Boxed caption backdrop</label>
+            <label><input id="karaoke" type="checkbox"> Highlight current word</label>
+            <label><input id="cumulative" type="checkbox"> Cumulative karaoke</label>
+            <label><input id="word_pop" type="checkbox"> Active word pop (115%)</label>
+            <label>Animation
+              <select id="animation">
+                <option value="none">Instant (None)</option>
+                <option value="fade">Smooth Fade</option>
+                <option value="pop">Pop Entrance</option>
+                <option value="slide_up">Slide Up</option>
+              </select>
+            </label>
+            <label>Neon glow <input id="glow" type="range" min="0" max="10" step="0.5" value="0"></label>
+            <div class="row">
+              <button id="saveStyle" type="button">Save style</button>
+              <button id="loadStyle" type="button">Use saved style</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- BOTTOM FULL-WIDTH CAPCUT MULTITRACK TIMELINE -->
+  <section class="capcutTimeline">
+    <div class="timelineToolbar">
+      <button id="add" class="primary" type="button">➕ Add Caption at Playhead</button>
+      <label>Shift all (s)<input id="shift" type="number" value="0" step=".1" style="width:68px;"></label>
+      <button id="shiftAll" type="button">Shift</button>
+      <label><input id="snapTimeline" type="checkbox" checked> 🧲 Snap to Beats</label>
+      <label style="margin-left:auto;">🔍 Zoom <input id="zoom" type="range" min="1" max="20" value="1"></label>
+    </div>
+    <div class="timelineTracksWrapper">
+      <div class="trackLabels" aria-hidden="true">
+        <div class="trackLabel">🎬 Clips</div>
+        <div class="trackLabel">🎵 Audio</div>
+        <div class="trackLabel">💬 Lyrics</div>
+      </div>
+      <div id="timelineScroll">
+        <div id="timeline">
+          <div id="videoTrackLane" aria-label="Video and B-roll track"></div>
+          <canvas id="waveform"></canvas>
+          <div id="blocks"></div>
+          <div id="playhead"></div>
+        </div>
+      </div>
+    </div>
+  </section>
 </main>
-<dialog id="lyricsDialog"><h2>Paste & sync lyrics</h2><p class="dialogStatus error" role="status"></p><p>One caption per line. Paste only the words sung in the selected audio range, including repeated choruses. Standalone [Verse] and [Chorus] labels are ignored during syncing.</p><div class="toolbar"><button id="useCurrentLyrics">Use current caption text</button><button id="clearLyricsDraft" class="hint">Clear saved lyrics</button></div><textarea id="lyrics" rows="9" maxlength="50000" placeholder="Paste your lyrics here" aria-label="Lyrics"></textarea><div class="row"><label>Language<select id="alignLanguage">{% for code, label in languages.items() %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</select></label><label>From (seconds)<input id="alignStart" type="number" min="0" step=".01"></label><label>To (seconds)<input id="alignEnd" type="number" min="0" step=".01"></label></div><p class="hint">"Correct transcription with my lyrics" matches your pasted lyrics directly to the current transcription's line timings, replacing words with your exact lyrics while preserving reliable audio timings. "Sync lyrics to audio" runs audio alignment using the local AI Pack. Manual estimates work without AI.</p><div class="row"><button id="cancelLyrics">Cancel</button><button id="applyLyrics">Use manual estimates</button><button id="correctLyrics" class="primary">Correct transcription with my lyrics</button><button id="alignLyrics" class="primary">Sync lyrics to audio</button></div></dialog>
-<dialog id="renderDialog"><h2>Rendered preview</h2><video id="renderVideo" controls></video><button id="closeRender">Close preview</button></dialog>
-<dialog id="songDialog"><h2>Create a music video</h2><p class="dialogStatus error" role="status"></p><p>Choose a song and background. After preparing the video, add lyrics and style them with the live preview.</p><label>Song<input id="songFile" type="file" accept=".mp3,.wav,.m4a,.flac,.ogg"></label><div class="row"><label>Format<select id="songShape"><option value="portrait">Portrait · Reels / TikTok / Shorts</option><option value="square">Square</option><option value="landscape">Landscape · YouTube</option></select></label><label>Background colour<input id="songColor" type="color" value="#141526"></label></div><p>Optional photo or looping video background (fills the frame with a centre crop):</p><input id="songBackground" type="file" accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,.mkv,.webm" aria-label="Background file"><div class="row"><select id="songLibrary" aria-label="Background from library"><option value="">Use colour / uploaded background</option></select><button id="browseStockSong" type="button">Search Pexels / Pixabay</button></div><p id="songStockNotice" class="hint" hidden></p><p class="hint">An uploaded background takes priority over the library choice. Background audio is replaced by your song.</p><label><input id="songVisualizer" type="checkbox"> Add an audio-reactive waveform along the bottom</label><p class="hint">Up to 20 minutes. Your originals are retained. Use Background & audio after creation to change the composition while keeping your lyrics.</p><p class="hint">Find backgrounds in-app or visit <a href="https://www.pexels.com/videos/" target="_blank" rel="noopener noreferrer">Pexels</a> · <a href="https://pixabay.com/videos/" target="_blank" rel="noopener noreferrer">Pixabay</a>. Check the asset’s usage terms.</p><div class="row"><button id="cancelSong">Cancel</button><button id="createSong" class="primary">Create video</button></div></dialog>
-<dialog id="compositionDialog"><h2>Background & audio</h2><p class="dialogStatus error" role="status"></p><p class="hint">Settings are remembered as a local draft. Apply prepares a new preview and keeps a previous version you can restore. File selections must be chosen again after closing the app.</p>
-<div class="compositionGrid">
-<fieldset><legend>Canvas & background</legend>
-<label>Format<select id="comp_shape"><option value="portrait">Portrait 9:16</option><option value="landscape">Landscape 16:9</option><option value="square">Square 1:1</option></select></label>
-<div class="sequenceSection" style="margin-bottom:12px;"><div class="row" style="justify-content:space-between;margin-bottom:8px;"><strong style="font-size:13px;color:#dcd6f7;">Video Clips Sequence</strong><div class="row" style="margin:0;"><button id="browseStockComp" class="primary" type="button">+ Add from Pixabay</button><label class="upload">+ Upload clips<input id="compSeqUpload" type="file" multiple accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,.mkv,.webm"></label></div></div><div id="compSequenceList" class="sequenceList"></div><p class="hint" style="margin-top:6px;">Add 2 or more clips to stitch a multi-clip video sequence across your song, or use a single background below.</p></div>
-<label>Single background file<input id="compBackground" type="file" accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,.mkv,.webm"></label>
-<label>From library / add clip<select id="compLibrary"><option value="">Keep current / choose clip…</option></select></label>
-<p id="compStockNotice" class="hint" hidden></p>
-<label><input id="compClear" type="checkbox"> Use a plain colour instead</label>
-<label>Canvas colour<input id="comp_color" type="color"></label>
-<label>Image sizing<select id="comp_fit"><option value="fill">Fill / crop</option><option value="fit">Fit whole image</option></select></label>
-<label>Horizontal focus (%)<input id="comp_x" type="number" min="0" max="100"></label>
-<label>Vertical focus (%)<input id="comp_y" type="number" min="0" max="100"></label>
-<label>Blur (0–30)<input id="comp_blur" type="number" min="0" max="30"></label>
-<label>Dimming (0–1)<input id="comp_dim" type="number" min="0" max="1" step=".05"></label>
-<label>Tint colour<input id="comp_overlay" type="color"></label>
-<label>Tint strength (0–1)<input id="comp_opacity" type="number" min="0" max="1" step=".05"></label>
-<label>Slow zoom (0–0.2)<input id="comp_zoom" type="number" min="0" max=".2" step=".01"></label>
-<label>Keyframe end X (%)<input id="comp_keyframe_end_x" type="number" min="0" max="100"></label>
-<label>Keyframe end Y (%)<input id="comp_keyframe_end_y" type="number" min="0" max="100"></label>
-<label>Brightness (-0.5–0.5)<input id="comp_brightness" type="number" min="-.5" max=".5" step=".05"></label>
-<label>Contrast (0.5–2)<input id="comp_contrast" type="number" min=".5" max="2" step=".05"></label>
-<label>Saturation (0–3)<input id="comp_saturation" type="number" min="0" max="3" step=".1"></label>
-<label>Video filter<select id="comp_video_filter"><option value="none">None (Original)</option><option value="bw">Black & White</option><option value="sepia">Sepia</option><option value="vintage">Vintage Film</option><option value="cyberpunk">Cyberpunk Neon</option><option value="warm">Warm Golden Hour</option><option value="cool">Cool Cinema</option><option value="dramatic">Dramatic Contrast</option><option value="dreamy">Dreamy Soft Glow</option></select></label>
-<label><input id="comp_vignette" type="checkbox"> Cinematic vignette</label>
-<label>Film grain (0–30)<input id="comp_film_grain" type="number" min="0" max="30" step="1"></label>
-<label>Sharpen (0–2)<input id="comp_sharpen" type="number" min="0" max="2" step=".1"></label>
-<label>RGB shift / Glitch (0–10)<input id="comp_chromatic" type="number" min="0" max="10" step="1"></label>
-<label>Background speed (0.25–2×)<input id="comp_background_speed" type="number" min=".25" max="2" step=".05"></label>
-<label>Video fade-in transition (s)<input id="comp_transition_in" type="number" min="0" max="10" step=".1"></label>
-<label>Video fade-out transition (s)<input id="comp_transition_out" type="number" min="0" max="10" step=".1"></label>
-<label><input id="comp_loop" type="checkbox"> Loop background video</label>
-<label>Background starts at (s)<input id="comp_background_start" type="number" min="0" step=".01"></label>
-<label>Background visible for (s)<input id="comp_background_duration" type="number" min="0" step=".01"></label><p class="hint">0 uses the whole song. A shorter background or a video without looping holds its last frame for the remainder. Slow zoom and keyframe end X/Y animate camera motion across the track.</p>
-<hr style="border:0;border-top:1px solid #393b4c;margin:12px 0">
-<label>Intro title card text<input id="comp_title_text" type="text" maxlength="120" placeholder="Optional song title / artist card"></label>
-<label>Title card duration (0–15s)<input id="comp_title_duration" type="number" min="0" max="15" step=".5"></label>
-<label>B-Roll / PiP overlay file<input id="compBroll" type="file" accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,.mkv,.webm"></label>
-<label>B-Roll from library<select id="compBrollLibrary"><option value="">Keep current B-roll</option></select></label>
-<label><input id="compClearBroll" type="checkbox"> Remove B-roll overlay</label>
-<label>B-Roll starts at (s)<input id="comp_broll_start" type="number" min="0" step=".1"></label>
-<label>B-Roll duration (s)<input id="comp_broll_duration" type="number" min="0" step=".1"></label>
-<label>B-Roll scale (20–100%)<input id="comp_broll_scale" type="number" min="20" max="100" step="5"></label>
-<label>B-Roll X (%)<input id="comp_broll_x" type="number" min="0" max="100"></label>
-<label>B-Roll Y (%)<input id="comp_broll_y" type="number" min="0" max="100"></label>
-<label>B-Roll opacity (0.1–1)<input id="comp_broll_opacity" type="number" min=".1" max="1" step=".05"></label>
-<label>B-Roll fade in/out (s)<input id="comp_broll_fade" type="number" min="0" max="5" step=".1"></label>
-</fieldset>
-<fieldset><legend>Song & sound</legend>
-<p id="compositionAssets" class="hint"></p>
-<label>Replace / relink song<input id="compAudio" type="file" accept=".mp3,.wav,.m4a,.flac,.ogg,.mp4,.mov,.mkv,.webm"></label>
-<label>Song starts at (s)<input id="comp_start" type="number" min="0" step=".01"></label>
-<label>Song ends at (s)<input id="comp_end" type="number" min=".1" step=".01"></label>
-<label>Delay song in video (s)<input id="comp_offset" type="number" min="0" max="120" step=".01"></label>
-<label>Song volume (0–2)<input id="comp_volume" type="number" min="0" max="2" step=".05"></label>
-<label>Fade in (s)<input id="comp_fade_in" type="number" min="0" max="60" step=".1"></label>
-<label>Fade out (s)<input id="comp_fade_out" type="number" min="0" max="60" step=".1"></label>
-<label><input id="comp_noise_cancel" type="checkbox"> Noise cancellation (FFT denoise)</label>
-<label><input id="comp_voice_isolation" type="checkbox"> Voice isolation & speech clarity</label>
-<label>Audio effect<select id="comp_audio_effect"><option value="none">None</option><option value="slowed_reverb">Slowed + Reverb (TikTok)</option><option value="nightcore">Nightcore / High Pitch</option><option value="vocal_remover">Vocal Remover (Karaoke)</option><option value="echo">Echo</option><option value="concert_hall">Concert Hall Reverb</option><option value="studio_vocal">Studio Vocal Polish</option><option value="lofi_radio">Lo-Fi / Vintage Radio</option><option value="bass_boost">Bass Boost</option><option value="chorus">Vocal Chorus</option></select></label>
-<label>Background volume (0–2)<input id="comp_background_volume" type="number" min="0" max="2" step=".05"></label>
-<label><input id="comp_ducking" type="checkbox"> Auto-duck background audio under song</label>
-<p class="hint">0 mutes background audio. Song trimming and delay move lyrics with the audio. Lines outside the new range are removed from this version; cut lines are flagged for review. Restore previous composition recovers them.</p>
-<label><input id="comp_visualizer" type="checkbox"> Show audio visualizer</label>
-<label>Visualizer style<select id="comp_visualizer_style"><option value="waveform">Waveform</option><option value="spectrum">Spectrum Bars</option></select></label>
-<label>Visualizer position<select id="comp_visualizer_position"><option value="bottom">Bottom</option><option value="center">Center</option><option value="top">Top</option></select></label>
-<label>Visualizer height (%)<input id="comp_visualizer_height" type="number" min="10" max="40" step="1"></label>
-<label>Visualizer sensitivity (0.5–3)<input id="comp_visualizer_sensitivity" type="number" min="0.5" max="3" step="0.1"></label>
-<label>Visualizer colour<input id="comp_visualizer_color" type="color"></label>
-</fieldset></div><div class="row"><button id="resetCompositionDraft">Reset draft to saved settings</button><button id="closeComposition">Close</button><button id="applyComposition" class="primary">Apply & preview</button></div></dialog>
-<dialog id="stockDialog"><h2>Stock Background Browser (Pexels & Pixabay)</h2>
-<p id="stockStatus" class="dialogStatus error" role="status"></p>
-<p class="hint">Search free looping videos and photos from Pexels and Pixabay. Downloaded assets are saved to your local Stock Media library with creator attribution and license details retained in the project.</p>
-<div class="row">
-<label>Provider<select id="stockProvider"><option value="pixabay" selected>Pixabay</option><option value="pexels">Pexels (Existing keys)</option></select></label>
-<label>Media type<select id="stockKind"><option value="video">Looping Videos</option><option value="image">Photos</option></select></label>
-<label>Orientation<select id="stockOrientation"><option value="portrait">Portrait (9:16)</option><option value="landscape">Landscape (16:9)</option><option value="square">Square (1:1)</option><option value="all">All orientations</option></select></label>
-<label>Max duration (s)<input id="stockMaxDuration" type="number" min="0" max="600" step="5" value="60"></label>
-</div>
-<div class="row">
-<input id="stockQuery" type="text" maxlength="100" placeholder="e.g. neon city night, rain window, ocean waves, abstract loop…" aria-label="Stock search query">
-<button id="stockSearch" class="primary" type="button">Search stock</button>
-</div>
-<details id="stockKeyDetails"><summary id="stockKeySummary">API key setup (optional · local uploads work without keys)</summary>
-<p class="hint">Get an instant free key from <a href="https://pixabay.com/api/docs/" target="_blank" rel="noopener noreferrer">Pixabay API</a> (shown under Parameters → key after logging in). Note: Pexels has temporarily paused new API key signups, though you can still download videos from <a href="https://www.pexels.com/videos/" target="_blank" rel="noopener noreferrer">pexels.com</a> and upload them directly.</p>
-<div class="row">
-<input id="stockApiKey" type="password" maxlength="200" placeholder="Paste API key for selected provider" aria-label="Stock provider API key">
-<button id="saveStockKey" type="button">Save key</button>
-</div>
-</details>
-<div id="stockResults" class="stockGrid" aria-label="Stock search results"></div>
-<div class="row"><button id="closeStock" type="button">Done / Close</button><button id="applyStockSequence" class="primary" type="button" hidden>Apply clips to video now</button></div>
+
+<dialog id="renderDialog">
+  <h2>Rendered 5-Second Check</h2>
+  <video id="renderVideo" controls></video>
+  <div class="row"><button id="closeRender" type="button">Close preview</button></div>
 </dialog>
-</body></html>
+</body>
+</html>
