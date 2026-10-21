@@ -33,6 +33,9 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         document.querySelectorAll('dialog[open] .dialogStatus').forEach(node=>{node.textContent=error?text:'';});
     };
     const media = name => `/api/captions/${project.id}/media/${encodeURIComponent(name)}`;
+    const draftKey = kind => `creator-${kind}-${project.id}`;
+    function readDraft(kind) {try{return JSON.parse(localStorage.getItem(draftKey(kind)));}catch{return null;}}
+    function storeDraft(kind, value) {try{if(value===null)localStorage.removeItem(draftKey(kind));else localStorage.setItem(draftKey(kind),JSON.stringify(value));}catch{}}
     const snapshot = () => copy({cues:project.cues, style:project.style, timing:project.timing});
     const current = () => project?.cues[selected];
     const fmt = t => `${Math.floor(t/60)}:${(t%60).toFixed(2).padStart(5,'0')}`;
@@ -51,7 +54,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         if (redraw) {
             const cue=current();project.cues.sort((a,b)=>a.start-b.start);selected=project.cues.indexOf(cue);
         }
-        dirty=true; generation++; $('saveStatus').textContent='Unsaved changes';
+        dirty=true; generation++;storeDraft('captions',{revision:project.revision,data:snapshot()}); $('saveStatus').textContent='Unsaved changes';
         clearTimeout(saveTimer); saveTimer=setTimeout(() => save().catch(e=>say(e.message,true)),900);
         if (redraw) { drawTimeline(); drawList(); fillSelection(); }
         drawCaption();drawKaraokeSummary();
@@ -79,7 +82,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         $('saveStatus').textContent='Saving…';
         saving=api(`/api/captions/${pid}`,'PUT',payload).then(data=>{
             project.revision=data.revision;
-            if(version===generation) { dirty=false; $('saveStatus').textContent='All changes saved'; }
+            if(version===generation) { dirty=false;storeDraft('captions',null); $('saveStatus').textContent='All changes saved'; }
         }).catch(e=>{ $('saveStatus').textContent='Not saved — check the message'; throw e; }).finally(()=>{saving=null;});
         await saving;
         if(dirty) return save();
@@ -88,6 +91,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         busy=value;
         for(const node of document.querySelectorAll('.style input,.style select,.style button,#selection input,#selection textarea,#selection button,.toolbar button,.toolbar select,#export,#renderCheck,#srt,#save,#paste,#subtitleFile,#videoFile,#openLibrary,#projects,#reload,#undo,#redo')) node.disabled=value || !project;
         $('videoFile').disabled=value; $('projects').disabled=value; $('openLibrary').disabled=value;$('newSong').disabled=value;
+        for(const id of ['editComposition','restoreComposition','duplicateProject','recoverEdits']) $(id).disabled=value||!project;
     }
     async function listProjects() {
         const items=await api('/api/captions');
@@ -103,7 +107,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         if(project.state==='busy') poll();
     }
     function mountVideo() {
-        const url=media('preview.mp4');
+        const url=media(project.preview||'preview.mp4');
         if(video.getAttribute('src')!==url) video.src=url;
         $('empty').hidden=true; $('empty').style.display='none';
         fitVideo();
@@ -132,7 +136,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
             edited:'Review timing while listening. Word timings are editable below.'
         })[project.timing] || 'Review timing while listening.';
         say(project.status,project.state==='error');
-        drawTimeline();drawList();fillSelection();drawDownloads();drawCaption();drawKaraokeSummary();
+        drawTimeline();drawList();fillSelection();drawDownloads();drawCaption();drawKaraokeSummary();drawComposition();
     }
     function poll() {
         clearTimeout(pollTimer);
@@ -272,6 +276,56 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         $('createSong').disabled=true;
         try {await create(form);$('songDialog').close();} finally {$('createSong').disabled=false;}
     });
+    const compositionKeys=['shape','color','fit','x','y','blur','dim','overlay','opacity','zoom','start','end','offset','volume','fade_in','fade_out','background_volume','loop','background_start','background_duration','visualizer'];
+    const compositionChecks=['loop','visualizer'], compositionStrings=['shape','color','fit','overlay'];
+    function fillComposition(settings) {
+        for(const key of compositionKeys) {const input=$('comp_'+key);if(compositionChecks.includes(key))input.checked=!!settings[key];else input.value=settings[key];}
+    }
+    function compositionSettings() {
+        return Object.fromEntries(compositionKeys.map(key=>{const input=$('comp_'+key);return [key,compositionChecks.includes(key)?input.checked:compositionStrings.includes(key)?input.value:Number(input.value)];}));
+    }
+    function drawComposition() {
+        const studio=project?.studio;
+        $('editComposition').disabled=busy||!studio;
+        $('restoreComposition').disabled=busy||!project?.composition_backup;
+        $('recoverEdits').disabled=busy||!readDraft('captions');
+        $('compositionSummary').textContent=studio ? `${studio.settings.shape} · ${studio.assets.background?.kind||'Colour'} background · song ${fmt(studio.settings.start)}–${fmt(studio.settings.end)} · ${studio.settings.offset}s delay`+(project.missing_assets?.length?` · Missing media: ${project.missing_assets.join(', ')}. Open Edit composition to relink.`:'') : 'Open a prepared project to edit its background and audio.';
+    }
+    $('editComposition').onclick=act(()=>{
+        if(!project?.studio)return;
+        video.pause();const draft=readDraft('composition');
+        fillComposition(draft?.source===project.source?draft.settings:project.studio.settings);
+        $('compBackground').value='';$('compAudio').value='';$('compLibrary').value='';$('compClear').checked=false;
+        $('compositionAssets').textContent='Current song: '+project.studio.assets.audio.file+(project.missing_assets?.length?' · Missing: '+project.missing_assets.join(', ')+'. Upload the original file again.':'');
+        $('compositionDialog').showModal();
+    });
+    for(const key of compositionKeys) $('comp_'+key).onchange=()=>storeDraft('composition',{source:project.source,settings:compositionSettings()});
+    $('resetCompositionDraft').onclick=()=>{fillComposition(project.studio.settings);storeDraft('composition',null);};
+    $('closeComposition').onclick=()=>$('compositionDialog').close();
+    $('applyComposition').onclick=act(async()=>{
+        if(!project||busy)return;
+        await save();video.pause();
+        const form=new FormData();form.append('revision',project.revision);form.append('settings',JSON.stringify(compositionSettings()));
+        const bg=$('compBackground').files[0],audio=$('compAudio').files[0];
+        if(bg)form.append('background',bg);else if($('compLibrary').value)form.append('background_path',$('compLibrary').value);
+        if(audio)form.append('audio',audio);form.append('clear_background',$('compClear').checked);
+        $('applyComposition').disabled=true;
+        try{project=await api(`/api/captions/${project.id}/composition`,'POST',form);history=[];future=[];dirty=false;storeDraft('composition',null);$('compositionDialog').close();refresh();poll();}
+        finally{$('applyComposition').disabled=false;}
+    });
+    $('restoreComposition').onclick=act(async()=>{
+        if(!project||!confirm('Restore the previous composition and its captions? The current version will become the restore point.'))return;
+        await save();video.pause();project=await api(`/api/captions/${project.id}/restore-composition`,'POST',{revision:project.revision});history=[];future=[];selected=0;mountVideo();refresh();
+    });
+    $('duplicateProject').onclick=act(async()=>{
+        if(!project)return;await save();video.pause();
+        const data=await api(`/api/captions/${project.id}/duplicate`,'POST',{revision:project.revision});await load(data.id);
+    });
+    $('recoverEdits').onclick=act(()=>{
+        const draft=readDraft('captions');if(!draft)return;
+        if(!confirm('Recover this browser’s unsaved caption draft? Review it before saving; it may be older than your current project.'))return;
+        CaptionTiming.validate(draft.data.cues,project.duration);checkpoint();Object.assign(project,draft.data);selected=0;changed();refresh();
+    });
     $('openLibrary').onclick=act(async()=>{if(!$('library').value)throw Error('Choose a library video.');const f=new FormData();f.append('path',$('library').value);await create(f);});
     $('projects').onchange=act(async()=>{if($('projects').value)await load($('projects').value);});
     $('reload').onclick=act(async()=>{if(!project)return;if(dirty&&!confirm('Discard unsaved edits and reload the saved project?'))return;dirty=false;await load(project.id);});
@@ -401,6 +455,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         await listProjects();
         const entries=await api('/api/gallery');
         $('library').replaceChildren(new Option('Choose from library…',''),...entries.filter(e=>e.type==='video'&&e.folder!=='Caption Projects').map(e=>new Option(e.name,e.full_path)));
+        $('compLibrary').replaceChildren(new Option('Keep current background',''),...entries.filter(e=>['image','video'].includes(e.type)&&e.folder!=='Caption Projects').map(e=>new Option(e.name,e.full_path)));
         $('songLibrary').replaceChildren(new Option('Use colour / uploaded background',''),...entries.filter(e=>['image','video'].includes(e.type)&&e.folder!=='Caption Projects').map(e=>new Option(e.name,e.full_path)));
     })().catch(e=>say(e.message,true));
 })();

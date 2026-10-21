@@ -11,7 +11,7 @@ import uuid
 import zipfile
 
 MAX_BYTES = 100 * 1024 * 1024
-FILES = {'app_local.py', 'ai_prompter.py', 'cleaner.py', 'media_safety.py', 'captions.py',
+FILES = {'app_local.py', 'ai_prompter.py', 'cleaner.py', 'media_safety.py', 'captions.py', 'creator_composition.py',
          'reference_prep.py', 'safe_update.py', 'ai_runtime.py', 'job_process.py', 'download_support.py', 'requirements.txt', 'requirements-ai.txt',
          'README.md', 'CHANGELOG.md'}
 DIRECTORIES = {'templates', 'static', 'assets'}

@@ -21,6 +21,15 @@ def transcribe(model, *args, **kwargs):
     return model.transcribe(*args, **kwargs)
 
 @serialized
+def detect_caption_language(model, audio, candidates=None):
+    """Detect from the cue audio; Latin script alone cannot identify French/English."""
+    import whisper
+    mel = whisper.log_mel_spectrogram(whisper.pad_or_trim(audio), n_mels=model.dims.n_mels).to(model.device)
+    _, probabilities = model.detect_language(mel)
+    choices = {k: v for k, v in probabilities.items() if not candidates or k in candidates}
+    return max(choices, key=choices.get)
+
+@serialized
 def align_caption_words(model, audio, text, language):
     try:
         from stable_whisper.alignment import align_words

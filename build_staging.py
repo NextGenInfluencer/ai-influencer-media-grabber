@@ -149,6 +149,7 @@ def main():
         "download_support.py",
         "reference_prep.py",
         "captions.py",
+        "creator_composition.py",
         "launch-silent.vbs",
         "run.bat",
         "install_ai.bat",

@@ -62,7 +62,7 @@ Projects autosave under `Caption Projects` in your media library. SRT carries te
 
 Import your SRT and click **Add karaoke timing to all subtitles**. This analyses each line's audio and adds word timings while keeping your text, line breaks, line start/end times and style. Enable **Highlight the current word** to see the result.
 
-The alignment-language selector can suggest Greek/English per line, or you can choose a language and **Retry karaoke for this line**. Mixed-language and unusually short timings are flagged. **Next line to review** visits missing or flagged timings; listen, edit the word boundaries and mark them reviewed. Flags are timing heuristics, not guaranteed accuracy scores.
+The alignment-language selector supports English, French, Korean, Greek, Spanish, German, Italian, Portuguese, Japanese, Chinese, Arabic, Hindi, Russian and Turkish. Choose **Detect per line**, **English + French**, **Korean + English** or **English + French + Korean** for mixed songs, or override a single language and **Retry karaoke for this line**. Ambiguous scripts use local audio language detection; short sung lines can be misidentified. Korean highlighting follows space-separated words. For untimed pasted mixed lyrics, sync matching language sections; these mixed modes apply to the existing-subtitle karaoke action. Mixed-language and unusually short timings are flagged. **Next line to review** visits missing or flagged timings; listen, edit the word boundaries and mark them reviewed. Flags are timing heuristics, not guaranteed accuracy scores.
 
 Failed lines retain their earlier words/timings. **Estimate missing timings** is an explicit approximate fallback, labelled for review. A cancelled operation preserves saved captions; **Restore previous karaoke version** restores the captions from before the last completed karaoke operation, including after reopening the project. Undo also works in the editing session. Long individual lines over 60 seconds need splitting before alignment.
 
@@ -70,11 +70,21 @@ Failed lines retain their earlier words/timings. **Estimate missing timings** is
 
 - **Sync pasted lyrics to audio:** keeps your supplied text and line breaks, with editable word timings. Choose the language and the section of audio containing those lyrics. Standalone Suno labels such as `[Verse]` are ignored; repeated sung lines must still be included. Uses local Whisper with stable-ts. Singing and repeated choruses can need corrections.
 - **Create video from a song:** start with MP3, WAV, M4A, FLAC or OGG. Choose portrait, square or landscape; use a colour, uploaded photo/video or a library background. Short video backgrounds loop and fill the frame with a centre crop. The song replaces background audio.
-- **Audio-reactive waveform:** optionally add a waveform along the bottom of the song video. Background and waveform are prepared into the new base video; caption styling remains editable. Create another version to change the background.
-- **Bundled fonts:** Oswald, Lobster and Bangers from Google Fonts, with their open-font licenses, work locally in preview and export. Glyph coverage varies; Greek may use a fallback.
+- **Audio-reactive waveform:** optionally add a waveform along the bottom of the song video. Use **Background & audio → Edit composition** to change or remove it later; the original song and background remain available.
+- **Bundled fonts:** Oswald, Lobster and Bangers from Google Fonts, with their open-font licenses, work locally in preview and export. Glyph coverage varies; Greek and Korean may use installed fallback fonts.
 - **Background discovery links:** open Pexels or Pixabay, download a suitable asset, then import it. There is no integrated stock search or automatic asset import yet.
 
 Song creation and lyric alignment support up to 20 minutes per operation. Use only the lyrics for the selected audio section. Existing captions are preserved if alignment fails or is cancelled. Manual estimates remain available without AI.
+
+### Editable background and audio composition (source)
+
+Open a song/video project and select **Background & audio → Edit composition**. Replace a background from an upload or your library without losing captions, word timings or style. Choose portrait/square/landscape, fit or fill, horizontal/vertical focus, blur, dimming, tint and slow zoom. Video backgrounds can loop or hold their final frame; still images last for the composition.
+
+Trim the song, delay its start, adjust volume and fades, and optionally mix the background video's audio (muted by default). Lyrics follow changes to the song's source trim/delay. Lines outside the range are removed from that version; cut lines keep their text but lose word timings and are flagged for review. Replacing a song preserves captions and flags them so you can check synchronization.
+
+**Apply & preview** renders a synchronized base and preview using the same composition specification. Seeking, playback speed and lyric looping then use that single prepared timeline. This step is not an instant multitrack preview; caption styling remains live. Use **Restore previous composition** to recover the prior composition and captions, or **Duplicate project** before exploring alternatives.
+
+Projects retain original assets and a versioned composition schema (assets, tracks, clips, source offsets, transforms and text style). Legacy projects remain readable and receive a pre-migration JSON backup when first saved. Missing media is reported; upload its original file in the composition dialog to relink it. Captions autosave; **Recover unsaved captions** offers this browser's saved draft after an interrupted edit. Composition settings have a local draft too; file selections must be chosen again after restart. Generated versions are retained, so repeated changes require additional disk space.
 
 ### Optional AI tools and metadata cleanup
 
@@ -106,7 +116,7 @@ The in-app GitHub updater checks published releases and validates staged changes
 
 | Version | Highlights |
 | --- | --- |
-| Source changes | Supplied-lyric alignment, song-to-video creation, waveform visualizer and bundled fonts |
+| Source changes | Multilingual batch karaoke, editable background/audio composition, project duplication/recovery, supplied-lyric alignment, waveform visualizer and bundled fonts |
 | v2.5.0 | Captions & Lyrics editor, waveform timeline, live styling, karaoke and rendered exports |
 | v2.4.1 | Improved Nano Banana character-replacement prompt |
 | v2.4.0 | Kling reference workflow and reliability/security fixes |

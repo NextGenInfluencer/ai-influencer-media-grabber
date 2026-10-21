@@ -1,6 +1,6 @@
 # Free Creator Studio — implementation and resume plan
 
-Saved 21 October 2026. Phase 1 implemented in the source checkout; later phases remain planned. No scheduled run has been created.
+Saved 21 October 2026. Phases 1 and 2 implemented in the source checkout; later phases remain planned. No scheduled run has been created.
 
 ## Product goal
 
@@ -99,13 +99,21 @@ Defer complex compositing, extensive effects marketplaces, collaborative cloud e
 ## Resume checklist
 
 1. Read this file, CAPTIONS_PLAN.md and repository instructions; inspect Git status and recent commits. Preserve unrelated user changes.
-2. Phase 1 is implemented. Confirm its status below, then proceed to Phase 2 only when the user authorizes it.
+2. Phases 1 and 2 are implemented. Confirm their status below, then proceed to Phase 3 only when the user authorizes it.
 3. Locate or request the intended song/SRT only if needed for evaluation. Work on a duplicate and report actual mixed-language results.
 4. Run regression tests plus real browser and render checks. Clearly distinguish approximate estimates, actual alignment and manual corrections.
 5. Report what works, what was tested and remaining limitations. Continue through later phases as authorized, releasing useful tested increments.
 
-Suggested next request: “Read CREATOR_STUDIO_ROADMAP.md and proceed with Phase 2: editable song and background composition.”
+Suggested next request: “Read CREATOR_STUDIO_ROADMAP.md and proceed with Phase 3: templates, fonts and audio-reactive visuals.”
 
 ## Phase 1 implementation status
 
-Implemented the imported-SRT whole-project karaoke action, single-line retry, language suggestions/override, review flags/counts/navigation, explicit estimates for missing lines, preserved line breaks, cancellation rollback and persisted previous-version restoration. Validated on a duplicate of the user's mixed-language song plus automated and browser/render checks; see CAPTIONS_PLAN.md. Singing timings still require listening review. Cumulative highlighting/word pop remain deferred to the animation phase. Next product phase is editable background/audio composition, not further changes to the working downloader.
+Implemented the imported-SRT whole-project karaoke action, single-line retry, language suggestions/override, review flags/counts/navigation, explicit estimates for missing lines, preserved line breaks, cancellation rollback and persisted previous-version restoration. Validated on a duplicate of the user's mixed-language song plus automated and browser/render checks; see CAPTIONS_PLAN.md. Singing timings still require listening review. Cumulative highlighting/word pop remain deferred to the animation phase. Language expansion adds 14 language choices and French/English, Korean/English and three-language modes. Automatic audio detection resolves ambiguous Latin script; mixed selections are flagged for review.
+
+## Phase 2 implementation status
+
+Implemented version-1 composition schema with immutable local assets, background/audio/caption tracks, clip source offsets and transforms. Song and video projects migrate without replacing their originals. Uploaded/library backgrounds, fit/fill/focus, blur/dim/tint/slow zoom, canvas ratios, loop/freeze, song trim/delay/volume/fades and optional background audio mixing are editable. Applying settings creates versioned base/preview files from a shared render specification, keeping captions synchronized; clipped lines are flagged. Added project duplication, persistent previous-composition restoration, missing-media relinking, browser caption recovery and composition setting drafts.
+
+Delivery boundary: composition changes use Apply & preview (rendered proxy), not instant multitrack playback. Image duration matches the output; a shorter background holds its last frame. Arbitrary multitrack clip sequencing remains Phase 5. Background sources are uploads and the existing local gallery; provider search remains Phase 4. Generated versions remain on disk. Existing v2.5.0 installers have not been republished.
+
+Validation: real FFmpeg composition/export checks, browser library background replacement and project duplication, French/Korean glyph rendering, real Whisper language detection plus alignment on generated English speech, and multilingual mocked alignment tests. French/Korean song timing accuracy still needs review with actual vocal material; no claim of listening-certified accuracy.

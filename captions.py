@@ -18,7 +18,8 @@ import numpy as np
 from PIL import ImageFont
 from flask import Blueprint, jsonify, request, send_file, render_template, session
 import job_process as process
-from ai_runtime import transcribe, align_lyrics, align_caption_words
+from ai_runtime import transcribe, align_lyrics, align_caption_words, detect_caption_language
+import creator_composition as composition_model
 
 DEFAULT_STYLE = dict(font='Arial', size=5, color='#ffffff', highlight='#ffdc55',
                      outline=2, position=85, background=False, karaoke=False)
@@ -252,11 +253,19 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
 
     def read(pid):
         with lock:
-            return json.loads((folder(pid) / 'project.json').read_text(encoding='utf-8'))
+            data = json.loads((folder(pid) / 'project.json').read_text(encoding='utf-8'))
+            if data.get('duration'):
+                data['studio'] = composition_model.migrate(data, folder(pid))
+                data['missing_assets'] = [key for key, asset in data['studio']['assets'].items() if not composition_model.local_asset(folder(pid), asset).is_file()]
+            return data
 
     def write(data):
         with lock:
             destination = folder(data['id']) / 'project.json'
+            if destination.exists() and data.get('studio') and not (destination.parent / 'pre-studio-project.json').exists():
+                old = json.loads(destination.read_text(encoding='utf-8'))
+                if old.get('duration') and not old.get('studio'):
+                    shutil.copy2(destination, destination.parent / 'pre-studio-project.json')
             temporary = destination.with_suffix('.tmp')
             temporary.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
             # Antivirus/indexers can briefly hold Windows files without delete sharing.
@@ -289,11 +298,8 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                 data['revision'] += 1
                 refresh_gallery()
             except Exception as exc:
-                for key in ('cues', 'style', 'timing', 'karaoke_backup'):
-                    if key in original:
-                        data[key] = original[key]
-                    else:
-                        data.pop(key, None)
+                data.clear()
+                data.update(original)
                 data['state'], data['status'] = 'error', str(exc)
             finally:
                 try:
@@ -318,7 +324,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
     def editor():
         if not session.get('authorized'):
             return 'Open Captions & Lyrics from the app first.', 403
-        return render_template('captions.html', api_token=session['api_token'])
+        return render_template('captions.html', api_token=session['api_token'], languages=composition_model.LANGUAGES)
 
     @bp.get('/api/captions')
     def projects():
@@ -420,7 +426,149 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             if result.returncode == 0 and result.stdout:
                 values = np.frombuffer(result.stdout, dtype='<f4')
                 d['peaks'] = [round(float(np.max(np.abs(chunk))), 4) for chunk in np.array_split(values, min(4000, len(values))) if len(chunk)]
+            d['studio'] = composition_model.migrate(d, f)
         return launch(data, 'Preparing preview and waveform…', prepare)
+
+    def preview_and_peaks(d, f, source, preview):
+        ffmpeg(['-i', source, '-map', '0:v:0', '-map', '0:a:0?', '-vf',
+                "scale=w='min(720,iw)':h='min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2",
+                '-c:v','libx264','-preset','veryfast','-crf','24','-pix_fmt','yuv420p',
+                '-c:a','aac','-movflags','+faststart',preview], f)
+        result = process.run([imageio_ffmpeg.get_ffmpeg_exe(),'-i',str(f/source),'-vn','-ac','1','-ar','1000','-f','f32le','-'], capture_output=True)
+        if result.returncode:
+            raise ValueError('Could not prepare the composition audio waveform.')
+        values = np.frombuffer(result.stdout, dtype='<f4')
+        d['peaks'] = [round(float(np.max(np.abs(c))),4) for c in np.array_split(values,min(4000,len(values))) if len(c)] if len(values) else []
+
+    def composition_snapshot(d):
+        keys = ('studio','source','preview','duration','width','height','peaks','cues','style','timing','karaoke_backup','composition')
+        return {key:copy.deepcopy(d[key]) for key in keys if key in d}
+
+    @bp.post('/api/captions/<pid>/composition')
+    def update_composition(pid):
+        with lock:
+            data = read(pid)
+            if data['state'] == 'busy' or request.form.get('revision') != str(data['revision']):
+                return jsonify(error='Project changed or is processing. Reload before applying composition changes.'),409
+            if not data.get('studio'):
+                raise ValueError('Finish preparing the project first.')
+            settings = json.loads(request.form.get('settings','{}'))
+            if not isinstance(settings,dict): raise ValueError('Invalid composition settings.')
+            # Validate all numeric controls before saving media; replacement duration is checked in the worker.
+            composition_model.validate(settings, 7200)
+            assets = copy.deepcopy(data['studio']['assets'])
+            f = folder(pid)
+            added = []
+            try:
+                for key, field in [('audio','audio'),('background','background')]:
+                    upload = request.files.get(field)
+                    library = request.form.get(field+'_path','') if not upload else ''
+                    if not upload and not library: continue
+                    if library and (not allowed_path(library) or not Path(library).is_file()):
+                        raise ValueError('Choose media from your library or upload it.')
+                    ext = Path(upload.filename if upload else library).suffix.lower()
+                    supported = composition_model.AUDIO | composition_model.VIDEOS if key=='audio' else composition_model.IMAGES | composition_model.VIDEOS
+                    if ext not in supported: raise ValueError('Unsupported composition media type.')
+                    name = 'asset_'+uuid.uuid4().hex+ext
+                    target = f/name
+                    if upload: upload.save(target)
+                    else: shutil.copy2(library,target)
+                    added.append(target)
+                    assets[key] = dict(file=name,kind='audio' if key=='audio' else 'image' if ext in composition_model.IMAGES else 'video')
+                if request.form.get('clear_background') == 'true': assets.pop('background',None)
+                for key,asset in assets.items():
+                    if not composition_model.local_asset(f,asset).is_file():
+                        raise ValueError('Missing '+key+' media. Choose its original file to relink it.')
+            except Exception:
+                for path in added: path.unlink(missing_ok=True)
+                raise
+            def work(d, f):
+                token = uuid.uuid4().hex[:12]
+                output, preview = 'composition_'+token+'.mp4','preview_'+token+'.mp4'
+                audio_probe = 'duration_'+token+'.wav'
+                success = False
+                try:
+                    # Bounded decode verifies the real replacement duration, not its filename or metadata.
+                    ffmpeg(['-i',assets['audio']['file'],'-t','1200.1','-vn','-ac','1','-ar','1000','-c:a','pcm_s16le',audio_probe], f)
+                    with wave.open(str(f/audio_probe),'rb') as audio:
+                        source_duration = audio.getnframes()/audio.getframerate()
+                    number(source_duration,.1,1200)
+                    if 0 < float(settings.get('end',0))-source_duration <= .05:
+                        settings['end'] = source_duration  # Legacy video frame rounding.
+                    clean = composition_model.validate(settings,source_duration)
+                    assets['audio']['duration'] = source_duration
+                    studio = composition_model.schema(assets,clean,d['style'])
+                    bg = assets.get('background')
+                    has_audio = False
+                    if bg and bg['kind']=='video' and clean['background_volume']:
+                        probe = process.run([imageio_ffmpeg.get_ffmpeg_exe(),'-i',str(f/bg['file'])],capture_output=True)
+                        has_audio = b'Audio:' in probe.stderr
+                        if not has_audio: raise ValueError('This background has no audio. Set Background volume to 0.')
+                    d['status'] = 'Applying background and audio settings…'
+                    write(d)
+                    ffmpeg(composition_model.render_args(studio,f,output,has_audio),f)
+                    preview_and_peaks(d,f,output,preview)
+                    process.check_cancelled()
+                    old_settings = d['studio']['settings']
+                    duration = clean['end']-clean['start']+clean['offset']
+                    delta = old_settings['start']-clean['start']+clean['offset']-old_settings['offset']
+                    cues = composition_model.shift_cues(d['cues'],delta,duration)
+                    validate_edit(dict(cues=cues,style=d['style']),duration)
+                    # Read the saved pre-job peaks: preview generation only modified the worker copy.
+                    backup = composition_snapshot(read(pid))
+                    d.update(studio=studio,source=output,preview=preview,duration=duration,
+                             width=composition_model.SHAPES[clean['shape']][0],height=composition_model.SHAPES[clean['shape']][1],
+                             cues=cues,composition=clean,composition_backup=backup,missing_assets=[])
+                    if delta or duration != backup['duration']:
+                        d.pop('karaoke_backup',None)
+                    if any(p.name == assets['audio']['file'] for p in added):
+                        for cue in d['cues']:
+                            cue['karaoke'] = dict(state='review',note='Audio replaced or relinked. Check lyric synchronization.')
+                    success = True
+                finally:
+                    (f/audio_probe).unlink(missing_ok=True)
+                    if not success:
+                        for path in [f/output,f/preview,*added]: path.unlink(missing_ok=True)
+            return launch(data,'Preparing editable composition…',work)
+
+    @bp.post('/api/captions/<pid>/restore-composition')
+    def restore_composition(pid):
+        with lock:
+            d = read(pid)
+            if d['state']=='busy' or request.get_json().get('revision') != d['revision']:
+                return jsonify(error='Reload the project before restoring.'),409
+            backup = d.get('composition_backup')
+            if not backup: raise ValueError('No previous composition is available.')
+            old = composition_snapshot(d)
+            for key in old: d.pop(key,None)
+            d.update(copy.deepcopy(backup),composition_backup=old,state='ready',status='Previous composition restored')
+            d['revision'] += 1
+            write(d)
+            return jsonify(d)
+
+    @bp.post('/api/captions/<pid>/duplicate')
+    def duplicate(pid):
+        with lock:
+            d = read(pid)
+            if d['state']=='busy' or request.get_json().get('revision') != d['revision']:
+                return jsonify(error='Reload the project before duplicating.'),409
+            old_folder = folder(pid)
+            d['id'] = uuid.uuid4().hex
+            target = folder(d['id'])
+            target.mkdir(parents=True)
+            names = {d['source'],d.get('preview','preview.mp4')}
+            names.update(a['file'] for a in d['studio']['assets'].values())
+            try:
+                for name in names:
+                    source = composition_model.local_asset(old_folder,dict(file=name))
+                    if source.is_file(): shutil.copy2(source,target/name)
+                d.update(name=(d['name']+' — copy')[:200],revision=0,exports=[],state='ready',status='Project duplicated')
+                for key in ('composition_backup','last_render'): d.pop(key,None)
+                write(d)
+            except Exception:
+                shutil.rmtree(target)
+                raise
+            return jsonify(d),201
 
     @bp.get('/api/captions/<pid>')
     def project(pid):
@@ -434,6 +582,8 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             if data['state'] == 'busy' or incoming.get('revision') != data['revision']:
                 return jsonify(error='Project changed or is processing. Reload it before saving.'), 409
             data.update(validate_edit(incoming, data['duration']))
+            if data.get('studio'):
+                data['studio'] = composition_model.schema(data['studio']['assets'], data['studio']['settings'], data['style'])
             data['revision'] += 1
             data['timing'] = incoming.get('timing', 'edited')
             if data['timing'] not in {'manual', 'estimated', 'automatic', 'aligned', 'imported', 'edited'}:
@@ -502,7 +652,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             if not data['cues']:
                 raise ValueError('Import subtitles or add caption lines first.')
             language = options.get('language', 'auto')
-            if language not in {'auto', 'en', 'el', 'es', 'fr', 'de'}:
+            if language not in {'auto', *composition_model.LANGUAGES, *composition_model.MIXED}:
                 raise ValueError('Choose a supported alignment language.')
             index = options.get('index')
             if index is not None and (type(index) is not int or not 0 <= index < len(data['cues'])):
@@ -524,7 +674,8 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                             cue = pending[i]
                             greek = bool(re.search(r'[\u0370-\u03ff\u1f00-\u1fff]', cue['text']))
                             latin = bool(re.search(r'[a-zA-Z]', cue['text']))
-                            chosen = ('el' if greek else 'en') if language == 'auto' else language
+                            korean = bool(re.search(r'[\u1100-\u11ff\u3130-\u318f\uac00-\ud7af]', cue['text']))
+                            chosen = language if language in composition_model.LANGUAGES else ('ko' if korean else 'el' if greek else 'en')
                             try:
                                 if cue['end'] - cue['start'] > 60:
                                     raise ValueError('Line exceeds 60 seconds. Split it before retrying.')
@@ -532,13 +683,17 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                                 samples = np.frombuffer(audio.readframes(round((cue['end']-cue['start'])*16000)), dtype='<i2').astype(np.float32)/32768
                                 if not len(samples) or np.max(np.abs(samples)) < .0001:
                                     raise ValueError('No audible audio in this line.')
+                                if language == 'auto' or language in composition_model.MIXED:
+                                    candidates = composition_model.MIXED.get(language)
+                                    if not greek and not korean:
+                                        chosen = detect_caption_language(model, samples, candidates)
                                 result = align_caption_words(model, samples, cue['text'], chosen)
                                 words = aligned_cues(result, [cue['text']], cue['start'], d['duration'], cue['end']-cue['start'])[0]['words']
                                 notes = []
                                 if any(w['end']-w['start'] < .06 for w in words):
                                     notes.append('Very short word timings; check against the vocals.')
-                                if greek and latin:
-                                    notes.append('Mixed Greek/English line; check timing or retry with a language override.')
+                                if (greek or korean) and latin or language in composition_model.MIXED:
+                                    notes.append('Mixed-language selection; check timing or retry this line with a language override.')
                                 cue['words'] = words
                                 cue['karaoke'] = dict(state='review' if notes else 'aligned', note=' '.join(notes), language=chosen)
                             except (ValueError, KeyError, TypeError) as exc:
@@ -580,8 +735,8 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             options = request.get_json()
             lines = lyric_lines(options.get('text', ''))
             language = options.get('language', '')
-            if language not in {'en', 'el', 'es', 'fr', 'de'}:
-                raise ValueError('Choose the lyric language: English, Greek, Spanish, French or German.')
+            if language not in composition_model.LANGUAGES:
+                raise ValueError('Choose a lyric language. For mixed songs, sync matching sections or use imported subtitles with per-line karaoke timing.')
             start = number(options.get('start', 0), 0, data['duration'])
             end = number(options.get('end', data['duration']), 0, data['duration'])
             if end - start < .1 or end - start > 1200:
@@ -648,7 +803,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
     @bp.get('/api/captions/<pid>/media/<name>')
     def media(pid, name):
         data = read(pid)
-        if name not in ['preview.mp4', *data.get('exports', [])]:
+        if name not in ['preview.mp4', data.get('preview'), *data.get('exports', [])]:
             return jsonify(error='Media not available.'), 404
         return send_file(folder(pid) / name, conditional=True, as_attachment=request.args.get('download') == '1')
 

@@ -200,6 +200,112 @@ class CaptionWorkflowTests(unittest.TestCase):
             self.assertEqual(self.wait(pid,'error')['cues'],data['cues'])
         self.assertFalse((self.root/'library'/'Caption Projects'/pid/'alignment.wav').exists())
 
+    def test_multilingual_karaoke_and_overrides(self):
+        pid,data=self.karaoke_project()
+        data['cues']=[dict(start=.1,end=.9,text='Bonjour mon amour',words=[]),dict(start=1,end=1.9,text='사랑해 hello',words=[])]
+        data=self.client.put('/api/captions/'+pid,json=data).json
+        languages=[]
+        def align(model,audio,text,language):
+            languages.append(language)
+            words=text.split()
+            return {'segments':[{'words':[dict(word=w,start=.05+i*.2,end=.2+i*.2) for i,w in enumerate(words)]}]}
+        with patch('captions.detect_caption_language',return_value='fr') as detect, patch('captions.align_caption_words',side_effect=align):
+            self.client.post(f'/api/captions/{pid}/karaoke',json=dict(revision=data['revision'],language='en-fr-ko'))
+            after=self.wait(pid)
+            self.assertEqual(languages,['fr','ko'])
+            self.assertEqual(detect.call_args.args[2],('en','fr','ko'))
+            self.assertTrue(all(c['karaoke']['state']=='review' for c in after['cues']))
+            self.client.post(f'/api/captions/{pid}/karaoke',json=dict(revision=after['revision'],language='ko',index=1))
+            self.wait(pid)
+            self.assertEqual(languages[-1],'ko')
+        self.assertEqual([c['text'] for c in after['cues']],[c['text'] for c in data['cues']])
+
+    def test_composition_edit_trim_restore_duplicate_and_originals(self):
+        import creator_composition as comp
+        pid,before=self.karaoke_project()
+        folder=self.root/'library'/'Caption Projects'/pid
+        original=(folder/'original.mp4').read_bytes()
+        legacy=copy.deepcopy(before);legacy.pop('studio');(folder/'project.json').write_text(json.dumps(legacy),encoding='utf-8')
+        settings={**before['studio']['settings'], 'shape':'square','start':.2,'end':1.8,'offset':.2,
+                  'fit':'fit','blur':1,'dim':.1,'opacity':.1,'zoom':.05,'fade_in':.1,'fade_out':.1,'background_volume':.2}
+        response=self.client.post(f'/api/captions/{pid}/composition',data=dict(revision=before['revision'],settings=json.dumps(settings)))
+        self.assertEqual(response.status_code,202,response.json)
+        after=self.wait(pid)
+        self.assertEqual(after['studio']['version'],1)
+        self.assertEqual(after['style'],before['style'])
+        self.assertEqual(after['cues'][0],before['cues'][0])
+        self.assertAlmostEqual(after['cues'][-1]['end'],1.8)
+        self.assertEqual(after['cues'][-1]['karaoke']['state'],'review')
+        self.assertEqual(after['width'],1080)
+        self.assertEqual(after['height'],1080)
+        self.assertEqual((folder/'original.mp4').read_bytes(),original)
+        self.assertTrue((folder/'pre-studio-project.json').is_file())
+        self.assertEqual(self.client.post(f'/api/captions/{pid}/composition',data=dict(revision=before['revision'],settings=json.dumps(settings))).status_code,409)
+        with self.client.get(f'/api/captions/{pid}/media/{after["preview"]}') as r: self.assertEqual(r.status_code,200)
+        duplicate=self.client.post(f'/api/captions/{pid}/duplicate',json=dict(revision=after['revision'])).json
+        self.assertNotEqual(duplicate['id'],pid)
+        self.assertEqual(duplicate['cues'],after['cues'])
+        self.assertTrue((folder.parent/duplicate['id']/duplicate['preview']).is_file())
+        restored=self.client.post(f'/api/captions/{pid}/restore-composition',json=dict(revision=after['revision'])).json
+        self.assertEqual(restored['source'],before['source'])
+        self.assertEqual(restored['cues'],before['cues'])
+        self.assertEqual(restored['peaks'],before['peaks'])
+        self.client.post(f'/api/captions/{pid}/render',json=dict(preview=True))
+        self.assertTrue(self.wait(pid)['last_render'])
+
+    def test_background_replace_relink_and_failed_composition_keeps_project(self):
+        from PIL import Image
+        pid,before=self.karaoke_project()
+        image=io.BytesIO();Image.new('RGB',(120,80),'red').save(image,format='PNG')
+        settings={**before['studio']['settings'],'shape':'landscape','visualizer':True}
+        response=self.client.post(f'/api/captions/{pid}/composition',data=dict(revision=before['revision'],settings=json.dumps(settings),background=(io.BytesIO(image.getvalue()),'new.png')))
+        self.assertEqual(response.status_code,202,response.json)
+        after=self.wait(pid)
+        self.assertEqual(after['cues'],before['cues'])
+        self.assertEqual(after['studio']['assets']['background']['kind'],'image')
+        folder=self.root/'library'/'Caption Projects'/pid
+        (folder/after['studio']['assets']['background']['file']).unlink()
+        loaded=self.client.get('/api/captions/'+pid).json
+        self.assertEqual(loaded['missing_assets'],['background'])
+        response=self.client.post(f'/api/captions/{pid}/composition',data=dict(revision=after['revision'],settings=json.dumps(settings)))
+        self.assertEqual(response.status_code,400)
+        response=self.client.post(f'/api/captions/{pid}/composition',data=dict(revision=after['revision'],settings=json.dumps(settings),background=(io.BytesIO(image.getvalue()),'relinked.png')))
+        after=self.wait(pid)
+        self.assertEqual(after['missing_assets'],[])
+        response=self.client.post(f'/api/captions/{pid}/composition',data=dict(revision=after['revision'],settings=json.dumps(settings),audio=(io.BytesIO(b'not audio'),'bad.wav')))
+        failed=self.wait(pid,'error')
+        for key in ('source','preview','studio','cues','duration','peaks'): self.assertEqual(failed[key],after[key])
+        self.assertFalse(list(folder.glob('duration_*.wav')))
+
+    def test_composition_delay_keeps_rendered_audio_and_words_synchronized(self):
+        import numpy as np
+        pid,before=self.karaoke_project()
+        settings={**before['studio']['settings'],'offset':.4,'volume':.5,'shape':'square'}
+        self.client.post(f'/api/captions/{pid}/composition',data=dict(revision=before['revision'],settings=json.dumps(settings)))
+        after=self.wait(pid)
+        self.assertAlmostEqual(after['cues'][0]['start'],before['cues'][0]['start']+.4)
+        self.assertAlmostEqual(after['duration'],before['duration']+.4)
+        media=self.root/'library'/'Caption Projects'/pid/after['source']
+        audio=subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(),'-i',str(media),'-vn','-ac','1','-ar','1000','-f','f32le','-'],capture_output=True,check=True)
+        samples=np.frombuffer(audio.stdout,dtype='<f4')
+        self.assertLess(float(np.max(np.abs(samples[:250]))),.002)
+        self.assertGreater(float(np.max(np.abs(samples[500:1000]))),.01)
+
+    def test_composition_cancel_is_transactional(self):
+        pid,before=self.karaoke_project()
+        entered,release=threading.Event(),threading.Event()
+        from creator_composition import render_args
+        def delayed(*args):
+            entered.set();release.wait(5);job_process.check_cancelled();return render_args(*args)
+        with patch('captions.composition_model.render_args',side_effect=delayed):
+            self.client.post(f'/api/captions/{pid}/composition',data=dict(revision=before['revision'],settings=json.dumps(before['studio']['settings'])))
+            try:
+                self.assertTrue(entered.wait(5));job_process.cancel_all()
+            finally: release.set()
+            failed=self.wait(pid,'error')
+        for key in ('source','studio','cues','duration','peaks'): self.assertEqual(failed[key],before[key])
+        self.assertNotIn('composition_backup',failed)
+
     def setUp(self):
         artifacts=Path(__file__).resolve().parents[1]/'audit_artifacts'
         artifacts.mkdir(exist_ok=True)
@@ -215,6 +321,7 @@ class CaptionWorkflowTests(unittest.TestCase):
                     {'start':.1,'end':.6,'word':'Hello'},{'start':.8,'end':1.5,'word':'world'}]}]}
         app=Flask('caption_test')
         self.model=Model()
+        detector=patch('captions.detect_caption_language',return_value='en');detector.start();self.addCleanup(detector.stop)
         register_captions(app,self.root/'library',lambda:None,lambda:None,lambda:None,lambda:self.model,lambda p:False)
         self.client=app.test_client()
 

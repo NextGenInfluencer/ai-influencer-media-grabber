@@ -46,3 +46,9 @@ The optional AI requirements changed. A future packaged release needs an install
 Whole-project and single-line word alignment preserve subtitle text, line breaks, line boundaries and style. Uses constrained stable-ts align_words with one shared Whisper model and bounded cue audio slices. Per-line Greek/English suggestions and explicit overrides, review flags, progress, selected retry, manual review and explicit estimates for missing lines are available. Changes are staged in memory; cancellation rolls back caption state. A persisted prior-caption snapshot supports restoration after reload.
 
 Real evaluation on a duplicate of the user’s 57-line mixed Greek/English project: 53 lines unflagged, four review flags, two missing word timings (one failed line already had prior timings). All text and line timestamps preserved; original project bytes unchanged. These counts verify operation and timing checks, not listening-certified accuracy. Browser whole-song and single-line actions completed; actual rendered output visibly highlights the previously reported English line.
+
+## Phase 2 and multilingual expansion (source)
+
+See CREATOR_STUDIO_ROADMAP.md and README.md for editable composition controls and versioned project architecture. Added 14 language choices and constrained French/English, Korean/English and three-language karaoke modes. Source updater and installer staging include creator_composition.py. No new AI dependencies were introduced in this phase. Composition previews are prepared with Apply & preview; instant multitrack editing remains future work.
+
+Validation: 63 Python tests pass in the bundled runtime; source-runtime regression tests and JavaScript checks also pass. Browser Apply & preview, duplicate and actual caption export succeeded. Real rendered French/Korean text displays correctly; audio-delay rendering was checked against waveform samples. Only isolated test projects were changed.
