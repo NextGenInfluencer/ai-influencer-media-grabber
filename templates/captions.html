@@ -121,6 +121,24 @@
                 <button id="seqEvenSplit" type="button" title="Set all clip durations to 0 (split song evenly)">Split evenly</button>
                 <button id="seqCycle10" type="button" title="Set each clip to 10s so clips cycle across the song">10s each</button>
               </div>
+              <div class="row" style="margin-bottom:8px;">
+                <label style="flex:1;">Clip Transition
+                  <select id="comp_sequence_transition">
+                    <option value="none">Cut (Instant)</option>
+                    <option value="fade">Dissolve / Crossfade</option>
+                    <option value="fadeblack">Fade to Black</option>
+                    <option value="fadewhite">Flash White</option>
+                    <option value="slideleft">Slide Left</option>
+                    <option value="slideright">Slide Right</option>
+                    <option value="circlecrop">Zoom / Iris Circle</option>
+                    <option value="wipeleft">Wipe Left</option>
+                    <option value="wiperight">Wipe Right</option>
+                  </select>
+                </label>
+                <label style="width:110px;">Duration (s)
+                  <input id="comp_sequence_transition_duration" type="number" min="0.1" max="2.0" step="0.1" value="0.5">
+                </label>
+              </div>
               <div id="sequenceList" class="sequenceList" aria-label="Video clip sequence"></div>
               <div class="row" style="margin-top:10px;">
                 <button id="applySequenceNow" class="primary" type="button" style="width:100%;">✨ Apply Clip Sequence to Video</button>
@@ -670,6 +688,8 @@
                 <option value="fade">Smooth Fade</option>
                 <option value="pop">Pop Entrance</option>
                 <option value="slide_up">Slide Up</option>
+                <option value="zoom_in">Zoom In</option>
+                <option value="typewriter">Typewriter</option>
               </select>
             </label>
             <label>Neon glow <input id="glow" type="range" min="0" max="10" step="0.5" value="0"></label>

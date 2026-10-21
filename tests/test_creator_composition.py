@@ -369,6 +369,118 @@ class CompositionDataTests(unittest.TestCase):
         ))
         self.assertEqual(yt_prov['license'], 'YouTube / Google Video')
 
+    def test_multi_clip_transitions_xfade_and_fadeblack(self):
+        artifacts = Path(__file__).resolve().parents[1] / 'audit_artifacts'
+        artifacts.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=artifacts) as directory:
+            folder = Path(directory)
+            (folder / 'song.wav').touch()
+            (folder / 'c1.mp4').touch()
+            (folder / 'c2.mp4').touch()
+            (folder / 'c3.mp4').touch()
+            assets = {
+                'audio': dict(file='song.wav', kind='audio', duration=9.0),
+                'background': dict(file='c1.mp4', kind='video', name='Clip 1'),
+                'clip_2': dict(file='c2.mp4', kind='video', name='Clip 2'),
+                'clip_3': dict(file='c3.mp4', kind='video', name='Clip 3'),
+            }
+            # Verify validation of sequence_transition
+            for t_name in comp.SEQUENCE_TRANSITIONS:
+                val = comp.validate({**comp.DEFAULTS, 'sequence_transition': t_name, 'sequence_transition_duration': 0.6, 'end': 9.0}, 9.0)
+                self.assertEqual(val['sequence_transition'], t_name)
+                self.assertEqual(val['sequence_transition_duration'], 0.6)
+            with self.assertRaises(ValueError):
+                comp.validate({**comp.DEFAULTS, 'sequence_transition': 'unknown_trans', 'end': 9.0}, 9.0)
+
+            settings = {
+                **comp.DEFAULTS,
+                'end': 9.0,
+                'sequence': [
+                    dict(asset='background', duration=3.0),
+                    dict(asset='clip_2', duration=3.0),
+                    dict(asset='clip_3', duration=3.0),
+                ],
+                'sequence_transition': 'fade',
+                'sequence_transition_duration': 0.5,
+            }
+            studio = dict(settings=settings, assets=assets)
+            args = comp.render_args(studio, folder, 'test_trans.mp4', background_has_audio=False)
+            fg = next(args[i+1] for i, a in enumerate(args) if a == '-filter_complex')
+            self.assertIn('xfade=transition=fade', fg)
+            self.assertIn('offset=2.5', fg)
+            self.assertIn('offset=5.5', fg)
+
+            # Test fade to black transition
+            settings['sequence_transition'] = 'fadeblack'
+            studio['settings'] = settings
+            args_black = comp.render_args(studio, folder, 'test_black.mp4', background_has_audio=False)
+            fg_black = next(args_black[i+1] for i, a in enumerate(args_black) if a == '-filter_complex')
+            self.assertIn('fade=t=in:st=0:d=0.50:color=black', fg_black)
+            self.assertIn('fade=t=out:', fg_black)
+            self.assertIn('color=black', fg_black)
+
+    def test_multi_clip_background_audio_mixing_with_anullsrc(self):
+        artifacts = Path(__file__).resolve().parents[1] / 'audit_artifacts'
+        artifacts.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=artifacts) as directory:
+            folder = Path(directory)
+            (folder / 'song.wav').touch()
+            (folder / 'v1.mp4').touch()
+            (folder / 'img.png').touch()
+            assets = {
+                'audio': dict(file='song.wav', kind='audio', duration=6.0),
+                'background': dict(file='v1.mp4', kind='video', name='Video 1', has_audio=True),
+                'clip_img': dict(file='img.png', kind='image', name='Photo 1'),
+            }
+            settings = {
+                **comp.DEFAULTS,
+                'end': 6.0,
+                'sequence': [
+                    dict(asset='background', duration=3.0),
+                    dict(asset='clip_img', duration=3.0),
+                ],
+                'background_volume': 0.35,
+                'ducking': True,
+            }
+            studio = dict(settings=settings, assets=assets)
+            args = comp.render_args(studio, folder, 'test_mix.mp4', background_has_audio=True)
+            fg = next(args[i+1] for i, a in enumerate(args) if a == '-filter_complex')
+            # Video segment has asetpts/atrim and image segment has anullsrc silence fallback
+            self.assertIn('anullsrc=r=44100:cl=stereo,atrim=duration=3.0', fg)
+            self.assertIn('concat=n=2:v=0:a=1', fg)
+            self.assertIn('amix=inputs=2:duration=first', fg)
+
+    def test_render_args_bake_fx_false_leaves_clean_base(self):
+        artifacts = Path(__file__).resolve().parents[1] / 'audit_artifacts'
+        artifacts.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=artifacts) as directory:
+            folder = Path(directory)
+            (folder / 'song.wav').touch()
+            (folder / 'bg.mp4').touch()
+            assets = {
+                'audio': dict(file='song.wav', kind='audio', duration=5.0),
+                'background': dict(file='bg.mp4', kind='video', name='Bg'),
+            }
+            settings = {
+                **comp.DEFAULTS,
+                'end': 5.0,
+                'video_filter': 'cyberpunk',
+                'vignette': True,
+                'audio_effect': 'slowed_reverb',
+            }
+            studio = dict(settings=settings, assets=assets)
+            # When bake_fx=False, fx are omitted to keep composition clean and reversible
+            args_clean = comp.render_args(studio, folder, 'clean.mp4', bake_fx=False)
+            fg_clean = next(args_clean[i+1] for i, a in enumerate(args_clean) if a == '-filter_complex')
+            self.assertNotIn('vignette', fg_clean)
+            self.assertNotIn('aecho', fg_clean)
+
+            # When bake_fx=True, fx are included in the graph
+            args_baked = comp.render_args(studio, folder, 'baked.mp4', bake_fx=True)
+            fg_baked = next(args_baked[i+1] for i, a in enumerate(args_baked) if a == '-filter_complex')
+            self.assertIn('vignette', fg_baked)
+            self.assertIn('aecho', fg_baked)
+
 
 
 

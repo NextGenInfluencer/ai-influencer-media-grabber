@@ -265,11 +265,12 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         const cue=project.cues.find(c=>c.start<=video.currentTime && c.end>video.currentTime);
         const s=project.style, h=$('stage').clientHeight;
         const baked=project.composition||{};
-        const activeFilter=(s.video_filter||'none')!==(baked.video_filter||'none')?(s.video_filter||'none'):'none';
-        const rgbShift=((s.chromatic||0)!==(baked.chromatic||0) && s.chromatic>0)?` drop-shadow(-${Math.max(1,Math.round(s.chromatic/2))}px 0 0 rgba(255,0,80,.55)) drop-shadow(${Math.max(1,Math.round(s.chromatic/2))}px 0 0 rgba(0,220,255,.55))`:'';
-        video.style.filter=((cssVideoFilters[activeFilter]||'')+rgbShift).trim();
+        const fxAlreadyBaked = baked.fx_baked !== false && (baked.video_filter !== undefined || baked.vignette !== undefined);
+        const activeFilter = (!fxAlreadyBaked || (s.video_filter||'none')!==(baked.video_filter||'none')) ? (s.video_filter||'none') : 'none';
+        const rgbShift = (!fxAlreadyBaked ? (s.chromatic > 0) : ((s.chromatic||0)!==(baked.chromatic||0) && s.chromatic>0)) ? ` drop-shadow(-${Math.max(1,Math.round(s.chromatic/2))}px 0 0 rgba(255,0,80,.55)) drop-shadow(${Math.max(1,Math.round(s.chromatic/2))}px 0 0 rgba(0,220,255,.55))` : '';
+        video.style.filter = ((cssVideoFilters[activeFilter]||'')+rgbShift).trim();
         const vig=$('stageVignette');
-        if(vig) vig.hidden=!((s.vignette && !baked.vignette) || ((activeFilter==='vintage'||activeFilter==='dramatic') && !baked.vignette));
+        if(vig) vig.hidden = !(s.vignette || activeFilter==='vintage' || activeFilter==='dramatic');
         const compSet=project.studio?.settings||project.composition||{};
         const showTitle=compSet.title_text && compSet.title_duration>0 && video.currentTime>=0 && video.currentTime<=compSet.title_duration;
         const glowPx=Number(s.glow||0)*2.5;
@@ -285,6 +286,9 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
                 const dy=(1-elapsed/0.18)*(h*0.035);
                 animTransform=`translateY(calc(-100% + ${dy.toFixed(1)}px))`;
                 animOpacity=String(Math.min(1, elapsed/0.15));
+            } else if(s.animation==='zoom_in' && elapsed<0.20) {
+                const sc=0.70+0.30*(elapsed/0.20);
+                animTransform=`translateY(-100%) scale(${sc.toFixed(3)})`;
             }
         }
         Object.assign(box.style,{fontFamily:`"${s.font}",Roboto,"Noto Sans KR",sans-serif`,fontSize:h*s.size/100+'px',color:s.color,
@@ -310,7 +314,16 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
                 if(active && s.word_pop) Object.assign(span.style,{display:'inline-block',transform:'scale(1.15)',textShadow:`0 0 12px ${s.highlight}`});
                 content.append(span);
             });
-        } else content.textContent=cue.text;
+        } else {
+            let displayText = cue.text;
+            if(s.animation === 'typewriter') {
+                const elapsed = Math.max(0, video.currentTime - cue.start);
+                const typeDur = Math.min(cue.end - cue.start, Math.max(0.4, (cue.text||'').length * 0.045));
+                const visibleCount = Math.max(1, Math.min(cue.text.length, Math.floor((elapsed / typeDur) * cue.text.length)));
+                displayText = cue.text.slice(0, visibleCount);
+            }
+            content.textContent = displayText;
+        }
         box.append(content);
     }
     function select(index,seek=true) {
@@ -548,8 +561,8 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         $('createSong').disabled=true;
         try {await create(form);$('songDialog').close();} finally {$('createSong').disabled=false;}
     });
-    const compositionKeys=['shape','color','fit','x','y','blur','dim','overlay','opacity','zoom','brightness','contrast','saturation','video_filter','vignette','film_grain','sharpen','chromatic','background_speed','transition_in','transition_out','keyframe_end_x','keyframe_end_y','title_text','title_duration','broll_start','broll_duration','broll_x','broll_y','broll_scale','broll_opacity','broll_fade','start','end','offset','volume','fade_in','fade_out','noise_cancel','voice_isolation','audio_effect','background_volume','ducking','loop','background_start','background_duration','visualizer','visualizer_style','visualizer_position','visualizer_height','visualizer_sensitivity','visualizer_color'];
-    const compositionChecks=['loop','visualizer','ducking','vignette','noise_cancel','voice_isolation'], compositionStrings=['shape','color','fit','overlay','visualizer_style','visualizer_position','visualizer_color','title_text','video_filter','audio_effect'];
+    const compositionKeys=['shape','color','fit','x','y','blur','dim','overlay','opacity','zoom','brightness','contrast','saturation','video_filter','vignette','film_grain','sharpen','chromatic','background_speed','transition_in','transition_out','keyframe_end_x','keyframe_end_y','title_text','title_duration','broll_start','broll_duration','broll_x','broll_y','broll_scale','broll_opacity','broll_fade','start','end','offset','volume','fade_in','fade_out','noise_cancel','voice_isolation','audio_effect','background_volume','ducking','loop','background_start','background_duration','visualizer','visualizer_style','visualizer_position','visualizer_height','visualizer_sensitivity','visualizer_color','sequence_transition','sequence_transition_duration'];
+    const compositionChecks=['loop','visualizer','ducking','vignette','noise_cancel','voice_isolation'], compositionStrings=['shape','color','fit','overlay','visualizer_style','visualizer_position','visualizer_color','title_text','video_filter','audio_effect','sequence_transition'];
     function fillComposition(settings) {
         for(const key of compositionKeys) {const input=$('comp_'+key);if(compositionChecks.includes(key))input.checked=!!settings[key];else if(settings[key]!==undefined)input.value=settings[key];}
     }

@@ -42,7 +42,8 @@ VIDEO_FILTERS = {
     'dramatic': 'eq=contrast=1.35:brightness=-0.04:saturation=0.85,vignette=PI/4',
     'dreamy': 'gblur=sigma=1.2,eq=brightness=0.06:contrast=0.95:saturation=1.2',
 }
-CAPTION_ANIMATIONS = {'none', 'fade', 'pop', 'slide_up'}
+CAPTION_ANIMATIONS = {'none', 'fade', 'pop', 'slide_up', 'typewriter', 'zoom_in'}
+SEQUENCE_TRANSITIONS = {'none', 'fade', 'dissolve', 'fadeblack', 'fadewhite', 'slideleft', 'slideright', 'circlecrop', 'wipeleft', 'wiperight'}
 AUDIO_EFFECTS = {
     'none': '',
     'echo': 'aecho=0.8:0.88:220:0.4',
@@ -67,7 +68,8 @@ DEFAULTS = dict(shape='portrait', color='#141526', fit='fill', x=50, y=50,
                 noise_cancel=False, voice_isolation=False, audio_effect='none',
                 background_volume=0, ducking=False, loop=True, background_start=0, background_duration=0,
                 visualizer=False, visualizer_style='waveform', visualizer_position='bottom',
-                visualizer_height=20, visualizer_sensitivity=1, visualizer_color='#bba6ff', sequence=[])
+                visualizer_height=20, visualizer_sensitivity=1, visualizer_color='#bba6ff',
+                sequence=[], sequence_transition='none', sequence_transition_duration=0.5)
 
 
 def video_fx_chain(cfg: dict) -> list[str]:
@@ -246,6 +248,9 @@ def validate(settings, source_duration):
         raise ValueError('Choose a supported visualizer style and position.')
     if s['video_filter'] not in VIDEO_FILTERS or s['audio_effect'] not in AUDIO_EFFECTS:
         raise ValueError('Choose a supported video filter and audio effect.')
+    if s.get('sequence_transition', 'none') not in SEQUENCE_TRANSITIONS:
+        raise ValueError('Choose a supported clip transition.')
+    s['sequence_transition_duration'] = finite(s.get('sequence_transition_duration') or 0.5, 0.1, 2.0)
     for key in ('color','overlay','visualizer_color'):
         if not re.fullmatch('#[0-9a-fA-F]{6}', str(s[key])):
             raise ValueError('Choose a valid composition color.')
@@ -292,7 +297,7 @@ def shift_cues(cues, delta, duration, speed=1.0):
     return result
 
 
-def render_args(studio, folder, output, background_has_audio=False):
+def render_args(studio, folder, output, background_has_audio=False, bake_fx=True):
     s = {**DEFAULTS, **studio['settings']}
     assets = studio['assets']
     w,h = SHAPES[s['shape']]
@@ -334,33 +339,71 @@ def render_args(studio, folder, output, background_has_audio=False):
     graph=[]
     length=s['end']-s['start']
     af=f"[0:a]atrim=start={s['start']}:end={s['end']},asetpts=PTS-STARTPTS,volume={s['volume']}"
-    for a_fx in audio_fx_chain(s):
-        af+=f",{a_fx}"
+    if bake_fx:
+        for a_fx in audio_fx_chain(s):
+            af+=f",{a_fx}"
     if s['fade_in']: af+=f",afade=t=in:st=0:d={s['fade_in']}"
     if s['fade_out']: af+=f",afade=t=out:st={length-s['fade_out']}:d={s['fade_out']}"
     af+=f",adelay={round(s['offset']*1000)}:all=1,apad,atrim=duration={duration}[song]"
     graph.append(af)
-    if background_has_audio and s['background_volume'] and not multi_clip:
-        bg_vol = f"volume='if(between(t,{s['offset']},{duration}),{round(s['background_volume']*0.3,4)},{s['background_volume']})':eval=frame" if s['ducking'] else f"volume={s['background_volume']}"
-        graph.append(f"[1:a]asetpts=PTS-STARTPTS,{bg_vol},apad,atrim=duration={duration}[ba]")
-        graph.append('[song][ba]amix=inputs=2:duration=first:normalize=0[mix]')
-    else: graph.append('[song]anull[mix]')
     pts_expr = f"{1.0/s['background_speed']:.4f}*(PTS-STARTPTS)" if abs(s['background_speed'] - 1.0) > 1e-4 else 'PTS-STARTPTS'
+    atempo_filter = f"atempo={s['background_speed']:.4f}," if abs(s['background_speed'] - 1.0) > 1e-4 else ""
+    if background_has_audio and s['background_volume']:
+        bg_vol = f"volume='if(between(t,{s['offset']},{duration}),{round(s['background_volume']*0.3,4)},{s['background_volume']})':eval=frame" if s['ducking'] else f"volume={s['background_volume']}"
+        if multi_clip:
+            for k, seg in enumerate(seq_segments):
+                c_asset = assets[seg['asset']]
+                idx = sequence_assets.index(seg['asset']) + 1
+                if c_asset['kind'] == 'video' and c_asset.get('has_audio', True):
+                    graph.append(f"[{idx}:a]{atempo_filter}asetpts=PTS-STARTPTS,atrim=duration={seg['duration']},asetpts=PTS-STARTPTS,aformat=sample_rates=44100:channel_layouts=stereo[aseg{k}]")
+                else:
+                    graph.append(f"anullsrc=r=44100:cl=stereo,atrim=duration={seg['duration']}[aseg{k}]")
+            a_concat_in = ''.join(f'[aseg{k}]' for k in range(len(seq_segments)))
+            graph.append(f"{a_concat_in}concat=n={len(seq_segments)}:v=0:a=1[bg_audio_raw]")
+            graph.append(f"[bg_audio_raw]asetpts=PTS-STARTPTS,{bg_vol},apad,atrim=duration={duration}[ba]")
+            graph.append('[song][ba]amix=inputs=2:duration=first:normalize=0[mix]')
+        else:
+            graph.append(f"[1:a]{atempo_filter}asetpts=PTS-STARTPTS,{bg_vol},apad,atrim=duration={duration}[ba]")
+            graph.append('[song][ba]amix=inputs=2:duration=first:normalize=0[mix]')
+    else: graph.append('[song]anull[mix]')
     scale_crop = (
         f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}:(iw-ow)*{s['x']/100}:(ih-oh)*{s['y']/100}"
         if s['fit']=='fill' else
         f"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)*{s['x']/100}:(oh-ih)*{s['y']/100}:color={s['color']}"
     )
+    trans = str(s.get('sequence_transition') or 'none')
+    trans_dur = finite(float(s.get('sequence_transition_duration') or 0.5), 0.1, 2.0)
+    td = min(trans_dur, min(seg['duration'] for seg in seq_segments) * 0.4) if (multi_clip and len(seq_segments) >= 2) else 0.0
+
     if multi_clip:
         for idx, key in enumerate(sequence_assets, start=1):
             uses = [k for k, seg in enumerate(seq_segments) if seg['asset'] == key]
             outputs = ''.join(f'[seqinput{k}]' for k in uses)
             graph.append(f'[{idx}:v]split={len(uses)}{outputs}')
+
+        xfade_active = trans in {'fade', 'dissolve', 'wipeleft', 'wiperight', 'slideleft', 'slideright', 'circlecrop', 'smoothleft', 'smoothright'} and td >= 0.05
+
         for k, seg in enumerate(seq_segments):
-            seg_vf = f"[seqinput{k}]setpts={pts_expr},fps=30,tpad=stop_mode=clone:stop_duration={seg['duration']},trim=duration={seg['duration']},setpts=PTS-STARTPTS,{scale_crop},setsar=1,format=yuv420p[vseg{k}]"
+            seg_trim_dur = round(seq_segments[0]['duration'] if (xfade_active and k == 0) else (seg['duration'] + (td if xfade_active else 0.0)), 3)
+            seg_vf = f"[seqinput{k}]setpts={pts_expr},fps=30,tpad=stop_mode=clone:stop_duration={seg_trim_dur},trim=duration={seg_trim_dur},setpts=PTS-STARTPTS,{scale_crop},setsar=1,format=yuv420p"
+            if trans in ('fadeblack', 'fadewhite') and td >= 0.05:
+                fcol = 'black' if trans == 'fadeblack' else 'white'
+                seg_vf += f",fade=t=in:st=0:d={td:.2f}:color={fcol},fade=t=out:st={round(seg['duration']-td, 3):.2f}:d={td:.2f}:color={fcol}"
+            seg_vf += f"[vseg{k}]"
             graph.append(seg_vf)
-        concat_in = ''.join(f'[vseg{k}]' for k in range(len(seq_segments)))
-        vf = f"{concat_in}concat=n={len(seq_segments)}:v=1:a=0,setsar=1"
+
+        if xfade_active:
+            cur_out = 'vseg0'
+            accum_offset = max(0.01, round(seq_segments[0]['duration'] - td, 3))
+            for k in range(1, len(seq_segments)):
+                next_out = f'xf{k}'
+                graph.append(f"[{cur_out}][vseg{k}]xfade=transition={trans}:duration={td:.2f}:offset={accum_offset}[{next_out}]")
+                cur_out = next_out
+                accum_offset = round(accum_offset + seq_segments[k]['duration'], 3)
+            vf = f"[{cur_out}]setsar=1"
+        else:
+            concat_in = ''.join(f'[vseg{k}]' for k in range(len(seq_segments)))
+            vf = f"{concat_in}concat=n={len(seq_segments)}:v=1:a=0,setsar=1"
     else:
         vf=f'[1:v]setpts={pts_expr},fps=30'
         if s['background_duration']: vf+=f",trim=duration={s['background_duration']}"
@@ -373,8 +416,9 @@ def render_args(studio, folder, output, background_has_audio=False):
         vf+=f",zoompan=z='1+{z_amt}*on/{frames}':x='(iw-iw/zoom)*{px}':y='(ih-ih/zoom)*{py}':d=1:s={w}x{h}:fps=30"
     if s['brightness'] != 0 or s['contrast'] != 1 or s['saturation'] != 1:
         vf+=f",eq=brightness={s['brightness']}:contrast={s['contrast']}:saturation={s['saturation']}"
-    for v_fx in video_fx_chain(s):
-        vf+=f",{v_fx}"
+    if bake_fx:
+        for v_fx in video_fx_chain(s):
+            vf+=f",{v_fx}"
     if s['blur']: vf+=f",gblur=sigma={s['blur']}"
     if s['dim']: vf+=f",drawbox=c=black@{s['dim']}:t=fill"
     if s['opacity']: vf+=f",drawbox=c={s['overlay']}@{s['opacity']}:t=fill"

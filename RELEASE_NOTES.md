@@ -1,3 +1,22 @@
+# v2.7.0 — Video Transitions, Non-Destructive Effects & Motion Presets
+
+- **CapCut-Style Video Transitions Between Multi-Clip Cuts**:
+  - Seamlessly blend adjacent video cuts in multi-clip sequences with 9 transitions: `Dissolve / Crossfade` (`fade`), `Fade to Black` (`fadeblack`), `Flash White` (`fadewhite`), `Slide Left` (`slideleft`), `Slide Right` (`slideright`), `Zoom / Circle Crop` (`circlecrop`), `Wipe Left` (`wipeleft`), and `Wipe Right` (`wiperight`).
+  - Configurable transition durations from 0.1s to 2.0s with frame-accurate FFmpeg `xfade` chaining and color-dip blending.
+- **100% Non-Destructive Reversible Video Filters & Visual FX**:
+  - Compositions leave base pixels untouched (`bake_fx=False`).
+  - Switching filters (`Vintage`, `Cyberpunk`, `Warm`, `Noir`, `Dreamy`, `Dramatic`, etc.) or clearing to `None` in the live studio updates the preview in 0ms via GPU CSS filters and renders cleanly at export time without double-baking or destructive pixel degeneration.
+- **Multi-Clip Background Audio Mixing with Silence Fallback**:
+  - When background volume is enabled, original audio tracks across multi-clip video sequences are preserved and mixed under the primary song with volume controls and speech ducking.
+  - Automatically synthesizes sample-accurate stereo silence (`anullsrc=r=44100:cl=stereo`) for photos or muted video clips so mixed sequences never desynchronize.
+- **Animated Caption & Title Card Motion Presets**:
+  - Added new motion presets for lyrics and caption lines: `Zoom In` (smooth scale-in entrance) and `Typewriter` (progressive character-by-character typing reveal).
+  - Fully synchronized across both the real-time canvas player (`drawCaption`) and ASS subtitle exports.
+
+Validation: 97 automated tests passed across Python unit tests, FFmpeg render tests, and Node.js timing checks.
+
+Download the Windows Setup EXE below. Close the app before installing over your existing installation. This release preserves all your saved media and caption projects.
+
 # v2.6.1 — Creator Studio stability fixes
 
 - Fixed the social clip grabber failing with `cast is not defined`.

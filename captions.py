@@ -265,7 +265,34 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text'
             title_size = round(font_size * 1.25, 1)
             output.append(f"Dialogue: 1,{timestamp(0, True)},{timestamp(t_end, True)},Default,,0,0,0,,{{\\an5\\pos({width/2:.0f},{height*.28:.0f})\\fs{title_size}\\fad(250,350)}}{escape(title_text)}")
     for cue in project['cues']:
+        anim = style.get('animation', 'none')
         use_words = bool((style.get('karaoke') or style.get('cumulative') or style.get('word_pop')) and cue['words'])
+        if not use_words and anim == 'typewriter' and len(cue['text']) > 1:
+            raw_text = cue['text']
+            total_dur = cue['end'] - cue['start']
+            type_dur = min(total_dur, max(0.4, len(raw_text) * 0.045))
+            num_steps = len(raw_text)
+            step_dur = type_dur / num_steps
+            pieces = []
+            for k in range(1, num_steps):
+                p_start = cue['start'] + (k - 1) * step_dur
+                p_end = cue['start'] + k * step_dur
+                pieces.append((p_start, p_end, raw_text[:k]))
+            pieces.append((cue['start'] + (num_steps - 1) * step_dur, cue['end'], raw_text))
+            for start, end, t_slice in pieces:
+                if round(start*100) >= round(end*100):
+                    continue
+                body = escape(t_slice)
+                cx, cy = width / 2, height * style['position'] / 100
+                glow = float(style.get('glow') or 0)
+                tags = [rf'\pos({cx:.1f},{cy:.1f})']
+                if glow > 0:
+                    tags.append(rf'\blur{glow:.1f}')
+                    body = body.replace(r'{\r}', r'{\r\blur' + f'{glow:.1f}' + '}')
+                position = '{' + ''.join(tags) + '}'
+                output.append(f"Dialogue: 0,{timestamp(start, True)},{timestamp(end, True)},Default,,0,0,0,,{position}{body}")
+            continue
+
         pieces = [(cue['start'], cue['end'], None)]
         if use_words:
             boundaries = sorted({cue['start'], cue['end'], *(w[k] for w in cue['words'] for k in ('start', 'end'))})
@@ -295,7 +322,6 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text'
                         parts.append(sep + w_esc)
                 body = ''.join(parts)
             cx, cy = width / 2, height * style['position'] / 100
-            anim = style.get('animation', 'none')
             glow = float(style.get('glow') or 0)
             is_first = abs(start - cue['start']) < 0.005
             is_last = abs(end - cue['end']) < 0.005
@@ -311,6 +337,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text'
                     tags.append(rf'\fad({fi},{fo})')
             elif anim == 'pop' and is_first:
                 tags.append(r'\fscx85\fscy85\t(0,160,\fscx100\fscy100)')
+            elif anim == 'zoom_in' and is_first:
+                tags.append(r'\fscx70\fscy70\t(0,200,\fscx100\fscy100)')
             if glow > 0:
                 tags.append(rf'\blur{glow:.1f}')
                 body = body.replace(r'{\r}', r'{\r\blur' + f'{glow:.1f}' + '}')
@@ -1095,13 +1123,19 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                     studio = composition_model.schema(assets,clean,d['style'])
                     bg = assets.get('background')
                     has_audio = False
-                    if bg and bg['kind']=='video' and clean['background_volume']:
-                        probe = process.run([imageio_ffmpeg.get_ffmpeg_exe(),'-i',str(f/bg['file'])],capture_output=True)
-                        has_audio = b'Audio:' in probe.stderr
-                        if not has_audio: raise ValueError('This background has no audio. Set Background volume to 0.')
+                    if clean['background_volume']:
+                        video_assets = [a for a in assets.values() if isinstance(a, dict) and a.get('kind') == 'video' and a.get('file')]
+                        for va in video_assets:
+                            v_file = f / va['file']
+                            if v_file.is_file():
+                                probe = process.run([imageio_ffmpeg.get_ffmpeg_exe(), '-i', str(v_file)], capture_output=True)
+                                if b'Audio:' in probe.stderr:
+                                    has_audio = True
+                                    va['has_audio'] = True
+                                    break
                     d['status'] = 'Applying background and audio settings…'
                     write(d)
-                    ffmpeg(composition_model.render_args(studio,f,output,has_audio),f)
+                    ffmpeg(composition_model.render_args(studio,f,output,has_audio,False),f)
                     preview_and_peaks(d,f,output,preview)
                     process.check_cancelled()
                     old_settings = d['studio']['settings']
@@ -1116,7 +1150,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                     backup = composition_snapshot(read(pid))
                     d.update(studio=studio,source=output,preview=preview,duration=duration,
                              width=composition_model.SHAPES[clean['shape']][0],height=composition_model.SHAPES[clean['shape']][1],
-                             cues=cues,composition=clean,composition_backup=backup,missing_assets=[])
+                             cues=cues,composition={**clean, 'fx_baked': False},composition_backup=backup,missing_assets=[])
                     if delta or duration != backup['duration']:
                         d.pop('karaoke_backup',None)
                     if any(p.name == assets['audio']['file'] for p in added):
@@ -1417,8 +1451,9 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                         shutil.copy2(FONT_DIR / filename, fonts / filename)
                     style_cfg = {**DEFAULT_STYLE, **d.get('style', {})}
                     baked = d.get('composition') if isinstance(d.get('composition'), dict) else {}
+                    fx_already_baked = baked.get('fx_baked', True)
                     render_fx = {
-                        k: (DEFAULT_STYLE[k] if style_cfg[k] == baked.get(k, DEFAULT_STYLE[k]) else style_cfg[k])
+                        k: (DEFAULT_STYLE[k] if (fx_already_baked and style_cfg[k] == baked.get(k, DEFAULT_STYLE[k])) else style_cfg[k])
                         for k in ('video_filter', 'vignette', 'film_grain', 'sharpen', 'chromatic',
                                   'noise_cancel', 'voice_isolation', 'audio_effect')
                     }

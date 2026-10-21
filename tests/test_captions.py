@@ -783,3 +783,20 @@ class CaptionWorkflowTests(unittest.TestCase):
         self.assertEqual(len(after_multi['studio']['tracks'][0]['clips']), 3)
         self.assertTrue((self.root / 'library' / 'Caption Projects' / pid / after_multi['source']).is_file())
 
+    def test_zoom_in_and_typewriter_motion_presets_in_ass(self):
+        project = {
+            'cues': [dict(start=0.0, end=2.0, text='Hello world', words=[])],
+            'style': {**DEFAULT_STYLE, 'animation': 'zoom_in'},
+            'width': 1080,
+            'height': 1920,
+        }
+        ass_zoom = ass_text(project)
+        self.assertIn(r'\fscx70\fscy70\t(0,200,\fscx100\fscy100)', ass_zoom)
+
+        project['style']['animation'] = 'typewriter'
+        ass_typewriter = ass_text(project)
+        self.assertIn('Dialogue: 0,00:00:00.00', ass_typewriter)
+        self.assertIn('Hello world', ass_typewriter)
+        lines = [line for line in ass_typewriter.splitlines() if line.startswith('Dialogue: 0,')]
+        self.assertGreater(len(lines), 3)
+

@@ -2,6 +2,23 @@
 
 All notable changes to the AI Influencer Media Grabber project will be documented in this file.
 
+## [v2.7.0] - 2026-10-21
+
+### Added & Improved
+- **CapCut-Style Video Transitions Between Multi-Clip Cuts**:
+  - Seamlessly transition between cuts in multi-clip video sequences with 9 transitions: `Dissolve / Crossfade` (`fade`), `Fade to Black` (`fadeblack`), `Flash White` (`fadewhite`), `Slide Left` (`slideleft`), `Slide Right` (`slideright`), `Zoom / Circle Crop` (`circlecrop`), `Wipe Left` (`wipeleft`), `Wipe Right` (`wiperight`).
+  - Configurable transition durations from 0.1s to 2.0s with frame-accurate FFmpeg `xfade` chaining and color-dip blending.
+- **100% Non-Destructive Reversible Video Filters & Visual FX**:
+  - Composition generation and editing now preserves raw pristine pixels (`bake_fx=False`).
+  - Switching filters (e.g. `Vintage`, `Cyberpunk`, `Warm`, `Noir`) or returning to `None` immediately restores untouched original colors without double-baking or pixel degradation.
+  - GPU-accelerated 0ms CSS preview in the browser and dynamic single-pass FFmpeg application during export.
+- **Multi-Clip Background Audio Mixing with Silence Fallback**:
+  - Background audio tracks from video clips in multi-clip sequences are mixed under the main song with adjustable volume and audio ducking.
+  - Generates synchronized stereo silence (`anullsrc=r=44100:cl=stereo`) for still photos or muted clips so mixed sequences never desynchronize.
+- **Animated Caption & Title Card Motion Presets**:
+  - Added `Zoom In` (smooth scale-in entrance) and `Typewriter` (progressive character-by-character typewriter reveal) animations.
+  - Implemented both in the interactive player stage (`drawCaption`) and in exported ASS subtitles.
+
 ## [v2.6.1] - 2026-10-21
 
 - Fixed the social clip grabber's missing `cast` failure. Downloads now run in a cancellable worker with a three-minute deadline, file-size/duration limits, live-stream filtering, isolated temporary files and active-job tracking.
