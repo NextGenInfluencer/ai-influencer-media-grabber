@@ -61,8 +61,28 @@
                 </section>
                 <section>
                     <label>Image sizing <select id="carouselFit"><option value="fill">Fill / crop</option><option value="fit">Fit whole image</option></select></label>
+                    <label>Photo filter <select id="carouselFilter">
+                        <option value="none">None (Original)</option>
+                        <option value="bw">Black &amp; White</option>
+                        <option value="sepia">Sepia</option>
+                        <option value="vintage">Vintage Film</option>
+                        <option value="warm">Warm Golden Hour</option>
+                        <option value="cool">Cool Cinema</option>
+                        <option value="dramatic">Dramatic Contrast</option>
+                    </select></label>
                     <label>Safe margin (0–15%) <input id="carouselMargin" type="number" min="0" max="15" step="1" value="0"></label>
                     <label>Background colour <input id="carouselBg" type="color" value="#141526"></label>
+                    <label>Font <select id="carouselFont">
+                        <option value="Montserrat">Montserrat</option>
+                        <option value="Roboto">Roboto</option>
+                        <option value="Noto Sans KR">Noto Sans KR</option>
+                        <option value="Oswald">Oswald</option>
+                        <option value="Lobster">Lobster</option>
+                        <option value="Bangers">Bangers</option>
+                    </select></label>
+                    <label>Text size (2–10%) <input id="carouselFontSize" type="number" min="2" max="10" step="0.5" value="4.5"></label>
+                    <label>Text colour <input id="carouselTextColor" type="color" value="#ffffff"></label>
+                    <label class="ref-check"><input id="carouselTextBg" type="checkbox" checked> High-contrast boxed text backdrop</label>
                     <label>Shared text overlay <input id="carouselCaption" type="text" maxlength="300" placeholder="Optional caption across slides"></label>
                     <div class="ref-actions">
                         <button type="button" id="carouselApply" disabled>Apply shared style</button>

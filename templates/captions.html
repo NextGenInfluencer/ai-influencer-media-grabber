@@ -32,6 +32,8 @@
 <label>Vertical position<input id="position" type="range" min="10" max="95" step="1" value="85"></label>
 <label><input id="background" type="checkbox"> High-contrast boxed captions</label><label><input id="karaoke" type="checkbox"> Highlight the current word</label>
 <label><input id="cumulative" type="checkbox"> Cumulative karaoke (keep words lit)</label><label><input id="word_pop" type="checkbox"> Active word pop (115% scale)</label>
+<label>Line animation<select id="animation"><option value="none">Instant (None)</option><option value="fade">Smooth Fade In/Out</option><option value="pop">Pop / Scale Entrance</option><option value="slide_up">Slide Up Entrance</option></select></label>
+<label>Neon glow<input id="glow" type="range" min="0" max="10" step="0.5" value="0"></label>
 <h3>Audio visualizer</h3>
 <label><input id="visualizer" type="checkbox"> Show audio-reactive visualizer</label>
 <label>Visualizer style<select id="visualizer_style"><option value="spectrum">Spectrum Bars</option><option value="waveform">Waveform</option></select></label>
@@ -48,7 +50,7 @@
 <h3>Audio FX & cleanup</h3>
 <label><input id="noise_cancel" type="checkbox"> Noise cancellation (AI/FFT)</label>
 <label><input id="voice_isolation" type="checkbox"> Voice isolation & clarity</label>
-<label>Audio effect<select id="audio_effect"><option value="none">None</option><option value="echo">Echo</option><option value="concert_hall">Concert Hall Reverb</option><option value="studio_vocal">Studio Vocal Polish</option><option value="lofi_radio">Lo-Fi / Vintage Radio</option><option value="bass_boost">Bass Boost</option><option value="chorus">Vocal Chorus</option></select></label>
+<label>Audio effect<select id="audio_effect"><option value="none">None</option><option value="slowed_reverb">Slowed + Reverb (TikTok)</option><option value="nightcore">Nightcore / High Pitch</option><option value="vocal_remover">Vocal Remover (Karaoke)</option><option value="echo">Echo</option><option value="concert_hall">Concert Hall Reverb</option><option value="studio_vocal">Studio Vocal Polish</option><option value="lofi_radio">Lo-Fi / Vintage Radio</option><option value="bass_boost">Bass Boost</option><option value="chorus">Vocal Chorus</option></select></label>
 <div class="row"><button id="saveStyle">Save my style</button><button id="loadStyle">Use my style</button></div>
 <p class="hint">Montserrat, Roboto, Noto Sans KR, Oswald, Lobster and Bangers are bundled Google Fonts with Greek, Korean and French support. Karaoke requires word timings.</p>
 </section>
@@ -130,7 +132,7 @@
 <label>Fade out (s)<input id="comp_fade_out" type="number" min="0" max="60" step=".1"></label>
 <label><input id="comp_noise_cancel" type="checkbox"> Noise cancellation (FFT denoise)</label>
 <label><input id="comp_voice_isolation" type="checkbox"> Voice isolation & speech clarity</label>
-<label>Audio effect<select id="comp_audio_effect"><option value="none">None</option><option value="echo">Echo</option><option value="concert_hall">Concert Hall Reverb</option><option value="studio_vocal">Studio Vocal Polish</option><option value="lofi_radio">Lo-Fi / Vintage Radio</option><option value="bass_boost">Bass Boost</option><option value="chorus">Vocal Chorus</option></select></label>
+<label>Audio effect<select id="comp_audio_effect"><option value="none">None</option><option value="slowed_reverb">Slowed + Reverb (TikTok)</option><option value="nightcore">Nightcore / High Pitch</option><option value="vocal_remover">Vocal Remover (Karaoke)</option><option value="echo">Echo</option><option value="concert_hall">Concert Hall Reverb</option><option value="studio_vocal">Studio Vocal Polish</option><option value="lofi_radio">Lo-Fi / Vintage Radio</option><option value="bass_boost">Bass Boost</option><option value="chorus">Vocal Chorus</option></select></label>
 <label>Background volume (0–2)<input id="comp_background_volume" type="number" min="0" max="2" step=".05"></label>
 <label><input id="comp_ducking" type="checkbox"> Auto-duck background audio under song</label>
 <p class="hint">0 mutes background audio. Song trimming and delay move lyrics with the audio. Lines outside the new range are removed from this version; cut lines are flagged for review. Restore previous composition recovers them.</p>
@@ -145,7 +147,7 @@
 <p id="stockStatus" class="dialogStatus error" role="status"></p>
 <p class="hint">Search free looping videos and photos from Pexels and Pixabay. Downloaded assets are saved to your local Stock Media library with creator attribution and license details retained in the project.</p>
 <div class="row">
-<label>Provider<select id="stockProvider"><option value="pexels">Pexels</option><option value="pixabay">Pixabay</option></select></label>
+<label>Provider<select id="stockProvider"><option value="pixabay" selected>Pixabay</option><option value="pexels">Pexels (Existing keys)</option></select></label>
 <label>Media type<select id="stockKind"><option value="video">Looping Videos</option><option value="image">Photos</option></select></label>
 <label>Orientation<select id="stockOrientation"><option value="portrait">Portrait (9:16)</option><option value="landscape">Landscape (16:9)</option><option value="square">Square (1:1)</option><option value="all">All orientations</option></select></label>
 <label>Max duration (s)<input id="stockMaxDuration" type="number" min="0" max="600" step="5" value="60"></label>
@@ -155,7 +157,7 @@
 <button id="stockSearch" class="primary" type="button">Search stock</button>
 </div>
 <details id="stockKeyDetails"><summary id="stockKeySummary">API key setup (optional · local uploads work without keys)</summary>
-<p class="hint">Enter a free API key from <a href="https://www.pexels.com/api/" target="_blank" rel="noopener noreferrer">Pexels API</a> or <a href="https://pixabay.com/api/docs/" target="_blank" rel="noopener noreferrer">Pixabay API</a>. Stored locally on your PC.</p>
+<p class="hint">Get an instant free key from <a href="https://pixabay.com/api/docs/" target="_blank" rel="noopener noreferrer">Pixabay API</a> (shown under Parameters → key after logging in). Note: Pexels has temporarily paused new API key signups, though you can still download videos from <a href="https://www.pexels.com/videos/" target="_blank" rel="noopener noreferrer">pexels.com</a> and upload them directly.</p>
 <div class="row">
 <input id="stockApiKey" type="password" maxlength="200" placeholder="Paste API key for selected provider" aria-label="Stock provider API key">
 <button id="saveStockKey" type="button">Save key</button>

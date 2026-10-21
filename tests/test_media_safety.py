@@ -342,13 +342,14 @@ class MediaTests(unittest.TestCase):
         rev_order = list(reversed(ids))
         u = self.client.post(f'/api/carousel/{cid}/update', json={
             'order': rev_order,
-            'settings': {'aspect': 'square', 'fit': 'fit', 'margin': 5, 'shared_caption': 'Φταίω Εγώ · 사랑해'},
+            'settings': {'aspect': 'square', 'fit': 'fit', 'filter': 'sepia', 'font': 'Lobster', 'font_size': 5.5, 'text_color': '#ffd166', 'margin': 5, 'shared_caption': 'Φταίω Εγώ · 사랑해'},
             'slides': [{'id': rev_order[0], 'rotate': 90, 'caption': 'Slide 1 Custom'}]
         }, headers=self.headers)
         self.assertEqual(u.status_code, 200, u.data)
         updated = u.json
         self.assertEqual([s['id'] for s in updated['slides']], rev_order)
         self.assertEqual(updated['slides'][0]['dimensions'], [1080, 1080])
+        self.assertEqual(updated['settings']['filter'], 'sepia')
 
         # Verify originals remain untouched on disk
         c_folder = self.save / 'Carousels' / cid

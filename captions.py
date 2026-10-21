@@ -31,6 +31,7 @@ DEFAULT_STYLE = dict(font='Arial', size=5, color='#ffffff', highlight='#ffdc55',
                      cumulative=False, word_pop=False,
                      visualizer=False, visualizer_style='spectrum', visualizer_position='bottom',
                      visualizer_height=18, visualizer_sensitivity=1, visualizer_color='#bba6ff',
+                     animation='none', glow=0,
                      video_filter='none', vignette=False, film_grain=0, sharpen=0, chromatic=0,
                      noise_cancel=False, voice_isolation=False, audio_effect='none')
 FONTS = {'Arial', 'Verdana', 'Georgia', 'Impact', 'Trebuchet MS'}
@@ -101,6 +102,9 @@ def validate_edit(data, duration):
         raise ValueError('Choose a supported visualizer style and position.')
     if style['video_filter'] not in composition_model.VIDEO_FILTERS or style['audio_effect'] not in composition_model.AUDIO_EFFECTS:
         raise ValueError('Choose a supported video filter and audio effect.')
+    if style['animation'] not in composition_model.CAPTION_ANIMATIONS:
+        raise ValueError('Choose a supported caption animation.')
+    style['glow'] = number(style['glow'], 0, 10)
     style['size'] = number(style['size'], 2, 12)
     style['outline'] = number(style['outline'], 0, 5)
     style['position'] = number(style['position'], 10, 95)
@@ -288,7 +292,27 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text'
                     else:
                         parts.append(sep + w_esc)
                 body = ''.join(parts)
-            position = r'{\pos(' + f'{width/2:.1f},{height*style["position"]/100:.1f}' + ')}'
+            cx, cy = width / 2, height * style['position'] / 100
+            anim = style.get('animation', 'none')
+            glow = float(style.get('glow') or 0)
+            is_first = abs(start - cue['start']) < 0.005
+            is_last = abs(end - cue['end']) < 0.005
+            tags = []
+            if anim == 'slide_up' and is_first:
+                tags.append(rf'\move({cx:.1f},{cy+height*0.035:.1f},{cx:.1f},{cy:.1f},0,180)')
+            else:
+                tags.append(rf'\pos({cx:.1f},{cy:.1f})')
+            if anim == 'fade':
+                fi = 180 if is_first else 0
+                fo = 180 if is_last else 0
+                if fi or fo:
+                    tags.append(rf'\fad({fi},{fo})')
+            elif anim == 'pop' and is_first:
+                tags.append(r'\fscx85\fscy85\t(0,160,\fscx100\fscy100)')
+            if glow > 0:
+                tags.append(rf'\blur{glow:.1f}')
+                body = body.replace(r'{\r}', r'{\r\blur' + f'{glow:.1f}' + '}')
+            position = '{' + ''.join(tags) + '}'
             output.append(f"Dialogue: 0,{timestamp(start, True)},{timestamp(end, True)},Default,,0,0,0,,{position}{body}")
     return '\n'.join(output) + '\n'
 

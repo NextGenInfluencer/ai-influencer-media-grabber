@@ -40,6 +40,7 @@ VIDEO_FILTERS = {
     'dramatic': 'eq=contrast=1.35:brightness=-0.04:saturation=0.85,vignette=PI/4',
     'dreamy': 'gblur=sigma=1.2,eq=brightness=0.06:contrast=0.95:saturation=1.2',
 }
+CAPTION_ANIMATIONS = {'none', 'fade', 'pop', 'slide_up'}
 AUDIO_EFFECTS = {
     'none': '',
     'echo': 'aecho=0.8:0.88:220:0.4',
@@ -48,6 +49,9 @@ AUDIO_EFFECTS = {
     'lofi_radio': 'highpass=f=400,lowpass=f=3200,acompressor=threshold=-15dB:ratio=4,afftdn=nf=-20',
     'bass_boost': 'bass=g=8:f=110:w=0.6,acompressor=threshold=-14dB:ratio=2',
     'chorus': 'chorus=0.7:0.9:55:0.4:0.25:2',
+    'slowed_reverb': 'aresample=44100,asetrate=38808,aresample=44100,atempo=1.13636,aecho=0.8:0.88:350|700:0.35|0.25',
+    'nightcore': 'aresample=44100,asetrate=50715,aresample=44100,atempo=0.86957',
+    'vocal_remover': 'stereotools=mlev=0.015625',
 }
 DEFAULTS = dict(shape='portrait', color='#141526', fit='fill', x=50, y=50,
                 blur=0, dim=0, overlay='#000000', opacity=0, zoom=0,

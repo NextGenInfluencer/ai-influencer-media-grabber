@@ -77,7 +77,31 @@ const CaptionTiming = (() => {
         }
         return rects;
     }
-    return {validate, visualizerBars};
+    function detectBeats(peaks, duration) {
+        if (!Array.isArray(peaks) || peaks.length < 8 || !(duration > 0)) return [];
+        const n = peaks.length;
+        let maxP = 0.01;
+        for (const p of peaks) if (Number(p) > maxP) maxP = Number(p);
+        const win = Math.max(3, Math.round(n / Math.max(4, duration * 2)));
+        const beats = [];
+        let lastBeat = -1;
+        for (let i = 2; i < n - 2; i++) {
+            const val = Number(peaks[i]);
+            if (val < maxP * 0.35) continue;
+            if (val < Number(peaks[i-1]) || val < Number(peaks[i+1]) || val < Number(peaks[i-2]) || val < Number(peaks[i+2])) continue;
+            let sum = 0, cnt = 0;
+            for (let j = Math.max(0, i - win); j <= Math.min(n - 1, i + win); j++) { sum += Number(peaks[j]); cnt++; }
+            if (val > (sum / Math.max(1, cnt)) * 1.3) {
+                const sec = Number(((i / (n - 1)) * duration).toFixed(3));
+                if (sec - lastBeat >= 0.32) {
+                    beats.push(sec);
+                    lastBeat = sec;
+                }
+            }
+        }
+        return beats;
+    }
+    return {validate, visualizerBars, detectBeats};
 })();
 if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
 /* Local caption editor. All imported text is rendered through textContent. */
@@ -87,9 +111,9 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
     const $ = id => document.getElementById(id), video = $('video');
     const token = document.querySelector('meta[name="media-token"]').content;
     const copy = value => JSON.parse(JSON.stringify(value));
-    const styleKeys = ['font','size','color','highlight','outline','position','background','karaoke','cumulative','word_pop','visualizer','visualizer_style','visualizer_position','visualizer_height','visualizer_sensitivity','visualizer_color','video_filter','vignette','film_grain','sharpen','chromatic','noise_cancel','voice_isolation','audio_effect'];
+    const styleKeys = ['font','size','color','highlight','outline','position','background','karaoke','cumulative','word_pop','animation','glow','visualizer','visualizer_style','visualizer_position','visualizer_height','visualizer_sensitivity','visualizer_color','video_filter','vignette','film_grain','sharpen','chromatic','noise_cancel','voice_isolation','audio_effect'];
     const styleChecks = ['background','karaoke','cumulative','word_pop','visualizer','vignette','noise_cancel','voice_isolation'];
-    const styleNumbers = ['size','outline','position','visualizer_height','visualizer_sensitivity','film_grain','sharpen','chromatic'];
+    const styleNumbers = ['size','outline','position','glow','visualizer_height','visualizer_sensitivity','film_grain','sharpen','chromatic'];
     const cssVideoFilters = {none:'',bw:'grayscale(1)',sepia:'sepia(1)',vintage:'sepia(0.45) contrast(1.1) brightness(0.95)',cyberpunk:'contrast(1.25) saturate(1.6) hue-rotate(-12deg)',warm:'sepia(0.22) saturate(1.2) brightness(1.03)',cool:'saturate(1.1) contrast(1.08) hue-rotate(12deg)',dramatic:'contrast(1.35) brightness(0.96) saturate(0.85)',dreamy:'blur(1.2px) brightness(1.06) contrast(0.95) saturate(1.2)'};
     let project = null, selected = -1, history = [], future = [], dirty = false;
     let saveTimer, pollTimer, saving = null, generation = 0, busy = false, dragging = false, pendingPreview = false;
@@ -248,8 +272,24 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         if(vig) vig.hidden=!((s.vignette && !baked.vignette) || ((activeFilter==='vintage'||activeFilter==='dramatic') && !baked.vignette));
         const compSet=project.studio?.settings||project.composition||{};
         const showTitle=compSet.title_text && compSet.title_duration>0 && video.currentTime>=0 && video.currentTime<=compSet.title_duration;
+        const glowPx=Number(s.glow||0)*2.5;
+        let animTransform='translateY(-100%)', animOpacity='1';
+        if(cue && s.animation && s.animation!=='none') {
+            const elapsed=Math.max(0,video.currentTime-cue.start), remain=Math.max(0,cue.end-video.currentTime);
+            if(s.animation==='fade') {
+                animOpacity=String(Math.min(1, elapsed/0.18, remain/0.18));
+            } else if(s.animation==='pop' && elapsed<0.16) {
+                const sc=0.85+0.15*(elapsed/0.16);
+                animTransform=`translateY(-100%) scale(${sc.toFixed(3)})`;
+            } else if(s.animation==='slide_up' && elapsed<0.18) {
+                const dy=(1-elapsed/0.18)*(h*0.035);
+                animTransform=`translateY(calc(-100% + ${dy.toFixed(1)}px))`;
+                animOpacity=String(Math.min(1, elapsed/0.15));
+            }
+        }
         Object.assign(box.style,{fontFamily:`"${s.font}",Roboto,"Noto Sans KR",sans-serif`,fontSize:h*s.size/100+'px',color:s.color,
-            top:(showTitle&&!cue?28:s.position)+'%',webkitTextStroke:`${2*h*s.outline/360}px black`});
+            top:(showTitle&&!cue?28:s.position)+'%',webkitTextStroke:`${2*h*s.outline/360}px black`,
+            transform:animTransform,opacity:animOpacity,textShadow:glowPx>0?`0 0 ${glowPx.toFixed(1)}px ${s.highlight}`:'none'});
         $('playingCaption').textContent=cue ? 'Playing: '+cue.text+((s.karaoke||s.cumulative||s.word_pop)&&!cue.words?.length?' · No word timings — use Add karaoke timing.':'') : (showTitle ? 'Title card: '+compSet.title_text : '');
         if(!cue && !showTitle) return;
         const content=document.createElement('span');
@@ -314,7 +354,8 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
     }
     function snapTime(val, minBound, maxBound) {
         if(!$('snapTimeline')?.checked) return Math.max(minBound, Math.min(maxBound, val));
-        const targets=[0, project.duration, video.currentTime, Math.round(val*4)/4];
+        const beats=CaptionTiming.detectBeats(project.peaks, project.duration);
+        const targets=[0, project.duration, video.currentTime, ...beats, Math.round(val*4)/4];
         for(const t of targets) {
             if(t>=minBound && t<=maxBound && Math.abs(val-t)<0.08) return t;
         }
@@ -352,6 +393,11 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         const ctx=canvas.getContext('2d');ctx.fillStyle='#72cfc5';
         const peaks=project.peaks||[], max=Math.max(.01,...peaks);
         peaks.forEach((p,i)=>{const h=p/max*70;ctx.fillRect(i/peaks.length*width,40-h/2,Math.max(1,width/peaks.length),h);});
+        const beats=CaptionTiming.detectBeats(peaks, project.duration);
+        if(beats.length) {
+            ctx.fillStyle='#ffd166aa';
+            beats.forEach(b=>{const bx=Math.round((b/project.duration)*width);ctx.fillRect(bx,0,2,12);ctx.fillRect(bx,68,2,12);});
+        }
         $('blocks').replaceChildren();
         project.cues.forEach((c,i)=>{
             const block=document.createElement('div');block.className='block'+(selected===i?' selected':'');block.textContent=c.text;
@@ -489,7 +535,8 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         try {
             const keys=await api('/api/captions/stock/keys');
             const prov=$('stockProvider').value;
-            $('stockKeySummary').textContent=keys[prov]?`API key setup (${prov.toUpperCase()} key saved ✓)`:'API key setup (optional · local uploads work without keys)';
+            $('stockKeySummary').textContent=keys[prov]?`API key setup (${prov.toUpperCase()} key saved ✓)`:'API key setup (paste your free API key below)';
+            if($('stockKeyDetails')) $('stockKeyDetails').open=!keys[prov];
         } catch {}
     }
     function openStockDialog(target) {

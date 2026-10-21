@@ -14,7 +14,7 @@ import zipfile
 import cv2
 from flask import Blueprint, jsonify, request, send_file
 import imageio_ffmpeg
-from PIL import Image, ImageDraw, ImageFont, ImageOps
+from PIL import Image, ImageDraw, ImageEnhance, ImageFont, ImageOps
 
 from media_safety import safe_media_name
 
@@ -25,12 +25,23 @@ CAROUSEL_PRESETS = {
     'story': (1080, 1920),      # 9:16 Reels / Stories / TikTok photo mode
     'landscape': (1920, 1080),  # 16:9 YouTube / X post
 }
+CAROUSEL_FONTS = {
+    'Montserrat': 'Montserrat[wght].ttf',
+    'Roboto': 'Roboto[wdth,wght].ttf',
+    'Noto Sans KR': 'NotoSansKR[wght].ttf',
+    'Oswald': 'Oswald[wght].ttf',
+    'Lobster': 'Lobster-Regular.ttf',
+    'Bangers': 'Bangers-Regular.ttf',
+}
+CAROUSEL_FILTERS = {'none', 'bw', 'sepia', 'vintage', 'warm', 'cool', 'dramatic'}
 CAROUSEL_DEFAULTS = dict(
     aspect='portrait',
     fit='fill',
     background='#141526',
     margin=0,
     rotate=0,
+    filter='none',
+    font='Montserrat',
     shared_caption='',
     text_color='#ffffff',
     text_bg=True,
@@ -38,9 +49,33 @@ CAROUSEL_DEFAULTS = dict(
 )
 
 
-def _pick_carousel_font(text: str, pixel_size: int):
+def _apply_photo_filter(im: Image.Image, flt: str) -> Image.Image:
+    if flt == 'bw':
+        return ImageOps.grayscale(im).convert('RGB')
+    if flt == 'sepia':
+        return ImageOps.colorize(ImageOps.grayscale(im), '#2b1d0e', '#f5e1c0').convert('RGB')
+    if flt == 'vintage':
+        sep = ImageOps.colorize(ImageOps.grayscale(im), '#241911', '#f2dec2').convert('RGB')
+        blended = Image.blend(im, sep, 0.45)
+        return ImageEnhance.Contrast(blended).enhance(1.12)
+    if flt == 'warm':
+        warm_layer = ImageOps.colorize(ImageOps.grayscale(im), '#2e1808', '#ffe4b5').convert('RGB')
+        blended = Image.blend(im, warm_layer, 0.22)
+        return ImageEnhance.Color(blended).enhance(1.2)
+    if flt == 'cool':
+        cool_layer = ImageOps.colorize(ImageOps.grayscale(im), '#0c1b2e', '#d6ecff').convert('RGB')
+        blended = Image.blend(im, cool_layer, 0.24)
+        return ImageEnhance.Contrast(blended).enhance(1.08)
+    if flt == 'dramatic':
+        desat = ImageEnhance.Color(im).enhance(0.82)
+        return ImageEnhance.Contrast(desat).enhance(1.38)
+    return im
+
+
+def _pick_carousel_font(text: str, pixel_size: int, font_name: str = 'Montserrat'):
     has_kr = bool(re.search(r'[\u1100-\u11ff\u3130-\u318f\uac00-\ud7af]', text))
-    font_file = FONT_DIR / ('NotoSansKR[wght].ttf' if has_kr else 'Montserrat[wght].ttf')
+    chosen = 'NotoSansKR[wght].ttf' if has_kr else CAROUSEL_FONTS.get(font_name, 'Montserrat[wght].ttf')
+    font_file = FONT_DIR / chosen
     try:
         if font_file.is_file():
             return ImageFont.truetype(str(font_file), max(14, pixel_size))
@@ -70,6 +105,9 @@ def render_carousel_slide(orig_path: Path, dest_path: Path, settings: dict, slid
         im = ImageOps.exif_transpose(raw).convert('RGB')
         if rotate_deg in (90, 180, 270):
             im = im.rotate(-rotate_deg, expand=True)
+        flt = str(slide.get('filter') or s.get('filter') or 'none')
+        if flt in CAROUSEL_FILTERS and flt != 'none':
+            im = _apply_photo_filter(im, flt)
         canvas = Image.new('RGB', (canvas_w, canvas_h), bg_color)
         if s.get('fit') == 'fit':
             contained = ImageOps.contain(im, (inner_w, inner_h), Image.Resampling.LANCZOS)
@@ -86,7 +124,7 @@ def render_carousel_slide(orig_path: Path, dest_path: Path, settings: dict, slid
         overlay = Image.new('RGBA', (canvas_w, canvas_h), (0, 0, 0, 0))
         draw = ImageDraw.Draw(overlay)
         px_size = round(canvas_h * max(2.0, min(10.0, float(s.get('font_size') or 4.5))) / 100.0)
-        font = _pick_carousel_font(caption, px_size)
+        font = _pick_carousel_font(caption, px_size, str(s.get('font') or 'Montserrat'))
         bbox = draw.multiline_textbbox((0, 0), caption, font=font, align='center', spacing=8)
         tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
         tx = (canvas_w - tw) / 2

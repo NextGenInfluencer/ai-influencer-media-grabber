@@ -105,6 +105,12 @@
         dialog.showModal();
         try { await refreshProjects(); await refreshCarousels(); } catch (e) { status(e.message); }
     };
+    window.openCarouselStudio = async () => {
+        dialog.showModal();
+        const ws = el('carouselWorkspace');
+        if (ws) { ws.open = true; setTimeout(() => ws.scrollIntoView({behavior: 'smooth', block: 'start'}), 60); }
+        try { await refreshProjects(); await refreshCarousels(); } catch (e) { cStatus(e.message); }
+    };
     el('referenceClose').onclick = () => dialog.close();
     el('referenceVideoInput').onchange = () => {
         clearResults();
@@ -197,8 +203,13 @@
         if (!el('carouselSlides')) return;
         el('carouselAspect').value = data.settings.aspect || 'portrait';
         el('carouselFit').value = data.settings.fit || 'fill';
+        if (el('carouselFilter')) el('carouselFilter').value = data.settings.filter || 'none';
         el('carouselMargin').value = data.settings.margin || 0;
         el('carouselBg').value = data.settings.background || '#141526';
+        if (el('carouselFont')) el('carouselFont').value = data.settings.font || 'Montserrat';
+        if (el('carouselFontSize')) el('carouselFontSize').value = data.settings.font_size ?? 4.5;
+        if (el('carouselTextColor')) el('carouselTextColor').value = data.settings.text_color || '#ffffff';
+        if (el('carouselTextBg')) el('carouselTextBg').checked = data.settings.text_bg !== false;
         el('carouselCaption').value = data.settings.shared_caption || '';
         el('carouselApply').disabled = false;
         el('carouselExport').href = `/api/carousel/${data.id}/export`;
@@ -262,8 +273,13 @@
             settings: {
                 aspect: el('carouselAspect').value,
                 fit: el('carouselFit').value,
+                filter: el('carouselFilter') ? el('carouselFilter').value : 'none',
                 margin: Number(el('carouselMargin').value || 0),
                 background: el('carouselBg').value,
+                font: el('carouselFont') ? el('carouselFont').value : 'Montserrat',
+                font_size: el('carouselFontSize') ? Number(el('carouselFontSize').value || 4.5) : 4.5,
+                text_color: el('carouselTextColor') ? el('carouselTextColor').value : '#ffffff',
+                text_bg: el('carouselTextBg') ? el('carouselTextBg').checked : true,
                 shared_caption: el('carouselCaption').value
             }
         });

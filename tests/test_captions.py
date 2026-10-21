@@ -709,6 +709,8 @@ class CaptionWorkflowTests(unittest.TestCase):
         # 1. Apply video filters & audio effects directly via live style panel and render
         fx_style = {
             **before['style'],
+            'animation': 'slide_up',
+            'glow': 4.0,
             'video_filter': 'sepia',
             'vignette': True,
             'film_grain': 6,
@@ -716,7 +718,7 @@ class CaptionWorkflowTests(unittest.TestCase):
             'chromatic': 2,
             'noise_cancel': True,
             'voice_isolation': True,
-            'audio_effect': 'echo',
+            'audio_effect': 'slowed_reverb',
         }
         saved = self.j(self.client.put(f'/api/captions/{pid}', json={
             'revision': before['revision'],
@@ -725,8 +727,13 @@ class CaptionWorkflowTests(unittest.TestCase):
             'timing': before['timing'],
         }))
         self.assertEqual(saved['style']['video_filter'], 'sepia')
+        self.assertEqual(saved['style']['animation'], 'slide_up')
+        self.assertEqual(saved['style']['glow'], 4.0)
         self.assertTrue(saved['style']['voice_isolation'])
-        self.assertEqual(saved['style']['audio_effect'], 'echo')
+        self.assertEqual(saved['style']['audio_effect'], 'slowed_reverb')
+        ass_out = ass_text(saved)
+        self.assertIn(r'\move(', ass_out)
+        self.assertIn(r'\blur4.0', ass_out)
 
         r_fx = self.client.post(f'/api/captions/{pid}/render', json={'preview': True, 'quality': 'draft'})
         self.assertEqual(r_fx.status_code, 202, r_fx.json)
