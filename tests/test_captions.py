@@ -950,4 +950,59 @@ class CaptionWorkflowTests(unittest.TestCase):
         self.assertEqual(fixed['cues'][0]['words'][0]['start'], start)
         self.assertEqual(fixed['cues'][0]['words'][-1]['end'], end)
 
+    def test_detect_face_in_video_and_track_face_endpoint(self):
+        """Test OpenCV face detection helper and AR track-face endpoint."""
+        import numpy as np
+        import cv2
+        from captions import detect_face_in_video
+        from unittest.mock import MagicMock, patch
+
+        # Nonexistent video returns clean found=False
+        res = detect_face_in_video(Path('nonexistent.mp4'), 0.0)
+        self.assertFalse(res['found'])
+
+        # Mock video capture and cascade detection
+        frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        mock_cap = MagicMock()
+        mock_cap.isOpened.return_value = True
+        mock_cap.read.return_value = (True, frame)
+        mock_cap.get.side_effect = lambda prop: 300.0 if prop == cv2.CAP_PROP_FRAME_COUNT else 30.0
+
+        with patch('captions.cv2.VideoCapture', return_value=mock_cap), \
+             patch('captions.cv2.CascadeClassifier.detectMultiScale', return_value=[(100, 100, 200, 200)]):
+            test_path = Path(self.root / 'library' / 'Caption Projects' / 'dummy.mp4')
+            test_path.parent.mkdir(parents=True, exist_ok=True)
+            test_path.touch()
+
+            # Target: head
+            res_head = detect_face_in_video(test_path, 1.0, target='head')
+            self.assertTrue(res_head['found'])
+            self.assertEqual(res_head['target'], 'head')
+            self.assertEqual(res_head['x'], 31)
+            self.assertEqual(res_head['y'], 14)
+
+            # Target: eyes
+            res_eyes = detect_face_in_video(test_path, 1.0, target='eyes')
+            self.assertTrue(res_eyes['found'])
+            self.assertEqual(res_eyes['target'], 'eyes')
+            self.assertEqual(res_eyes['x'], 31)
+            self.assertEqual(res_eyes['y'], 62)
+
+            # Target: center
+            res_center = detect_face_in_video(test_path, 1.0, target='center')
+            self.assertTrue(res_center['found'])
+            self.assertEqual(res_center['target'], 'center')
+            self.assertEqual(res_center['x'], 31)
+            self.assertEqual(res_center['y'], 42)
+
+            # Test API endpoint
+            pid, _ = self.karaoke_project()
+            resp = self.client.post(f'/api/captions/{pid}/track-face', json={'time': 0.5, 'target': 'head'})
+            self.assertEqual(resp.status_code, 200)
+            data = resp.json
+            self.assertTrue(data['found'])
+            self.assertEqual(data['x'], 31)
+            self.assertEqual(data['y'], 14)
+
+
 

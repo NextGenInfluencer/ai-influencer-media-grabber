@@ -66,6 +66,19 @@ The alignment-language selector supports English, French, Korean, Greek, Spanish
 
 Failed lines retain their earlier words/timings. **Estimate missing timings** is an explicit approximate fallback, labelled for review. A cancelled operation preserves saved captions; **Restore previous karaoke version** restores the captions from before the last completed karaoke operation, including after reopening the project. Undo also works in the editing session. Long individual lines over 60 seconds need splitting before alignment.
 
+### New in v2.8.0 (TikTok & Snapchat Aesthetic Filters + OpenCV AR Face Tracking)
+
+- **TikTok & Snapchat Signature Aesthetic Filters (1-Click Presets & 0ms Live Preview):** Instantly apply iconic social media visual presets with real-time CSS stage preview and native FFmpeg export:
+  - **✨ TikTok Beauty Glow:** Soft-skin porcelain smoothing and luminous highlight bloom.
+  - **📼 VHS 90s Camcorder:** Chromatic RGB aberration, retro tape noise, and scanline texture.
+  - **🌅 Teal & Orange Cinematic:** Deep teal shadows contrasted with warm peach skin tones.
+  - **💖 Vaporwave Neon:** Y2K electric pink and magenta punch with hyper-saturated anime colors.
+  - **💎 KiraKira / Bling Sparkle:** Specular highlight pop and glitz starburst highlights.
+  - **🐟 Fish-Eye Bubble Lens:** Convex wide-angle lens distortion for skate videos and meme POVs.
+  - **🎞️ Film Noir / Gotham Dark:** Crushed moody blacks and desaturated silver tones.
+- **OpenCV-Powered AR Face Tracking & Auto-Snapping (🎯 Auto-Snap to Face):** Local computer vision face detection tracks subjects across video frames and automatically snaps stickers/props to the 👑 Head / Crown, 🕶️ Eyes / Shades, or 🎭 Face Center with zero cloud subscriptions or API keys.
+- **Sub-Millisecond Float Precision Sanitization & Auto-Clamping:** Resilient boundary clamping prevents floating-point fraction errors when aligning lyrics, timing words, or dragging cue blocks on the timeline.
+
 ### New in v2.7.2 (Cut-to-the-Beat, Per-Clip Speed & Sticker Overlays)
 
 - **Cut-to-the-Beat / Auto Beat-Drop Snapping (`⚡ Cut to Beat`):** Analyze audio transients and snap all clip cuts directly to musical beat drops with 1 click for rhythmic TikTok and Reels videos.
@@ -143,6 +156,7 @@ The in-app GitHub updater checks published releases and validates staged changes
 
 | Version | Highlights |
 | --- | --- |
+| v2.8.0 | TikTok & Snapchat aesthetic filters, OpenCV AR face tracking & auto-snapping, float precision auto-clamping |
 | v2.7.2 | Cut-to-the-beat auto snapping, per-clip speed ramping (0.25x to 4x), stickers & emoji graphic overlay track |
 | v2.7.1 | Split clip at playhead (Ctrl+B), custom font upload (.ttf/.otf), 1080p 60fps & 4K UHD presets, timeline audio indicators |
 | v2.7.0 | Video transitions between multi-clip cuts, 100% reversible non-destructive effects, multi-clip background audio mixing and caption motion presets (Zoom In, Typewriter) |

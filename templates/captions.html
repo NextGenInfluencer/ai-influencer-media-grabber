@@ -345,29 +345,43 @@
           </div>
 
           <div class="subCard stackForm style">
-            <h3>CapCut Video Filters (Live Preview)</h3>
+            <h3>CapCut, TikTok &amp; Snapchat Video Filters (Live Preview)</h3>
             <div class="filterPills" id="filterQuickPills">
               <button type="button" data-filter-pill="none">Original</button>
-              <button type="button" data-filter-pill="bw">B&amp;W</button>
-              <button type="button" data-filter-pill="sepia">Sepia</button>
-              <button type="button" data-filter-pill="vintage">Vintage</button>
-              <button type="button" data-filter-pill="cyberpunk">Cyberpunk</button>
+              <button type="button" data-filter-pill="beauty">✨ Beauty Glow</button>
+              <button type="button" data-filter-pill="vhs">📼 VHS 90s</button>
+              <button type="button" data-filter-pill="teal_orange">🌅 Teal &amp; Orange</button>
+              <button type="button" data-filter-pill="vaporwave">💖 Vaporwave</button>
+              <button type="button" data-filter-pill="bling">💎 Bling Sparkle</button>
+              <button type="button" data-filter-pill="fisheye">🐟 Fish-Eye</button>
+              <button type="button" data-filter-pill="noir">🎞️ Noir</button>
               <button type="button" data-filter-pill="warm">Golden Hour</button>
               <button type="button" data-filter-pill="cool">Cool Cinema</button>
+              <button type="button" data-filter-pill="cyberpunk">Cyberpunk</button>
+              <button type="button" data-filter-pill="vintage">Vintage</button>
               <button type="button" data-filter-pill="dramatic">Dramatic</button>
               <button type="button" data-filter-pill="dreamy">Dreamy Glow</button>
+              <button type="button" data-filter-pill="bw">B&amp;W</button>
+              <button type="button" data-filter-pill="sepia">Sepia</button>
             </div>
             <label>Filter preset
               <select id="video_filter">
                 <option value="none">None (Original)</option>
-                <option value="bw">Black &amp; White</option>
-                <option value="sepia">Sepia</option>
-                <option value="vintage">Vintage Film</option>
-                <option value="cyberpunk">Cyberpunk Neon</option>
+                <option value="beauty">✨ Beauty Glow (TikTok Smooth Cam)</option>
+                <option value="vhs">📼 VHS 90s Camcorder (Snapchat Retro)</option>
+                <option value="teal_orange">🌅 Teal &amp; Orange (Cinematic Moody)</option>
+                <option value="vaporwave">💖 Vaporwave Neon (Anime Pink)</option>
+                <option value="bling">💎 Bling Sparkle (KiraKira Glitz)</option>
+                <option value="fisheye">🐟 Fish-Eye Lens (TikTok Bubble)</option>
+                <option value="noir">🎞️ Film Noir (Gotham Dark)</option>
                 <option value="warm">Warm Golden Hour</option>
                 <option value="cool">Cool Cinema</option>
+                <option value="cyberpunk">Cyberpunk Neon</option>
+                <option value="vintage">Vintage Film</option>
                 <option value="dramatic">Dramatic Contrast</option>
                 <option value="dreamy">Dreamy Soft Glow</option>
+                <option value="bw">Black &amp; White</option>
+                <option value="sepia">Sepia</option>
               </select>
             </label>
             <label><input id="vignette" type="checkbox"> Cinematic dark vignette</label>
@@ -551,7 +565,7 @@
 
           <!-- Hidden synced composition mirrors for live FX & visualizer -->
           <div hidden>
-            <select id="comp_video_filter"><option value="none">None</option><option value="bw">bw</option><option value="sepia">sepia</option><option value="vintage">vintage</option><option value="cyberpunk">cyberpunk</option><option value="warm">warm</option><option value="cool">cool</option><option value="dramatic">dramatic</option><option value="dreamy">dreamy</option></select>
+            <select id="comp_video_filter"><option value="none">None</option><option value="beauty">beauty</option><option value="vhs">vhs</option><option value="teal_orange">teal_orange</option><option value="vaporwave">vaporwave</option><option value="bling">bling</option><option value="fisheye">fisheye</option><option value="noir">noir</option><option value="bw">bw</option><option value="sepia">sepia</option><option value="vintage">vintage</option><option value="cyberpunk">cyberpunk</option><option value="warm">warm</option><option value="cool">cool</option><option value="dramatic">dramatic</option><option value="dreamy">dreamy</option></select>
             <input id="comp_vignette" type="checkbox">
             <input id="comp_film_grain" type="number" value="0">
             <input id="comp_sharpen" type="number" value="0">
@@ -583,12 +597,18 @@
             <h3>1. Choose Sticker or Graphic</h3>
             <p class="hint" style="margin-top:0;">Pick an animated/transparent sticker or 1-click reaction emoji.</p>
             <div class="emojiPickRow" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">
+              <button type="button" class="emojiBtn" data-emoji="🕶️" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;" title="Sunglasses (Auto-snaps to eyes)">🕶️</button>
+              <button type="button" class="emojiBtn" data-emoji="👑" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;" title="Golden Crown (Auto-snaps above head)">👑</button>
+              <button type="button" class="emojiBtn" data-emoji="😇" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;" title="Angel Halo (Auto-snaps above head)">😇</button>
+              <button type="button" class="emojiBtn" data-emoji="🐶" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;" title="Dog Face / Ears">🐶</button>
+              <button type="button" class="emojiBtn" data-emoji="🐱" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;" title="Cat Ears &amp; Whiskers">🐱</button>
+              <button type="button" class="emojiBtn" data-emoji="💖" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;" title="Heart Eyes">💖</button>
+              <button type="button" class="emojiBtn" data-emoji="🎭" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;" title="Theater Face Mask">🎭</button>
+              <button type="button" class="emojiBtn" data-emoji="🐰" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;" title="Bunny Ears">🐰</button>
               <button type="button" class="emojiBtn" data-emoji="🔥" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;">🔥</button>
-              <button type="button" class="emojiBtn" data-emoji="💃" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;">💃</button>
-              <button type="button" class="emojiBtn" data-emoji="👑" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;">👑</button>
               <button type="button" class="emojiBtn" data-emoji="✨" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;">✨</button>
+              <button type="button" class="emojiBtn" data-emoji="💃" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;">💃</button>
               <button type="button" class="emojiBtn" data-emoji="💯" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;">💯</button>
-              <button type="button" class="emojiBtn" data-emoji="💖" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;">💖</button>
               <button type="button" class="emojiBtn" data-emoji="⚡" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;">⚡</button>
               <button type="button" class="emojiBtn" data-emoji="🎧" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;">🎧</button>
               <button type="button" class="emojiBtn" data-emoji="🚀" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;">🚀</button>
@@ -630,6 +650,16 @@
                 </select>
               </label>
             </div>
+            <!-- AR FACE TRACKING & AUTO-SNAP -->
+            <div class="row" style="margin-top:10px;background:rgba(255,255,255,0.04);padding:8px;border-radius:8px;align-items:center;gap:8px;">
+              <button id="snapToFaceBtn" class="primary" type="button" style="flex:1;" title="Auto-detect face at playhead and snap sticker">🎯 Auto-Snap to Face</button>
+              <select id="snapTarget" style="width:130px;" aria-label="AR Face Target">
+                <option value="head">👑 Head / Crown</option>
+                <option value="eyes">🕶️ Eyes / Shades</option>
+                <option value="center">🎭 Face Center</option>
+              </select>
+            </div>
+            <p id="snapFaceStatus" class="hint" style="margin-top:4px;color:#a899e6;"></p>
             <div class="row" style="margin-top:10px;">
               <button id="clearStickerBtn" type="button" title="Remove active sticker from video">✕ Remove Sticker</button>
               <button id="applyStickerBtn" class="primary" type="button" style="flex:1;">🎨 Apply Sticker to Video</button>

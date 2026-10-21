@@ -814,6 +814,92 @@ def match_lyrics_to_transcription(cues, lyrics, duration, language=None, model=N
     return validate_edit(dict(cues=final_cues), duration)['cues']
 
 
+def detect_face_in_video(video_path: Path, time_sec: float = 0.0, target: str = 'head') -> dict[str, Any]:
+    """Detect prominent face at or around time_sec using local OpenCV and return normalized coordinates."""
+    if not video_path.exists():
+        return dict(found=False, message='Video media not found on disk.')
+    cap = cv2.VideoCapture(str(video_path))
+    if not cap.isOpened():
+        return dict(found=False, message='Could not open video file for face tracking.')
+    try:
+        cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
+        face_cascade = cv2.CascadeClassifier(cascade_path)
+        if face_cascade.empty():
+            return dict(found=False, message='OpenCV face cascade model is unavailable.')
+
+        dur_sec = max(0.1, cap.get(cv2.CAP_PROP_FRAME_COUNT) / max(1.0, cap.get(cv2.CAP_PROP_FPS) or 30.0))
+        search_times = [
+            time_sec,
+            max(0.0, time_sec - 0.25),
+            min(dur_sec, time_sec + 0.25),
+            max(0.0, time_sec - 0.75),
+            min(dur_sec, time_sec + 0.75),
+            max(0.0, time_sec - 1.5),
+            min(dur_sec, time_sec + 1.5),
+        ]
+
+        best_face = None
+        frame_w = 0
+        frame_h = 0
+        best_time = time_sec
+
+        for t in search_times:
+            cap.set(cv2.CAP_PROP_POS_MSEC, max(0.0, t) * 1000.0)
+            ret, frame = cap.read()
+            if not ret or frame is None:
+                continue
+            frame_h, frame_w = frame.shape[:2]
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            faces = face_cascade.detectMultiScale(gray, scaleFactor=1.15, minNeighbors=3, minSize=(30, 30))
+            if len(faces) > 0:
+                faces = sorted(faces, key=lambda b: b[2] * b[3], reverse=True)
+                best_face = faces[0]
+                best_time = t
+                break
+
+        if best_face is None or frame_w <= 0 or frame_h <= 0:
+            return dict(found=False, message='No face detected around this timestamp. Seek to a frame showing the face clearly.')
+
+        fx, fy, fw, fh = best_face
+        face_center_x = fx + (fw / 2.0)
+        face_center_y = fy + (fh / 2.0)
+
+        norm_w = (fw / frame_w) * 100.0
+
+        if target == 'eyes':
+            eye_y = fy + 0.38 * fh
+            eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_eye.xml')
+            if not eye_cascade.empty():
+                face_roi = gray[fy:fy + int(fh * 0.65), fx:fx + fw]
+                eyes = eye_cascade.detectMultiScale(face_roi, scaleFactor=1.1, minNeighbors=3, minSize=(15, 15))
+                if len(eyes) >= 1:
+                    avg_ey = sum(e[1] + e[3] / 2.0 for e in eyes) / len(eyes)
+                    eye_y = fy + avg_ey
+            target_x = round((face_center_x / frame_w) * 100.0)
+            target_y = round((eye_y / frame_h) * 100.0)
+            scale = round(max(10.0, min(80.0, norm_w * 1.15)))
+        elif target == 'head':
+            target_x = round((face_center_x / frame_w) * 100.0)
+            target_y = round(max(2.0, ((fy - 0.16 * fh) / frame_h) * 100.0))
+            scale = round(max(10.0, min(80.0, norm_w * 1.12)))
+        else:
+            target_x = round((face_center_x / frame_w) * 100.0)
+            target_y = round((face_center_y / frame_h) * 100.0)
+            scale = round(max(10.0, min(85.0, norm_w * 1.05)))
+
+        return dict(
+            found=True,
+            x=target_x,
+            y=target_y,
+            scale=scale,
+            time=round(best_time, 2),
+            target=target,
+            box=dict(x=int(fx), y=int(fy), w=int(fw), h=int(fh))
+        )
+    finally:
+        cap.release()
+
+
 def register_captions(app, save_dir, job_started, job_finished, refresh_gallery, get_whisper, allowed_path):
     bp = Blueprint('captions', __name__)
     root = Path(save_dir) / 'Caption Projects'
@@ -1252,6 +1338,30 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             d['revision'] += 1
             write(d)
             return jsonify(d)
+
+    @bp.post('/api/captions/<pid>/track-face')
+    def track_face(pid):
+        incoming = request.get_json() or {}
+        time_sec = float(incoming.get('time', 0.0))
+        target = str(incoming.get('target', 'head')).lower()
+        if target not in {'head', 'eyes', 'center'}:
+            target = 'head'
+        with lock:
+            data = read(pid)
+            f = folder(pid)
+            candidates = [
+                f / data.get('preview', 'preview.mp4'),
+                f / 'preview.mp4',
+                f / data.get('source', 'original.mp4'),
+                f / 'original.mp4'
+            ]
+            if data.get('studio', {}).get('assets', {}).get('background', {}).get('file'):
+                candidates.append(f / data['studio']['assets']['background']['file'])
+            video_file = next((p for p in candidates if p.exists() and p.is_file()), None)
+            if not video_file:
+                return jsonify(found=False, message='No video file found in this project to track.')
+        result = detect_face_in_video(video_file, time_sec=time_sec, target=target)
+        return jsonify(result)
 
     @bp.post('/api/captions/<pid>/duplicate')
     def duplicate(pid):

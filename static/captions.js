@@ -114,7 +114,24 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
     const styleKeys = ['font','size','color','highlight','outline','position','background','karaoke','cumulative','word_pop','animation','glow','visualizer','visualizer_style','visualizer_position','visualizer_height','visualizer_sensitivity','visualizer_color','video_filter','vignette','film_grain','sharpen','chromatic','noise_cancel','voice_isolation','audio_effect'];
     const styleChecks = ['background','karaoke','cumulative','word_pop','visualizer','vignette','noise_cancel','voice_isolation'];
     const styleNumbers = ['size','outline','position','glow','visualizer_height','visualizer_sensitivity','film_grain','sharpen','chromatic'];
-    const cssVideoFilters = {none:'',bw:'grayscale(1)',sepia:'sepia(1)',vintage:'sepia(0.45) contrast(1.1) brightness(0.95)',cyberpunk:'contrast(1.25) saturate(1.6) hue-rotate(-12deg)',warm:'sepia(0.22) saturate(1.2) brightness(1.03)',cool:'saturate(1.1) contrast(1.08) hue-rotate(12deg)',dramatic:'contrast(1.35) brightness(0.96) saturate(0.85)',dreamy:'blur(1.2px) brightness(1.06) contrast(0.95) saturate(1.2)'};
+    const cssVideoFilters = {
+        none:'',
+        beauty:'blur(0.8px) contrast(1.08) brightness(1.05) saturate(1.15)',
+        vhs:'contrast(1.16) saturate(1.12) drop-shadow(2px 0 0 rgba(255,0,80,0.5)) drop-shadow(-2px 0 0 rgba(0,242,234,0.5))',
+        teal_orange:'contrast(1.2) saturate(1.25) hue-rotate(-12deg) sepia(0.15)',
+        vaporwave:'contrast(1.25) saturate(1.65) hue-rotate(320deg)',
+        bling:'contrast(1.25) brightness(1.08) saturate(1.35) drop-shadow(0 0 4px rgba(255,255,255,0.7))',
+        fisheye:'contrast(1.05)',
+        noir:'contrast(1.4) saturate(0.5) brightness(0.96)',
+        bw:'grayscale(1)',
+        sepia:'sepia(1)',
+        vintage:'sepia(0.45) contrast(1.1) brightness(0.95)',
+        cyberpunk:'contrast(1.25) saturate(1.6) hue-rotate(-12deg)',
+        warm:'sepia(0.22) saturate(1.2) brightness(1.03)',
+        cool:'saturate(1.1) contrast(1.08) hue-rotate(12deg)',
+        dramatic:'contrast(1.35) brightness(0.96) saturate(0.85)',
+        dreamy:'blur(1.2px) brightness(1.06) contrast(0.95) saturate(1.2)'
+    };
     let project = null, selected = -1, history = [], future = [], dirty = false;
     let saveTimer, pollTimer, saving = null, generation = 0, busy = false, dragging = false, pendingPreview = false;
     const say = (text, error = false) => {
@@ -274,6 +291,8 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         const activeFilter = (!fxAlreadyBaked || (s.video_filter||'none')!==(baked.video_filter||'none')) ? (s.video_filter||'none') : 'none';
         const rgbShift = (!fxAlreadyBaked ? (s.chromatic > 0) : ((s.chromatic||0)!==(baked.chromatic||0) && s.chromatic>0)) ? ` drop-shadow(-${Math.max(1,Math.round(s.chromatic/2))}px 0 0 rgba(255,0,80,.55)) drop-shadow(${Math.max(1,Math.round(s.chromatic/2))}px 0 0 rgba(0,220,255,.55))` : '';
         video.style.filter = ((cssVideoFilters[activeFilter]||'')+rgbShift).trim();
+        video.style.borderRadius = activeFilter === 'fisheye' ? '28px' : '';
+        video.style.transform = activeFilter === 'fisheye' ? 'scale(1.05)' : '';
         const vig=$('stageVignette');
         if(vig) vig.hidden = !(s.vignette || activeFilter==='vintage' || activeFilter==='dramatic');
         const compSet=project.studio?.settings||project.composition||{};
@@ -939,9 +958,43 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
             clearStickerPending = false;
             if ($('activeStickerNotice')) $('activeStickerNotice').textContent = `Active sticker: Emoji ${selectedEmoji} (Click Apply to save)`;
             if ($('stickerFile')) $('stickerFile').value = '';
+            // Auto-align AR face target based on prop category
+            if ($('snapTarget')) {
+                if (selectedEmoji === '🕶️') $('snapTarget').value = 'eyes';
+                else if (['👑','😇','🐶','🐱','🐰'].includes(selectedEmoji)) $('snapTarget').value = 'head';
+                else if (['🎭','💖'].includes(selectedEmoji)) $('snapTarget').value = 'center';
+            }
             drawCaption();
         };
     });
+    if ($('snapToFaceBtn')) {
+        $('snapToFaceBtn').onclick = act(async () => {
+            if (!project) return;
+            const target = $('snapTarget')?.value || 'head';
+            if ($('snapFaceStatus')) $('snapFaceStatus').textContent = '🎯 Detecting face in video with OpenCV…';
+            const data = await api(`/api/captions/${project.id}/track-face`, 'POST', {
+                time: video.currentTime || 0,
+                target: target
+            });
+            if (data.found) {
+                if ($('comp_sticker_x')) $('comp_sticker_x').value = data.x;
+                if ($('comp_sticker_y')) $('comp_sticker_y').value = data.y;
+                if ($('comp_sticker_scale')) $('comp_sticker_scale').value = Math.max(10, Math.min(80, data.scale));
+                if ($('comp_sticker_duration') && Number($('comp_sticker_duration').value) <= 0) {
+                    $('comp_sticker_duration').value = '4';
+                    $('comp_sticker_start').value = Math.max(0, video.currentTime).toFixed(1);
+                }
+                const msg = `🎯 Locked to face (${target}) at ${data.x}%, ${data.y}% · Scale ${data.scale}%`;
+                if ($('snapFaceStatus')) $('snapFaceStatus').textContent = msg;
+                say(msg);
+                drawCaption();
+            } else {
+                const msg = data.message || 'No face detected around this timestamp.';
+                if ($('snapFaceStatus')) $('snapFaceStatus').textContent = `⚠️ ${msg}`;
+                say(msg, true);
+            }
+        });
+    }
     if ($('stickerFile')) {
         $('stickerFile').onchange = () => {
             const f = $('stickerFile').files[0];

@@ -43,6 +43,13 @@ VIDEO_FILTERS = {
     'cool': 'colorbalance=rs=-0.12:gs=0.02:bs=0.16:rm=-0.08:gm=0.02:bm=0.12,eq=contrast=1.08',
     'dramatic': 'eq=contrast=1.35:brightness=-0.04:saturation=0.85,vignette=PI/4',
     'dreamy': 'gblur=sigma=1.2,eq=brightness=0.06:contrast=0.95:saturation=1.2',
+    'beauty': 'gblur=sigma=2.0:steps=2,eq=contrast=1.08:saturation=1.14:brightness=0.04',
+    'vhs': 'rgbashift=rh=-3:bh=3,eq=contrast=1.16:saturation=1.12:brightness=-0.02,noise=alls=15:allf=t+u',
+    'teal_orange': 'colorbalance=rs=-0.12:gs=0.03:bs=0.22:rm=0.15:gm=0.05:bm=-0.12:rh=0.2:gh=0.06:bh=-0.16,eq=contrast=1.2:saturation=1.25',
+    'vaporwave': 'colorbalance=rs=0.2:gs=-0.1:bs=0.25:rh=0.25:gh=-0.05:bh=0.3,eq=contrast=1.25:saturation=1.65',
+    'bling': 'eq=contrast=1.25:brightness=0.05:saturation=1.35,unsharp=5:5:1.2:5:5:0.0',
+    'fisheye': 'lenscorrection=cx=0.5:cy=0.5:k1=-0.22:k2=-0.22',
+    'noir': 'colorbalance=rs=-0.1:gs=-0.1:bs=0.05,eq=contrast=1.4:saturation=0.5:brightness=-0.04',
 }
 CAPTION_ANIMATIONS = {'none', 'fade', 'pop', 'slide_up', 'typewriter', 'zoom_in'}
 SEQUENCE_TRANSITIONS = {'none', 'fade', 'dissolve', 'fadeblack', 'fadewhite', 'slideleft', 'slideright', 'circlecrop', 'wipeleft', 'wiperight'}
