@@ -54,7 +54,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         dirty=true; generation++; $('saveStatus').textContent='Unsaved changes';
         clearTimeout(saveTimer); saveTimer=setTimeout(() => save().catch(e=>say(e.message,true)),900);
         if (redraw) { drawTimeline(); drawList(); fillSelection(); }
-        drawCaption();
+        drawCaption();drawKaraokeSummary();
     }
     function edit(fn, redraw = true) {
         if (!project || busy) return;
@@ -132,7 +132,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
             edited:'Review timing while listening. Word timings are editable below.'
         })[project.timing] || 'Review timing while listening.';
         say(project.status,project.state==='error');
-        drawTimeline();drawList();fillSelection();drawDownloads();drawCaption();
+        drawTimeline();drawList();fillSelection();drawDownloads();drawCaption();drawKaraokeSummary();
     }
     function poll() {
         clearTimeout(pollTimer);
@@ -141,7 +141,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
                 project=await api(`/api/captions/${project.id}`);
                 if(project.state==='busy') {say(project.status);poll();return;}
                 if(project.width) mountVideo();
-                selected=project.cues.length?0:-1; refresh();
+                selected=project.cues.length?Math.max(0,Math.min(selected,project.cues.length-1)):-1; refresh();
                 if(pendingPreview && project.last_render && project.last_render.startsWith('check_') && project.state==='ready') {
                     $('renderVideo').src=media(project.last_render); $('renderDialog').showModal();
                 }
@@ -157,12 +157,13 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         const s=project.style, h=$('stage').clientHeight;
         Object.assign(box.style,{fontFamily:`"${s.font}",sans-serif`,fontSize:h*s.size/100+'px',color:s.color,
             top:s.position+'%',webkitTextStroke:`${2*h*s.outline/360}px black`});
+        $('playingCaption').textContent=cue ? 'Playing: '+cue.text+(s.karaoke&&!cue.words?.length?' · No word timings — use Add karaoke timing.':'') : '';
         if(!cue) return;
         const content=document.createElement('span');
         content.style.background=s.background?'rgba(0,0,0,.65)':'transparent';
         if(s.karaoke && cue.words?.length) {
             cue.words.forEach((w,i)=>{
-                if(i) content.append(' ');
+                if(i) content.append((cue.text.match(/\s+/g)||[])[i-1]||' ');
                 const span=document.createElement('span');span.textContent=w.text;
                 if(w.start<=video.currentTime && video.currentTime<w.end) span.style.color=s.highlight;
                 content.append(span);
@@ -173,6 +174,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
     function select(index,seek=true) {
         selected=index;
         drawList();fillSelection();drawTimeline();drawCaption();
+        $('cueList').children[selected]?.scrollIntoView?.({block:'nearest'});
         if(seek&&current()&&Number.isFinite(current().start)) video.currentTime=Math.max(0,Math.min(project.duration,current().start+.01));
     }
     function drawList() {
@@ -181,12 +183,13 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         project.cues.forEach((c,i)=>{
             const row=document.createElement('button');row.className='cue'+(i===selected?' active':'');
             const time=document.createElement('time');time.textContent=`${fmt(c.start)} → ${fmt(c.end)}`;
-            const text=document.createElement('span');text.textContent=c.text;row.append(time,text);
+            const text=document.createElement('span');text.textContent=(needsReview(c)?'⚑ ': '')+c.text;row.append(time,text);
             row.onclick=()=>select(i);list.append(row);
         });
     }
     function fillSelection() {
         const c=current();
+        $('lineReview').textContent=c?.karaoke?.note || (c?.words?.length ? 'Word timings available — listen and adjust if needed.' : 'No word timings yet.');
         $('text').value=c?.text||'';$('start').value=c?.start.toFixed(2)||'';$('end').value=c?.end.toFixed(2)||'';
         for(const node of document.querySelectorAll('#selection textarea,#selection input,#selection button')) node.disabled=!c||busy;
         $('words').replaceChildren();
@@ -201,7 +204,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
             for(const k of ['start','end']) {
                 const input=document.createElement('input');input.type='number';input.step='.01';input.value=w[k].toFixed(2);
                 input.setAttribute('aria-label',`${w.text} ${k}`);input.disabled=busy;
-                input.onchange=()=>timingEdit(()=>{c.words[i][k]=Number(input.value);});
+                input.onchange=()=>timingEdit(()=>{c.words[i][k]=Number(input.value);c.karaoke={state:'edited',note:'Word timings edited — check while listening'};});
                 row.append(input);
             }
             $('words').append(row);
@@ -317,7 +320,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         edit(()=>project.cues.splice(selected,1,{start:c.start,end:t,text:words.slice(0,index).join(' '),words:[]},{start:t,end:c.end,text:words.slice(index).join(' '),words:[]}));
     });
     $('merge').onclick=()=>{const c=current(),next=project?.cues[selected+1];if(c&&next)edit(()=>project.cues.splice(selected,2,{start:c.start,end:next.end,text:c.text+' '+next.text,words:[]}));};
-    $('estimateWords').onclick=()=>{const c=current();if(c)timingEdit(()=>{const words=c.text.trim().split(/\s+/);c.words=words.map((text,i)=>({text,start:c.start+(c.end-c.start)*i/words.length,end:c.start+(c.end-c.start)*(i+1)/words.length}));say('Word timings are evenly spaced estimates for this line only. Play this line to see highlighting; adjust the timings while listening.');});};
+    $('estimateWords').onclick=()=>{const c=current();if(c)timingEdit(()=>{const words=c.text.trim().split(/\s+/);c.words=words.map((text,i)=>({text,start:c.start+(c.end-c.start)*i/words.length,end:i===words.length-1?c.end:c.start+(c.end-c.start)*(i+1)/words.length}));c.karaoke={state:'estimated',note:'Evenly spaced estimates, not audio alignment'};say('Word timings are evenly spaced estimates for this line only. Play this line to see highlighting; adjust the timings while listening.');});};
     $('shiftAll').onclick=act(()=>{
         if(!project)return;const shift=Number($('shift').value);
         if(!Number.isFinite(shift)||project.cues.some(c=>c.start+shift<0||c.end+shift>project.duration))throw Error('That shift would move captions outside the video.');
@@ -354,10 +357,28 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
     });
     async function job(kind,options) {
         if(!project)return;await save();
-        project=await api(`/api/captions/${project.id}/${kind}`,'POST',options);
+        project=await api(`/api/captions/${project.id}/${kind}`,'POST',{...options,revision:project.revision});
         pendingPreview=kind==='render' && options.preview;
         setBusy(true);say(project.status);poll();
     }
+    function needsReview(c){return !c.words?.length || ['review','estimated','edited'].includes(c.karaoke?.state);}
+    function drawKaraokeSummary() {
+        if(!project)return;
+        const total=project.cues.length, missing=project.cues.filter(c=>!c.words?.length).length;
+        const review=project.cues.filter(needsReview).length;
+        $('karaokeSummary').textContent=`${total-missing}/${total} lines have word timings · ${review} to review · ${missing} missing timings`+(project.style.karaoke?'':' · Enable Highlight the current word to preview karaoke.');
+        $('restoreKaraoke').disabled=busy||!project.karaoke_backup;
+    }
+    async function addKaraoke(index) {
+        if(!project?.cues.length)throw Error('Import subtitles or add lines first.');
+        video.pause();checkpoint();await job('karaoke',{language:$('karaokeLanguage').value,index});
+    }
+    $('estimateMissing').onclick=act(()=>{if(!project||!confirm('Use evenly spaced estimates for all lines still missing word timings? These are not matched to the audio.'))return;timingEdit(()=>project.cues.filter(c=>!c.words?.length).forEach(c=>{const words=c.text.trim().split(/\s+/);c.words=words.map((text,i)=>({text,start:c.start+(c.end-c.start)*i/words.length,end:i===words.length-1?c.end:c.start+(c.end-c.start)*(i+1)/words.length}));c.karaoke={state:'estimated',note:'Evenly spaced estimates, not audio alignment'};}));});
+    $('karaokeAll').onclick=act(()=>addKaraoke());
+    $('karaokeLine').onclick=act(()=>{if(current())return addKaraoke(selected);});
+    $('nextReview').onclick=()=>{if(!project)return;for(let n=1;n<=project.cues.length;n++){const i=(Math.max(-1,selected)+n)%project.cues.length;if(needsReview(project.cues[i])){select(i);return;}}say('No lines are flagged. You can still review any line while listening.');};
+    $('markReviewed').onclick=act(()=>{if(!current()?.words?.length)throw Error('Add word timings before marking this line reviewed.');edit(()=>{current().karaoke={...current().karaoke,state:'checked',note:'Reviewed manually'};});});
+    $('restoreKaraoke').onclick=act(async()=>{if(!project||!confirm('Restore captions from before the last karaoke operation? Current caption edits will be replaced; your video and style are kept.'))return;await save();checkpoint();project=await api(`/api/captions/${project.id}/restore-karaoke`,'POST',{revision:project.revision});selected=0;refresh();});
     $('transcribe').onclick=act(async()=>{
         if(project?.cues.length&&!confirm('Replace existing captions with automatic transcription? The current version stays saved if transcription fails.'))return;
         checkpoint();await job('transcribe',{language:$('language').value});

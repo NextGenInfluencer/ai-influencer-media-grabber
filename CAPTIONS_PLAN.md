@@ -40,3 +40,9 @@ Implemented supplied-text alignment with stable-ts 2.19.1 using the existing sha
 Implemented song-to-video creation (MP3/WAV/M4A/FLAC/OGG), 1080p portrait/square/landscape, colour/photo/looped-video backgrounds from upload or library, and optional audio-reactive waveform. Composition is prepared into the base video, not an editable multitrack timeline. Original audio/background uploads are retained. Added three locally bundled Google Fonts with licenses. Stock-library links are discovery links only, not API search/import.
 
 The optional AI requirements changed. A future packaged release needs an installer; do not promise that the v2.5.0 source updater can apply this dependency migration. The local source environment already has the new dependency.
+
+## Phase 1: imported-SRT karaoke (source)
+
+Whole-project and single-line word alignment preserve subtitle text, line breaks, line boundaries and style. Uses constrained stable-ts align_words with one shared Whisper model and bounded cue audio slices. Per-line Greek/English suggestions and explicit overrides, review flags, progress, selected retry, manual review and explicit estimates for missing lines are available. Changes are staged in memory; cancellation rolls back caption state. A persisted prior-caption snapshot supports restoration after reload.
+
+Real evaluation on a duplicate of the user’s 57-line mixed Greek/English project: 53 lines unflagged, four review flags, two missing word timings (one failed line already had prior timings). All text and line timestamps preserved; original project bytes unchanged. These counts verify operation and timing checks, not listening-certified accuracy. Browser whole-song and single-line actions completed; actual rendered output visibly highlights the previously reported English line.

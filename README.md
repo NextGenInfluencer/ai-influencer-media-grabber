@@ -58,6 +58,14 @@ Open **Captions & Lyrics** from the Studio navigation:
 
 Projects autosave under `Caption Projects` in your media library. SRT carries text and timing, not fonts or effects. Automatic transcription needs review, especially for songs. Browser text layout is an approximation; the rendered check shows the final result.
 
+### Karaoke from your existing SRT
+
+Import your SRT and click **Add karaoke timing to all subtitles**. This analyses each line's audio and adds word timings while keeping your text, line breaks, line start/end times and style. Enable **Highlight the current word** to see the result.
+
+The alignment-language selector can suggest Greek/English per line, or you can choose a language and **Retry karaoke for this line**. Mixed-language and unusually short timings are flagged. **Next line to review** visits missing or flagged timings; listen, edit the word boundaries and mark them reviewed. Flags are timing heuristics, not guaranteed accuracy scores.
+
+Failed lines retain their earlier words/timings. **Estimate missing timings** is an explicit approximate fallback, labelled for review. A cancelled operation preserves saved captions; **Restore previous karaoke version** restores the captions from before the last completed karaoke operation, including after reopening the project. Undo also works in the editing session. Long individual lines over 60 seconds need splitting before alignment.
+
 ### New in the source checkout (not yet in the v2.5.0 installer)
 
 - **Sync pasted lyrics to audio:** keeps your supplied text and line breaks, with editable word timings. Choose the language and the section of audio containing those lyrics. Standalone Suno labels such as `[Verse]` are ignored; repeated sung lines must still be included. Uses local Whisper with stable-ts. Singing and repeated choruses can need corrections.

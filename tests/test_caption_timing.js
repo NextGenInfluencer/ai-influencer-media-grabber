@@ -24,8 +24,9 @@ class Element {
 const nodes=new Map();
 const element=id=>{if(!nodes.has(id))nodes.set(id,new Element());return nodes.get(id);};
 let animation;
+const requests=[];
 const project={id:'test',revision:0,duration:185.5,width:1080,height:1920,state:'ready',status:'Ready',timing:'imported',peaks:[],exports:[],style:{font:'Verdana',size:5,color:'#ffffff',highlight:'#ffdc55',outline:2,position:65,background:false,karaoke:true},cues:[{start:30.52,end:32.53,text:'Feeling getting so much warmer',words:[]}]};
-const ctx={document:{getElementById:element,querySelector:()=>({content:'test'}),querySelectorAll:()=>[],createElement:()=>new Element(),addEventListener(){}},window:{innerWidth:1200,addEventListener(){}},requestAnimationFrame:fn=>{animation=fn;},setTimeout:()=>1,clearTimeout(){},setInterval(){},FormData:class{},Option:class{},fetch:async(url,options)=>({ok:true,json:async()=>url==='/api/captions'?[]:url==='/api/gallery'?[]:options?.method==='PUT'?{revision:1}:structuredClone(project)}),console};
+const ctx={document:{getElementById:element,querySelector:()=>({content:'test'}),querySelectorAll:()=>[],createElement:()=>new Element(),addEventListener(){}},window:{innerWidth:1200,addEventListener(){}},requestAnimationFrame:fn=>{animation=fn;},setTimeout:()=>1,clearTimeout(){},setInterval(){},FormData:class{},Option:class{},fetch:async(url,options)=>{requests.push({url,options});return {ok:true,json:async()=>url==='/api/captions'?[]:url==='/api/gallery'?[]:options?.method==='PUT'?{revision:1}:structuredClone(project)};},console};
 vm.createContext(ctx);vm.runInContext(fs.readFileSync(require.resolve('../static/captions.js'),'utf8'),ctx);
 (async()=>{
     await new Promise(resolve=>setImmediate(resolve));
@@ -43,5 +44,9 @@ vm.createContext(ctx);vm.runInContext(fs.readFileSync(require.resolve('../static
     element('video').currentTime=185.5;element('setStart').onclick();
     assert.match(element('status').textContent,/start before/);
     assert.equal(element('start').value,'30.52');
+    element('karaokeLanguage').value='auto';
+    await element('karaokeAll').onclick();
+    const request=requests.find(x=>x.url.endsWith('/karaoke'));
+    assert(request);const sent=JSON.parse(request.options.body);assert.equal(sent.language,'auto');assert.equal(sent.revision,1);assert.equal(sent.index,undefined);
     console.log('Actual Estimate button and moving karaoke highlight passed without an external helper.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

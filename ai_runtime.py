@@ -21,6 +21,17 @@ def transcribe(model, *args, **kwargs):
     return model.transcribe(*args, **kwargs)
 
 @serialized
+def align_caption_words(model, audio, text, language):
+    try:
+        from stable_whisper.alignment import align_words
+    except ImportError as exc:
+        raise RuntimeError('Install the updated AI Pack in the Studio, then restart to enable karaoke timing.') from exc
+    result = align_words(model, audio, [dict(start=0, end=len(audio)/16000, text=text)],
+                         language=language, normalize_text=False, regroup=False, verbose=None,
+                         progress_callback=lambda *_: check_cancelled())
+    return result.to_dict()
+
+@serialized
 def align_lyrics(model, audio, text, language):
     """Use the shared Whisper model without changing its transcription methods."""
     try:

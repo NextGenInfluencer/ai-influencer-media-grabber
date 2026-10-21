@@ -1,5 +1,6 @@
 """Local caption projects, validated subtitle data and non-destructive rendering."""
 import io
+import copy
 import json
 import math
 import os
@@ -17,7 +18,7 @@ import numpy as np
 from PIL import ImageFont
 from flask import Blueprint, jsonify, request, send_file, render_template, session
 import job_process as process
-from ai_runtime import transcribe, align_lyrics
+from ai_runtime import transcribe, align_lyrics, align_caption_words
 
 DEFAULT_STYLE = dict(font='Arial', size=5, color='#ffffff', highlight='#ffdc55',
                      outline=2, position=85, background=False, karaoke=False)
@@ -59,7 +60,14 @@ def validate_edit(data, duration):
             words.append(dict(start=a, end=b, text=t))
         if words and ' '.join(w['text'] for w in words).split() != text.split():
             raise ValueError('Word timing text must match its caption. Rebuild word timings after editing text.')
-        clean.append(dict(start=start, end=end, text=text, words=words))
+        item = dict(start=start, end=end, text=text, words=words)
+        if isinstance(cue.get('karaoke'), dict):
+            info = cue['karaoke']
+            state = info.get('state')
+            if state in {'aligned', 'review', 'estimated', 'edited', 'checked'}:
+                item['karaoke'] = dict(state=state, note=str(info.get('note', ''))[:300],
+                                       language=str(info.get('language', ''))[:3])
+        clean.append(item)
     clean.sort(key=lambda c: c['start'])
     for left, right in zip(clean, clean[1:]):
         if left['end'] > right['start'] + .001:
@@ -133,9 +141,10 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text'
         for start, end, active in pieces:
             if round(start*100) >= round(end*100):
                 continue
-            body = escape(' '.join(w['text'] for w in cue['words']) if style['karaoke'] and cue['words'] else cue['text'])
+            body = escape(cue['text'])
             if active is not None:
-                body = ' '.join((r'{\c' + color(style['highlight']).replace('&H00', '&H') + '&}' + escape(w['text']) + r'{\r}') if i == active else escape(w['text']) for i, w in enumerate(cue['words']))
+                separators = re.findall(r'\s+', cue['text'])
+                body = ''.join((escape(separators[i-1]) if i else '') + ((r'{\c' + color(style['highlight']).replace('&H00', '&H') + '&}' + escape(w['text']) + r'{\r}') if i == active else escape(w['text'])) for i, w in enumerate(cue['words']))
             position = r'{\pos(' + f'{width/2:.1f},{height*style["position"]/100:.1f}' + ')}'
             output.append(f"Dialogue: 0,{timestamp(start, True)},{timestamp(end, True)},Default,,0,0,0,,{position}{body}")
     return '\n'.join(output) + '\n'
@@ -272,6 +281,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             job_started()
         def run():
             process.begin_job()
+            original = copy.deepcopy(data)
             try:
                 work(data, folder(data['id']))
                 process.check_cancelled()
@@ -279,6 +289,11 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                 data['revision'] += 1
                 refresh_gallery()
             except Exception as exc:
+                for key in ('cues', 'style', 'timing', 'karaoke_backup'):
+                    if key in original:
+                        data[key] = original[key]
+                    else:
+                        data.pop(key, None)
                 data['state'], data['status'] = 'error', str(exc)
             finally:
                 try:
@@ -476,6 +491,85 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                 finally:
                     (f / 'speech.wav').unlink(missing_ok=True)
             return launch(data, 'Transcribing audio (existing captions are kept if this fails)…', work)
+
+    @bp.post('/api/captions/<pid>/karaoke')
+    def karaoke(pid):
+        with lock:
+            data = read(pid)
+            options = request.get_json()
+            if data['state'] == 'busy' or options.get('revision') != data['revision']:
+                return jsonify(error='Project changed or is processing. Reload before syncing.'), 409
+            if not data['cues']:
+                raise ValueError('Import subtitles or add caption lines first.')
+            language = options.get('language', 'auto')
+            if language not in {'auto', 'en', 'el', 'es', 'fr', 'de'}:
+                raise ValueError('Choose a supported alignment language.')
+            index = options.get('index')
+            if index is not None and (type(index) is not int or not 0 <= index < len(data['cues'])):
+                raise ValueError('Select a valid caption line.')
+            indices = list(range(len(data['cues']))) if index is None else [index]
+            def work(d, f):
+                model = get_whisper()
+                if model is None:
+                    raise ValueError('Install the AI Pack in the Studio to add karaoke timing.')
+                # Decode once, then read bounded cue slices rather than loading a full song into RAM.
+                audio_file = f / 'karaoke.wav'
+                pending = copy.deepcopy(d['cues'])
+                try:
+                    ffmpeg(['-i', d['source'], '-t', str(d['duration']), '-vn', '-ac', '1',
+                            '-ar', '16000', '-c:a', 'pcm_s16le', audio_file.name], f)
+                    with wave.open(str(audio_file), 'rb') as audio:
+                        for count, i in enumerate(indices):
+                            process.check_cancelled()
+                            cue = pending[i]
+                            greek = bool(re.search(r'[\u0370-\u03ff\u1f00-\u1fff]', cue['text']))
+                            latin = bool(re.search(r'[a-zA-Z]', cue['text']))
+                            chosen = ('el' if greek else 'en') if language == 'auto' else language
+                            try:
+                                if cue['end'] - cue['start'] > 60:
+                                    raise ValueError('Line exceeds 60 seconds. Split it before retrying.')
+                                audio.setpos(min(audio.getnframes(), round(cue['start']*16000)))
+                                samples = np.frombuffer(audio.readframes(round((cue['end']-cue['start'])*16000)), dtype='<i2').astype(np.float32)/32768
+                                if not len(samples) or np.max(np.abs(samples)) < .0001:
+                                    raise ValueError('No audible audio in this line.')
+                                result = align_caption_words(model, samples, cue['text'], chosen)
+                                words = aligned_cues(result, [cue['text']], cue['start'], d['duration'], cue['end']-cue['start'])[0]['words']
+                                notes = []
+                                if any(w['end']-w['start'] < .06 for w in words):
+                                    notes.append('Very short word timings; check against the vocals.')
+                                if greek and latin:
+                                    notes.append('Mixed Greek/English line; check timing or retry with a language override.')
+                                cue['words'] = words
+                                cue['karaoke'] = dict(state='review' if notes else 'aligned', note=' '.join(notes), language=chosen)
+                            except (ValueError, KeyError, TypeError) as exc:
+                                process.check_cancelled()
+                                note = str(exc)[:220] + (' Existing word timings were kept.' if cue['words'] else ' No word timings were added.')
+                                cue['karaoke'] = dict(state='review', note=note, language=chosen)
+                            d['status'] = f'Adding karaoke timing: {count+1}/{len(indices)} lines. Changes apply when the job finishes.'
+                            write(d)
+                    validate_edit(dict(cues=pending, style=d['style']), d['duration'])
+                    process.check_cancelled()
+                    d['karaoke_backup'] = dict(cues=copy.deepcopy(d['cues']), timing=d['timing'])
+                    d['cues'] = pending
+                finally:
+                    audio_file.unlink(missing_ok=True)
+            return launch(data, 'Adding karaoke timing while preserving subtitle lines…', work)
+
+    @bp.post('/api/captions/<pid>/restore-karaoke')
+    def restore_karaoke(pid):
+        with lock:
+            d = read(pid)
+            if d['state'] == 'busy' or request.get_json().get('revision') != d['revision']:
+                return jsonify(error='Project changed or is processing. Reload before restoring.'), 409
+            backup = d.get('karaoke_backup')
+            if not backup:
+                raise ValueError('No previous karaoke version is available.')
+            old = dict(cues=d['cues'], timing=d['timing'])
+            d.update(cues=backup['cues'], timing=backup['timing'], karaoke_backup=old)
+            d['revision'] += 1
+            d.update(state='ready', status='Previous caption version restored')
+            write(d)
+            return jsonify(d)
 
     @bp.post('/api/captions/<pid>/align')
     def align(pid):

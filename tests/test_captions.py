@@ -64,8 +64,89 @@ class CaptionDataTests(unittest.TestCase):
         gap=next(line for line in lines if line.startswith('Dialogue: 0,00:00:00.60,00:00:01.00'))
         self.assertNotIn(r'{\c',gap)
 
+    def test_karaoke_export_preserves_explicit_line_breaks(self):
+        cue=dict(start=0,end=2,text='Hello\nworld',words=[dict(start=0,end=1,text='Hello'),dict(start=1,end=2,text='world')])
+        data=validate_edit({'cues':[cue],'style':{**DEFAULT_STYLE,'karaoke':True}},2)
+        events=[line for line in ass_text({**data,'width':320,'height':240}).splitlines() if line.startswith('Dialogue:')]
+        self.assertTrue(events)
+        self.assertTrue(all(r'\N' in line for line in events))
+
 
 class CaptionWorkflowTests(unittest.TestCase):
+    def karaoke_project(self):
+        response=self.client.post('/api/captions',data={'video':(io.BytesIO(self.source.read_bytes()),'sample.mp4')})
+        pid=response.json['id'];data=self.wait(pid)
+        data['cues']=[dict(start=.1,end=.9,text='Hello\nworld',words=[]),dict(start=1,end=1.9,text='Γεια σου',words=[])]
+        data=self.client.put('/api/captions/'+pid,json=data).json
+        return pid,data
+
+    def test_karaoke_preserves_lines_style_and_backup_and_flags_failures(self):
+        pid,before=self.karaoke_project()
+        languages=[]
+        def align(model,audio,text,language):
+            languages.append(language)
+            if language=='el':raise ValueError('Uncertain words')
+            return {'segments':[{'words':[dict(word='Hello',start=.05,end=.3),dict(word=' world',start=.4,end=.7)]}]}
+        options=dict(revision=before['revision'],language='auto')
+        with patch('captions.align_caption_words',side_effect=align):
+            self.assertEqual(self.client.post(f'/api/captions/{pid}/karaoke',json=options).status_code,202)
+            after=self.wait(pid)
+        self.assertEqual(languages,['en','el'])
+        self.assertEqual(after['style'],before['style'])
+        self.assertEqual([(c['text'],c['start'],c['end']) for c in after['cues']],[(c['text'],c['start'],c['end']) for c in before['cues']])
+        self.assertEqual(after['cues'][0]['karaoke']['state'],'aligned')
+        self.assertEqual(after['cues'][1]['karaoke']['state'],'review')
+        self.assertEqual(after['cues'][1]['words'],[])
+        self.assertEqual(self.client.post(f'/api/captions/{pid}/karaoke',json=options).status_code,409)
+        saved=self.client.put('/api/captions/'+pid,json=after).json
+        self.assertEqual(saved['cues'],after['cues'])
+        restored=self.client.post(f'/api/captions/{pid}/restore-karaoke',json={'revision':saved['revision']}).json
+        self.assertEqual(restored['cues'],before['cues'])
+
+    def test_karaoke_single_retry_override_and_cancel_are_transactional(self):
+        pid,before=self.karaoke_project()
+        result={'segments':[{'words':[dict(word='Γεια',start=.05,end=.3),dict(word=' σου',start=.4,end=.7)]}]}
+        with patch('captions.align_caption_words',return_value=result) as align:
+            self.client.post(f'/api/captions/{pid}/karaoke',json={'revision':before['revision'],'index':1,'language':'el'})
+            after=self.wait(pid)
+            self.assertEqual(align.call_count,1)
+        self.assertEqual(after['cues'][0],before['cues'][0])
+        self.assertEqual(len(after['cues'][1]['words']),2)
+        entered,release=threading.Event(),threading.Event()
+        def blocked(*args):
+            entered.set();release.wait(5);return result
+        with patch('captions.align_caption_words',side_effect=blocked):
+            self.client.post(f'/api/captions/{pid}/karaoke',json={'revision':after['revision'],'index':1,'language':'el'})
+            try:
+                self.assertTrue(entered.wait(5))
+                busy=self.client.get('/api/captions/'+pid).json
+                self.assertEqual(busy['cues'],after['cues'])
+                self.assertEqual(self.client.put('/api/captions/'+pid,json=after).status_code,409)
+                job_process.cancel_all()
+            finally:release.set()
+            cancelled=self.wait(pid,'error')
+        self.assertEqual(cancelled['cues'],after['cues'])
+        self.assertEqual(cancelled['karaoke_backup'],after['karaoke_backup'])
+        self.assertFalse((self.root/'library'/'Caption Projects'/pid/'karaoke.wav').exists())
+
+    def test_karaoke_mixed_language_line_is_flagged_and_keeps_linebreak(self):
+        pid,data=self.karaoke_project()
+        data['cues'][0]['text']='Γεια\nhello'
+        data=self.client.put('/api/captions/'+pid,json=data).json
+        result={'segments':[{'words':[dict(word='Γεια',start=.05,end=.3),dict(word=' hello',start=.4,end=.7)]}]}
+        with patch('captions.align_caption_words',return_value=result) as align:
+            self.client.post(f'/api/captions/{pid}/karaoke',json={'revision':data['revision'],'index':0,'language':'auto'})
+            after=self.wait(pid)
+            self.assertEqual(align.call_args.args[-1],'el')
+        self.assertEqual(after['cues'][0]['text'],'Γεια\nhello')
+        self.assertEqual(after['cues'][0]['karaoke']['state'],'review')
+        self.assertIn('Mixed',after['cues'][0]['karaoke']['note'])
+        self.assertEqual(after['cues'][1],data['cues'][1])
+        after['style']['karaoke']=True
+        self.client.put('/api/captions/'+pid,json=after)
+        self.client.post(f'/api/captions/{pid}/render',json={'preview':False})
+        self.assertTrue(self.wait(pid)['last_render'])
+
     def test_song_composition_backgrounds_visualizer_and_font_export(self):
         from PIL import Image
         audio=self.root/'song.wav'
