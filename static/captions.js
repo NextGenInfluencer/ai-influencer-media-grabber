@@ -9,7 +9,7 @@ const CaptionTiming = (() => {
             previous=c.end;
             let wordEnd=c.start;
             for(const w of c.words||[]) {
-                if(!Number.isFinite(w.start)||!Number.isFinite(w.end)||w.start<wordEnd||w.end>c.end||w.end<=w.start)
+                if(!Number.isFinite(w.start)||!Number.isFinite(w.end)||w.start<wordEnd-.005||w.end>c.end+.005||w.end<=w.start)
                     throw Error('Word timings must run forwards, stay inside the line, and not overlap.');
                 wordEnd=w.end;
             }
@@ -499,7 +499,8 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
                         const rawStart=snapTime(original.start+delta, before, after-(original.end-original.start));
                         const shift=rawStart-original.start;
                         c.start=original.start+shift;c.end=original.end+shift;
-                        c.words=original.words.map(w=>({...w,start:w.start+shift,end:w.end+shift}));
+                        c.words=original.words.map(w=>({...w,start:Math.max(c.start,Math.min(c.end,w.start+shift)),end:Math.max(c.start,Math.min(c.end,w.end+shift))}));
+                        if(c.words.length){c.words[0].start=c.start;c.words[c.words.length-1].end=c.end;}
                     } else {
                         c[side]=side==='start'?snapTime(original.start+delta,before,original.end-.05):snapTime(original.end+delta,original.start+.05,after);
                         c.words=[];
@@ -1265,7 +1266,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         edit(()=>project.cues.splice(selected,1,{start:c.start,end:t,text:words.slice(0,index).join(' '),words:[]},{start:t,end:c.end,text:words.slice(index).join(' '),words:[]}));
     });
     $('merge').onclick=()=>{const c=current(),next=project?.cues[selected+1];if(c&&next)edit(()=>project.cues.splice(selected,2,{start:c.start,end:next.end,text:c.text+' '+next.text,words:[]}));};
-    $('estimateWords').onclick=()=>{const c=current();if(c)timingEdit(()=>{const words=c.text.trim().split(/\s+/);c.words=words.map((text,i)=>({text,start:c.start+(c.end-c.start)*i/words.length,end:i===words.length-1?c.end:c.start+(c.end-c.start)*(i+1)/words.length}));c.karaoke={state:'estimated',note:'Evenly spaced estimates, not audio alignment'};say('Word timings are evenly spaced estimates for this line only. Play this line to see highlighting; adjust the timings while listening.');});};
+    $('estimateWords').onclick=()=>{const c=current();if(c)timingEdit(()=>{const words=c.text.trim().split(/\s+/);c.words=words.map((text,i)=>({text,start:i===0?c.start:c.start+(c.end-c.start)*i/words.length,end:i===words.length-1?c.end:c.start+(c.end-c.start)*(i+1)/words.length}));c.karaoke={state:'estimated',note:'Evenly spaced estimates, not audio alignment'};say('Word timings are evenly spaced estimates for this line only. Play this line to see highlighting; adjust the timings while listening.');});};
     $('shiftAll').onclick=act(()=>{
         if(!project)return;const shift=Number($('shift').value);
         if(!Number.isFinite(shift)||project.cues.some(c=>c.start+shift<0||c.end+shift>project.duration))throw Error('That shift would move captions outside the video.');
@@ -1351,7 +1352,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         if(!project?.cues.length)throw Error('Import subtitles or add lines first.');
         video.pause();checkpoint();await job('karaoke',{language:$('karaokeLanguage').value,index});
     }
-    $('estimateMissing').onclick=act(()=>{if(!project||!confirm('Use evenly spaced estimates for all lines still missing word timings? These are not matched to the audio.'))return;timingEdit(()=>project.cues.filter(c=>!c.words?.length).forEach(c=>{const words=c.text.trim().split(/\s+/);c.words=words.map((text,i)=>({text,start:c.start+(c.end-c.start)*i/words.length,end:i===words.length-1?c.end:c.start+(c.end-c.start)*(i+1)/words.length}));c.karaoke={state:'estimated',note:'Evenly spaced estimates, not audio alignment'};}));});
+    $('estimateMissing').onclick=act(()=>{if(!project||!confirm('Use evenly spaced estimates for all lines still missing word timings? These are not matched to the audio.'))return;timingEdit(()=>project.cues.filter(c=>!c.words?.length).forEach(c=>{const words=c.text.trim().split(/\s+/);c.words=words.map((text,i)=>({text,start:i===0?c.start:c.start+(c.end-c.start)*i/words.length,end:i===words.length-1?c.end:c.start+(c.end-c.start)*(i+1)/words.length}));c.karaoke={state:'estimated',note:'Evenly spaced estimates, not audio alignment'};}));});
     $('karaokeAll').onclick=act(()=>addKaraoke());
     $('karaokeLine').onclick=act(()=>{if(current())return addKaraoke(selected);});
     $('nextReview').onclick=()=>{if(!project)return;for(let n=1;n<=project.cues.length;n++){const i=(Math.max(-1,selected)+n)%project.cues.length;if(needsReview(project.cues[i])){select(i);return;}}say('No lines are flagged. You can still review any line while listening.');};

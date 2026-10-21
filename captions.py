@@ -97,10 +97,25 @@ def validate_edit(data, duration):
         if end <= start or not text or len(text) > 1000:
             raise ValueError('Each caption needs text and an end after its start (maximum 1,000 characters).')
         words = []
+        raw_words = cue.get('words', [])
+        n_words = len(raw_words)
         previous = start
-        for word in cue.get('words', []):
-            a, b = number(word['start'], start, end), number(word['end'], start, end)
-            t = str(word['text']).strip()
+        for w_idx, word in enumerate(raw_words):
+            raw_a = float(word.get('start', start))
+            raw_b = float(word.get('end', end))
+            # Gracefully clamp with floating-point tolerance to caption bounds
+            raw_a = max(start, min(end, raw_a))
+            raw_b = max(start, min(end, raw_b))
+            if raw_a < previous:
+                raw_a = previous
+            if raw_b <= raw_a:
+                rem = n_words - 1 - w_idx
+                available = max(0.001, end - raw_a)
+                step = available / max(1, rem + 1)
+                raw_b = min(end, raw_a + step)
+            a = number(raw_a, start, end)
+            b = number(raw_b, start, end)
+            t = str(word.get('text', '')).strip()
             if b <= a or a < previous or not t or len(t) > 100:
                 raise ValueError('Word timings must be ordered and inside their caption.')
             previous = b
@@ -530,8 +545,17 @@ def aligned_cues(result, lines, offset, duration, limit, recover=False):
     for k in range(len(cues) - 1):
         if cues[k]['end'] > cues[k+1]['start']:
             cues[k]['end'] = cues[k+1]['start']
-            if cues[k]['words'] and cues[k]['words'][-1]['end'] > cues[k]['end']:
-                cues[k]['words'][-1]['end'] = cues[k]['end']
+    for cue in cues:
+        if cue.get('words'):
+            c_s, c_e = cue['start'], cue['end']
+            prev_w = c_s
+            n_w = len(cue['words'])
+            for idx, w in enumerate(cue['words']):
+                w['start'] = max(prev_w, min(c_e - 0.001 * (n_w - idx), float(w['start'])))
+                w['end'] = max(w['start'] + 0.001, min(c_e - 0.001 * (n_w - 1 - idx), float(w['end'])))
+                prev_w = w['end']
+            cue['words'][0]['start'] = c_s
+            cue['words'][-1]['end'] = c_e
     return validate_edit(dict(cues=cues), duration)['cues']
 
 
@@ -548,10 +572,10 @@ def distribute_words_in_cue(words_text: list[str], cue_start: float, cue_end: fl
     if not words_text:
         return []
     n = len(words_text)
-    cue_start = round(cue_start, 3)
-    cue_end = round(cue_end, 3)
+    cue_start = float(cue_start)
+    cue_end = float(cue_end)
     if cue_end <= cue_start:
-        cue_end = round(cue_start + max(0.05, 0.005 * n), 3)
+        cue_end = cue_start + max(0.05, 0.005 * n)
     total = cue_end - cue_start
 
     char_lens = [max(1, len(w)) for w in words_text]
@@ -570,10 +594,9 @@ def distribute_words_in_cue(words_text: list[str], cue_start: float, cue_end: fl
             max_end = cue_end - (rem_words * 0.001)
             raw_end = curr + fraction * total
             w_end = min(max_end, max(w_start + 0.001, raw_end))
-            w_end = round(w_end, 3)
 
-        w_start = max(cue_start, min(cue_end - 0.001, round(w_start, 3)))
-        w_end = max(w_start + 0.001, min(cue_end, round(w_end, 3)))
+        w_start = max(cue_start, min(cue_end - 0.001, w_start))
+        w_end = max(w_start + 0.001, min(cue_end, w_end))
         words.append(dict(text=wt, start=w_start, end=w_end))
         curr = w_end
 
@@ -748,8 +771,8 @@ def match_lyrics_to_transcription(cues, lyrics, duration, language=None, model=N
     # Step 2: Strict monotonicity and non-overlapping pass on all cue line boundaries
     prev = 0.0
     for it in items:
-        s = round(max(prev, min(duration - 0.05, it['start'])), 2)
-        e = round(max(s + 0.05, min(duration, it['end'])), 2)
+        s = round(max(prev, min(duration - 0.05, it['start'])), 3)
+        e = round(max(s + 0.05, min(duration, it['end'])), 3)
         it['start'] = s
         it['end'] = e
         prev = e
@@ -758,8 +781,12 @@ def match_lyrics_to_transcription(cues, lyrics, duration, language=None, model=N
     if items and items[-1]['end'] > duration:
         overflow = items[-1]['end'] - duration
         for it in reversed(items):
-            it['end'] = max(0.05, it['end'] - overflow)
-            it['start'] = max(0.0, min(it['end'] - 0.05, it['start'] - overflow))
+            it['end'] = round(max(0.05, it['end'] - overflow), 3)
+            it['start'] = round(max(0.0, min(it['end'] - 0.05, it['start'] - overflow)), 3)
+
+    for it in items:
+        it['start'] = round(it['start'], 3)
+        it['end'] = round(it['end'], 3)
 
     # Step 3: Now that all cue boundaries are 100% final and non-overlapping, generate word timings
     final_cues: list[dict[str, Any]] = []
@@ -1374,6 +1401,16 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                                     notes.append('Very short word timings; check against the vocals.')
                                 if (greek or korean) and latin or language in composition_model.MIXED:
                                     notes.append('Mixed-language selection; check timing or retry this line with a language override.')
+                                if words:
+                                    c_s, c_e = float(cue['start']), float(cue['end'])
+                                    prev_w = c_s
+                                    n_w = len(words)
+                                    for idx, w in enumerate(words):
+                                        w['start'] = max(prev_w, min(c_e - 0.001 * (n_w - idx), float(w['start'])))
+                                        w['end'] = max(w['start'] + 0.001, min(c_e - 0.001 * (n_w - 1 - idx), float(w['end'])))
+                                        prev_w = w['end']
+                                    words[0]['start'] = c_s
+                                    words[-1]['end'] = c_e
                                 cue['words'] = words
                                 cue['karaoke'] = dict(state='review' if notes else 'aligned', note=' '.join(notes), language=chosen)
                             except (ValueError, KeyError, TypeError) as exc:
@@ -1382,7 +1419,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                                 cue['karaoke'] = dict(state='review', note=note, language=chosen)
                             d['status'] = f'Adding karaoke timing: {count+1}/{len(indices)} lines. Changes apply when the job finishes.'
                             write(d)
-                    validate_edit(dict(cues=pending, style=d['style']), d['duration'])
+                    pending = validate_edit(dict(cues=pending, style=d['style']), d['duration'])['cues']
                     process.check_cancelled()
                     d['karaoke_backup'] = dict(cues=copy.deepcopy(d['cues']), timing=d['timing'])
                     d['cues'] = pending

@@ -915,3 +915,39 @@ class CaptionWorkflowTests(unittest.TestCase):
         after_clear = self.wait(pid)
         self.assertNotIn('sticker', after_clear['studio']['assets'])
 
+    def test_distribute_words_and_validate_edit_submillisecond_float_precision(self):
+        """Verify that floating point fractions (e.g. 22.556666666666658 - 26.67666666666666) never cause validation errors."""
+        from captions import distribute_words_in_cue, validate_edit
+        start = 22.556666666666658
+        end = 26.67666666666666
+        words_text = ['Stopped', 'checking', 'the', 'phone', 'stopped', 'looking', 'at', 'the', 'door']
+
+        words = distribute_words_in_cue(words_text, start, end)
+        self.assertEqual(words[0]['start'], start)
+        self.assertEqual(words[-1]['end'], end)
+        self.assertTrue(all(start <= w['start'] <= end and start <= w['end'] <= end for w in words))
+
+        # Test validate_edit with exact words
+        cue = dict(text=' '.join(words_text), start=start, end=end, words=words)
+        validated = validate_edit(dict(cues=[cue]), 300)
+        self.assertEqual(len(validated['cues']), 1)
+        self.assertEqual(len(validated['cues'][0]['words']), len(words_text))
+
+        # Test validate_edit with slightly noisy / rounded word timestamps
+        noisy_words = [
+            dict(text='Stopped', start=22.555, end=23.0),      # slightly before start
+            dict(text='checking', start=23.0, end=23.5),
+            dict(text='the', start=23.5, end=24.0),
+            dict(text='phone', start=24.0, end=24.5),
+            dict(text='stopped', start=24.5, end=25.0),
+            dict(text='looking', start=25.0, end=25.5),
+            dict(text='at', start=25.5, end=26.0),
+            dict(text='the', start=26.0, end=26.4),
+            dict(text='door', start=26.4, end=26.678)          # slightly after end (26.678 > 26.67666666666666)
+        ]
+        noisy_cue = dict(text=' '.join(words_text), start=start, end=end, words=noisy_words)
+        fixed = validate_edit(dict(cues=[noisy_cue]), 300)
+        self.assertEqual(fixed['cues'][0]['words'][0]['start'], start)
+        self.assertEqual(fixed['cues'][0]['words'][-1]['end'], end)
+
+
