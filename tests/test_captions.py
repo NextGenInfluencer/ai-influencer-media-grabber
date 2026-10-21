@@ -703,3 +703,52 @@ class CaptionWorkflowTests(unittest.TestCase):
         self.assertEqual(r_draft.status_code, 202)
         rendered = self.wait(pid)
         self.assertTrue(rendered['last_render'])
+
+    def test_capcut_video_and_audio_effects_in_style_and_composition_render(self):
+        pid, before = self.karaoke_project()
+        # 1. Apply video filters & audio effects directly via live style panel and render
+        fx_style = {
+            **before['style'],
+            'video_filter': 'sepia',
+            'vignette': True,
+            'film_grain': 6,
+            'sharpen': 0.5,
+            'chromatic': 2,
+            'noise_cancel': True,
+            'voice_isolation': True,
+            'audio_effect': 'echo',
+        }
+        saved = self.j(self.client.put(f'/api/captions/{pid}', json={
+            'revision': before['revision'],
+            'cues': before['cues'],
+            'style': fx_style,
+            'timing': before['timing'],
+        }))
+        self.assertEqual(saved['style']['video_filter'], 'sepia')
+        self.assertTrue(saved['style']['voice_isolation'])
+        self.assertEqual(saved['style']['audio_effect'], 'echo')
+
+        r_fx = self.client.post(f'/api/captions/{pid}/render', json={'preview': True, 'quality': 'draft'})
+        self.assertEqual(r_fx.status_code, 202, r_fx.json)
+        after_render = self.wait(pid)
+        self.assertEqual(after_render['state'], 'ready')
+        self.assertTrue((self.root / 'library' / 'Caption Projects' / pid / after_render['last_render']).is_file())
+
+        # 2. Apply composition-level video filter & audio effect and verify sync to style
+        comp_settings = {
+            **after_render['studio']['settings'],
+            'video_filter': 'cyberpunk',
+            'vignette': True,
+            'noise_cancel': True,
+            'audio_effect': 'concert_hall',
+        }
+        c_res = self.client.post(f'/api/captions/{pid}/composition', data={
+            'revision': after_render['revision'],
+            'settings': json.dumps(comp_settings),
+        })
+        self.assertEqual(c_res.status_code, 202, c_res.json)
+        after_comp = self.wait(pid)
+        self.assertEqual(after_comp['style']['video_filter'], 'cyberpunk')
+        self.assertEqual(after_comp['style']['audio_effect'], 'concert_hall')
+        self.assertTrue(after_comp['style']['noise_cancel'])
+

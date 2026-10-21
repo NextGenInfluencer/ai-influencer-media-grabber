@@ -235,3 +235,35 @@ class CompositionDataTests(unittest.TestCase):
         self.assertIn('overlay=x=', joined)
         self.assertIn('between(t,0.0,4.0)', joined)
 
+    def test_video_and_audio_fx_chains_and_validation(self):
+        for name, expr in comp.VIDEO_FILTERS.items():
+            if name != 'none':
+                self.assertIn(expr, comp.video_fx_chain({'video_filter': name}))
+        for name, expr in comp.AUDIO_EFFECTS.items():
+            if name != 'none':
+                self.assertIn(expr, comp.audio_fx_chain({'audio_effect': name}))
+        v_chain = comp.video_fx_chain({
+            'video_filter': 'sepia',
+            'sharpen': 1.2,
+            'chromatic': 4,
+            'film_grain': 10,
+            'vignette': True,
+        })
+        self.assertEqual(len(v_chain), 5)
+        self.assertIn('rgbashift=rh=-4:bh=4', v_chain)
+        self.assertIn('noise=alls=10:allf=t+u', v_chain)
+
+        a_iso = comp.audio_fx_chain({'voice_isolation': True, 'noise_cancel': True, 'audio_effect': 'echo'})
+        self.assertEqual(len(a_iso), 2)
+        self.assertIn('highpass=f=100', a_iso[0])
+        self.assertIn('aecho=', a_iso[1])
+
+        a_denoise = comp.audio_fx_chain({'voice_isolation': False, 'noise_cancel': True, 'audio_effect': 'none'})
+        self.assertEqual(a_denoise, ['afftdn=nf=-25'])
+
+        with self.assertRaisesRegex(ValueError, 'video filter and audio effect'):
+            comp.validate({**comp.DEFAULTS, 'end': 3.0, 'video_filter': 'unknown'}, 3.0)
+        with self.assertRaisesRegex(ValueError, 'video filter and audio effect'):
+            comp.validate({**comp.DEFAULTS, 'end': 3.0, 'audio_effect': 'autotune99'}, 3.0)
+
+

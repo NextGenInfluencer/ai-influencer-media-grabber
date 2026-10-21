@@ -30,6 +30,7 @@ from PIL import Image
 from flask import Flask, Response, abort, jsonify, render_template, request, session, send_file, send_from_directory
 from media_safety import MEDIA_EXTENSIONS, contained_path, safe_media_name, crop_filter
 from reference_prep import register_reference_prep
+import creator_composition
 
 
 class MediaTests(unittest.TestCase):

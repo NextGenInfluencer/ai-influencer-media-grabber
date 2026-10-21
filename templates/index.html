@@ -453,6 +453,66 @@
                                     </select>
                                 </div>
                             </div>
+                            <!-- CapCut-Style Video Filters & Audio Effects -->
+                            <div class="col-span-2 pt-3 border-t border-zinc-800/60 space-y-3">
+                                <label class="block text-[10px] font-bold text-purple-400 uppercase tracking-widest"><i class="fa-solid fa-sliders mr-1.5"></i>Video Filters &amp; Audio FX (CapCut Suite)</label>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-[10px] font-bold text-zinc-400 uppercase mb-1">Video Filter</label>
+                                        <select id="convVideoFilter" name="video_filter" class="w-full px-2.5 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-purple-500">
+                                            <option value="none" selected>None (Original)</option>
+                                            <option value="bw">Black &amp; White</option>
+                                            <option value="sepia">Sepia</option>
+                                            <option value="vintage">Vintage Film</option>
+                                            <option value="cyberpunk">Cyberpunk Neon</option>
+                                            <option value="warm">Warm Golden Hour</option>
+                                            <option value="cool">Cool Cinema</option>
+                                            <option value="dramatic">Dramatic Contrast</option>
+                                            <option value="dreamy">Dreamy Soft Glow</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-[10px] font-bold text-zinc-400 uppercase mb-1">Audio Effect</label>
+                                        <select id="convAudioEffect" name="audio_effect" class="w-full px-2.5 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-purple-500">
+                                            <option value="none" selected>None</option>
+                                            <option value="echo">Echo</option>
+                                            <option value="concert_hall">Concert Hall Reverb</option>
+                                            <option value="studio_vocal">Studio Vocal Polish</option>
+                                            <option value="lofi_radio">Lo-Fi / Vintage Radio</option>
+                                            <option value="bass_boost">Bass Boost</option>
+                                            <option value="chorus">Vocal Chorus</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-3 gap-3">
+                                    <div>
+                                        <label class="block text-[10px] text-zinc-400 font-bold uppercase mb-1">Film Grain (0-30)</label>
+                                        <input type="number" id="convFilmGrain" name="film_grain" min="0" max="30" step="1" value="0" class="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-700 rounded-lg text-xs text-white focus:border-purple-500 focus:outline-none">
+                                    </div>
+                                    <div>
+                                        <label class="block text-[10px] text-zinc-400 font-bold uppercase mb-1">Sharpen (0-2)</label>
+                                        <input type="number" id="convSharpen" name="sharpen" min="0" max="2" step="0.1" value="0" class="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-700 rounded-lg text-xs text-white focus:border-purple-500 focus:outline-none">
+                                    </div>
+                                    <div>
+                                        <label class="block text-[10px] text-zinc-400 font-bold uppercase mb-1">RGB Glitch (0-10)</label>
+                                        <input type="number" id="convChromatic" name="chromatic" min="0" max="10" step="1" value="0" class="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-700 rounded-lg text-xs text-white focus:border-purple-500 focus:outline-none">
+                                    </div>
+                                </div>
+                                <div class="flex flex-wrap gap-4 pt-1">
+                                    <label class="flex items-center space-x-2 text-xs text-zinc-300 cursor-pointer">
+                                        <input type="checkbox" id="convVignette" class="form-checkbox text-purple-500 rounded border-zinc-700 bg-zinc-900">
+                                        <span>Cinematic Vignette</span>
+                                    </label>
+                                    <label class="flex items-center space-x-2 text-xs text-zinc-300 cursor-pointer">
+                                        <input type="checkbox" id="convNoiseCancel" class="form-checkbox text-purple-500 rounded border-zinc-700 bg-zinc-900">
+                                        <span>Noise Cancellation (AI/FFT)</span>
+                                    </label>
+                                    <label class="flex items-center space-x-2 text-xs text-zinc-300 cursor-pointer">
+                                        <input type="checkbox" id="convVoiceIsolation" class="form-checkbox text-purple-500 rounded border-zinc-700 bg-zinc-900">
+                                        <span>Voice Isolation &amp; Clarity</span>
+                                    </label>
+                                </div>
+                            </div>
                             <div class="col-span-2 flex items-center justify-end">
                                 <div class="w-1/2">
                                     <select id="convFormat" name="format" class="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-zinc-200 focus:outline-none focus:border-purple-500 appearance-none">
@@ -2089,6 +2149,14 @@
             formData.set('export_subtitles', document.getElementById('convExportSubtitles').checked);
             formData.set('translate_lang', document.getElementById('convTranslateLang').value);
             formData.set('llmModel', document.getElementById('llmModelConverter').value);
+            formData.set('video_filter', document.getElementById('convVideoFilter')?.value || 'none');
+            formData.set('audio_effect', document.getElementById('convAudioEffect')?.value || 'none');
+            formData.set('film_grain', document.getElementById('convFilmGrain')?.value || '0');
+            formData.set('sharpen', document.getElementById('convSharpen')?.value || '0');
+            formData.set('chromatic', document.getElementById('convChromatic')?.value || '0');
+            formData.set('vignette', document.getElementById('convVignette')?.checked || false);
+            formData.set('noise_cancel', document.getElementById('convNoiseCancel')?.checked || false);
+            formData.set('voice_isolation', document.getElementById('convVoiceIsolation')?.checked || false);
             const statusContainer = document.getElementById('convStatusContainer');
             const statusText = document.getElementById('convStatusText');
             const statusIcon = document.getElementById('convStatusIcon');

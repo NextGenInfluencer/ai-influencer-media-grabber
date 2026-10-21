@@ -29,17 +29,72 @@ RENDER_QUALITIES = {
     'standard': dict(preset='fast', crf='18', audio_bitrate='256k', max_side=0),
     'high': dict(preset='medium', crf='15', audio_bitrate='320k', max_side=0),
 }
+VIDEO_FILTERS = {
+    'none': '',
+    'bw': 'hue=s=0',
+    'sepia': 'colorchannelmixer=.393:.769:.189:0:.349:.686:.168:0:.272:.534:.131',
+    'vintage': 'curves=vintage,vignette=PI/4',
+    'cyberpunk': 'eq=contrast=1.25:saturation=1.6,colorbalance=rs=-0.15:gs=-0.05:bs=0.25:rh=0.2:gh=-0.1:bh=0.25',
+    'warm': 'colorbalance=rs=0.12:gs=0.04:bs=-0.12:rm=0.1:gm=0.03:bm=-0.1,eq=saturation=1.15',
+    'cool': 'colorbalance=rs=-0.12:gs=0.02:bs=0.16:rm=-0.08:gm=0.02:bm=0.12,eq=contrast=1.08',
+    'dramatic': 'eq=contrast=1.35:brightness=-0.04:saturation=0.85,vignette=PI/4',
+    'dreamy': 'gblur=sigma=1.2,eq=brightness=0.06:contrast=0.95:saturation=1.2',
+}
+AUDIO_EFFECTS = {
+    'none': '',
+    'echo': 'aecho=0.8:0.88:220:0.4',
+    'concert_hall': 'aecho=0.8:0.9:500|1000:0.3|0.2',
+    'studio_vocal': 'highpass=f=80,afftdn=nf=-22,acompressor=threshold=-16dB:ratio=3:makeup=2,equalizer=f=4500:t=q:w=1.2:g=3,aecho=0.8:0.88:90:0.18',
+    'lofi_radio': 'highpass=f=400,lowpass=f=3200,acompressor=threshold=-15dB:ratio=4,afftdn=nf=-20',
+    'bass_boost': 'bass=g=8:f=110:w=0.6,acompressor=threshold=-14dB:ratio=2',
+    'chorus': 'chorus=0.7:0.9:55:0.4:0.25:2',
+}
 DEFAULTS = dict(shape='portrait', color='#141526', fit='fill', x=50, y=50,
                 blur=0, dim=0, overlay='#000000', opacity=0, zoom=0,
                 brightness=0, contrast=1, saturation=1, background_speed=1,
+                video_filter='none', vignette=False, film_grain=0, sharpen=0, chromatic=0,
                 transition_in=0, transition_out=0, keyframe_end_x=50, keyframe_end_y=50,
                 title_text='', title_duration=0,
                 broll_start=0, broll_duration=0, broll_x=50, broll_y=50,
                 broll_scale=100, broll_opacity=1, broll_fade=0,
                 start=0, end=0, offset=0, volume=1, fade_in=0, fade_out=0,
+                noise_cancel=False, voice_isolation=False, audio_effect='none',
                 background_volume=0, ducking=False, loop=True, background_start=0, background_duration=0,
                 visualizer=False, visualizer_style='waveform', visualizer_position='bottom',
                 visualizer_height=20, visualizer_sensitivity=1, visualizer_color='#bba6ff')
+
+
+def video_fx_chain(cfg: dict) -> list[str]:
+    """Return FFmpeg video filter expressions for CapCut-style color filters and visual FX."""
+    chain: list[str] = []
+    preset = VIDEO_FILTERS.get(str(cfg.get('video_filter') or 'none'), '')
+    if preset:
+        chain.append(preset)
+    sharpen = float(cfg.get('sharpen') or 0)
+    if sharpen > 0:
+        chain.append(f'unsharp=5:5:{sharpen:.2f}:5:5:0.0')
+    chromatic = int(round(float(cfg.get('chromatic') or 0)))
+    if chromatic > 0:
+        chain.append(f'rgbashift=rh=-{chromatic}:bh={chromatic}')
+    grain = int(round(float(cfg.get('film_grain') or 0)))
+    if grain > 0:
+        chain.append(f'noise=alls={grain}:allf=t+u')
+    if cfg.get('vignette'):
+        chain.append('vignette=PI/4')
+    return chain
+
+
+def audio_fx_chain(cfg: dict) -> list[str]:
+    """Return FFmpeg audio filter expressions for noise cancellation, voice isolation, and audio FX."""
+    chain: list[str] = []
+    if cfg.get('voice_isolation'):
+        chain.append('highpass=f=100,lowpass=f=7500,afftdn=nf=-25,equalizer=f=3000:t=q:w=1:g=4,acompressor=threshold=-18dB:ratio=3:makeup=2')
+    elif cfg.get('noise_cancel'):
+        chain.append('afftdn=nf=-25')
+    fx = AUDIO_EFFECTS.get(str(cfg.get('audio_effect') or 'none'), '')
+    if fx:
+        chain.append(fx)
+    return chain
 
 
 def finite(value, low, high):
@@ -116,12 +171,15 @@ def validate(settings, source_duration):
         raise ValueError('Choose a supported canvas format and fit mode.')
     if s['visualizer_style'] not in VISUALIZER_STYLES or s['visualizer_position'] not in VISUALIZER_POSITIONS:
         raise ValueError('Choose a supported visualizer style and position.')
+    if s['video_filter'] not in VIDEO_FILTERS or s['audio_effect'] not in AUDIO_EFFECTS:
+        raise ValueError('Choose a supported video filter and audio effect.')
     for key in ('color','overlay','visualizer_color'):
         if not re.fullmatch('#[0-9a-fA-F]{6}', str(s[key])):
             raise ValueError('Choose a valid composition color.')
     s['title_text'] = re.sub(r'[\r\n\t]+', ' ', str(s.get('title_text') or '')).strip()[:120]
     bounds = dict(x=(0,100),y=(0,100),blur=(0,30),dim=(0,1),opacity=(0,1),zoom=(0,.2),
                   brightness=(-.5,.5),contrast=(.5,2),saturation=(0,3),background_speed=(.25,2),
+                  film_grain=(0,30),sharpen=(0,2),chromatic=(0,10),
                   transition_in=(0,10),transition_out=(0,10),keyframe_end_x=(0,100),keyframe_end_y=(0,100),
                   title_duration=(0,15),broll_start=(0,7200),broll_duration=(0,7200),
                   broll_x=(0,100),broll_y=(0,100),broll_scale=(20,100),broll_opacity=(.1,1),broll_fade=(0,5),
@@ -135,7 +193,7 @@ def validate(settings, source_duration):
         raise ValueError('Choose a song range of at least 0.1 seconds and an output up to 20 minutes.')
     if max(s['fade_in'],s['fade_out']) > length:
         raise ValueError('Audio fades must fit inside the selected song range.')
-    for key in ('loop','visualizer','ducking'):
+    for key in ('loop','visualizer','ducking','vignette','noise_cancel','voice_isolation'):
         if type(s[key]) is not bool: raise ValueError('Invalid composition checkbox value.')
     return s
 
@@ -187,6 +245,8 @@ def render_args(studio, folder, output, background_has_audio=False):
     graph=[]
     length=s['end']-s['start']
     af=f"[0:a]atrim=start={s['start']}:end={s['end']},asetpts=PTS-STARTPTS,volume={s['volume']}"
+    for a_fx in audio_fx_chain(s):
+        af+=f",{a_fx}"
     if s['fade_in']: af+=f",afade=t=in:st=0:d={s['fade_in']}"
     if s['fade_out']: af+=f",afade=t=out:st={length-s['fade_out']}:d={s['fade_out']}"
     af+=f",adelay={round(s['offset']*1000)}:all=1,apad,atrim=duration={duration}[song]"
@@ -213,6 +273,8 @@ def render_args(studio, folder, output, background_has_audio=False):
         vf+=f",zoompan=z='1+{z_amt}*on/{frames}':x='(iw-iw/zoom)*{px}':y='(ih-ih/zoom)*{py}':d=1:s={w}x{h}:fps=30"
     if s['brightness'] != 0 or s['contrast'] != 1 or s['saturation'] != 1:
         vf+=f",eq=brightness={s['brightness']}:contrast={s['contrast']}:saturation={s['saturation']}"
+    for v_fx in video_fx_chain(s):
+        vf+=f",{v_fx}"
     if s['blur']: vf+=f",gblur=sigma={s['blur']}"
     if s['dim']: vf+=f",drawbox=c=black@{s['dim']}:t=fill"
     if s['opacity']: vf+=f",drawbox=c={s['overlay']}@{s['opacity']}:t=fill"

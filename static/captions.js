@@ -87,9 +87,10 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
     const $ = id => document.getElementById(id), video = $('video');
     const token = document.querySelector('meta[name="media-token"]').content;
     const copy = value => JSON.parse(JSON.stringify(value));
-    const styleKeys = ['font','size','color','highlight','outline','position','background','karaoke','cumulative','word_pop','visualizer','visualizer_style','visualizer_position','visualizer_height','visualizer_sensitivity','visualizer_color'];
-    const styleChecks = ['background','karaoke','cumulative','word_pop','visualizer'];
-    const styleNumbers = ['size','outline','position','visualizer_height','visualizer_sensitivity'];
+    const styleKeys = ['font','size','color','highlight','outline','position','background','karaoke','cumulative','word_pop','visualizer','visualizer_style','visualizer_position','visualizer_height','visualizer_sensitivity','visualizer_color','video_filter','vignette','film_grain','sharpen','chromatic','noise_cancel','voice_isolation','audio_effect'];
+    const styleChecks = ['background','karaoke','cumulative','word_pop','visualizer','vignette','noise_cancel','voice_isolation'];
+    const styleNumbers = ['size','outline','position','visualizer_height','visualizer_sensitivity','film_grain','sharpen','chromatic'];
+    const cssVideoFilters = {none:'',bw:'grayscale(1)',sepia:'sepia(1)',vintage:'sepia(0.45) contrast(1.1) brightness(0.95)',cyberpunk:'contrast(1.25) saturate(1.6) hue-rotate(-12deg)',warm:'sepia(0.22) saturate(1.2) brightness(1.03)',cool:'saturate(1.1) contrast(1.08) hue-rotate(12deg)',dramatic:'contrast(1.35) brightness(0.96) saturate(0.85)',dreamy:'blur(1.2px) brightness(1.06) contrast(0.95) saturate(1.2)'};
     let project = null, selected = -1, history = [], future = [], dirty = false;
     let saveTimer, pollTimer, saving = null, generation = 0, busy = false, dragging = false, pendingPreview = false;
     const say = (text, error = false) => {
@@ -239,6 +240,12 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         drawVisualizer();
         const cue=project.cues.find(c=>c.start<=video.currentTime && c.end>video.currentTime);
         const s=project.style, h=$('stage').clientHeight;
+        const baked=project.composition||{};
+        const activeFilter=(s.video_filter||'none')!==(baked.video_filter||'none')?(s.video_filter||'none'):'none';
+        const rgbShift=((s.chromatic||0)!==(baked.chromatic||0) && s.chromatic>0)?` drop-shadow(-${Math.max(1,Math.round(s.chromatic/2))}px 0 0 rgba(255,0,80,.55)) drop-shadow(${Math.max(1,Math.round(s.chromatic/2))}px 0 0 rgba(0,220,255,.55))`:'';
+        video.style.filter=((cssVideoFilters[activeFilter]||'')+rgbShift).trim();
+        const vig=$('stageVignette');
+        if(vig) vig.hidden=!((s.vignette && !baked.vignette) || ((activeFilter==='vintage'||activeFilter==='dramatic') && !baked.vignette));
         const compSet=project.studio?.settings||project.composition||{};
         const showTitle=compSet.title_text && compSet.title_duration>0 && video.currentTime>=0 && video.currentTime<=compSet.title_duration;
         Object.assign(box.style,{fontFamily:`"${s.font}",Roboto,"Noto Sans KR",sans-serif`,fontSize:h*s.size/100+'px',color:s.color,
@@ -419,8 +426,8 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         $('createSong').disabled=true;
         try {await create(form);$('songDialog').close();} finally {$('createSong').disabled=false;}
     });
-    const compositionKeys=['shape','color','fit','x','y','blur','dim','overlay','opacity','zoom','brightness','contrast','saturation','background_speed','transition_in','transition_out','keyframe_end_x','keyframe_end_y','title_text','title_duration','broll_start','broll_duration','broll_x','broll_y','broll_scale','broll_opacity','broll_fade','start','end','offset','volume','fade_in','fade_out','background_volume','ducking','loop','background_start','background_duration','visualizer','visualizer_style','visualizer_position','visualizer_height','visualizer_sensitivity','visualizer_color'];
-    const compositionChecks=['loop','visualizer','ducking'], compositionStrings=['shape','color','fit','overlay','visualizer_style','visualizer_position','visualizer_color','title_text'];
+    const compositionKeys=['shape','color','fit','x','y','blur','dim','overlay','opacity','zoom','brightness','contrast','saturation','video_filter','vignette','film_grain','sharpen','chromatic','background_speed','transition_in','transition_out','keyframe_end_x','keyframe_end_y','title_text','title_duration','broll_start','broll_duration','broll_x','broll_y','broll_scale','broll_opacity','broll_fade','start','end','offset','volume','fade_in','fade_out','noise_cancel','voice_isolation','audio_effect','background_volume','ducking','loop','background_start','background_duration','visualizer','visualizer_style','visualizer_position','visualizer_height','visualizer_sensitivity','visualizer_color'];
+    const compositionChecks=['loop','visualizer','ducking','vignette','noise_cancel','voice_isolation'], compositionStrings=['shape','color','fit','overlay','visualizer_style','visualizer_position','visualizer_color','title_text','video_filter','audio_effect'];
     function fillComposition(settings) {
         for(const key of compositionKeys) {const input=$('comp_'+key);if(compositionChecks.includes(key))input.checked=!!settings[key];else if(settings[key]!==undefined)input.value=settings[key];}
     }
@@ -436,7 +443,13 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         const prov=studio?.assets?.background?.provenance;
         const provText=prov?` · ${prov.attribution} (${prov.license})`:'';
         const brollText=studio?.assets?.broll && studio?.settings?.broll_duration>0 ? ` · B-Roll ${studio.settings.broll_duration}s` : '';
-        $('compositionSummary').textContent=studio ? `${studio.settings.shape} · ${studio.assets.background?.kind||'Colour'} background${provText}${brollText} · song ${fmt(studio.settings.start)}–${fmt(studio.settings.end)} · ${studio.settings.offset}s delay`+(project.missing_assets?.length?` · Missing media: ${project.missing_assets.join(', ')}. Open Edit composition to relink.`:'') : 'Open a prepared project to edit its background and audio.';
+        const fxParts=[];
+        if((project?.style?.video_filter||studio?.settings?.video_filter||'none')!=='none') fxParts.push(`filter: ${project?.style?.video_filter||studio?.settings?.video_filter}`);
+        if(project?.style?.voice_isolation||studio?.settings?.voice_isolation) fxParts.push('voice isolation');
+        else if(project?.style?.noise_cancel||studio?.settings?.noise_cancel) fxParts.push('noise cancel');
+        if((project?.style?.audio_effect||studio?.settings?.audio_effect||'none')!=='none') fxParts.push(`audio FX: ${project?.style?.audio_effect||studio?.settings?.audio_effect}`);
+        const fxText=fxParts.length ? ` · ${fxParts.join(', ')}` : '';
+        $('compositionSummary').textContent=studio ? `${studio.settings.shape} · ${studio.assets.background?.kind||'Colour'} background${provText}${brollText}${fxText} · song ${fmt(studio.settings.start)}–${fmt(studio.settings.end)} · ${studio.settings.offset}s delay`+(project.missing_assets?.length?` · Missing media: ${project.missing_assets.join(', ')}. Open Edit composition to relink.`:'') : 'Open a prepared project to edit its background and audio.';
     }
     function openCompositionEditor() {
         if(!project?.studio)return;

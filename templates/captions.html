@@ -2,7 +2,7 @@
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="media-token" content="{{ api_token }}"><title>Captions & Lyrics — Media Grabber</title>
-<link rel="stylesheet" href="/static/captions.css"><script src="/static/captions.js?v=phase4-1" defer></script></head>
+<link rel="stylesheet" href="/static/captions.css"><script src="/static/captions.js?v=phase7-fx" defer></script></head>
 <body>
 <header><a href="/">← Studio</a><div><h1>Captions & Lyrics</h1><small>Your words. Your timing. Your style.</small></div><span id="saveStatus" role="status">Open a video to begin</span><button id="save">Save now</button></header>
 <main>
@@ -18,7 +18,7 @@
 <p id="status" role="status">Open a video, then transcribe its audio or add your own lyrics.</p>
 <div class="workspace">
 <section class="panel preview">
-<div id="stage"><video id="video" playsinline preload="metadata"></video><canvas id="stageVisualizer" hidden></canvas><div id="guides" hidden></div><div id="caption"></div><div id="empty">Your video preview<br><small>Original files are kept unchanged</small></div></div>
+<div id="stage"><video id="video" playsinline preload="metadata"></video><div id="stageVignette" hidden></div><canvas id="stageVisualizer" hidden></canvas><div id="guides" hidden></div><div id="caption"></div><div id="empty">Your video preview<br><small>Original files are kept unchanged</small></div></div>
 <p id="playingCaption" class="hint" role="status"></p><div class="transport"><button id="play">▶ Play</button><span id="time">0:00.00</span><select id="speed" aria-label="Playback speed"><option value="0.5">0.5×</option><option value="0.75">0.75×</option><option selected value="1">1×</option><option value="1.25">1.25×</option></select><label><input type="checkbox" id="loop"> Loop selected line</label><label><input type="checkbox" id="safe"> Safe-area guide</label></div>
 <p class="hint">Live preview · Use “Render 5-second check” to verify the exact exported appearance.</p>
 </section>
@@ -39,6 +39,16 @@
 <label>Height (%)<input id="visualizer_height" type="range" min="10" max="40" step="1" value="18"></label>
 <label>Sensitivity<input id="visualizer_sensitivity" type="range" min="0.5" max="3" step="0.1" value="1"></label>
 <label>Visualizer colour<input id="visualizer_color" type="color" value="#bba6ff"></label>
+<h3>Video filters & FX</h3>
+<label>Filter<select id="video_filter"><option value="none">None (Original)</option><option value="bw">Black & White</option><option value="sepia">Sepia</option><option value="vintage">Vintage Film</option><option value="cyberpunk">Cyberpunk Neon</option><option value="warm">Warm Golden Hour</option><option value="cool">Cool Cinema</option><option value="dramatic">Dramatic Contrast</option><option value="dreamy">Dreamy Soft Glow</option></select></label>
+<label><input id="vignette" type="checkbox"> Cinematic vignette</label>
+<label>Film grain<input id="film_grain" type="range" min="0" max="30" step="1" value="0"></label>
+<label>Sharpen<input id="sharpen" type="range" min="0" max="2" step="0.1" value="0"></label>
+<label>RGB shift (Glitch)<input id="chromatic" type="range" min="0" max="10" step="1" value="0"></label>
+<h3>Audio FX & cleanup</h3>
+<label><input id="noise_cancel" type="checkbox"> Noise cancellation (AI/FFT)</label>
+<label><input id="voice_isolation" type="checkbox"> Voice isolation & clarity</label>
+<label>Audio effect<select id="audio_effect"><option value="none">None</option><option value="echo">Echo</option><option value="concert_hall">Concert Hall Reverb</option><option value="studio_vocal">Studio Vocal Polish</option><option value="lofi_radio">Lo-Fi / Vintage Radio</option><option value="bass_boost">Bass Boost</option><option value="chorus">Vocal Chorus</option></select></label>
 <div class="row"><button id="saveStyle">Save my style</button><button id="loadStyle">Use my style</button></div>
 <p class="hint">Montserrat, Roboto, Noto Sans KR, Oswald, Lobster and Bangers are bundled Google Fonts with Greek, Korean and French support. Karaoke requires word timings.</p>
 </section>
@@ -84,6 +94,11 @@
 <label>Brightness (-0.5–0.5)<input id="comp_brightness" type="number" min="-.5" max=".5" step=".05"></label>
 <label>Contrast (0.5–2)<input id="comp_contrast" type="number" min=".5" max="2" step=".05"></label>
 <label>Saturation (0–3)<input id="comp_saturation" type="number" min="0" max="3" step=".1"></label>
+<label>Video filter<select id="comp_video_filter"><option value="none">None (Original)</option><option value="bw">Black & White</option><option value="sepia">Sepia</option><option value="vintage">Vintage Film</option><option value="cyberpunk">Cyberpunk Neon</option><option value="warm">Warm Golden Hour</option><option value="cool">Cool Cinema</option><option value="dramatic">Dramatic Contrast</option><option value="dreamy">Dreamy Soft Glow</option></select></label>
+<label><input id="comp_vignette" type="checkbox"> Cinematic vignette</label>
+<label>Film grain (0–30)<input id="comp_film_grain" type="number" min="0" max="30" step="1"></label>
+<label>Sharpen (0–2)<input id="comp_sharpen" type="number" min="0" max="2" step=".1"></label>
+<label>RGB shift / Glitch (0–10)<input id="comp_chromatic" type="number" min="0" max="10" step="1"></label>
 <label>Background speed (0.25–2×)<input id="comp_background_speed" type="number" min=".25" max="2" step=".05"></label>
 <label>Video fade-in transition (s)<input id="comp_transition_in" type="number" min="0" max="10" step=".1"></label>
 <label>Video fade-out transition (s)<input id="comp_transition_out" type="number" min="0" max="10" step=".1"></label>
@@ -113,6 +128,9 @@
 <label>Song volume (0–2)<input id="comp_volume" type="number" min="0" max="2" step=".05"></label>
 <label>Fade in (s)<input id="comp_fade_in" type="number" min="0" max="60" step=".1"></label>
 <label>Fade out (s)<input id="comp_fade_out" type="number" min="0" max="60" step=".1"></label>
+<label><input id="comp_noise_cancel" type="checkbox"> Noise cancellation (FFT denoise)</label>
+<label><input id="comp_voice_isolation" type="checkbox"> Voice isolation & speech clarity</label>
+<label>Audio effect<select id="comp_audio_effect"><option value="none">None</option><option value="echo">Echo</option><option value="concert_hall">Concert Hall Reverb</option><option value="studio_vocal">Studio Vocal Polish</option><option value="lofi_radio">Lo-Fi / Vintage Radio</option><option value="bass_boost">Bass Boost</option><option value="chorus">Vocal Chorus</option></select></label>
 <label>Background volume (0–2)<input id="comp_background_volume" type="number" min="0" max="2" step=".05"></label>
 <label><input id="comp_ducking" type="checkbox"> Auto-duck background audio under song</label>
 <p class="hint">0 mutes background audio. Song trimming and delay move lyrics with the audio. Lines outside the new range are removed from this version; cut lines are flagged for review. Restore previous composition recovers them.</p>

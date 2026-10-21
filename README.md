@@ -118,7 +118,7 @@ The in-app GitHub updater checks published releases and validates staged changes
 
 | Version | Highlights |
 | --- | --- |
-| Source changes | Multilingual batch karaoke, editable background/audio composition, project duplication/recovery, supplied-lyric alignment, waveform visualizer and bundled fonts |
+| Source changes | Multilingual batch karaoke, editable multitrack composition, Pexels/Pixabay stock browser, CapCut-style video filters & audio effects (noise cancellation, voice isolation, echo/reverb), Carousel Studio & Kling contact sheets |
 | v2.5.0 | Captions & Lyrics editor, waveform timeline, live styling, karaoke and rendered exports |
 | v2.4.1 | Improved Nano Banana character-replacement prompt |
 | v2.4.0 | Kling reference workflow and reliability/security fixes |

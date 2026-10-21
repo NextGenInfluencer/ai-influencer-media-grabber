@@ -30,7 +30,9 @@ DEFAULT_STYLE = dict(font='Arial', size=5, color='#ffffff', highlight='#ffdc55',
                      outline=2, position=85, background=False, karaoke=False,
                      cumulative=False, word_pop=False,
                      visualizer=False, visualizer_style='spectrum', visualizer_position='bottom',
-                     visualizer_height=18, visualizer_sensitivity=1, visualizer_color='#bba6ff')
+                     visualizer_height=18, visualizer_sensitivity=1, visualizer_color='#bba6ff',
+                     video_filter='none', vignette=False, film_grain=0, sharpen=0, chromatic=0,
+                     noise_cancel=False, voice_isolation=False, audio_effect='none')
 FONTS = {'Arial', 'Verdana', 'Georgia', 'Impact', 'Trebuchet MS'}
 BUNDLED_FONTS = {
     'Oswald': 'Oswald[wght].ttf',
@@ -97,16 +99,24 @@ def validate_edit(data, duration):
             raise ValueError('Invalid caption color.')
     if style['visualizer_style'] not in {'waveform', 'spectrum'} or style['visualizer_position'] not in {'bottom', 'center', 'top'}:
         raise ValueError('Choose a supported visualizer style and position.')
+    if style['video_filter'] not in composition_model.VIDEO_FILTERS or style['audio_effect'] not in composition_model.AUDIO_EFFECTS:
+        raise ValueError('Choose a supported video filter and audio effect.')
     style['size'] = number(style['size'], 2, 12)
     style['outline'] = number(style['outline'], 0, 5)
     style['position'] = number(style['position'], 10, 95)
     style['visualizer_height'] = number(style['visualizer_height'], 10, 40)
     style['visualizer_sensitivity'] = number(style['visualizer_sensitivity'], .5, 3)
+    style['film_grain'] = number(style['film_grain'], 0, 30)
+    style['sharpen'] = number(style['sharpen'], 0, 2)
+    style['chromatic'] = number(style['chromatic'], 0, 10)
     style['background'] = bool(style['background'])
     style['karaoke'] = bool(style['karaoke'])
     style['cumulative'] = bool(style['cumulative'])
     style['word_pop'] = bool(style['word_pop'])
     style['visualizer'] = bool(style['visualizer'])
+    style['vignette'] = bool(style['vignette'])
+    style['noise_cancel'] = bool(style['noise_cancel'])
+    style['voice_isolation'] = bool(style['voice_isolation'])
     return dict(cues=clean, style=style)
 
 
@@ -1011,6 +1021,9 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                     duration = clean['end']-clean['start']+clean['offset']
                     delta = old_settings['start']-clean['start']+clean['offset']-old_settings['offset']
                     cues = composition_model.shift_cues(d['cues'],delta,duration)
+                    for fx_key in ('video_filter', 'vignette', 'film_grain', 'sharpen', 'chromatic',
+                                   'noise_cancel', 'voice_isolation', 'audio_effect'):
+                        d['style'][fx_key] = clean[fx_key]
                     validate_edit(dict(cues=cues,style=d['style']),duration)
                     # Read the saved pre-job peaks: preview generation only modified the worker copy.
                     backup = composition_snapshot(read(pid))
@@ -1293,7 +1306,10 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             options = request.get_json()
             if data['state'] == 'busy':
                 return jsonify(error='Wait for the current task.'), 409
-            if not data['cues'] and not data.get('composition'):
+            fx_keys = ('video_filter', 'vignette', 'film_grain', 'sharpen', 'chromatic',
+                       'noise_cancel', 'voice_isolation', 'audio_effect', 'visualizer')
+            has_fx = any(data.get('style', {}).get(k, DEFAULT_STYLE[k]) != DEFAULT_STYLE[k] for k in fx_keys)
+            if not data['cues'] and not data.get('composition') and not has_fx:
                 raise ValueError('Add and save captions before rendering.')
             start = number(options.get('start', 0), 0, data['duration'])
             preview = bool(options.get('preview'))
@@ -1312,8 +1328,19 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                     fonts.mkdir(exist_ok=True)
                     for filename in BUNDLED_FONTS.values():
                         shutil.copy2(FONT_DIR / filename, fonts / filename)
+                    style_cfg = {**DEFAULT_STYLE, **d.get('style', {})}
+                    baked = d.get('composition') if isinstance(d.get('composition'), dict) else {}
+                    render_fx = {
+                        k: (DEFAULT_STYLE[k] if style_cfg[k] == baked.get(k, DEFAULT_STYLE[k]) else style_cfg[k])
+                        for k in ('video_filter', 'vignette', 'film_grain', 'sharpen', 'chromatic',
+                                  'noise_cancel', 'voice_isolation', 'audio_effect')
+                    }
                     scale_vf = "scale=w='min(720,iw)':h='min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2" if q_spec['max_side'] else 'scale=trunc(iw/2)*2:trunc(ih/2)*2'
-                    args = ['-i', d['source'], '-map', '0:v:0', '-map', '0:a:0?', '-vf', f'ass={ass.name}:fontsdir=caption_fonts,{scale_vf}']
+                    vf_chain = [*composition_model.video_fx_chain(render_fx), f'ass={ass.name}:fontsdir=caption_fonts', scale_vf]
+                    af_chain = composition_model.audio_fx_chain(render_fx)
+                    args = ['-i', d['source'], '-map', '0:v:0', '-map', '0:a:0?', '-vf', ','.join(vf_chain)]
+                    if af_chain:
+                        args += ['-af', ','.join(af_chain)]
                     if preview:
                         args += ['-ss', str(start), '-t', str(min(5, d['duration']-start))]
                     ffmpeg([*args, '-c:v', 'libx264', '-preset', q_spec['preset'], '-crf', q_spec['crf'], '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', q_spec['audio_bitrate'], '-movflags', '+faststart', temporary.name], f)

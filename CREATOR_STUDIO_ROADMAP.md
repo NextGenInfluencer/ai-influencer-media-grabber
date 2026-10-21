@@ -133,3 +133,10 @@ Extended the version-1 composition schema (`creator_composition.py` and `caption
 ## Phase 6 implementation status
 
 Enhanced Kling Reference Prep (`reference_prep.py`, `templates/reference_prep.html`, `static/reference_prep.js`) with automatic extraction of up to 6 evenly spaced candidate frames (`candidate_0.png`..`candidate_5.png`), a composite 3×2 `contact_sheet.png`, and 1-click frame re-cutting (`POST /api/reference/<id>/select-frame`) alongside the default `first_frame.png` workflow. Added the Carousel & Still Image Studio (`/api/carousel/create`, `/api/carousel/projects`, `/api/carousel/<cid>/update`, `/api/carousel/<cid>/export`) supporting 1–30 still images, non-destructive original preservation (`orig_*`), slide reordering, 90° rotation, consistent canvas presets (`portrait` 4:5, `square` 1:1, `story` 9:16, `landscape` 16:9), safe margins, multilingual text overlays using bundled Google Fonts, and ordered ZIP export.
+
+## Phase 7 — CapCut-style Video Filters, Visual FX & Audio FX Suite
+
+Implemented native offline video filters, visual FX, noise cancellation, voice isolation, and audio effects across both the Captions & Lyrics Studio (`/captions` live style panel + composition editor) and the Media Tools converter (`/`):
+- **Video Filters (`VIDEO_FILTERS`)**: `bw` (Black & White), `sepia` (Sepia), `vintage` (Vintage Film curves + vignette), `cyberpunk` (Cyberpunk Neon contrast/colorbalance), `warm` (Warm Golden Hour), `cool` (Cool Cinema), `dramatic` (High-Contrast Dramatic), and `dreamy` (Soft Glow).
+- **Visual FX**: Cinematic Vignette (`vignette=PI/4`), Film Grain (`noise`), Sharpen (`unsharp`), and RGB Chromatic Glitch (`rgbashift`), with live browser preview on `#video` and `#stageVignette`.
+- **Audio Cleanup & Effects (`AUDIO_EFFECTS`)**: FFT Noise Cancellation (`afftdn`), Voice Isolation & Speech Clarity (`highpass=100Hz` + `lowpass=7500Hz` + `afftdn` + `3kHz` presence boost + `acompressor`), plus `echo`, `concert_hall` (multi-tap reverb), `studio_vocal`, `lofi_radio`, `bass_boost`, and `chorus`.

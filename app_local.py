@@ -31,6 +31,7 @@ import yt_dlp
 import math
 from media_safety import contained_path, safe_media_name, crop_filter, MEDIA_EXTENSIONS
 from ai_runtime import serialized, transcribe, translate_srt
+import creator_composition
 from typing import Any, Optional, cast
 
 # --- Constants ---
@@ -923,6 +924,26 @@ def convert_media():
     trim_start = request.form.get('trimStart')
     trim_end = request.form.get('trimEnd')
     compress_opt = request.form.get('compress')
+    video_filter = request.form.get('video_filter', 'none') or 'none'
+    vignette = request.form.get('vignette') == 'true'
+    noise_cancel = request.form.get('noise_cancel') == 'true'
+    voice_isolation = request.form.get('voice_isolation') == 'true'
+    audio_effect = request.form.get('audio_effect', 'none') or 'none'
+    try:
+        film_grain = float(request.form.get('film_grain') or 0)
+        sharpen = float(request.form.get('sharpen') or 0)
+        chromatic = float(request.form.get('chromatic') or 0)
+    except ValueError:
+        return jsonify({'error': 'Invalid effect slider value.'}), 400
+    if video_filter not in creator_composition.VIDEO_FILTERS or audio_effect not in creator_composition.AUDIO_EFFECTS:
+        return jsonify({'error': 'Unsupported video filter or audio effect.'}), 400
+    if not (0 <= film_grain <= 30 and 0 <= sharpen <= 2 and 0 <= chromatic <= 10):
+        return jsonify({'error': 'Effect slider values are out of range.'}), 400
+    fx_cfg = dict(
+        video_filter=video_filter, vignette=vignette, film_grain=film_grain,
+        sharpen=sharpen, chromatic=chromatic, noise_cancel=noise_cancel,
+        voice_isolation=voice_isolation, audio_effect=audio_effect
+    )
 
     if format_opt not in {'mp4', 'mp4_hevc', 'mov_prores', 'mov', 'mkv', 'avi', 'webm', 'gif', 'mp3', 'wav', 'png', 'jpg', 'webp'}:
         return jsonify({'error': 'Unsupported output format'}), 400
@@ -1106,14 +1127,18 @@ def convert_media():
                         elif compress_opt == "compress_extreme": vf_filters.append("scale=iw*0.15:ih*0.15")
 
                     # Audio formats (ignore video filters)
+                    af_filters = creator_composition.audio_fx_chain(fx_cfg)
                     if format_opt in ["mp3", "wav"]:
                         cmd = [ffmpeg_exe, "-y", "-i", input_path]
+                        if af_filters:
+                            cmd.extend(["-af", ",".join(af_filters)])
                         if format_opt == "mp3":
                             cmd.extend(["-vn", "-acodec", "libmp3lame", "-b:a", "320k"])
                         else:
                             cmd.extend(["-vn", "-acodec", "pcm_s16le"])
                     else:
                         # Video or Image formats
+                        vf_filters.extend(creator_composition.video_fx_chain(fx_cfg))
                         if burn_subtitles or export_subtitles:
                             q.put({"status": f"{prefix}Generating Subtitles..."})
                             temp_audio = os.path.join(shared_temp_dir, f"{uuid.uuid4().hex}.mp3")
@@ -1166,6 +1191,8 @@ def convert_media():
                             vf_filters.append("scale=trunc(iw/2)*2:trunc(ih/2)*2")
                         if vf_filters:
                             cmd.extend(["-vf", ",".join(vf_filters)])
+                        if af_filters and format_opt in ["mp4", "mp4_hevc", "mov_prores", "mov", "mkv", "avi", "webm"]:
+                            cmd.extend(["-af", ",".join(af_filters)])
 
                         if format_opt in ["mp4", "mkv", "avi"]:
                             cmd.extend(["-c:v", "libx264", "-preset", "slow" if crf_val in ["0", "14"] else "medium", "-crf", crf_val, "-c:a", "aac", "-b:a", "320k", "-pix_fmt", "yuv420p"])
