@@ -9,6 +9,8 @@ import math
 import os
 import re
 import time
+import sys
+import job_process as process
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -166,7 +168,7 @@ def validate_sequence(seq) -> list[dict]:
 
 def schedule_sequence(seq: list, assets: dict, total_duration: float, loop: bool = True) -> list[dict]:
     valid = [item for item in (seq or []) if isinstance(item, dict) and item.get('asset') in assets and assets[item['asset']].get('kind') in {'video', 'image'}]
-    if len(valid) <= 1:
+    if not valid or (len(valid) == 1 and float(valid[0].get('duration') or 0) <= 0):
         if len(valid) == 1:
             a_key = valid[0]['asset']
             return [dict(asset=a_key, name=str(valid[0].get('name') or assets[a_key]['file'])[:120], start=0.0, duration=round(total_duration, 3))]
@@ -178,14 +180,16 @@ def schedule_sequence(seq: list, assets: dict, total_duration: float, loop: bool
     else:
         auto_dur = 5.0
     base = [(item, float(item['duration']) if float(item.get('duration') or 0) > 0 else auto_dur) for item in valid]
+    if any(not math.isfinite(d) or d < 0.05 for _, d in base):
+        raise ValueError('Each clip duration must be at least 0.05 seconds, or 0 for automatic timing.')
     segments: list[dict] = []
     t = 0.0
-    passes = 0
-    while t < total_duration - 0.05 and len(segments) < 60:
-        passes += 1
+    while t < total_duration - 0.05:
         for item, b_dur in base:
-            if t >= total_duration - 0.05 or len(segments) >= 60:
+            if t >= total_duration - 0.05:
                 break
+            if len(segments) >= 600:
+                raise ValueError('This sequence needs more than 600 cuts. Increase clip durations or shorten the song range.')
             seg_d = min(b_dur, total_duration - t)
             if seg_d < 0.05:
                 break
@@ -197,7 +201,7 @@ def schedule_sequence(seq: list, assets: dict, total_duration: float, loop: bool
                 duration=round(seg_d, 3),
             ))
             t += seg_d
-        if not loop or auto_count > 0 or passes >= 20:
+        if not loop or auto_count > 0:
             break
     if segments and t < total_duration - 0.05:
         segments[-1]['duration'] = round(segments[-1]['duration'] + (total_duration - t), 3)
@@ -296,11 +300,13 @@ def render_args(studio, folder, output, background_has_audio=False):
     args = ['-i',local_asset(folder,assets['audio']).name]
     seq_segments = schedule_sequence(s.get('sequence') or [], assets, duration, loop=s['loop'])
     multi_clip = len(seq_segments) >= 2
+    sequence_assets = list(dict.fromkeys(seg['asset'] for seg in seq_segments))
     if multi_clip:
-        for seg in seq_segments:
-            c_asset = assets[seg['asset']]
+        for key in sequence_assets:
+            c_asset = assets[key]
             c_path = local_asset(folder, c_asset)
-            in_dur = round(seg['duration'] * max(1.0, s['background_speed']) + 0.5, 3)
+            longest = max(seg['duration'] for seg in seq_segments if seg['asset'] == key)
+            in_dur = round(longest * max(1.0, s['background_speed']) + 0.5, 3)
             if c_asset['kind'] == 'image':
                 args += ['-loop', '1', '-framerate', '30', '-t', str(in_dur), '-i', c_path.name]
             else:
@@ -318,7 +324,7 @@ def render_args(studio, folder, output, background_has_audio=False):
             args += ['-f','lavfi','-i',f"color=c={s['color']}:s={w}x{h}:r=30"]
     broll = assets.get('broll')
     has_broll = bool(broll and s['broll_duration'] > 0)
-    broll_idx = (1 + len(seq_segments)) if multi_clip else 2
+    broll_idx = (1 + len(sequence_assets)) if multi_clip else 2
     if has_broll and broll is not None:
         bpath = local_asset(folder, broll)
         if broll['kind'] == 'image':
@@ -346,9 +352,12 @@ def render_args(studio, folder, output, background_has_audio=False):
         f"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)*{s['x']/100}:(oh-ih)*{s['y']/100}:color={s['color']}"
     )
     if multi_clip:
+        for idx, key in enumerate(sequence_assets, start=1):
+            uses = [k for k, seg in enumerate(seq_segments) if seg['asset'] == key]
+            outputs = ''.join(f'[seqinput{k}]' for k in uses)
+            graph.append(f'[{idx}:v]split={len(uses)}{outputs}')
         for k, seg in enumerate(seq_segments):
-            idx = 1 + k
-            seg_vf = f"[{idx}:v]setpts={pts_expr},fps=30,tpad=stop_mode=clone:stop_duration={seg['duration']},trim=duration={seg['duration']},setpts=PTS-STARTPTS,{scale_crop},setsar=1,format=yuv420p[vseg{k}]"
+            seg_vf = f"[seqinput{k}]setpts={pts_expr},fps=30,tpad=stop_mode=clone:stop_duration={seg['duration']},trim=duration={seg['duration']},setpts=PTS-STARTPTS,{scale_crop},setsar=1,format=yuv420p[vseg{k}]"
             graph.append(seg_vf)
         concat_in = ''.join(f'[vseg{k}]' for k in range(len(seq_segments)))
         vf = f"{concat_in}concat=n={len(seq_segments)}:v=1:a=0,setsar=1"
@@ -532,24 +541,24 @@ def _search_mixkit(query: str, orientation: str, opener=None) -> list[dict]:
 
 def _search_youtube(query: str, orientation: str, max_duration: float) -> list[dict]:
     """Search YouTube Shorts / Google Video via yt-dlp without requiring any API key."""
-    import yt_dlp
     search_q = query
     if orientation == 'portrait' and '#shorts' not in query.lower():
         search_q = f'{query} #shorts vertical'
-    ydl_opts = {
-        'quiet': True,
-        'no_warnings': True,
-        'extract_flat': 'in_playlist',
-        'skip_download': True,
-    }
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(f'ytsearch24:{search_q}', download=False)
+        result = process.run([sys.executable, str(Path(__file__).with_name('social_worker.py')), '--ignore-config',
+                              '--proxy', '',
+                              '--flat-playlist', '--skip-download', '--dump-single-json',
+                              '--no-warnings', '--socket-timeout', '10', '--retries', '1',
+                              '--', f'ytsearch24:{search_q}'], capture_output=True, timeout=45)
+        process.check_cancelled()
+        if result.returncode:
+            raise ValueError('Search provider unavailable. Please try again.')
+        info = json.loads(result.stdout)
     except Exception as exc:
         raise ValueError(f'YouTube Shorts search failed: {exc}') from None
     entries = (info or {}).get('entries') or []
     results: list[dict] = []
-    dur_cap = max(max_duration, 65.0) if max_duration > 0 else 180.0
+    dur_cap = max_duration if max_duration > 0 else 180.0
     for entry in entries:
         if not isinstance(entry, dict):
             continue

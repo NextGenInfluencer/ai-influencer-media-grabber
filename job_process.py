@@ -72,6 +72,9 @@ def run(args, *, input=None, capture_output=False, timeout=None, check=False, **
         try:
             stdout, stderr = process.communicate(input, timeout=timeout)
         except BaseException:
+            if os.name == 'nt' and process.poll() is None:
+                _subprocess.run(['taskkill', '/PID', str(process.pid), '/T', '/F'],
+                                capture_output=True, creationflags=_subprocess.CREATE_NO_WINDOW)
             process.kill()
             process.communicate()
             raise

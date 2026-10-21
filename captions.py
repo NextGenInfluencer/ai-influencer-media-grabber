@@ -12,6 +12,8 @@ import time
 import urllib.parse
 import uuid
 import wave
+import sys
+import tempfile
 from typing import Any
 
 import unicodedata
@@ -1481,14 +1483,21 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                 keys[provider] = api_key[:200]
                 root.mkdir(parents=True, exist_ok=True)
                 (root / 'stock_keys.json').write_text(json.dumps(keys, ensure_ascii=False), encoding='utf-8')
-        results = composition_model.search_stock(
-            provider=provider,
-            query=str(payload.get('query', '')),
-            kind=str(payload.get('kind', 'video')),
-            orientation=str(payload.get('orientation', 'portrait')),
-            max_duration=float(payload.get('max_duration') or 0),
-            api_key=api_key
-        )
+        process.begin_job()
+        job_started()
+        try:
+            results = composition_model.search_stock(
+                provider=provider,
+                query=str(payload.get('query', '')),
+                kind=str(payload.get('kind', 'video')),
+                orientation=str(payload.get('orientation', 'portrait')),
+                max_duration=float(payload.get('max_duration') or 0),
+                api_key=api_key
+            )
+            process.check_cancelled()
+        finally:
+            process.end_job()
+            job_finished()
         return jsonify(results=results)
 
     @bp.post('/api/captions/stock/download')
@@ -1515,46 +1524,62 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
         stock_dir.mkdir(parents=True, exist_ok=True)
         dest = stock_dir / f'{provider}_{safe_id}_{uuid.uuid4().hex[:6]}{ext}'
         process.begin_job()
+        job_started()
         try:
             composition_model.download_stock_asset(dl_url, provider, kind, dest, check_cancel=process.check_cancelled)
         finally:
             process.end_job()
+            job_finished()
         refresh_gallery()
         return jsonify(path=str(dest), name=dest.name, kind=kind, provenance=prov)
 
     def _grab_social_video(raw_url: str, prefix: str = 'social') -> tuple[Path, str]:
-        import yt_dlp
+        parsed = urllib.parse.urlsplit(raw_url)
+        host = (parsed.hostname or '').lower()
+        platforms = ('youtube.com', 'youtu.be', 'tiktok.com', 'instagram.com')
+        if (parsed.scheme != 'https' or parsed.username or parsed.password
+                or parsed.port not in (None, 443)
+                or not any(host == domain or host.endswith('.' + domain) for domain in platforms)):
+            raise ValueError('Use an HTTPS TikTok, Instagram, or YouTube video link.')
         stock_dir.mkdir(parents=True, exist_ok=True)
         token = uuid.uuid4().hex[:8]
-        outtmpl = str(stock_dir / f'{prefix}_%(id)s_{token}.%(ext)s')
         node_exe = Path(__file__).resolve().parent / 'node_runtime' / 'node.exe'
-        ydl_opts: dict[str, Any] = {
-            'format': 'bestvideo[height<=1920]+bestaudio[ext=m4a]/bestvideo[height<=1920]+bestaudio/best[height<=1920]/best',
-            'merge_output_format': 'mp4',
-            'outtmpl': outtmpl,
-            'noplaylist': True,
-            'quiet': True,
-            'no_warnings': True,
-            'ffmpeg_location': imageio_ffmpeg.get_ffmpeg_exe(),
-            'retries': 5,
-            'socket_timeout': 25,
-            'js_runtimes': {'node': {'path': str(node_exe)}} if node_exe.is_file() else {'node': {}},
-        }
         process.begin_job()
+        job_started()
         try:
-            with yt_dlp.YoutubeDL(cast(Any, ydl_opts)) as ydl:
-                info = ydl.extract_info(raw_url, download=True) or {}
+            with tempfile.TemporaryDirectory(prefix='.grab-', dir=stock_dir) as scratch:
+                args = [sys.executable, str(Path(__file__).with_name('social_worker.py')), '--ignore-config', '--no-playlist',
+                        '--proxy', '',
+                        '--use-extractors', 'youtube.*,tiktok.*,instagram.*',
+                        '--no-progress', '--no-warnings', '--socket-timeout', '10',
+                        '--retries', '2', '--fragment-retries', '2',
+                        '--max-filesize', '80M', '--match-filter', '!is_live & duration <= 1200',
+                        '--format', 'bestvideo[height<=1920]+bestaudio/best[height<=1920]',
+                        '--merge-output-format', 'mp4', '--ffmpeg-location', imageio_ffmpeg.get_ffmpeg_exe(),
+                        '--print', 'after_move:%(title)j',
+                        '--js-runtimes', ('node:' + str(node_exe)) if node_exe.is_file() else 'node',
+                        '-o', str(Path(scratch) / 'clip.%(ext)s'), '--', raw_url]
+                result = process.run(args, capture_output=True, timeout=180)
+                process.check_cancelled()
+                if result.returncode:
+                    raise ValueError((result.stderr or b'').decode('utf-8', errors='replace')[-500:])
+                videos = [p for p in Path(scratch).iterdir() if p.suffix.lower() in composition_model.VIDEOS]
+                if len(videos) != 1:
+                    raise ValueError('No supported video downloaded. Choose a non-live clip under 20 minutes and 80 MB.')
+                if videos[0].stat().st_size > 80 * 1024 * 1024:
+                    raise ValueError('The downloaded clip exceeds 80 MB.')
+                found = stock_dir / f'{prefix}_{token}{videos[0].suffix.lower()}'
+                videos[0].replace(found)
+                try:
+                    title = str(json.loads(result.stdout.decode('utf-8').strip().splitlines()[-1]))[:80]
+                except (ValueError, IndexError, UnicodeError):
+                    title = found.stem
         except Exception as exc:
             msg = re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', str(exc))
             raise ValueError(f'Could not grab video from URL: {msg[:200]}') from None
         finally:
             process.end_job()
-        matches = sorted(stock_dir.glob(f'*_{token}.*'), key=lambda p: p.stat().st_mtime, reverse=True)
-        video_matches = [p for p in matches if p.suffix.lower() in composition_model.VIDEOS]
-        if not video_matches:
-            raise ValueError('No video file was downloaded from that URL.')
-        found = video_matches[0]
-        title = str(info.get('title') or info.get('id') or found.stem).strip()[:80]
+            job_finished()
         refresh_gallery()
         return found, title
 

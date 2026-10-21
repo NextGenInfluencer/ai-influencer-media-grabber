@@ -2,6 +2,16 @@
 
 All notable changes to the AI Influencer Media Grabber project will be documented in this file.
 
+## Unreleased — v2.6.1 stability work
+
+- Fixed the social clip grabber's missing `cast` failure. Downloads now run in a cancellable worker with a three-minute deadline, file-size/duration limits, live-stream filtering, isolated temporary files and active-job tracking.
+- Restricted clip URLs to HTTPS YouTube, TikTok and Instagram hosts without credentials or custom ports; disabled unrelated/generic extractors for this workflow.
+- The isolated Python download worker rejects private/reserved socket destinations, including redirected and DNS-resolved targets.
+- Added a cancellable, time-limited YouTube search worker and respected the requested duration limit.
+- Fixed long-song cycling silently stopping after 20 repeats/60 cuts. Repeated clips share decoder inputs; sequences above 600 cuts now show an explicit error.
+- Added route-level download/cancellation tests and a real FFmpeg repeated portrait/landscape regression check.
+- This is local, unreleased work. Remaining audit items and installer/release verification are not marked complete.
+
 ## [v2.6.0] - 2026-10-21
 
 ### Added & Improved

@@ -149,7 +149,7 @@ def main():
         "download_support.py",
         "reference_prep.py",
         "captions.py",
-        "creator_composition.py", "carousel_studio.py", "CREATOR_STUDIO_ROADMAP.md",
+        "creator_composition.py", "social_worker.py", "CREATOR_STUDIO_ROADMAP.md",
         "launch-silent.vbs",
         "run.bat",
         "install_ai.bat",
