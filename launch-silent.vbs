@@ -44,8 +44,16 @@ Function IsServerOnline()
     http.send
     If Err.Number = 0 Then
         If http.Status = 200 Then
-            ' Reuse the running server. Restart is an authenticated in-app action.
-            IsServerOnline = True
+            Dim resp
+            resp = LCase(http.responseText)
+            If InStr(resp, """needs_restart"": true") > 0 Or InStr(resp, """needs_restart"":true") > 0 Then
+                ' Stale process detected with outdated code: terminate so a fresh server launches
+                WshShell.Run "powershell -NoProfile -Command ""Get-NetTCPConnection -LocalPort 5000 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }""", 0, True
+                WScript.Sleep 1000
+                IsServerOnline = False
+            Else
+                IsServerOnline = True
+            End If
         End If
     End If
     Set http = Nothing

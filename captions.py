@@ -11,6 +11,10 @@ import threading
 import time
 import uuid
 import wave
+from typing import Any
+
+import unicodedata
+from difflib import SequenceMatcher
 
 import cv2
 import imageio_ffmpeg
@@ -22,9 +26,19 @@ from ai_runtime import transcribe, align_lyrics, align_caption_words, detect_cap
 import creator_composition as composition_model
 
 DEFAULT_STYLE = dict(font='Arial', size=5, color='#ffffff', highlight='#ffdc55',
-                     outline=2, position=85, background=False, karaoke=False)
+                     outline=2, position=85, background=False, karaoke=False,
+                     cumulative=False, word_pop=False,
+                     visualizer=False, visualizer_style='spectrum', visualizer_position='bottom',
+                     visualizer_height=18, visualizer_sensitivity=1, visualizer_color='#bba6ff')
 FONTS = {'Arial', 'Verdana', 'Georgia', 'Impact', 'Trebuchet MS'}
-BUNDLED_FONTS = {'Oswald': 'Oswald[wght].ttf', 'Lobster': 'Lobster-Regular.ttf', 'Bangers': 'Bangers-Regular.ttf'}
+BUNDLED_FONTS = {
+    'Oswald': 'Oswald[wght].ttf',
+    'Lobster': 'Lobster-Regular.ttf',
+    'Bangers': 'Bangers-Regular.ttf',
+    'Montserrat': 'Montserrat[wght].ttf',
+    'Roboto': 'Roboto[wdth,wght].ttf',
+    'Noto Sans KR': 'NotoSansKR[wght].ttf',
+}
 FONTS.update(BUNDLED_FONTS)
 FONT_DIR = Path(__file__).resolve().parent / 'static' / 'fonts'
 
@@ -61,7 +75,7 @@ def validate_edit(data, duration):
             words.append(dict(start=a, end=b, text=t))
         if words and ' '.join(w['text'] for w in words).split() != text.split():
             raise ValueError('Word timing text must match its caption. Rebuild word timings after editing text.')
-        item = dict(start=start, end=end, text=text, words=words)
+        item: dict[str, Any] = dict(start=start, end=end, text=text, words=words)
         if isinstance(cue.get('karaoke'), dict):
             info = cue['karaoke']
             state = info.get('state')
@@ -77,14 +91,21 @@ def validate_edit(data, duration):
     if style['font'] not in FONTS:
         raise ValueError('Choose a supported font.')
     style = {k: style[k] for k in DEFAULT_STYLE}
-    for k in ('color', 'highlight'):
+    for k in ('color', 'highlight', 'visualizer_color'):
         if not re.fullmatch(r'#[0-9a-fA-F]{6}', str(style[k])):
             raise ValueError('Invalid caption color.')
+    if style['visualizer_style'] not in {'waveform', 'spectrum'} or style['visualizer_position'] not in {'bottom', 'center', 'top'}:
+        raise ValueError('Choose a supported visualizer style and position.')
     style['size'] = number(style['size'], 2, 12)
     style['outline'] = number(style['outline'], 0, 5)
     style['position'] = number(style['position'], 10, 95)
+    style['visualizer_height'] = number(style['visualizer_height'], 10, 40)
+    style['visualizer_sensitivity'] = number(style['visualizer_sensitivity'], .5, 3)
     style['background'] = bool(style['background'])
     style['karaoke'] = bool(style['karaoke'])
+    style['cumulative'] = bool(style['cumulative'])
+    style['word_pop'] = bool(style['word_pop'])
+    style['visualizer'] = bool(style['visualizer'])
     return dict(cues=clean, style=style)
 
 
@@ -113,16 +134,85 @@ def srt_text(cues):
     return '\n\n'.join(f"{i}\n{timestamp(c['start'])} --> {timestamp(c['end'])}\n{c['text']}" for i, c in enumerate(cues, 1)) + '\n'
 
 
+def visualizer_bars(peaks, duration, time_sec, width, height, style):
+    """Compute deterministic audio-reactive visualizer bar rectangles (x1, y1, x2, y2).
+    Uses identical visual math to static/captions.js CaptionTiming.visualizerBars().
+    """
+    def rint(val):
+        return int(math.floor(val + 0.5))
+    mode = style.get('visualizer_style', 'spectrum')
+    pos = style.get('visualizer_position', 'bottom')
+    vis_h = float(style.get('visualizer_height', 18))
+    sens = float(style.get('visualizer_sensitivity', 1.0))
+    count = 36 if mode == 'spectrum' else 48
+
+    pts = peaks if (isinstance(peaks, list) and len(peaks) > 0) else [0.25] * 64
+    n = len(pts)
+    max_p = max(0.01, max(float(p) for p in pts))
+    dur = max(0.1, float(duration or 1.0))
+    t = max(0.0, min(dur, float(time_sec)))
+    center = (t / dur) * (n - 1)
+
+    band_h = height * (vis_h / 100.0)
+    start_x = width * 0.06
+    usable_w = width * 0.88
+    step_x = usable_w / count
+    bar_w = max(2.0, step_x * (0.65 if mode == 'spectrum' else 0.75))
+
+    rects = []
+    for i in range(count):
+        if mode == 'spectrum':
+            idx0 = max(0, min(n - 1, rint(center)))
+            idx1 = max(0, min(n - 1, rint(center + (i - count / 2.0) * 0.5)))
+            idx2 = max(0, min(n - 1, rint(center + ((i % 7) - 3) * 1.5)))
+            p0 = float(pts[idx0]) / max_p
+            p1 = float(pts[idx1]) / max_p
+            p2 = float(pts[idx2]) / max_p
+            u = i / max(1, count - 1)
+            arch = 0.55 + 0.45 * math.sin(u * math.pi)
+            ripple = 0.72 + 0.28 * math.sin(t * (7.0 + (i % 5) * 1.3) + i * 0.65)
+            raw = (0.5 * p0 + 0.3 * p1 + 0.2 * p2) * arch * ripple * sens
+            level = 0.04 if p0 < 0.005 else min(1.0, max(0.04, math.sqrt(max(0.0, raw))))
+        else:
+            span = max(8.0, n * 0.04)
+            offset = ((i / max(1, count - 1)) - 0.5) * span
+            idx = max(0, min(n - 1, rint(center + offset)))
+            p = float(pts[idx]) / max_p
+            wave_mod = 0.8 + 0.2 * math.cos(t * 8.0 + i * 0.4)
+            raw = p * wave_mod * sens
+            level = 0.04 if p < 0.005 else min(1.0, max(0.04, math.sqrt(max(0.0, raw))))
+
+        bh = max(2.0, level * band_h)
+        x1 = rint(start_x + i * step_x)
+        x2 = rint(x1 + bar_w)
+        if mode == 'waveform' or pos == 'center':
+            mid_y = (height - band_h * 0.5 - height * 0.02) if pos == 'bottom' else (band_h * 0.5 + height * 0.02) if pos == 'top' else (height * 0.5)
+            y1 = rint(mid_y - bh * 0.5)
+            y2 = rint(mid_y + bh * 0.5)
+        elif pos == 'top':
+            y1 = 0
+            y2 = rint(bh)
+        else:
+            y1 = rint(height - bh)
+            y2 = rint(height)
+        rects.append((x1, y1, x2, y2))
+    return rects
+
+
 def ass_text(project):
-    style = project['style']
+    style = {**DEFAULT_STYLE, **project.get('style', {})}
     width, height = project['width'], project['height']
-    def color(hexcolor):
-        return '&H00' + hexcolor[5:7] + hexcolor[3:5] + hexcolor[1:3]
+    def color(hexcolor, alpha='00'):
+        return f'&H{alpha}' + hexcolor[5:7] + hexcolor[3:5] + hexcolor[1:3]
     def escape(text):
         # Fullwidth lookalikes prevent user text becoming ASS override commands.
         return text.replace('\\', '＼').replace('{', '｛').replace('}', '｝').replace('\r', '').replace('\n', r'\N')
     font_size = height * style['size'] / 100 * font_scale(style['font'])
     outline = height * style['outline'] / 360
+    border_style = 3 if style['background'] else 1
+    box_outline = max(outline, height * 0.012) if style['background'] else outline
+    outline_col = '&H38140C0A' if style['background'] else '&H00000000'
+    vis_col = color(style.get('visualizer_color', '#bba6ff'), '28')
     output = [f'''[Script Info]
 ScriptType: v4.00+
 PlayResX: {width}
@@ -131,21 +221,54 @@ WrapStyle: 0
 ScaledBorderAndShadow: yes
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,{style['font']},{font_size},{color(style['color'])},{color(style['color'])},&H00000000,&H80000000,0,0,0,0,100,100,0,0,{3 if style['background'] else 1},{outline},0,2,{round(width*.06)},{round(width*.06)},0,1
+Style: Default,{style['font']},{font_size},{color(style['color'])},{color(style['color'])},{outline_col},&H80000000,0,0,0,0,100,100,0,0,{border_style},{box_outline},0,2,{round(width*.06)},{round(width*.06)},0,1
+Style: Vis,Arial,20,{vis_col},{vis_col},&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text''']
+    if style.get('visualizer'):
+        dur = float(project.get('duration') or (project['cues'][-1]['end'] if project.get('cues') else 0))
+        if dur > 0:
+            fps = 15
+            steps = max(1, int(math.ceil(dur * fps)))
+            peaks = project.get('peaks', [])
+            for step in range(steps):
+                t0 = step / fps
+                t1 = min(dur, (step + 1) / fps)
+                if round(t0 * 100) >= round(t1 * 100):
+                    continue
+                rects = visualizer_bars(peaks, dur, (t0 + t1) / 2, width, height, style)
+                drawing = ' '.join(f'm {x1} {y1} l {x2} {y1} {x2} {y2} {x1} {y2}' for x1, y1, x2, y2 in rects)
+                output.append(f"Dialogue: -1,{timestamp(t0, True)},{timestamp(t1, True)},Vis,,0,0,0,,{{\\pos(0,0)\\p1}}{drawing}{{\\p0}}")
     for cue in project['cues']:
+        use_words = bool((style.get('karaoke') or style.get('cumulative') or style.get('word_pop')) and cue['words'])
         pieces = [(cue['start'], cue['end'], None)]
-        if style['karaoke'] and cue['words']:
+        if use_words:
             boundaries = sorted({cue['start'], cue['end'], *(w[k] for w in cue['words'] for k in ('start', 'end'))})
             pieces = [(a, b, next((i for i, w in enumerate(cue['words']) if w['start'] <= (a+b)/2 < w['end']), None)) for a, b in zip(boundaries, boundaries[1:])]
         for start, end, active in pieces:
             if round(start*100) >= round(end*100):
                 continue
             body = escape(cue['text'])
-            if active is not None:
+            if use_words:
+                mid = (start + end) / 2
                 separators = re.findall(r'\s+', cue['text'])
-                body = ''.join((escape(separators[i-1]) if i else '') + ((r'{\c' + color(style['highlight']).replace('&H00', '&H') + '&}' + escape(w['text']) + r'{\r}') if i == active else escape(w['text'])) for i, w in enumerate(cue['words']))
+                hl = color(style['highlight']).replace('&H00', '&H')
+                parts = []
+                for i, w in enumerate(cue['words']):
+                    sep = escape(separators[i-1]) if i else ''
+                    is_active = (i == active)
+                    is_lit = (w['start'] <= mid) if style.get('cumulative') else (is_active and bool(style.get('karaoke')))
+                    is_pop = is_active and bool(style.get('word_pop'))
+                    w_esc = escape(w['text'])
+                    if is_lit and is_pop:
+                        parts.append(sep + r'{\c' + hl + r'&\fscx115\fscy115}' + w_esc + r'{\r}')
+                    elif is_lit:
+                        parts.append(sep + r'{\c' + hl + '&}' + w_esc + r'{\r}')
+                    elif is_pop:
+                        parts.append(sep + r'{\fscx115\fscy115}' + w_esc + r'{\r}')
+                    else:
+                        parts.append(sep + w_esc)
+                body = ''.join(parts)
             position = r'{\pos(' + f'{width/2:.1f},{height*style["position"]/100:.1f}' + ')}'
             output.append(f"Dialogue: 0,{timestamp(start, True)},{timestamp(end, True)},Default,,0,0,0,,{position}{body}")
     return '\n'.join(output) + '\n'
@@ -207,7 +330,8 @@ def aligned_cues(result, lines, offset, duration, limit, recover=False):
     pieces = [w for s in result.get('segments', []) for w in s.get('words', [])
               if str(w.get('word', '')).strip()]
     expected = ''.join(''.join(line.split()) for line in lines)
-    if ''.join(''.join(str(w['word']).split()) for w in pieces) != expected:
+    actual = ''.join(''.join(str(w['word']).split()) for w in pieces)
+    if unicodedata.normalize('NFC', actual) != unicodedata.normalize('NFC', expected):
         raise ValueError('Some lyrics could not be aligned. Check that the pasted words match this audio range.')
     repaired = set()
     if recover:
@@ -215,44 +339,56 @@ def aligned_cues(result, lines, offset, duration, limit, recover=False):
         # and any line touching those runs is explicitly flagged for listening review.
         pieces = copy.deepcopy(pieces)
         anchors, pending = [], []
-        previous = 0
+        previous = 0.0
+        a: float = 0.0
+        b: float = 0.0
         for i, piece in enumerate(pieces):
             try:
-                a, b = number(piece['start'], 0, limit), number(piece['end'], 0, limit)
-                valid = b > a and a >= previous and (not pending or a-previous >= .01*len(pending))
+                raw_s = float(piece.get('start', 0))
+                raw_e = float(piece.get('end', 0))
+                a = max(0.0, min(limit, raw_s))
+                b = max(0.0, min(limit, raw_e))
+                valid = b > a and a >= previous and (not pending or a - previous >= .01 * len(pending))
             except (ValueError, TypeError, KeyError):
                 valid = False
             if not valid:
                 pending.append(i)
                 continue
             if pending:
-                step = (a-previous)/len(pending)
+                step = (a - previous) / len(pending)
                 for n, index in enumerate(pending):
-                    pieces[index].update(start=previous+n*step, end=previous+(n+1)*step)
+                    pieces[index].update(start=previous + n * step, end=previous + (n + 1) * step)
                     repaired.add(index)
                 pending = []
             anchors.append(i)
             previous = b
         if pending:
-            while anchors and limit-previous < .01*len(pending):
+            while anchors and limit - previous < .01 * len(pending):
                 index = anchors.pop()
-                pending = list(range(index,len(pieces)))
+                pending = list(range(index, len(pieces)))
                 previous = pieces[index]['start']
-            if not anchors or limit-previous < .01*len(pending):
+            if not anchors or limit - previous < .01 * len(pending):
                 raise ValueError('Too few reliable timing anchors. Try syncing a shorter section; your saved captions were kept.')
-            step = (limit-previous)/len(pending)
-            for n,index in enumerate(pending):
-                pieces[index].update(start=previous+n*step, end=limit if n==len(pending)-1 else previous+(n+1)*step)
+            step = (limit - previous) / len(pending)
+            for n, index in enumerate(pending):
+                pieces[index].update(start=previous + n * step, end=limit if n == len(pending) - 1 else previous + (n + 1) * step)
                 repaired.add(index)
         if not anchors:
             raise ValueError('No reliable lyric timing was found. Try a shorter section; your saved captions were kept.')
     spans, cursor = [], 0
-    previous = 0
+    previous = 0.0
     for piece_index, piece in enumerate(pieces):
-        a = number(piece['start'], 0, limit)
-        b = number(piece['end'], 0, limit)
+        raw_s = float(piece.get('start', 0))
+        raw_e = float(piece.get('end', 0))
+        a = max(0.0, min(limit, raw_s))
+        b = max(0.0, min(limit, raw_e))
         if b <= a or a < previous - .001:
-            raise ValueError('Some words have uncertain timing. Try a shorter audio range with only its matching lyrics.')
+            if recover:
+                a = max(a, previous)
+                b = max(a + .01, b)
+                repaired.add(piece_index)
+            else:
+                raise ValueError('Some words have uncertain timing. Try a shorter audio range with only its matching lyrics.')
         a = max(a, previous)
         previous = b
         length = len(''.join(piece['word'].split()))
@@ -276,11 +412,275 @@ def aligned_cues(result, lines, offset, duration, limit, recover=False):
             estimated = estimated or any(span[4] for span in matches)
             words.append(dict(text=text, start=matches[0][2], end=matches[-1][3]))
             cursor = end
+        prev_w = words[0]['start']
+        for w in words:
+            if w['start'] < prev_w:
+                w['start'] = prev_w
+            if w['end'] <= w['start']:
+                w['end'] = w['start'] + 0.01
+            prev_w = w['end']
         cue = dict(text=line, start=words[0]['start'], end=words[-1]['end'], words=words)
         if estimated:
             cue['karaoke'] = dict(state='review', note='Some uncertain word timings were estimated between audio anchors. Listen and adjust or retry this line.')
         cues.append(cue)
+    for k in range(len(cues) - 1):
+        if cues[k]['end'] > cues[k+1]['start']:
+            cues[k]['end'] = cues[k+1]['start']
+            if cues[k]['words'] and cues[k]['words'][-1]['end'] > cues[k]['end']:
+                cues[k]['words'][-1]['end'] = cues[k]['end']
     return validate_edit(dict(cues=cues), duration)['cues']
+
+
+def normalize_lyric_text(text):
+    """Normalize text for cross-script, multilingual phonetic matching."""
+    text = unicodedata.normalize('NFD', str(text).lower())
+    text = ''.join(c for c in text if unicodedata.category(c) != 'Mn')
+    text = unicodedata.normalize('NFC', text)
+    text = re.sub(r'[^\w\s]', '', text)
+    return ' '.join(text.split())
+
+
+def distribute_words_in_cue(words_text: list[str], cue_start: float, cue_end: float) -> list[dict[str, Any]]:
+    if not words_text:
+        return []
+    n = len(words_text)
+    cue_start = round(cue_start, 3)
+    cue_end = round(cue_end, 3)
+    if cue_end <= cue_start:
+        cue_end = round(cue_start + max(0.05, 0.005 * n), 3)
+    total = cue_end - cue_start
+
+    char_lens = [max(1, len(w)) for w in words_text]
+    total_chars = sum(char_lens)
+
+    words = []
+    curr = cue_start
+    for i, (wt, clen) in enumerate(zip(words_text, char_lens)):
+        if i == n - 1:
+            w_start = curr
+            w_end = cue_end
+        else:
+            fraction = clen / total_chars
+            w_start = curr
+            rem_words = n - 1 - i
+            max_end = cue_end - (rem_words * 0.001)
+            raw_end = curr + fraction * total
+            w_end = min(max_end, max(w_start + 0.001, raw_end))
+            w_end = round(w_end, 3)
+
+        w_start = max(cue_start, min(cue_end - 0.001, round(w_start, 3)))
+        w_end = max(w_start + 0.001, min(cue_end, round(w_end, 3)))
+        words.append(dict(text=wt, start=w_start, end=w_end))
+        curr = w_end
+
+    return words
+
+
+def match_lyrics_to_transcription(cues, lyrics, duration, language=None, model=None, audio_samples=None, generate_fn=None, llm_model_id='llama-3.2-1b'):
+    """Match user's supplied lyrics to existing timed transcription cues using global sequence alignment.
+
+    Replaces transcription text using ONLY supplied lyrics, preserves valid line timings,
+    and flags unmatched or uncertain lines for listening review.
+    """
+    if not cues:
+        raise ValueError('No existing transcription lines to match against. Transcribe the audio first.')
+    if not lyrics:
+        raise ValueError('Paste your correct lyrics first.')
+
+    N = len(lyrics)
+    M = len(cues)
+
+    # Compute similarity matrix between supplied lyrics and transcribed cues
+    sim = [[0.0] * M for _ in range(N)]
+    for i in range(N):
+        l_norm = normalize_lyric_text(lyrics[i])
+        l_words = set(l_norm.split())
+        for j in range(M):
+            c_norm = normalize_lyric_text(cues[j]['text'])
+            c_words = set(c_norm.split())
+            ratio = SequenceMatcher(None, l_norm, c_norm).ratio()
+            jaccard = len(l_words & c_words) / max(1, len(l_words | c_words))
+            sim[i][j] = max(ratio, jaccard)
+
+    # Needleman-Wunsch global sequence alignment to preserve chronological ordering
+    dp = [[-1e9] * (M + 1) for _ in range(N + 1)]
+    back: list[list[Any]] = [[None] * (M + 1) for _ in range(N + 1)]
+    dp[0][0] = 0.0
+
+    gap_lyric = -0.15
+    gap_cue = -0.10
+
+    for i in range(N + 1):
+        for j in range(M + 1):
+            if i == 0 and j == 0:
+                continue
+            best = -1e9
+            move = None
+            if i > 0 and j > 0:
+                score = dp[i-1][j-1] + (sim[i-1][j-1] * 2.0 - 0.5)
+                if score > best:
+                    best = score
+                    move = ('match', i-1, j-1)
+            if i > 0:
+                score = dp[i-1][j] + gap_lyric
+                if score > best:
+                    best = score
+                    move = ('skip_lyric', i-1, j)
+            if j > 0:
+                score = dp[i][j-1] + gap_cue
+                if score > best:
+                    best = score
+                    move = ('skip_cue', i, j-1)
+            dp[i][j] = best
+            back[i][j] = move
+
+    # Traceback
+    i, j = N, M
+    pairs = []
+    while i > 0 or j > 0:
+        move = back[i][j]
+        if move is None:
+            break
+        kind = move[0]
+        if kind == 'match':
+            pairs.append((i-1, j-1, sim[i-1][j-1]))
+            i -= 1
+            j -= 1
+        elif kind == 'skip_lyric':
+            pairs.append((i-1, None, 0.0))
+            i -= 1
+        else:
+            pairs.append((None, j-1, 0.0))
+            j -= 1
+
+    pairs.reverse()
+
+    # Build intermediate cue list
+    items: list[dict[str, Any]] = []
+    for l_idx, c_idx, score in pairs:
+        if l_idx is not None and c_idx is not None:
+            c = cues[c_idx]
+            items.append({
+                'text': lyrics[l_idx],
+                'start': c['start'],
+                'end': c['end'],
+                'score': score,
+                'matched': True
+            })
+        elif l_idx is not None:
+            items.append({
+                'text': lyrics[l_idx],
+                'start': None,
+                'end': None,
+                'score': 0.0,
+                'matched': False
+            })
+
+    # Step 1: Assign valid line timing windows to all items
+    k = 0
+    while k < len(items):
+        if items[k]['start'] is not None:
+            k += 1
+            continue
+        k_start = k
+        while k < len(items) and items[k]['start'] is None:
+            k += 1
+        k_end = k
+        run_len = k_end - k_start
+
+        prev_idx = k_start - 1 if k_start > 0 else None
+        next_idx = k_end if k_end < len(items) else None
+
+        prev_end = items[prev_idx]['end'] if prev_idx is not None else 0.0
+        next_start = items[next_idx]['start'] if next_idx is not None else duration
+
+        gap = next_start - prev_end
+        if gap >= 0.5 * run_len:
+            step = gap / run_len
+            for r_i in range(k_start, k_end):
+                items[r_i]['start'] = prev_end + (r_i - k_start) * step
+                items[r_i]['end'] = prev_end + (r_i - k_start + 1) * step
+        elif prev_idx is not None and (items[prev_idx]['end'] - items[prev_idx]['start']) >= 1.5 * (run_len + 1):
+            span_start = items[prev_idx]['start']
+            span_end = next_start
+            total_span = span_end - span_start
+            all_lines = [items[prev_idx]] + [items[r] for r in range(k_start, k_end)]
+            lens = [max(1, len(it['text'])) for it in all_lines]
+            tot_lens = sum(lens)
+            curr = span_start
+            for l_i, it in enumerate(all_lines):
+                fraction = lens[l_i] / tot_lens
+                it['start'] = curr
+                it['end'] = span_end if l_i == len(all_lines) - 1 else curr + fraction * total_span
+                curr = it['end']
+        elif next_idx is not None and (items[next_idx]['end'] - items[next_idx]['start']) >= 1.5 * (run_len + 1):
+            span_start = prev_end
+            span_end = items[next_idx]['end']
+            total_span = span_end - span_start
+            all_lines = [items[r] for r in range(k_start, k_end)] + [items[next_idx]]
+            lens = [max(1, len(it['text'])) for it in all_lines]
+            tot_lens = sum(lens)
+            curr = span_start
+            for l_i, it in enumerate(all_lines):
+                fraction = lens[l_i] / tot_lens
+                it['start'] = curr
+                it['end'] = span_end if l_i == len(all_lines) - 1 else curr + fraction * total_span
+                curr = it['end']
+        else:
+            slice_dur = 0.5
+            total_needed = slice_dur * run_len
+            avail = max(0.0, next_start - prev_end)
+            if avail >= total_needed:
+                step = avail / run_len
+                for r_i in range(k_start, k_end):
+                    items[r_i]['start'] = prev_end + (r_i - k_start) * step
+                    items[r_i]['end'] = prev_end + (r_i - k_start + 1) * step
+            else:
+                step = max(0.05, avail / run_len) if avail > 0 else 0.1
+                for r_i in range(k_start, k_end):
+                    items[r_i]['start'] = prev_end + (r_i - k_start) * step
+                    items[r_i]['end'] = prev_end + (r_i - k_start + 1) * step
+
+    # Step 2: Strict monotonicity and non-overlapping pass on all cue line boundaries
+    prev = 0.0
+    for it in items:
+        s = round(max(prev, min(duration - 0.05, it['start'])), 2)
+        e = round(max(s + 0.05, min(duration, it['end'])), 2)
+        it['start'] = s
+        it['end'] = e
+        prev = e
+
+    # Backwards pass if any cue exceeded duration
+    if items and items[-1]['end'] > duration:
+        overflow = items[-1]['end'] - duration
+        for it in reversed(items):
+            it['end'] = max(0.05, it['end'] - overflow)
+            it['start'] = max(0.0, min(it['end'] - 0.05, it['start'] - overflow))
+
+    # Step 3: Now that all cue boundaries are 100% final and non-overlapping, generate word timings
+    final_cues: list[dict[str, Any]] = []
+    for it in items:
+        words_text = it['text'].strip().split()
+        if not words_text:
+            continue
+        words = distribute_words_in_cue(words_text, it['start'], it['end'])
+
+        if not it['matched']:
+            karaoke = dict(state='review', note='Unmatched lyric line — timing estimated between surrounding cues. Listen and adjust.')
+        elif it['score'] < 0.45:
+            karaoke = dict(state='review', note=f'Low confidence match ({int(it["score"]*100)}%). Verify line timing.')
+        else:
+            karaoke = dict(state='review', note='Lyrics matched to transcription. Listen and adjust word timings if needed.')
+
+        final_cues.append(dict(
+            start=it['start'],
+            end=it['end'],
+            text=it['text'],
+            words=words,
+            karaoke=karaoke
+        ))
+
+    return validate_edit(dict(cues=final_cues), duration)['cues']
 
 
 def register_captions(app, save_dir, job_started, job_finished, refresh_gallery, get_whisper, allowed_path):
@@ -388,15 +788,23 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
         song = request.files.get('audio')
         path = request.form.get('path', '')
         source = Path(path) if path else None
-        if not song and not upload and (not source or not allowed_path(str(source)) or not source.is_file()):
+        if song and song.filename:
+            name = song.filename
+        elif upload and upload.filename:
+            name = upload.filename
+        elif source is not None and allowed_path(str(source)) and source.is_file():
+            name = source.name
+        else:
             raise ValueError('Choose a video from your library or upload one.')
-        name = song.filename if song else upload.filename if upload else source.name
         extension = Path(name).suffix.lower()
         if song and extension not in {'.mp3', '.wav', '.m4a', '.flac', '.ogg'}:
             raise ValueError('Choose MP3, WAV, M4A, FLAC or OGG audio.')
         if not song and extension not in {'.mp4', '.mkv', '.mov', '.webm', '.avi', '.m4v'}:
             raise ValueError('Choose a supported video file.')
         composition = None
+        background = None
+        bg_path = ''
+        bg_ext = ''
         if song:
             shapes = {'portrait': (1080,1920), 'square': (1080,1080), 'landscape': (1920,1080)}
             shape = request.form.get('shape', 'portrait')
@@ -409,7 +817,8 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             bg_path = request.form.get('background_path', '')
             if bg_path and (not allowed_path(bg_path) or not Path(bg_path).is_file()):
                 raise ValueError('Choose a background from your library.')
-            bg_ext = Path(background.filename if background else bg_path).suffix.lower()
+            bg_name = (background.filename if background and background.filename else bg_path) or ''
+            bg_ext = Path(bg_name).suffix.lower() if bg_name else ''
             if (background or bg_path) and bg_ext not in {'.png','.jpg','.jpeg','.webp','.mp4','.mov','.mkv','.webm'}:
                 raise ValueError('Choose a photo or video background.')
             composition = dict(shape=shape, color=color, visualizer=request.form.get('visualizer') == 'true')
@@ -419,13 +828,13 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             song_file = destination / ('song' + extension)
             song.save(song_file)
             bg_file = destination / ('background' + bg_ext) if background or bg_path else None
-            if background:
+            if background and bg_file is not None:
                 background.save(bg_file)
-            elif bg_path:
+            elif bg_path and bg_file is not None:
                 shutil.copy2(bg_path, bg_file)
         elif upload:
             upload.save(media)
-        else:
+        elif source is not None:
             shutil.copy2(source, media)
         data = dict(id=pid, name=name[:200], source=media.name, state='busy', status='Preparing video',
                     revision=0, cues=[], style=dict(DEFAULT_STYLE), width=0, height=0, duration=0, peaks=[], timing='manual', exports=[])
@@ -446,7 +855,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                 else:
                     args += ['-f','lavfi','-i',f'color=c={color}:s={width}x{height}:r=30']
                 graph = f'[1:v]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1,fps=30[bg]'
-                if composition['visualizer']:
+                if composition and composition.get('visualizer'):
                     graph += f';[0:a]showwaves=s={width}x{height//5}:mode=cline:rate=30:colors=0xbba6ff:scale=sqrt[wave];[bg][wave]overlay=0:H-h:shortest=1[out]'
                 else:
                     graph += ';[bg]null[out]'
@@ -508,7 +917,8 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                     if not upload and not library: continue
                     if library and (not allowed_path(library) or not Path(library).is_file()):
                         raise ValueError('Choose media from your library or upload it.')
-                    ext = Path(upload.filename if upload else library).suffix.lower()
+                    media_name = (upload.filename if upload and upload.filename else library) or ''
+                    ext = Path(media_name).suffix.lower()
                     supported = composition_model.AUDIO | composition_model.VIDEOS if key=='audio' else composition_model.IMAGES | composition_model.VIDEOS
                     if ext not in supported: raise ValueError('Unsupported composition media type.')
                     name = 'asset_'+uuid.uuid4().hex+ext
@@ -730,7 +1140,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                                     if not greek and not korean:
                                         chosen = detect_caption_language(model, samples, candidates)
                                 result = align_caption_words(model, samples, cue['text'], chosen)
-                                words = aligned_cues(result, [cue['text']], cue['start'], d['duration'], cue['end']-cue['start'])[0]['words']
+                                words = aligned_cues(result, [cue['text']], cue['start'], d['duration'], cue['end']-cue['start'], recover=True)[0]['words']
                                 notes = []
                                 if any(w['end']-w['start'] < .06 for w in words):
                                     notes.append('Very short word timings; check against the vocals.')
@@ -806,6 +1216,29 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                 finally:
                     audio_file.unlink(missing_ok=True)
             return launch(data, 'Matching your lyrics to the audio (existing captions are kept if this fails)…', work)
+
+    @bp.post('/api/captions/<pid>/correct-lyrics')
+    def correct_lyrics(pid):
+        with lock:
+            data = read(pid)
+            if data['state'] == 'busy':
+                return jsonify(error='Wait for the current task.'), 409
+            if not data.get('cues'):
+                raise ValueError('Auto-transcribe the audio or import subtitles first so we have line timings to match.')
+            options = request.get_json() or {}
+            lines = lyric_lines(options.get('text', ''))
+            language = options.get('language', '')
+            def work(d, f):
+                process.check_cancelled()
+                matched = match_lyrics_to_transcription(
+                    d['cues'], lines, d['duration'], language=language
+                )
+                process.check_cancelled()
+                d['karaoke_backup'] = dict(cues=copy.deepcopy(d['cues']), timing=d['timing'])
+                d.update(cues=matched, timing='aligned')
+                flagged = sum(c.get('karaoke', {}).get('state') == 'review' for c in matched)
+                d['_completion_notice'] = f'Transcription updated with your lyrics ({len(matched)} lines). {flagged} lines contain estimated word timings — use Next line to review.'
+            return launch(data, 'Matching your lyrics to the existing transcription timings…', work)
 
     @bp.post('/api/captions/<pid>/render')
     def render(pid):

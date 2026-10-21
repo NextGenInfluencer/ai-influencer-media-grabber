@@ -1,6 +1,6 @@
 'use strict';
 const assert=require('node:assert/strict');
-const {validate}=require('../static/captions.js');
+const {validate, visualizerBars}=require('../static/captions.js');
 const line=(start,end,words=[])=>({start,end,words});
 assert.throws(()=>validate([line(185.54,3)],185.54),/start before/);
 assert.throws(()=>validate([line(0,3,[line(185.54,94.27),line(94.27,3)])],185.54),/Word timings/);
@@ -9,6 +9,8 @@ assert.throws(()=>validate([line(0,3,[line(0,2),line(1,3)])],10),/Word timings/)
 assert.throws(()=>validate([line(NaN,3)],10),/start before/);
 assert.doesNotThrow(()=>validate([line(12.74,15.74,[line(12.74,14.24),line(14.24,15.74)])],185.54));
 assert.doesNotThrow(()=>validate([line(0,3)],185.54));
+assert.equal(visualizerBars([0.2,0.8,0.5],10,5,640,360,{visualizer_style:'spectrum',visualizer_position:'bottom'}).length,36);
+assert.equal(visualizerBars([0.2,0.8,0.5],10,5,640,360,{visualizer_style:'waveform',visualizer_position:'center'}).length,48);
 console.log('Caption timing regression checks passed.');
 // Run the real editor script with no separately loaded timing helper.
 const vm=require('node:vm'), fs=require('node:fs');
@@ -41,6 +43,13 @@ vm.createContext(ctx);vm.runInContext(fs.readFileSync(require.resolve('../static
     const next=element('caption').children[0].children.filter(x=>typeof x==='object');
     assert.equal(next[1].textContent,'getting');assert.equal(next[1].style.color,'#ffdc55');
     assert.equal(next[0].style.color,undefined);
+    element('cumulative').checked=true;element('word_pop').checked=true;element('cumulative').onchange();element('word_pop').onchange();
+    animation();
+    const cum=element('caption').children[0].children.filter(x=>typeof x==='object');
+    assert.equal(cum[0].style.color,'#ffdc55');
+    assert.equal(cum[1].style.color,'#ffdc55');
+    assert.equal(cum[1].style.transform,'scale(1.15)');
+    assert.equal(cum[0].style.transform,undefined);
     element('video').currentTime=185.5;element('setStart').onclick();
     assert.match(element('status').textContent,/start before/);
     assert.equal(element('start').value,'30.52');

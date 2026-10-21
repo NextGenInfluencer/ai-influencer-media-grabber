@@ -2,11 +2,11 @@
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="media-token" content="{{ api_token }}"><title>Captions & Lyrics — Media Grabber</title>
-<link rel="stylesheet" href="/static/captions.css"><script src="/static/captions.js?v=restart-notice-1" defer></script></head>
+<link rel="stylesheet" href="/static/captions.css"><script src="/static/captions.js?v=phase3-1" defer></script></head>
 <body>
 <header><a href="/">← Studio</a><div><h1>Captions & Lyrics</h1><small>Your words. Your timing. Your style.</small></div><span id="saveStatus" role="status">Open a video to begin</span><button id="save">Save now</button></header>
 <main>
-<p id="restartNotice" class="panel error" role="status" hidden>Update ready — this app is still running older code. Save your edits and copy any pasted lyrics somewhere safe, then close all Media Grabber windows, wait 20 seconds, and reopen your shortcut.</p>
+<p id="restartNotice" class="panel error" role="status" hidden>Update ready — this app is still running older code. Save your edits and copy any pasted lyrics somewhere safe, then restart the engine. <button id="restartNow" class="primary" style="margin-left:12px;">Restart app now</button></p>
 <section class="panel sources">
 <label class="upload">Open video<input id="videoFile" type="file" accept="video/*"></label>
 <button id="newSong">Create video from a song</button>
@@ -18,21 +18,29 @@
 <p id="status" role="status">Open a video, then transcribe its audio or add your own lyrics.</p>
 <div class="workspace">
 <section class="panel preview">
-<div id="stage"><video id="video" playsinline preload="metadata"></video><div id="guides" hidden></div><div id="caption"></div><div id="empty">Your video preview<br><small>Original files are kept unchanged</small></div></div>
+<div id="stage"><video id="video" playsinline preload="metadata"></video><canvas id="stageVisualizer" hidden></canvas><div id="guides" hidden></div><div id="caption"></div><div id="empty">Your video preview<br><small>Original files are kept unchanged</small></div></div>
 <p id="playingCaption" class="hint" role="status"></p><div class="transport"><button id="play">▶ Play</button><span id="time">0:00.00</span><select id="speed" aria-label="Playback speed"><option value="0.5">0.5×</option><option value="0.75">0.75×</option><option selected value="1">1×</option><option value="1.25">1.25×</option></select><label><input type="checkbox" id="loop"> Loop selected line</label><label><input type="checkbox" id="safe"> Safe-area guide</label></div>
 <p class="hint">Live preview · Use “Render 5-second check” to verify the exact exported appearance.</p>
 </section>
 <section class="panel style">
 <h2>Make it yours</h2>
-<div class="presets"><button data-preset="clean">Clean</button><button data-preset="bold">Bold</button><button data-preset="lyrics">Lyrics</button><button data-preset="karaoke">Karaoke</button></div>
-<label>Font<select id="font"><option>Arial</option><option>Verdana</option><option>Georgia</option><option>Impact</option><option>Trebuchet MS</option><option>Oswald</option><option>Lobster</option><option>Bangers</option></select></label>
+<div class="presets"><button data-preset="neon_karaoke">Neon Karaoke</button><button data-preset="cinematic_clean">Cinematic Clean</button><button data-preset="bold_pop">Bold Pop</button><button data-preset="minimalist_lyric">Minimalist Lyric</button><button data-preset="clean">Clean</button><button data-preset="bold">Bold</button><button data-preset="lyrics">Lyrics</button><button data-preset="karaoke">Karaoke</button></div>
+<label>Font<select id="font"><option>Arial</option><option>Verdana</option><option>Georgia</option><option>Impact</option><option>Trebuchet MS</option><option>Montserrat</option><option>Roboto</option><option>Noto Sans KR</option><option>Oswald</option><option>Lobster</option><option>Bangers</option></select></label>
 <label>Size<input id="size" type="range" min="2" max="12" step=".25" value="5"></label>
 <div class="row"><label>Text<input id="color" type="color" value="#ffffff"></label><label>Highlight<input id="highlight" type="color" value="#ffdc55"></label></div>
 <label>Outline<input id="outline" type="range" min="0" max="5" step=".25" value="2"></label>
 <label>Vertical position<input id="position" type="range" min="10" max="95" step="1" value="85"></label>
-<label><input id="background" type="checkbox"> Text background</label><label><input id="karaoke" type="checkbox"> Highlight the current word</label>
+<label><input id="background" type="checkbox"> High-contrast boxed captions</label><label><input id="karaoke" type="checkbox"> Highlight the current word</label>
+<label><input id="cumulative" type="checkbox"> Cumulative karaoke (keep words lit)</label><label><input id="word_pop" type="checkbox"> Active word pop (115% scale)</label>
+<h3>Audio visualizer</h3>
+<label><input id="visualizer" type="checkbox"> Show audio-reactive visualizer</label>
+<label>Visualizer style<select id="visualizer_style"><option value="spectrum">Spectrum Bars</option><option value="waveform">Waveform</option></select></label>
+<label>Position<select id="visualizer_position"><option value="bottom">Bottom</option><option value="center">Center</option><option value="top">Top</option></select></label>
+<label>Height (%)<input id="visualizer_height" type="range" min="10" max="40" step="1" value="18"></label>
+<label>Sensitivity<input id="visualizer_sensitivity" type="range" min="0.5" max="3" step="0.1" value="1"></label>
+<label>Visualizer colour<input id="visualizer_color" type="color" value="#bba6ff"></label>
 <div class="row"><button id="saveStyle">Save my style</button><button id="loadStyle">Use my style</button></div>
-<p class="hint">Oswald, Lobster and Bangers are bundled Google Fonts. Other fonts use installed versions; Greek and Korean may use installed fallback fonts. Karaoke requires word timings.</p>
+<p class="hint">Montserrat, Roboto, Noto Sans KR, Oswald, Lobster and Bangers are bundled Google Fonts with Greek, Korean and French support. Karaoke requires word timings.</p>
 </section>
 </div>
 <section class="panel">
@@ -50,7 +58,7 @@
 </section>
 <section class="panel exports"><h2>Finish your video</h2><button id="renderCheck">Render 5-second check</button><button id="export" class="primary">Export captioned MP4</button><button id="srt">Download SRT</button><button id="stop">Stop processing</button><div id="downloads"></div></section>
 </main>
-<dialog id="lyricsDialog"><h2>Paste & sync lyrics</h2><p class="dialogStatus error" role="status"></p><p>One caption per line. Paste only the words sung in the selected audio range, including repeated choruses. Standalone [Verse] and [Chorus] labels are ignored during syncing.</p><button id="useCurrentLyrics">Use current caption text</button><textarea id="lyrics" rows="9" maxlength="50000" placeholder="Paste your lyrics here" aria-label="Lyrics"></textarea><div class="row"><label>Language<select id="alignLanguage">{% for code, label in languages.items() %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</select></label><label>From (seconds)<input id="alignStart" type="number" min="0" step=".01"></label><label>To (seconds)<input id="alignEnd" type="number" min="0" step=".01"></label></div><p class="hint">Sync uses the local AI Pack (up to 20 minutes per range). Review the result while listening. Existing captions are kept if syncing fails. Manual estimates work without AI.</p><div class="row"><button id="cancelLyrics">Cancel</button><button id="applyLyrics">Use manual estimates</button><button id="alignLyrics" class="primary">Sync lyrics to audio</button></div></dialog>
+<dialog id="lyricsDialog"><h2>Paste & sync lyrics</h2><p class="dialogStatus error" role="status"></p><p>One caption per line. Paste only the words sung in the selected audio range, including repeated choruses. Standalone [Verse] and [Chorus] labels are ignored during syncing.</p><div class="toolbar"><button id="useCurrentLyrics">Use current caption text</button><button id="clearLyricsDraft" class="hint">Clear saved lyrics</button></div><textarea id="lyrics" rows="9" maxlength="50000" placeholder="Paste your lyrics here" aria-label="Lyrics"></textarea><div class="row"><label>Language<select id="alignLanguage">{% for code, label in languages.items() %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</select></label><label>From (seconds)<input id="alignStart" type="number" min="0" step=".01"></label><label>To (seconds)<input id="alignEnd" type="number" min="0" step=".01"></label></div><p class="hint">"Correct transcription with my lyrics" matches your pasted lyrics directly to the current transcription's line timings, replacing words with your exact lyrics while preserving reliable audio timings. "Sync lyrics to audio" runs audio alignment using the local AI Pack. Manual estimates work without AI.</p><div class="row"><button id="cancelLyrics">Cancel</button><button id="applyLyrics">Use manual estimates</button><button id="correctLyrics" class="primary">Correct transcription with my lyrics</button><button id="alignLyrics" class="primary">Sync lyrics to audio</button></div></dialog>
 <dialog id="renderDialog"><h2>Rendered preview</h2><video id="renderVideo" controls></video><button id="closeRender">Close preview</button></dialog>
 <dialog id="songDialog"><h2>Create a music video</h2><p class="dialogStatus error" role="status"></p><p>Choose a song and background. After preparing the video, add lyrics and style them with the live preview.</p><label>Song<input id="songFile" type="file" accept=".mp3,.wav,.m4a,.flac,.ogg"></label><div class="row"><label>Format<select id="songShape"><option value="portrait">Portrait · Reels / TikTok / Shorts</option><option value="square">Square</option><option value="landscape">Landscape · YouTube</option></select></label><label>Background colour<input id="songColor" type="color" value="#141526"></label></div><p>Optional photo or looping video background (fills the frame with a centre crop):</p><input id="songBackground" type="file" accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,.mkv,.webm" aria-label="Background file"><select id="songLibrary" aria-label="Background from library"><option value="">Use colour / uploaded background</option></select><p class="hint">An uploaded background takes priority over the library choice. Background audio is replaced by your song.</p><label><input id="songVisualizer" type="checkbox"> Add an audio-reactive waveform along the bottom</label><p class="hint">Up to 20 minutes. Your originals are retained. Use Background & audio after creation to change the composition while keeping your lyrics.</p><p class="hint">Find backgrounds: <a href="https://www.pexels.com/videos/" target="_blank" rel="noopener noreferrer">Pexels</a> · <a href="https://pixabay.com/videos/" target="_blank" rel="noopener noreferrer">Pixabay</a>. Download a clip there, then choose it above. Check the asset’s usage terms.</p><div class="row"><button id="cancelSong">Cancel</button><button id="createSong" class="primary">Create video</button></div></dialog>
 <dialog id="compositionDialog"><h2>Background & audio</h2><p class="dialogStatus error" role="status"></p><p class="hint">Settings are remembered as a local draft. Apply prepares a new preview and keeps a previous version you can restore. File selections must be chosen again after closing the app.</p>
@@ -84,6 +92,11 @@
 <label>Fade out (s)<input id="comp_fade_out" type="number" min="0" max="60" step=".1"></label>
 <label>Background volume (0–2)<input id="comp_background_volume" type="number" min="0" max="2" step=".05"></label>
 <p class="hint">0 mutes background audio. Song trimming and delay move lyrics with the audio. Lines outside the new range are removed from this version; cut lines are flagged for review. Restore previous composition recovers them.</p>
-<label><input id="comp_visualizer" type="checkbox"> Show audio waveform</label>
+<label><input id="comp_visualizer" type="checkbox"> Show audio visualizer</label>
+<label>Visualizer style<select id="comp_visualizer_style"><option value="waveform">Waveform</option><option value="spectrum">Spectrum Bars</option></select></label>
+<label>Visualizer position<select id="comp_visualizer_position"><option value="bottom">Bottom</option><option value="center">Center</option><option value="top">Top</option></select></label>
+<label>Visualizer height (%)<input id="comp_visualizer_height" type="number" min="10" max="40" step="1"></label>
+<label>Visualizer sensitivity (0.5–3)<input id="comp_visualizer_sensitivity" type="number" min="0.5" max="3" step="0.1"></label>
+<label>Visualizer colour<input id="comp_visualizer_color" type="color"></label>
 </fieldset></div><div class="row"><button id="resetCompositionDraft">Reset draft to saved settings</button><button id="closeComposition">Close</button><button id="applyComposition" class="primary">Apply & preview</button></div></dialog>
 </body></html>

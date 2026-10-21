@@ -16,11 +16,14 @@ SHAPES = {'portrait':(1080,1920), 'square':(1080,1080), 'landscape':(1920,1080)}
 IMAGES = {'.png','.jpg','.jpeg','.webp'}
 VIDEOS = {'.mp4','.mov','.mkv','.webm','.avi','.m4v'}
 AUDIO = {'.mp3','.wav','.m4a','.flac','.ogg'}
+VISUALIZER_STYLES = {'waveform', 'spectrum'}
+VISUALIZER_POSITIONS = {'bottom', 'center', 'top'}
 DEFAULTS = dict(shape='portrait', color='#141526', fit='fill', x=50, y=50,
                 blur=0, dim=0, overlay='#000000', opacity=0, zoom=0,
                 start=0, end=0, offset=0, volume=1, fade_in=0, fade_out=0,
                 background_volume=0, loop=True, background_start=0, background_duration=0,
-                visualizer=False)
+                visualizer=False, visualizer_style='waveform', visualizer_position='bottom',
+                visualizer_height=20, visualizer_sensitivity=1, visualizer_color='#bba6ff')
 
 
 def finite(value, low, high):
@@ -79,13 +82,16 @@ def validate(settings, source_duration):
     s = {**DEFAULTS, **{k:v for k,v in settings.items() if k in DEFAULTS}}
     if s['shape'] not in SHAPES or s['fit'] not in {'fit','fill'}:
         raise ValueError('Choose a supported canvas format and fit mode.')
-    for key in ('color','overlay'):
+    if s['visualizer_style'] not in VISUALIZER_STYLES or s['visualizer_position'] not in VISUALIZER_POSITIONS:
+        raise ValueError('Choose a supported visualizer style and position.')
+    for key in ('color','overlay','visualizer_color'):
         if not re.fullmatch('#[0-9a-fA-F]{6}', str(s[key])):
             raise ValueError('Choose a valid composition color.')
     bounds = dict(x=(0,100),y=(0,100),blur=(0,30),dim=(0,1),opacity=(0,1),zoom=(0,.2),
                   start=(0,source_duration),end=(0,source_duration),offset=(0,120),volume=(0,2),
                   fade_in=(0,60),fade_out=(0,60),background_volume=(0,2),
-                  background_start=(0,7200),background_duration=(0,7200))
+                  background_start=(0,7200),background_duration=(0,7200),
+                  visualizer_height=(10,40),visualizer_sensitivity=(.5,3))
     for key, (lo,hi) in bounds.items(): s[key] = finite(s[key],lo,hi)
     length = s['end']-s['start']
     if length < .1 or length+s['offset'] > 1200:
@@ -154,7 +160,15 @@ def render_args(studio, folder, output, background_has_audio=False):
     if s['opacity']: vf+=f",drawbox=c={s['overlay']}@{s['opacity']}:t=fill"
     graph.append(vf+'[bg]')
     if s['visualizer']:
-        graph += ['[mix]asplit=2[aout][vis]',f'[vis]showwaves=s={w}x{h//5}:mode=cline:rate=30:colors=0xbba6ff:scale=sqrt[wave]', '[bg][wave]overlay=0:H-h:shortest=1[out]']
+        vh = max(2, round(h * (s['visualizer_height'] / 100) / 2) * 2)
+        vy = '0' if s['visualizer_position'] == 'top' else '(H-h)/2' if s['visualizer_position'] == 'center' else 'H-h'
+        vcol = '0x' + str(s['visualizer_color'])[1:]
+        sens = s['visualizer_sensitivity']
+        if s['visualizer_style'] == 'spectrum':
+            vfilter = f"[vis]volume={sens},showfreqs=s={w}x{vh}:mode=bar:ascale=sqrt:fscale=log:win_size=2048:rate=30:colors={vcol}[wave]"
+        else:
+            vfilter = f"[vis]volume={sens},showwaves=s={w}x{vh}:mode=cline:rate=30:colors={vcol}:scale=sqrt[wave]"
+        graph += ['[mix]asplit=2[aout][vis]', vfilter, f'[bg][wave]overlay=0:{vy}:shortest=1[out]']
     else: graph += ['[mix]anull[aout]','[bg]null[out]']
     return [*args,'-filter_complex',';'.join(graph),'-map','[out]','-map','[aout]',
             '-t',str(duration),'-c:v','libx264','-preset','veryfast','-crf','18','-pix_fmt','yuv420p',

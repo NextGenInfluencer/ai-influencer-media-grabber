@@ -7,12 +7,16 @@ import subprocess
 import tempfile
 import time
 import threading
+from typing import Any
 import unittest
 from unittest.mock import patch
 
 from flask import Flask
 import imageio_ffmpeg
-from captions import DEFAULT_STYLE, ass_text, parse_subtitles, register_captions, srt_text, validate_edit, lyric_lines, aligned_cues
+from captions import (DEFAULT_STYLE, BUNDLED_FONTS, FONT_DIR, font_scale, visualizer_bars,
+                      ass_text, parse_subtitles, register_captions,
+                      srt_text, validate_edit, lyric_lines, aligned_cues,
+                      match_lyrics_to_transcription, normalize_lyric_text)
 import job_process
 
 
@@ -54,6 +58,72 @@ class CaptionDataTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'reliable'):
             aligned_cues(result,['Καλή μέρα','για σένα','ξανά'],0,3,3,recover=True)
 
+    def test_aligned_cues_pathological_zero_duration_and_boundary_overlap(self):
+        # Simulates real Whisper output with zero-duration words and boundary edge cases
+        result = {'segments': [{'words': [
+            dict(word='Πάλι', start=0.1, end=0.8),
+            dict(word='μόνος', start=0.8, end=1.5),
+            dict(word='με', start=1.5, end=1.5), # zero duration!
+            dict(word='το', start=1.5, end=1.5), # zero duration!
+            dict(word='ίδιο', start=1.8, end=2.4),
+            dict(word='δωμάτιο', start=2.4, end=3.0),
+            dict(word='ξανά', start=3.0, end=3.0), # tail zero-duration word at limit!
+        ]}]}
+        lines = ['Πάλι μόνος', 'με το ίδιο δωμάτιο', 'ξανά']
+        # Without recover, should raise uncertain timing
+        with self.assertRaises(ValueError):
+            aligned_cues(result, lines, 0, 3.0, 3.0, recover=False)
+        # With recover=True, must recover without error and flag affected lines
+        cues = aligned_cues(result, lines, 0, 3.0, 3.0, recover=True)
+        self.assertEqual(len(cues), 3)
+        self.assertEqual([c['text'] for c in cues], lines)
+        self.assertEqual(cues[1]['karaoke']['state'], 'review')
+        self.assertTrue(all(w['end'] > w['start'] for c in cues for w in c['words']))
+
+    def test_match_lyrics_to_transcription_phonetic_and_preservation(self):
+        transcribed = [
+            dict(start=1.0, end=4.0, text='Παλή μόνος μέσα το ίδιο δω μάτι', words=[]),
+            dict(start=4.5, end=8.0, text='Ξέρου φτεο εγώ που σε αγάπησα', words=[]),
+            dict(start=8.5, end=12.0, text='Το Ξυγλόβ με τραβά στο κενό', words=[]),
+        ]
+        correct = [
+            'Πάλι μόνος μες στο ίδιο δωμάτιο',
+            'Ξέρω φταίω εγώ που σε αγάπησα',
+            'Το toxic love με τραβά στο κενό',
+        ]
+        matched = match_lyrics_to_transcription(transcribed, correct, 15.0)
+        self.assertEqual(len(matched), 3)
+        self.assertEqual([c['text'] for c in matched], correct)
+        self.assertEqual(matched[0]['start'], 1.0)
+        self.assertEqual(matched[0]['end'], 4.0)
+        self.assertEqual(matched[1]['start'], 4.5)
+        self.assertEqual(matched[1]['end'], 8.0)
+        self.assertEqual(matched[2]['start'], 8.5)
+        self.assertEqual(matched[2]['end'], 12.0)
+        # Words must be generated and valid
+        for c in matched:
+            self.assertTrue(all(w['end'] > w['start'] for w in c['words']))
+
+    def test_match_lyrics_to_transcription_unmatched_lines(self):
+        transcribed = [
+            dict(start=1.0, end=4.0, text='Πρώτη γραμμή τραγουδιού', words=[]),
+            dict(start=10.0, end=14.0, text='Τρίτη γραμμή τραγουδιού', words=[]),
+        ]
+        correct = [
+            'Πρώτη γραμμή τραγουδιού',
+            'Δεύτερη γραμμή που δεν είχε καταγραφεί', # un-transcribed bridge
+            'Τρίτη γραμμή τραγουδιού',
+        ]
+        matched = match_lyrics_to_transcription(transcribed, correct, 20.0)
+        self.assertEqual(len(matched), 3)
+        self.assertEqual([c['text'] for c in matched], correct)
+        # Line 1 must be flagged as review
+        self.assertEqual(matched[1]['karaoke']['state'], 'review')
+        self.assertIn('Unmatched', matched[1]['karaoke']['note'])
+        # Timing must be within gap (between 4.0 and 10.0)
+        self.assertGreaterEqual(matched[1]['start'], 4.0)
+        self.assertLessEqual(matched[1]['end'], 10.0)
+
     def test_unicode_roundtrip_and_lrc_repeated_lines(self):
         text = '1\n00:00:00,100 --> 00:00:01,500\nΓεια σου\nHello\n'
         cues = parse_subtitles(text, 4)
@@ -92,14 +162,78 @@ class CaptionDataTests(unittest.TestCase):
         self.assertTrue(events)
         self.assertTrue(all(r'\N' in line for line in events))
 
+    def test_bundled_multilingual_fonts_and_ofl_licenses(self):
+        for family in ('Montserrat', 'Roboto', 'Noto Sans KR', 'Oswald', 'Lobster', 'Bangers'):
+            self.assertIn(family, BUNDLED_FONTS)
+            ttf_path = FONT_DIR / BUNDLED_FONTS[family]
+            self.assertTrue(ttf_path.is_file(), f'Missing font file: {ttf_path}')
+            self.assertGreater(font_scale(family), 0.9)
+            validated = validate_edit({'cues': [], 'style': {**DEFAULT_STYLE, 'font': family}}, 5)
+            self.assertEqual(validated['style']['font'], family)
+        for license_name in ('montserrat-OFL.txt', 'roboto-OFL.txt', 'notosanskr-OFL.txt',
+                             'oswald-OFL.txt', 'lobster-OFL.txt', 'bangers-OFL.txt'):
+            self.assertTrue((FONT_DIR / license_name).is_file(), f'Missing OFL file: {license_name}')
+
+    def test_cumulative_karaoke_word_pop_boxed_captions_and_visualizer_ass(self):
+        cue = dict(start=0, end=2, text='Φταίω Εγώ', words=[
+            dict(start=0.2, end=0.8, text='Φταίω'),
+            dict(start=1.0, end=1.8, text='Εγώ')
+        ])
+        style = {
+            **DEFAULT_STYLE,
+            'font': 'Roboto',
+            'karaoke': True,
+            'cumulative': True,
+            'word_pop': True,
+            'background': True,
+            'visualizer': True,
+            'visualizer_style': 'spectrum',
+            'visualizer_position': 'bottom',
+            'visualizer_height': 20,
+            'visualizer_sensitivity': 1.2,
+            'visualizer_color': '#00f5d4'
+        }
+        data = validate_edit({'cues': [cue], 'style': style}, 2)
+        ass = ass_text({**data, 'width': 640, 'height': 360, 'duration': 2.0, 'peaks': [0.2, 0.6, 0.9, 0.4]})
+        self.assertIn('Style: Default,Roboto,', ass)
+        self.assertIn('&H38140C0A', ass)
+        # Check visualizer vector events on Layer -1
+        vis_events = [line for line in ass.splitlines() if line.startswith('Dialogue: -1,')]
+        self.assertTrue(vis_events)
+        self.assertIn(r'\p1', vis_events[0])
+        # During word 2 (1.00 to 1.80), word 1 remains lit (cumulative) and word 2 has both color and 115% scale pop
+        word2_line = next(line for line in ass.splitlines() if line.startswith('Dialogue: 0,00:00:01.00,00:00:01.80'))
+        self.assertIn(r'Φταίω{\r}', word2_line)
+        self.assertIn(r'\fscx115\fscy115}Εγώ{\r}', word2_line)
+        # Verify visualizer_bars math for top, center, and bottom
+        for mode in ('spectrum', 'waveform'):
+            for pos in ('bottom', 'center', 'top'):
+                rects = visualizer_bars([0.1, 0.5, 0.9], 2.0, 1.0, 640, 360, {**style, 'visualizer_style': mode, 'visualizer_position': pos})
+                self.assertEqual(len(rects), 36 if mode == 'spectrum' else 48)
+                self.assertTrue(all(x2 > x1 and y2 > y1 for x1, y1, x2, y2 in rects))
+        # Verify identical visual math between Python visualizer_bars() and JS CaptionTiming.visualizerBars()
+        py_rects = [list(r) for r in visualizer_bars([0.15, 0.45, 0.85, 0.35], 4.0, 1.75, 1080, 1920, style)]
+        js_check = subprocess.run(
+            ['node', '-e', f'const {{visualizerBars}}=require("./static/captions.js"); console.log(JSON.stringify(visualizerBars([0.15,0.45,0.85,0.35],4.0,1.75,1080,1920,{json.dumps(style)})));'],
+            capture_output=True, text=True, check=True
+        )
+        self.assertEqual(py_rects, json.loads(js_check.stdout.strip()))
+
 
 class CaptionWorkflowTests(unittest.TestCase):
+    def j(self, response) -> dict[str, Any]:
+        data = response.json
+        self.assertIsNotNone(data)
+        assert isinstance(data, dict)
+        return data
+
     def karaoke_project(self):
-        response=self.client.post('/api/captions',data={'video':(io.BytesIO(self.source.read_bytes()),'sample.mp4')})
-        pid=response.json['id'];data=self.wait(pid)
-        data['cues']=[dict(start=.1,end=.9,text='Hello\nworld',words=[]),dict(start=1,end=1.9,text='Γεια σου',words=[])]
-        data=self.client.put('/api/captions/'+pid,json=data).json
-        return pid,data
+        response = self.client.post('/api/captions', data={'video': (io.BytesIO(self.source.read_bytes()), 'sample.mp4')})
+        pid = self.j(response)['id']
+        data = self.wait(pid)
+        data['cues'] = [dict(start=.1, end=.9, text='Hello\nworld', words=[]), dict(start=1, end=1.9, text='Γεια σου', words=[])]
+        data = self.j(self.client.put('/api/captions/' + pid, json=data))
+        return pid, data
 
     def test_karaoke_preserves_lines_style_and_backup_and_flags_failures(self):
         pid,before=self.karaoke_project()
@@ -119,9 +253,9 @@ class CaptionWorkflowTests(unittest.TestCase):
         self.assertEqual(after['cues'][1]['karaoke']['state'],'review')
         self.assertEqual(after['cues'][1]['words'],[])
         self.assertEqual(self.client.post(f'/api/captions/{pid}/karaoke',json=options).status_code,409)
-        saved=self.client.put('/api/captions/'+pid,json=after).json
+        saved = self.j(self.client.put('/api/captions/' + pid, json=after))
         self.assertEqual(saved['cues'],after['cues'])
-        restored=self.client.post(f'/api/captions/{pid}/restore-karaoke',json={'revision':saved['revision']}).json
+        restored = self.j(self.client.post(f'/api/captions/{pid}/restore-karaoke', json={'revision': saved['revision']}))
         self.assertEqual(restored['cues'],before['cues'])
 
     def test_karaoke_single_retry_override_and_cancel_are_transactional(self):
@@ -140,7 +274,7 @@ class CaptionWorkflowTests(unittest.TestCase):
             self.client.post(f'/api/captions/{pid}/karaoke',json={'revision':after['revision'],'index':1,'language':'el'})
             try:
                 self.assertTrue(entered.wait(5))
-                busy=self.client.get('/api/captions/'+pid).json
+                busy = self.j(self.client.get('/api/captions/' + pid))
                 self.assertEqual(busy['cues'],after['cues'])
                 self.assertEqual(self.client.put('/api/captions/'+pid,json=after).status_code,409)
                 job_process.cancel_all()
@@ -153,7 +287,7 @@ class CaptionWorkflowTests(unittest.TestCase):
     def test_karaoke_mixed_language_line_is_flagged_and_keeps_linebreak(self):
         pid,data=self.karaoke_project()
         data['cues'][0]['text']='Γεια\nhello'
-        data=self.client.put('/api/captions/'+pid,json=data).json
+        data = self.j(self.client.put('/api/captions/' + pid, json=data))
         result={'segments':[{'words':[dict(word='Γεια',start=.05,end=.3),dict(word=' hello',start=.4,end=.7)]}]}
         with patch('captions.align_caption_words',return_value=result) as align:
             self.client.post(f'/api/captions/{pid}/karaoke',json={'revision':data['revision'],'index':0,'language':'auto'})
@@ -177,8 +311,9 @@ class CaptionWorkflowTests(unittest.TestCase):
             payload={'audio':(io.BytesIO(audio.read_bytes()),'song.wav'),'shape':'square','visualizer':'true','color':'#123456'}
             if background: payload['background']=(io.BytesIO(background[0]),background[1])
             response=self.client.post('/api/captions',data=payload)
-            self.assertEqual(response.status_code,202,response.json)
-            pid=response.json['id'];data=self.wait(pid)
+            self.assertEqual(response.status_code,202,response.data)
+            pid = self.j(response)['id']
+            data = self.wait(pid)
             self.assertEqual((data['width'],data['height']),(1080,1080))
             self.assertAlmostEqual(data['duration'],2,delta=.1)
             self.assertTrue(data['composition']['visualizer'])
@@ -195,7 +330,8 @@ class CaptionWorkflowTests(unittest.TestCase):
 
     def test_alignment_failure_success_and_cancellation_preserve_saved_text(self):
         response=self.client.post('/api/captions',data={'video':(io.BytesIO(self.source.read_bytes()),'sample.mp4')})
-        pid=response.json['id'];data=self.wait(pid)
+        pid = self.j(response)['id']
+        data = self.wait(pid)
         data['cues']=[dict(start=0,end=1,text='Keep me',words=[])]
         self.client.put('/api/captions/'+pid,json=data)
         options=dict(text='Hello world',language='en',start=.2,end=1.8)
@@ -221,10 +357,36 @@ class CaptionWorkflowTests(unittest.TestCase):
             self.assertEqual(self.wait(pid,'error')['cues'],data['cues'])
         self.assertFalse((self.root/'library'/'Caption Projects'/pid/'alignment.wav').exists())
 
+    def test_correct_lyrics_endpoint_and_backup(self):
+        pid, data = self.karaoke_project()
+        data['cues'] = [
+            dict(start=0.2, end=1.0, text='Helo wrld', words=[]),
+            dict(start=1.2, end=2.0, text='Gudbye', words=[])
+        ]
+        self.client.put('/api/captions/' + pid, json=data)
+        correct_text = 'Hello world\nGoodbye'
+        res = self.client.post(f'/api/captions/{pid}/correct-lyrics', json=dict(text=correct_text, language='en'))
+        self.assertEqual(res.status_code, 202)
+        after = self.wait(pid)
+        self.assertEqual(after['timing'], 'aligned')
+        self.assertEqual(len(after['cues']), 2)
+        self.assertEqual(after['cues'][0]['text'], 'Hello world')
+        self.assertEqual(after['cues'][1]['text'], 'Goodbye')
+        self.assertEqual(after['cues'][0]['start'], 0.2)
+        self.assertEqual(after['cues'][0]['end'], 1.0)
+        # Verify backup was saved
+        self.assertIn('karaoke_backup', after)
+        self.assertEqual(after['karaoke_backup']['cues'][0]['text'], 'Helo wrld')
+        # Restore karaoke/lyrics backup
+        restore = self.client.post(f'/api/captions/{pid}/restore-karaoke', json=dict(revision=after['revision']))
+        self.assertEqual(restore.status_code, 200)
+        restored = self.j(restore)
+        self.assertEqual(restored['cues'][0]['text'], 'Helo wrld')
+
     def test_multilingual_karaoke_and_overrides(self):
         pid,data=self.karaoke_project()
         data['cues']=[dict(start=.1,end=.9,text='Bonjour mon amour',words=[]),dict(start=1,end=1.9,text='사랑해 hello',words=[])]
-        data=self.client.put('/api/captions/'+pid,json=data).json
+        data = self.j(self.client.put('/api/captions/' + pid, json=data))
         languages=[]
         def align(model,audio,text,language):
             languages.append(language)
@@ -263,11 +425,11 @@ class CaptionWorkflowTests(unittest.TestCase):
         self.assertTrue((folder/'pre-studio-project.json').is_file())
         self.assertEqual(self.client.post(f'/api/captions/{pid}/composition',data=dict(revision=before['revision'],settings=json.dumps(settings))).status_code,409)
         with self.client.get(f'/api/captions/{pid}/media/{after["preview"]}') as r: self.assertEqual(r.status_code,200)
-        duplicate=self.client.post(f'/api/captions/{pid}/duplicate',json=dict(revision=after['revision'])).json
+        duplicate = self.j(self.client.post(f'/api/captions/{pid}/duplicate', json=dict(revision=after['revision'])))
         self.assertNotEqual(duplicate['id'],pid)
         self.assertEqual(duplicate['cues'],after['cues'])
         self.assertTrue((folder.parent/duplicate['id']/duplicate['preview']).is_file())
-        restored=self.client.post(f'/api/captions/{pid}/restore-composition',json=dict(revision=after['revision'])).json
+        restored = self.j(self.client.post(f'/api/captions/{pid}/restore-composition', json=dict(revision=after['revision'])))
         self.assertEqual(restored['source'],before['source'])
         self.assertEqual(restored['cues'],before['cues'])
         self.assertEqual(restored['peaks'],before['peaks'])
@@ -286,7 +448,7 @@ class CaptionWorkflowTests(unittest.TestCase):
         self.assertEqual(after['studio']['assets']['background']['kind'],'image')
         folder=self.root/'library'/'Caption Projects'/pid
         (folder/after['studio']['assets']['background']['file']).unlink()
-        loaded=self.client.get('/api/captions/'+pid).json
+        loaded = self.j(self.client.get('/api/captions/' + pid))
         self.assertEqual(loaded['missing_assets'],['background'])
         response=self.client.post(f'/api/captions/{pid}/composition',data=dict(revision=after['revision'],settings=json.dumps(settings)))
         self.assertEqual(response.status_code,400)
@@ -361,20 +523,22 @@ class CaptionWorkflowTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
-    def wait(self,pid,state='ready'):
+    def wait(self, pid: str, state: str = 'ready') -> dict[str, Any]:
         for _ in range(200):
-            data=self.client.get('/api/captions/'+pid).json
-            if data['state']!='busy':
-                self.assertEqual(data['state'],state,data['status'])
+            res = self.client.get('/api/captions/' + pid)
+            data = res.json
+            if data and data.get('state') != 'busy':
+                self.assertEqual(data.get('state'), state, data.get('status'))
                 return data
             time.sleep(.05)
-        self.fail('Caption job timed out')
+        raise TimeoutError('Caption job timed out')
 
     def test_upload_save_conflict_transcribe_export_and_original_preserved(self):
         original=self.source.read_bytes()
         response=self.client.post('/api/captions',data={'video':(io.BytesIO(original),'sample.mp4')})
-        self.assertEqual(response.status_code,202,response.json)
-        pid=response.json['id'];data=self.wait(pid)
+        self.assertEqual(response.status_code,202,response.data)
+        pid = self.j(response)['id']
+        data = self.wait(pid)
         self.assertEqual((data['width'],data['height']),(320,240))
         self.assertTrue(data['peaks'])
         response=self.client.post(f'/api/captions/{pid}/transcribe',json={'language':'en'})
@@ -404,7 +568,8 @@ class CaptionWorkflowTests(unittest.TestCase):
 
     def test_cancelled_transcription_keeps_saved_captions(self):
         response=self.client.post('/api/captions',data={'video':(io.BytesIO(self.source.read_bytes()),'sample.mp4')})
-        pid=response.json['id'];data=self.wait(pid)
+        pid = self.j(response)['id']
+        data = self.wait(pid)
         payload={'revision':data['revision'],'cues':[dict(start=0,end=1,text='Keep this',words=[])],'style':DEFAULT_STYLE}
         self.assertEqual(self.client.put('/api/captions/'+pid,json=payload).status_code,200)
         entered, release = threading.Event(), threading.Event()
@@ -425,13 +590,14 @@ class CaptionWorkflowTests(unittest.TestCase):
 
     def test_restart_reports_interrupted_job_without_losing_captions(self):
         response=self.client.post('/api/captions',data={'video':(io.BytesIO(self.source.read_bytes()),'sample.mp4')})
-        pid=response.json['id'];data=self.wait(pid)
+        pid = self.j(response)['id']
+        data = self.wait(pid)
         data.update(state='busy',cues=[dict(start=0,end=1,text='Saved before restart',words=[])])
         location=self.root/'library'/'Caption Projects'/pid/'project.json'
         location.write_text(json.dumps(data),encoding='utf-8')
         restarted=Flask('restarted')
         register_captions(restarted,self.root/'library',lambda:None,lambda:None,lambda:None,lambda:self.model,lambda p:False)
-        data=restarted.test_client().get('/api/captions/'+pid).json
+        data = self.j(restarted.test_client().get('/api/captions/' + pid))
         self.assertEqual(data['state'],'error')
         self.assertIn('interrupted',data['status'])
         self.assertEqual(data['cues'][0]['text'],'Saved before restart')

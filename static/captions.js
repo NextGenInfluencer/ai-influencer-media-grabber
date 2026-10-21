@@ -15,7 +15,69 @@ const CaptionTiming = (() => {
             }
         }
     }
-    return {validate};
+    function visualizerBars(peaks, duration, timeSec, width, height, style={}) {
+        const rint = val => Math.floor(val + 0.5);
+        const mode = style.visualizer_style || 'spectrum';
+        const pos = style.visualizer_position || 'bottom';
+        const visH = Number(style.visualizer_height ?? 18);
+        const sens = Number(style.visualizer_sensitivity ?? 1.0);
+        const count = mode === 'spectrum' ? 36 : 48;
+        const pts = (Array.isArray(peaks) && peaks.length > 0) ? peaks : Array(64).fill(0.25);
+        const n = pts.length;
+        let maxP = 0.01;
+        for (const p of pts) if (Number(p) > maxP) maxP = Number(p);
+        const dur = Math.max(0.1, Number(duration || 1.0));
+        const t = Math.max(0.0, Math.min(dur, Number(timeSec || 0)));
+        const center = (t / dur) * (n - 1);
+        const bandH = height * (visH / 100.0);
+        const startX = width * 0.06;
+        const usableW = width * 0.88;
+        const stepX = usableW / count;
+        const barW = Math.max(2.0, stepX * (mode === 'spectrum' ? 0.65 : 0.75));
+        const rects = [];
+        for (let i = 0; i < count; i++) {
+            let level;
+            if (mode === 'spectrum') {
+                const idx0 = Math.max(0, Math.min(n - 1, rint(center)));
+                const idx1 = Math.max(0, Math.min(n - 1, rint(center + (i - count / 2.0) * 0.5)));
+                const idx2 = Math.max(0, Math.min(n - 1, rint(center + ((i % 7) - 3) * 1.5)));
+                const p0 = Number(pts[idx0]) / maxP;
+                const p1 = Number(pts[idx1]) / maxP;
+                const p2 = Number(pts[idx2]) / maxP;
+                const u = i / Math.max(1, count - 1);
+                const arch = 0.55 + 0.45 * Math.sin(u * Math.PI);
+                const ripple = 0.72 + 0.28 * Math.sin(t * (7.0 + (i % 5) * 1.3) + i * 0.65);
+                const raw = (0.5 * p0 + 0.3 * p1 + 0.2 * p2) * arch * ripple * sens;
+                level = p0 < 0.005 ? 0.04 : Math.min(1.0, Math.max(0.04, Math.sqrt(Math.max(0.0, raw))));
+            } else {
+                const span = Math.max(8.0, n * 0.04);
+                const offset = ((i / Math.max(1, count - 1)) - 0.5) * span;
+                const idx = Math.max(0, Math.min(n - 1, rint(center + offset)));
+                const p = Number(pts[idx]) / maxP;
+                const waveMod = 0.8 + 0.2 * Math.cos(t * 8.0 + i * 0.4);
+                const raw = p * waveMod * sens;
+                level = p < 0.005 ? 0.04 : Math.min(1.0, Math.max(0.04, Math.sqrt(Math.max(0.0, raw))));
+            }
+            const bh = Math.max(2.0, level * bandH);
+            const x1 = rint(startX + i * stepX);
+            const x2 = rint(x1 + barW);
+            let y1, y2;
+            if (mode === 'waveform' || pos === 'center') {
+                const midY = pos === 'bottom' ? (height - bandH * 0.5 - height * 0.02) : pos === 'top' ? (bandH * 0.5 + height * 0.02) : (height * 0.5);
+                y1 = rint(midY - bh * 0.5);
+                y2 = rint(midY + bh * 0.5);
+            } else if (pos === 'top') {
+                y1 = 0;
+                y2 = rint(bh);
+            } else {
+                y1 = rint(height - bh);
+                y2 = rint(height);
+            }
+            rects.push([x1, y1, x2, y2]);
+        }
+        return rects;
+    }
+    return {validate, visualizerBars};
 })();
 if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
 /* Local caption editor. All imported text is rendered through textContent. */
@@ -25,7 +87,9 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
     const $ = id => document.getElementById(id), video = $('video');
     const token = document.querySelector('meta[name="media-token"]').content;
     const copy = value => JSON.parse(JSON.stringify(value));
-    const styleKeys = ['font','size','color','highlight','outline','position','background','karaoke'];
+    const styleKeys = ['font','size','color','highlight','outline','position','background','karaoke','cumulative','word_pop','visualizer','visualizer_style','visualizer_position','visualizer_height','visualizer_sensitivity','visualizer_color'];
+    const styleChecks = ['background','karaoke','cumulative','word_pop','visualizer'];
+    const styleNumbers = ['size','outline','position','visualizer_height','visualizer_sensitivity'];
     let project = null, selected = -1, history = [], future = [], dirty = false;
     let saveTimer, pollTimer, saving = null, generation = 0, busy = false, dragging = false, pendingPreview = false;
     const say = (text, error = false) => {
@@ -124,7 +188,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         setBusy(project?.state==='busy');
         if(!project) return;
         for(const key of styleKeys) {
-            if($(key).type==='checkbox') $(key).checked=project.style[key]; else $(key).value=project.style[key];
+            if(styleChecks.includes(key)) $(key).checked=!!project.style[key]; else if(project.style[key]!==undefined) $(key).value=project.style[key];
         }
         $('saveStatus').textContent=dirty?'Unsaved changes':'All changes saved';
         $('timingNote').textContent=({
@@ -154,22 +218,42 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
             } catch(e) {say(e.message,true);setBusy(false);}
         },1000);
     }
+    function drawVisualizer() {
+        const vcanvas=$('stageVisualizer');
+        if(!project || !vcanvas) return;
+        const s=project.style||{};
+        const showVis=!!s.visualizer;
+        vcanvas.hidden=!showVis;
+        if(!showVis) return;
+        const w=Math.max(1,$('stage').clientWidth||600), h=Math.max(1,$('stage').clientHeight||380);
+        vcanvas.width=w; vcanvas.height=h;
+        const vctx=vcanvas.getContext('2d');
+        vctx.fillStyle=s.visualizer_color||'#bba6ff';
+        vctx.globalAlpha=0.85;
+        const rects=CaptionTiming.visualizerBars(project.peaks,project.duration,video.currentTime,w,h,s);
+        rects.forEach(([x1,y1,x2,y2])=>vctx.fillRect(x1,y1,Math.max(1,x2-x1),Math.max(1,y2-y1)));
+    }
     function drawCaption() {
         const box=$('caption');box.replaceChildren();
         if(!project) return;
+        drawVisualizer();
         const cue=project.cues.find(c=>c.start<=video.currentTime && c.end>video.currentTime);
         const s=project.style, h=$('stage').clientHeight;
-        Object.assign(box.style,{fontFamily:`"${s.font}",sans-serif`,fontSize:h*s.size/100+'px',color:s.color,
+        Object.assign(box.style,{fontFamily:`"${s.font}",Roboto,"Noto Sans KR",sans-serif`,fontSize:h*s.size/100+'px',color:s.color,
             top:s.position+'%',webkitTextStroke:`${2*h*s.outline/360}px black`});
-        $('playingCaption').textContent=cue ? 'Playing: '+cue.text+(s.karaoke&&!cue.words?.length?' · No word timings — use Add karaoke timing.':'') : '';
+        $('playingCaption').textContent=cue ? 'Playing: '+cue.text+((s.karaoke||s.cumulative||s.word_pop)&&!cue.words?.length?' · No word timings — use Add karaoke timing.':'') : '';
         if(!cue) return;
         const content=document.createElement('span');
-        content.style.background=s.background?'rgba(0,0,0,.65)':'transparent';
-        if(s.karaoke && cue.words?.length) {
+        content.style.background=s.background?'rgba(10,12,20,.78)':'transparent';
+        if(s.background) Object.assign(content.style,{padding:'.14em .45em',borderRadius:'.28em',boxDecorationBreak:'clone',webkitBoxDecorationBreak:'clone',boxShadow:'0 4px 16px rgba(0,0,0,.45)'});
+        if((s.karaoke || s.cumulative || s.word_pop) && cue.words?.length) {
             cue.words.forEach((w,i)=>{
                 if(i) content.append((cue.text.match(/\s+/g)||[])[i-1]||' ');
                 const span=document.createElement('span');span.textContent=w.text;
-                if(w.start<=video.currentTime && video.currentTime<w.end) span.style.color=s.highlight;
+                const active=w.start<=video.currentTime && video.currentTime<w.end;
+                const lit=s.cumulative ? video.currentTime>=w.start : (active && s.karaoke);
+                if(lit) span.style.color=s.highlight;
+                if(active && s.word_pop) Object.assign(span.style,{display:'inline-block',transform:'scale(1.15)',textShadow:`0 0 12px ${s.highlight}`});
                 content.append(span);
             });
         } else content.textContent=cue.text;
@@ -276,8 +360,8 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         $('createSong').disabled=true;
         try {await create(form);$('songDialog').close();} finally {$('createSong').disabled=false;}
     });
-    const compositionKeys=['shape','color','fit','x','y','blur','dim','overlay','opacity','zoom','start','end','offset','volume','fade_in','fade_out','background_volume','loop','background_start','background_duration','visualizer'];
-    const compositionChecks=['loop','visualizer'], compositionStrings=['shape','color','fit','overlay'];
+    const compositionKeys=['shape','color','fit','x','y','blur','dim','overlay','opacity','zoom','start','end','offset','volume','fade_in','fade_out','background_volume','loop','background_start','background_duration','visualizer','visualizer_style','visualizer_position','visualizer_height','visualizer_sensitivity','visualizer_color'];
+    const compositionChecks=['loop','visualizer'], compositionStrings=['shape','color','fit','overlay','visualizer_style','visualizer_position','visualizer_color'];
     function fillComposition(settings) {
         for(const key of compositionKeys) {const input=$('comp_'+key);if(compositionChecks.includes(key))input.checked=!!settings[key];else input.value=settings[key];}
     }
@@ -344,8 +428,20 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         }
         requestAnimationFrame(tick);
     }
-    for(const key of styleKeys) $(key).oninput=()=>edit(()=>{project.style[key]=$(key).type==='checkbox'?$(key).checked:$(key).type==='range'?Number($(key).value):$(key).value;},false);
-    const presets={clean:{font:'Arial',size:5,outline:2,background:false,karaoke:false,color:'#ffffff'},bold:{font:'Impact',size:6,outline:3,background:false,karaoke:false,color:'#ffffff'},lyrics:{font:'Georgia',size:4.5,outline:1,background:false,karaoke:false,color:'#ffffff'},karaoke:{font:'Verdana',size:5,outline:2,karaoke:true,highlight:'#ffdc55'}};
+    for(const key of styleKeys) {
+        const updateStyle=()=>edit(()=>{project.style[key]=styleChecks.includes(key)?$(key).checked:styleNumbers.includes(key)?Number($(key).value):$(key).value;},false);
+        $(key).oninput=updateStyle; $(key).onchange=updateStyle;
+    }
+    const presets={
+        neon_karaoke:{font:'Montserrat',size:5.5,outline:2.5,position:82,background:false,karaoke:true,cumulative:true,word_pop:true,color:'#ffffff',highlight:'#00f5d4',visualizer:true,visualizer_style:'spectrum',visualizer_position:'bottom',visualizer_height:18,visualizer_sensitivity:1.2,visualizer_color:'#00f5d4'},
+        cinematic_clean:{font:'Roboto',size:4.5,outline:1.5,position:88,background:true,karaoke:true,cumulative:false,word_pop:false,color:'#f8f9fa',highlight:'#ffd166',visualizer:false},
+        bold_pop:{font:'Montserrat',size:6.5,outline:3.5,position:78,background:false,karaoke:true,cumulative:false,word_pop:true,color:'#ffffff',highlight:'#ffdc55',visualizer:true,visualizer_style:'spectrum',visualizer_position:'bottom',visualizer_height:20,visualizer_sensitivity:1.3,visualizer_color:'#ffdc55'},
+        minimalist_lyric:{font:'Roboto',size:4.25,outline:1,position:85,background:false,karaoke:true,cumulative:true,word_pop:false,color:'#e9ecef',highlight:'#bba6ff',visualizer:true,visualizer_style:'waveform',visualizer_position:'bottom',visualizer_height:14,visualizer_sensitivity:1.0,visualizer_color:'#bba6ff'},
+        clean:{font:'Arial',size:5,outline:2,background:false,karaoke:false,cumulative:false,word_pop:false,color:'#ffffff'},
+        bold:{font:'Impact',size:6,outline:3,background:false,karaoke:false,cumulative:false,word_pop:false,color:'#ffffff'},
+        lyrics:{font:'Georgia',size:4.5,outline:1,background:false,karaoke:false,cumulative:false,word_pop:false,color:'#ffffff'},
+        karaoke:{font:'Verdana',size:5,outline:2,karaoke:true,cumulative:false,word_pop:false,highlight:'#ffdc55'}
+    };
     document.querySelectorAll('[data-preset]').forEach(b=>b.onclick=()=>{edit(()=>Object.assign(project.style,presets[b.dataset.preset]));refresh();});
     $('saveStyle').onclick=act(()=>{if(project){localStorage.setItem('captionStyle',JSON.stringify(project.style));say('Style saved in this browser.');}});
     $('loadStyle').onclick=act(()=>{const s=JSON.parse(localStorage.getItem('captionStyle')||'null');if(!s)throw Error('Save a style first.');edit(()=>{project.style=s;});refresh();});
@@ -385,8 +481,41 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         dest.push(snapshot());Object.assign(project,source.pop());selected=Math.min(selected,project.cues.length-1);changed();refresh();
     }
     $('undo').onclick=()=>undo();$('redo').onclick=()=>undo(true);
-    $('paste').onclick=()=>{if(project){$('alignStart').value=0;$('alignEnd').value=project.duration.toFixed(3);$('alignLanguage').value=$('language').value||'en';$('lyricsDialog').showModal();}};
-    $('useCurrentLyrics').onclick=()=>{$('lyrics').value=project.cues.map(c=>c.text).join('\n');};
+    function saveLyricsDraft() {
+        if(project) storeDraft('lyrics', {text:$('lyrics').value, language:$('alignLanguage').value, start:$('alignStart').value, end:$('alignEnd').value});
+    }
+    $('lyrics').oninput=saveLyricsDraft;
+    $('alignLanguage').onchange=saveLyricsDraft;
+    $('alignStart').onchange=saveLyricsDraft;
+    $('alignEnd').onchange=saveLyricsDraft;
+    $('clearLyricsDraft').onclick=()=>{if(project)storeDraft('lyrics',null);$('lyrics').value='';};
+    $('paste').onclick=()=>{
+        if(!project)return;
+        $('alignStart').value=0;
+        $('alignEnd').value=project.duration.toFixed(3);
+        $('alignLanguage').value=$('language').value||'en';
+        const draft=readDraft('lyrics');
+        if(draft&&draft.text) {
+            $('lyrics').value=draft.text;
+            if(draft.language)$('alignLanguage').value=draft.language;
+            if(draft.start!==undefined)$('alignStart').value=draft.start;
+            if(draft.end!==undefined)$('alignEnd').value=draft.end;
+        }
+        $('lyricsDialog').showModal();
+    };
+    $('useCurrentLyrics').onclick=()=>{
+        $('lyrics').value=project.cues.map(c=>c.text).join('\n');
+        saveLyricsDraft();
+    };
+    $('correctLyrics').onclick=act(async()=>{
+        if(!$('lyrics').value.trim())throw Error('Paste your correct lyrics first.');
+        if(!project.cues?.length)throw Error('Transcribe the audio or import subtitles first so we have line timings to match.');
+        if(!confirm('Replace current caption text with your lyrics? Line timings will be preserved; you can restore the previous version if needed.'))return;
+        const options={text:$('lyrics').value,language:$('alignLanguage').value};
+        $('correctLyrics').disabled=true;
+        try {checkpoint();await job('correct-lyrics',options);$('lyricsDialog').close();}
+        finally {$('correctLyrics').disabled=false;}
+    });
     $('alignLyrics').onclick=act(async()=>{
         if(!$('lyrics').value.trim())throw Error('Paste the lyrics sung in this video first.');
         if(project.cues.length&&!confirm('Replace the current captions with aligned lyrics? You can undo this after alignment.'))return;
@@ -453,6 +582,12 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
     async function checkRestart() {
         try {const health=await api('/api/health_check');$('restartNotice').hidden=!health.needs_restart;} catch {}
     }
+    $('restartNow').onclick=act(async()=>{
+        await save();
+        say('Restarting local app engine…');
+        await api('/api/restart','POST',{});
+        setTimeout(()=>location.reload(),2500);
+    });
     checkRestart();setInterval(checkRestart,30000);
     setBusy(false);tick();
     (async()=>{

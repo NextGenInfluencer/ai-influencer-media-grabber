@@ -1,6 +1,6 @@
 # Free Creator Studio — implementation and resume plan
 
-Saved 21 October 2026. Phases 1 and 2 implemented in the source checkout; later phases remain planned. No scheduled run has been created.
+Saved 21 October 2026. Phases 1, 2 and 3 implemented in the source checkout; later phases in progress. No scheduled run has been created.
 
 ## Product goal
 
@@ -117,3 +117,7 @@ Implemented version-1 composition schema with immutable local assets, background
 Delivery boundary: composition changes use Apply & preview (rendered proxy), not instant multitrack playback. Image duration matches the output; a shorter background holds its last frame. Arbitrary multitrack clip sequencing remains Phase 5. Background sources are uploads and the existing local gallery; provider search remains Phase 4. Generated versions remain on disk. Existing v2.5.0 installers have not been republished.
 
 Validation: real FFmpeg composition/export checks, browser library background replacement and project duplication, French/Korean glyph rendering, real Whisper language detection plus alignment on generated English speech, and multilingual mocked alignment tests. French/Korean song timing accuracy still needs review with actual vocal material; no claim of listening-certified accuracy.
+
+## Phase 3 implementation status
+
+Implemented bundled multilingual Google Fonts (`Montserrat`, `Roboto`, `Noto Sans KR`, alongside `Oswald`, `Lobster`, `Bangers`) with OFL licenses, verified for Greek, Korean and French coverage across browser preview and FFmpeg/libass exports. Added cumulative karaoke highlighting, active word pop (115% scale), and high-contrast boxed captions. Added audio-reactive visualizer controls (Spectrum Bars vs. Waveform, Bottom/Center/Top position, height, sensitivity, and colour) with identical deterministic bar geometry between the browser `<canvas>` preview (`CaptionTiming.visualizerBars`) and ASS/FFmpeg export (`visualizer_bars`), plus composition `showfreqs`/`showwaves` support. Added 1-click aesthetic music-video presets (`Neon Karaoke`, `Cinematic Clean`, `Bold Pop`, `Minimalist Lyric`), Needleman-Wunsch lyric-to-transcription matching (`Correct transcription with my lyrics`), and localStorage lyric draft persistence.
