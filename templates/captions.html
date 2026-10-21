@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="media-token" content="{{ api_token }}">
 <title>Captions & Video Studio — Media Grabber</title>
-<link rel="stylesheet" href="/static/captions.css?v=capcut3">
-<script src="/static/captions.js?v=capcut3" defer></script>
+<link rel="stylesheet" href="/static/captions.css?v=capcut4">
+<script src="/static/captions.js?v=capcut4" defer></script>
 </head>
 <body class="capcutStudio">
 <header class="capcutHeader">
@@ -61,7 +61,7 @@
         </button>
         <button type="button" class="dockTab" data-dock="stock">
           <span class="dockIcon">🌐</span>
-          <span>Pixabay</span>
+          <span>Free Videos</span>
         </button>
         <button type="button" class="dockTab" data-dock="lyrics">
           <span class="dockIcon">📝</span>
@@ -113,7 +113,7 @@
                 <button id="grabClipBtn" class="primary" type="button" title="Download TikTok/Reel without watermark and add to your video clips">⬇️ Grab Clip</button>
               </div>
               <div class="row" style="margin-bottom:8px;">
-                <button id="seqBrowseStock" class="primary" type="button">🌐 + Add from Pixabay</button>
+                <button id="seqBrowseStock" class="primary" type="button">🌐 + Browse Free Videos (Mixkit / Shorts / Pixabay)</button>
                 <label class="upload">➕ Upload Clips<input id="seqUploadInput" type="file" multiple accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,.mkv,.webm"></label>
               </div>
               <div class="row" style="margin-bottom:8px;">
@@ -129,7 +129,7 @@
             </div>
             <div class="row" style="margin-top:8px;">
               <button id="editComposition" type="button">🎞️ Canvas &amp; B-Roll Settings</button>
-              <button id="openStockBrowser" type="button">🌐 Browse Pixabay</button>
+              <button id="openStockBrowser" type="button">🌐 Browse Free Videos</button>
             </div>
           </div>
 
@@ -151,7 +151,7 @@
               <label>Initial background (optional)<input id="songBackground" type="file" accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,.mkv,.webm" aria-label="Background file"></label>
               <div class="row">
                 <select id="songLibrary" aria-label="Background from library" style="flex:1;"><option value="">Use colour / uploaded background</option></select>
-                <button id="browseStockSong" type="button">🌐 Pixabay</button>
+                <button id="browseStockSong" type="button">🌐 Free Videos</button>
               </div>
               <p id="songStockNotice" class="hint" hidden></p>
               <label><input id="songVisualizer" type="checkbox"> Add audio-reactive waveform</label>
@@ -163,10 +163,10 @@
           </details>
         </section>
 
-        <!-- PANE 2: PIXABAY STOCK BROWSER (INLINE, NO POPUP!) -->
+        <!-- PANE 2: FREE VIDEOS & STOCK BROWSER (INLINE, NO POPUP!) -->
         <section class="dockPane" data-dock-pane="stock" id="stockDialog">
           <div class="paneHeader">
-            <h2>🌐 Pixabay &amp; Stock Videos</h2>
+            <h2>🌐 Free Videos (Mixkit · Shorts · Pixabay)</h2>
           </div>
           <p id="stockStatus" class="dialogStatus" role="status"></p>
           <div class="subCard stackForm">
@@ -178,22 +178,28 @@
             <p class="hint" style="margin-top:2px;">Downloads any TikTok, Instagram Reel, or YouTube Short without watermark and adds it directly to your music video sequence (your song replaces the clip's audio).</p>
           </div>
           <div class="subCard stackForm">
-            <h3>🌐 Free Stock Dance &amp; Aesthetic Clips</h3>
+            <h3>1. Choose Free Video Source</h3>
+            <div class="filterPills" id="stockProviderPills">
+              <button type="button" class="active" data-stock-provider="mixkit">🔥 Mixkit HD Stock (Free · No Key)</button>
+              <button type="button" data-stock-provider="youtube">📱 YouTube Shorts / Google (Free)</button>
+              <button type="button" data-stock-provider="pixabay">🌐 Pixabay</button>
+            </div>
+            <h3 style="margin-top:6px;">2. 1-Click Dance &amp; Vibe Categories</h3>
             <div class="filterPills">
-              <button type="button" data-stock-chip="woman dancing">💃 Dance</button>
-              <button type="button" data-stock-chip="street dance hip hop">🔥 Street Dance</button>
-              <button type="button" data-stock-chip="nightclub party dancing">🪩 Club &amp; Party</button>
-              <button type="button" data-stock-chip="contemporary dance">💃 Modern Dance</button>
-              <button type="button" data-stock-chip="neon lights girl">✨ Neon Aesthetic</button>
-              <button type="button" data-stock-chip="car night drive">🌆 Night Drive</button>
-              <button type="button" data-stock-chip="dj concert crowd">🎤 Concert / DJ</button>
-              <button type="button" data-stock-chip="sunset beach silhouette">🌊 Sunset Vibe</button>
+              <button type="button" data-stock-chip="dance">💃 Dance</button>
+              <button type="button" data-stock-chip="hip hop dance">🔥 Street / Hip-Hop</button>
+              <button type="button" data-stock-chip="party dance">🪩 Club &amp; Party</button>
+              <button type="button" data-stock-chip="modern dance">💃 Modern Dance</button>
+              <button type="button" data-stock-chip="neon lights">✨ Neon Aesthetic</button>
+              <button type="button" data-stock-chip="night drive">🌆 Night Drive</button>
+              <button type="button" data-stock-chip="dj concert">🎤 Concert / DJ</button>
+              <button type="button" data-stock-chip="sunset beach">🌊 Sunset Vibe</button>
             </div>
             <div class="row">
               <label>Source
                 <select id="stockProvider">
-                  <option value="youtube" selected>📱 YouTube Shorts / Google (Free · No Key)</option>
-                  <option value="mixkit">🔥 Mixkit HD Stock (Free · No Key)</option>
+                  <option value="mixkit" selected>🔥 Mixkit HD Stock (Free · No Key)</option>
+                  <option value="youtube">📱 YouTube Shorts / Google (Free · No Key)</option>
                   <option value="pixabay">🌐 Pixabay (API Key)</option>
                   <option value="pexels">🌐 Pexels (API Key)</option>
                 </select>

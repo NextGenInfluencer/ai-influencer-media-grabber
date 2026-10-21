@@ -559,7 +559,13 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
     function switchDock(name) {
         document.querySelectorAll('[data-dock]').forEach(b=>b.classList.toggle('active',b.dataset.dock===name));
         document.querySelectorAll('[data-dock-pane]').forEach(p=>p.classList.toggle('active',p.dataset.dockPane===name));
-        if(name==='stock') syncStockKeyStatus();
+        if(name==='stock') {
+            syncStockKeyStatus();
+            if($('stockResults') && !$('stockResults').children.length) {
+                if(!$('stockQuery').value.trim()) $('stockQuery').value='dance';
+                runStockSearch().catch(()=>{});
+            }
+        }
     }
     document.querySelectorAll('[data-dock]').forEach(b=>{b.onclick=()=>switchDock(b.dataset.dock);});
     document.querySelectorAll('[data-insp]').forEach(b=>{
@@ -724,6 +730,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
     async function syncStockKeyStatus() {
         try {
             const prov=$('stockProvider').value;
+            document.querySelectorAll('[data-stock-provider]').forEach(b=>b.classList.toggle('active',b.dataset.stockProvider===prov));
             if(prov==='youtube'||prov==='mixkit') {
                 $('stockKeySummary').textContent=`✅ No API Key Needed (${prov==='youtube'?'YouTube Shorts / Google':'Mixkit HD Stock'} is free)`;
                 if($('stockKeyDetails')) $('stockKeyDetails').open=false;
@@ -744,6 +751,10 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         drawSequenceLists();
         syncStockKeyStatus();
         $('stockDialog').showModal();
+        if($('stockResults') && !$('stockResults').children.length) {
+            if(!$('stockQuery').value.trim()) $('stockQuery').value='dance';
+            runStockSearch().catch(()=>{});
+        }
     }
     $('browseStockSong').onclick=()=>openStockDialog('song');
     $('browseStockComp').onclick=()=>openStockDialog('composition');
@@ -841,6 +852,14 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
     }
     $('stockSearch').onclick=act(runStockSearch);
     $('stockQuery').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('stockSearch').click();}};
+    document.querySelectorAll('[data-stock-provider]').forEach(b=>{
+        b.onclick=()=>{
+            $('stockProvider').value=b.dataset.stockProvider;
+            syncStockKeyStatus();
+            if(!$('stockQuery').value.trim()) $('stockQuery').value='dance';
+            runStockSearch().catch(e=>say(e.message,true));
+        };
+    });
     document.querySelectorAll('[data-stock-chip]').forEach(b=>{
         b.onclick=()=>{
             $('stockQuery').value=b.dataset.stockChip;
