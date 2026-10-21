@@ -1,7 +1,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='reference_prep.css') }}">
 <dialog id="referenceDialog" aria-labelledby="referenceTitle">
     <div class="ref-heading">
-        <div><h2 id="referenceTitle">Prepare for Kling</h2><p>Reference video → first frame → your Nano Banana edit → matched reference set</p></div>
+        <div><h2 id="referenceTitle">Prepare for Kling &amp; Carousel Studio</h2><p>Reference video → first frame / contact sheet → Nano Banana edit → matched reference set · Plus multi-slide Carousel Studio</p></div>
         <button type="button" id="referenceClose" aria-label="Close reference preparation">Close</button>
     </div>
     <div class="ref-body">
@@ -22,7 +22,10 @@
             <section>
                 <h3>2. Replace the character in Nano Banana</h3>
                 <p>Save the extracted PNG and use it as your editing reference. Keep the pose, framing, and image dimensions aligned.</p>
-                <a id="referenceFrameDownload" hidden download="first_frame.png">Save first_frame.png</a>
+                <div class="ref-actions">
+                    <a id="referenceFrameDownload" hidden download="first_frame.png">Save first_frame.png</a>
+                    <a id="referenceSheetDownload" hidden download="contact_sheet.png">Save contact_sheet.png</a>
+                </div>
                 <h3>3. Add your edited influencer image</h3>
                 <input id="referenceImageInput" type="file" accept="image/png,image/jpeg,image/webp" disabled>
                 <label class="ref-check"><input id="referenceResizeImage" type="checkbox"> Resize to match if the aspect ratio is the same</label>
@@ -34,10 +37,42 @@
             </section>
         </div>
         <p id="referenceStatus" role="status" aria-live="polite">Choose a video. The first frame is selected by default.</p>
+        <section id="referenceCandidatesSection" hidden>
+            <h3>Contact sheet &amp; candidate frame selector (click any frame to re-cut reference start)</h3>
+            <div id="referenceCandidates" class="ref-candidates"></div>
+        </section>
         <div class="ref-columns ref-comparison">
             <figure><figcaption>Original reference frame</figcaption><img id="referenceOriginalImage" alt="First frame of the prepared reference video" hidden></figure>
             <figure><figcaption>Your influencer image</figcaption><img id="referenceEditedImage" alt="Your edited influencer reference" hidden></figure>
         </div>
+        <details id="carouselWorkspace" style="margin-top:20px;border-top:1px solid #3f3f46;padding-top:16px">
+            <summary style="cursor:pointer;font-weight:700;color:#d8b4fe">Carousel &amp; Still Image Studio (Reorder slides, shared canvas presets &amp; text overlays)</summary>
+            <div class="ref-columns" style="margin-top:12px">
+                <section>
+                    <label>Saved carousels <select id="carouselProjects"><option value="">New carousel</option></select></label>
+                    <label>Upload photos (1–30 PNG/JPG/WebP) <input id="carouselInput" type="file" accept="image/png,image/jpeg,image/webp" multiple></label>
+                    <label>Canvas preset <select id="carouselAspect">
+                        <option value="portrait">Portrait 4:5 (1080×1350 · Instagram)</option>
+                        <option value="square">Square 1:1 (1080×1080)</option>
+                        <option value="story">Story / Reel 9:16 (1080×1920)</option>
+                        <option value="landscape">Landscape 16:9 (1920×1080)</option>
+                    </select></label>
+                    <button type="button" id="carouselCreate" class="ref-primary">Create carousel</button>
+                </section>
+                <section>
+                    <label>Image sizing <select id="carouselFit"><option value="fill">Fill / crop</option><option value="fit">Fit whole image</option></select></label>
+                    <label>Safe margin (0–15%) <input id="carouselMargin" type="number" min="0" max="15" step="1" value="0"></label>
+                    <label>Background colour <input id="carouselBg" type="color" value="#141526"></label>
+                    <label>Shared text overlay <input id="carouselCaption" type="text" maxlength="300" placeholder="Optional caption across slides"></label>
+                    <div class="ref-actions">
+                        <button type="button" id="carouselApply" disabled>Apply shared style</button>
+                        <a id="carouselExport" class="ref-primary" hidden>Export ordered carousel (.zip)</a>
+                    </div>
+                </section>
+            </div>
+            <p id="carouselStatus" role="status">Upload photos to build an ordered carousel with consistent aspect ratios and text overlays.</p>
+            <div id="carouselSlides" class="ref-candidates"></div>
+        </details>
     </div>
 </dialog>
 <script src="{{ url_for('static', filename='reference_prep.js') }}"></script>

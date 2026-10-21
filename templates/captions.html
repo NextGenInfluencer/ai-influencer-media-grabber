@@ -2,7 +2,7 @@
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="media-token" content="{{ api_token }}"><title>Captions & Lyrics — Media Grabber</title>
-<link rel="stylesheet" href="/static/captions.css"><script src="/static/captions.js?v=phase3-1" defer></script></head>
+<link rel="stylesheet" href="/static/captions.css"><script src="/static/captions.js?v=phase4-1" defer></script></head>
 <body>
 <header><a href="/">← Studio</a><div><h1>Captions & Lyrics</h1><small>Your words. Your timing. Your style.</small></div><span id="saveStatus" role="status">Open a video to begin</span><button id="save">Save now</button></header>
 <main>
@@ -14,7 +14,7 @@
 <select id="projects" aria-label="Saved project"><option value="">Saved projects…</option></select>
 <button id="reload">Reload project</button><button id="duplicateProject">Duplicate project</button><button id="recoverEdits">Recover unsaved captions</button>
 </section>
-<section class="panel" id="compositionPanel"><div class="toolbar"><h2>Background & audio</h2><button id="editComposition">Edit composition</button><button id="restoreComposition">Restore previous composition</button></div><p id="compositionSummary" class="hint">Open a project to edit its background and audio.</p><p class="hint">Original media stays separate from your edits. Apply settings to prepare a synchronized preview. Lyric styling updates live.</p></section>
+<section class="panel" id="compositionPanel"><div class="toolbar"><h2>Background & audio</h2><button id="editComposition">Edit composition</button><button id="openStockBrowser">Browse stock backgrounds</button><button id="restoreComposition">Restore previous composition</button></div><p id="compositionSummary" class="hint">Open a project to edit its background and audio.</p><p class="hint">Original media stays separate from your edits. Apply settings to prepare a synchronized preview. Lyric styling updates live.</p></section>
 <p id="status" role="status">Open a video, then transcribe its audio or add your own lyrics.</p>
 <div class="workspace">
 <section class="panel preview">
@@ -44,8 +44,8 @@
 </section>
 </div>
 <section class="panel">
-<div class="toolbar"><h2>Words & timing</h2><button id="undo">Undo</button><button id="redo">Redo</button><label>Zoom <input id="zoom" type="range" min="1" max="20" value="1"></label><span class="hint">Drag a block to move it; drag its edges to resize.</span></div>
-<div id="timelineScroll"><div id="timeline"><canvas id="waveform"></canvas><div id="blocks"></div><div id="playhead"></div></div></div>
+<div class="toolbar"><h2>Multitrack & word timing</h2><button id="undo">Undo</button><button id="redo">Redo</button><label>Zoom <input id="zoom" type="range" min="1" max="20" value="1"></label><label><input id="snapTimeline" type="checkbox" checked> Snap</label><span class="hint">Video/B-Roll, Audio & Captions tracks · Drag a block to move; drag edges to trim.</span></div>
+<div id="timelineScroll"><div id="timeline"><div id="videoTrackLane" aria-label="Video and B-roll track"></div><canvas id="waveform"></canvas><div id="blocks"></div><div id="playhead"></div></div></div>
 <div class="toolbar"><select id="language" aria-label="Transcription language"><option value="">Auto language</option>{% for code, label in languages.items() %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</select><button id="transcribe">Auto-transcribe</button><button id="paste">Paste lyrics</button><label class="upload">Import SRT / LRC<input id="subtitleFile" type="file" accept=".srt,.lrc"></label><button id="add">Add line here</button><label>Shift all (seconds)<input id="shift" type="number" value="0" step=".1"></label><button id="shiftAll">Apply shift</button></div>
 <div class="toolbar"><button id="karaokeAll" class="primary">Add karaoke timing to all subtitles</button><label>Alignment language<select id="karaokeLanguage"><option value="auto">Detect per line</option><option value="en-fr">English + French</option><option value="en-ko">Korean + English</option><option value="en-fr-ko">English + French + Korean</option>{% for code, label in languages.items() %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</select></label><button id="estimateMissing">Estimate missing timings</button><button id="nextReview">Next line to review</button><button id="restoreKaraoke">Restore previous karaoke version</button></div><p id="karaokeSummary" class="hint" role="status"></p><p class="hint">Adds word timings without moving your subtitle lines. Review singing timings even when no issue is flagged. Mixed-language modes detect each line from its audio where the script is ambiguous. Short or bilingual lines can be misidentified: choose a single language and retry that line when needed. Korean highlighting follows space-separated words. French/English switches within a line still need review.</p>
 <p id="timingNote" class="hint">Automatic timings should be reviewed, especially for singing.</p>
@@ -56,17 +56,19 @@
 <details><summary>Word timings for karaoke</summary><p class="hint">Editing line text clears old word timings. Estimated timings divide the line evenly; adjust them while listening.</p><button id="estimateWords">Estimate word timings</button><div id="words"></div></details>
 </div></div>
 </section>
-<section class="panel exports"><h2>Finish your video</h2><button id="renderCheck">Render 5-second check</button><button id="export" class="primary">Export captioned MP4</button><button id="srt">Download SRT</button><button id="stop">Stop processing</button><div id="downloads"></div></section>
+<section class="panel exports"><h2>Finish your video</h2><label>Quality<select id="renderQuality"><option value="standard">Standard HD (1080p)</option><option value="high">Studio High Quality (CRF 15 · 320k)</option><option value="draft">Fast Proxy / Draft (720p)</option></select></label><button id="renderCheck">Render 5-second check</button><button id="export" class="primary">Export captioned MP4</button><button id="srt">Download SRT</button><button id="stop">Stop processing</button><div id="downloads"></div></section>
 </main>
 <dialog id="lyricsDialog"><h2>Paste & sync lyrics</h2><p class="dialogStatus error" role="status"></p><p>One caption per line. Paste only the words sung in the selected audio range, including repeated choruses. Standalone [Verse] and [Chorus] labels are ignored during syncing.</p><div class="toolbar"><button id="useCurrentLyrics">Use current caption text</button><button id="clearLyricsDraft" class="hint">Clear saved lyrics</button></div><textarea id="lyrics" rows="9" maxlength="50000" placeholder="Paste your lyrics here" aria-label="Lyrics"></textarea><div class="row"><label>Language<select id="alignLanguage">{% for code, label in languages.items() %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</select></label><label>From (seconds)<input id="alignStart" type="number" min="0" step=".01"></label><label>To (seconds)<input id="alignEnd" type="number" min="0" step=".01"></label></div><p class="hint">"Correct transcription with my lyrics" matches your pasted lyrics directly to the current transcription's line timings, replacing words with your exact lyrics while preserving reliable audio timings. "Sync lyrics to audio" runs audio alignment using the local AI Pack. Manual estimates work without AI.</p><div class="row"><button id="cancelLyrics">Cancel</button><button id="applyLyrics">Use manual estimates</button><button id="correctLyrics" class="primary">Correct transcription with my lyrics</button><button id="alignLyrics" class="primary">Sync lyrics to audio</button></div></dialog>
 <dialog id="renderDialog"><h2>Rendered preview</h2><video id="renderVideo" controls></video><button id="closeRender">Close preview</button></dialog>
-<dialog id="songDialog"><h2>Create a music video</h2><p class="dialogStatus error" role="status"></p><p>Choose a song and background. After preparing the video, add lyrics and style them with the live preview.</p><label>Song<input id="songFile" type="file" accept=".mp3,.wav,.m4a,.flac,.ogg"></label><div class="row"><label>Format<select id="songShape"><option value="portrait">Portrait · Reels / TikTok / Shorts</option><option value="square">Square</option><option value="landscape">Landscape · YouTube</option></select></label><label>Background colour<input id="songColor" type="color" value="#141526"></label></div><p>Optional photo or looping video background (fills the frame with a centre crop):</p><input id="songBackground" type="file" accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,.mkv,.webm" aria-label="Background file"><select id="songLibrary" aria-label="Background from library"><option value="">Use colour / uploaded background</option></select><p class="hint">An uploaded background takes priority over the library choice. Background audio is replaced by your song.</p><label><input id="songVisualizer" type="checkbox"> Add an audio-reactive waveform along the bottom</label><p class="hint">Up to 20 minutes. Your originals are retained. Use Background & audio after creation to change the composition while keeping your lyrics.</p><p class="hint">Find backgrounds: <a href="https://www.pexels.com/videos/" target="_blank" rel="noopener noreferrer">Pexels</a> · <a href="https://pixabay.com/videos/" target="_blank" rel="noopener noreferrer">Pixabay</a>. Download a clip there, then choose it above. Check the asset’s usage terms.</p><div class="row"><button id="cancelSong">Cancel</button><button id="createSong" class="primary">Create video</button></div></dialog>
+<dialog id="songDialog"><h2>Create a music video</h2><p class="dialogStatus error" role="status"></p><p>Choose a song and background. After preparing the video, add lyrics and style them with the live preview.</p><label>Song<input id="songFile" type="file" accept=".mp3,.wav,.m4a,.flac,.ogg"></label><div class="row"><label>Format<select id="songShape"><option value="portrait">Portrait · Reels / TikTok / Shorts</option><option value="square">Square</option><option value="landscape">Landscape · YouTube</option></select></label><label>Background colour<input id="songColor" type="color" value="#141526"></label></div><p>Optional photo or looping video background (fills the frame with a centre crop):</p><input id="songBackground" type="file" accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,.mkv,.webm" aria-label="Background file"><div class="row"><select id="songLibrary" aria-label="Background from library"><option value="">Use colour / uploaded background</option></select><button id="browseStockSong" type="button">Search Pexels / Pixabay</button></div><p id="songStockNotice" class="hint" hidden></p><p class="hint">An uploaded background takes priority over the library choice. Background audio is replaced by your song.</p><label><input id="songVisualizer" type="checkbox"> Add an audio-reactive waveform along the bottom</label><p class="hint">Up to 20 minutes. Your originals are retained. Use Background & audio after creation to change the composition while keeping your lyrics.</p><p class="hint">Find backgrounds in-app or visit <a href="https://www.pexels.com/videos/" target="_blank" rel="noopener noreferrer">Pexels</a> · <a href="https://pixabay.com/videos/" target="_blank" rel="noopener noreferrer">Pixabay</a>. Check the asset’s usage terms.</p><div class="row"><button id="cancelSong">Cancel</button><button id="createSong" class="primary">Create video</button></div></dialog>
 <dialog id="compositionDialog"><h2>Background & audio</h2><p class="dialogStatus error" role="status"></p><p class="hint">Settings are remembered as a local draft. Apply prepares a new preview and keeps a previous version you can restore. File selections must be chosen again after closing the app.</p>
 <div class="compositionGrid">
 <fieldset><legend>Canvas & background</legend>
 <label>Format<select id="comp_shape"><option value="portrait">Portrait 9:16</option><option value="landscape">Landscape 16:9</option><option value="square">Square 1:1</option></select></label>
 <label>Background file<input id="compBackground" type="file" accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,.mkv,.webm"></label>
 <label>From library<select id="compLibrary"><option value="">Keep current background</option></select></label>
+<button id="browseStockComp" type="button">Search Pexels / Pixabay stock</button>
+<p id="compStockNotice" class="hint" hidden></p>
 <label><input id="compClear" type="checkbox"> Use a plain colour instead</label>
 <label>Canvas colour<input id="comp_color" type="color"></label>
 <label>Image sizing<select id="comp_fit"><option value="fill">Fill / crop</option><option value="fit">Fit whole image</option></select></label>
@@ -77,9 +79,30 @@
 <label>Tint colour<input id="comp_overlay" type="color"></label>
 <label>Tint strength (0–1)<input id="comp_opacity" type="number" min="0" max="1" step=".05"></label>
 <label>Slow zoom (0–0.2)<input id="comp_zoom" type="number" min="0" max=".2" step=".01"></label>
+<label>Keyframe end X (%)<input id="comp_keyframe_end_x" type="number" min="0" max="100"></label>
+<label>Keyframe end Y (%)<input id="comp_keyframe_end_y" type="number" min="0" max="100"></label>
+<label>Brightness (-0.5–0.5)<input id="comp_brightness" type="number" min="-.5" max=".5" step=".05"></label>
+<label>Contrast (0.5–2)<input id="comp_contrast" type="number" min=".5" max="2" step=".05"></label>
+<label>Saturation (0–3)<input id="comp_saturation" type="number" min="0" max="3" step=".1"></label>
+<label>Background speed (0.25–2×)<input id="comp_background_speed" type="number" min=".25" max="2" step=".05"></label>
+<label>Video fade-in transition (s)<input id="comp_transition_in" type="number" min="0" max="10" step=".1"></label>
+<label>Video fade-out transition (s)<input id="comp_transition_out" type="number" min="0" max="10" step=".1"></label>
 <label><input id="comp_loop" type="checkbox"> Loop background video</label>
 <label>Background starts at (s)<input id="comp_background_start" type="number" min="0" step=".01"></label>
-<label>Background visible for (s)<input id="comp_background_duration" type="number" min="0" step=".01"></label><p class="hint">0 uses the whole song. A shorter background or a video without looping holds its last frame for the remainder. Slow zoom uses the focus position above.</p>
+<label>Background visible for (s)<input id="comp_background_duration" type="number" min="0" step=".01"></label><p class="hint">0 uses the whole song. A shorter background or a video without looping holds its last frame for the remainder. Slow zoom and keyframe end X/Y animate camera motion across the track.</p>
+<hr style="border:0;border-top:1px solid #393b4c;margin:12px 0">
+<label>Intro title card text<input id="comp_title_text" type="text" maxlength="120" placeholder="Optional song title / artist card"></label>
+<label>Title card duration (0–15s)<input id="comp_title_duration" type="number" min="0" max="15" step=".5"></label>
+<label>B-Roll / PiP overlay file<input id="compBroll" type="file" accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,.mkv,.webm"></label>
+<label>B-Roll from library<select id="compBrollLibrary"><option value="">Keep current B-roll</option></select></label>
+<label><input id="compClearBroll" type="checkbox"> Remove B-roll overlay</label>
+<label>B-Roll starts at (s)<input id="comp_broll_start" type="number" min="0" step=".1"></label>
+<label>B-Roll duration (s)<input id="comp_broll_duration" type="number" min="0" step=".1"></label>
+<label>B-Roll scale (20–100%)<input id="comp_broll_scale" type="number" min="20" max="100" step="5"></label>
+<label>B-Roll X (%)<input id="comp_broll_x" type="number" min="0" max="100"></label>
+<label>B-Roll Y (%)<input id="comp_broll_y" type="number" min="0" max="100"></label>
+<label>B-Roll opacity (0.1–1)<input id="comp_broll_opacity" type="number" min=".1" max="1" step=".05"></label>
+<label>B-Roll fade in/out (s)<input id="comp_broll_fade" type="number" min="0" max="5" step=".1"></label>
 </fieldset>
 <fieldset><legend>Song & sound</legend>
 <p id="compositionAssets" class="hint"></p>
@@ -91,6 +114,7 @@
 <label>Fade in (s)<input id="comp_fade_in" type="number" min="0" max="60" step=".1"></label>
 <label>Fade out (s)<input id="comp_fade_out" type="number" min="0" max="60" step=".1"></label>
 <label>Background volume (0–2)<input id="comp_background_volume" type="number" min="0" max="2" step=".05"></label>
+<label><input id="comp_ducking" type="checkbox"> Auto-duck background audio under song</label>
 <p class="hint">0 mutes background audio. Song trimming and delay move lyrics with the audio. Lines outside the new range are removed from this version; cut lines are flagged for review. Restore previous composition recovers them.</p>
 <label><input id="comp_visualizer" type="checkbox"> Show audio visualizer</label>
 <label>Visualizer style<select id="comp_visualizer_style"><option value="waveform">Waveform</option><option value="spectrum">Spectrum Bars</option></select></label>
@@ -99,4 +123,27 @@
 <label>Visualizer sensitivity (0.5–3)<input id="comp_visualizer_sensitivity" type="number" min="0.5" max="3" step="0.1"></label>
 <label>Visualizer colour<input id="comp_visualizer_color" type="color"></label>
 </fieldset></div><div class="row"><button id="resetCompositionDraft">Reset draft to saved settings</button><button id="closeComposition">Close</button><button id="applyComposition" class="primary">Apply & preview</button></div></dialog>
+<dialog id="stockDialog"><h2>Stock Background Browser (Pexels & Pixabay)</h2>
+<p id="stockStatus" class="dialogStatus error" role="status"></p>
+<p class="hint">Search free looping videos and photos from Pexels and Pixabay. Downloaded assets are saved to your local Stock Media library with creator attribution and license details retained in the project.</p>
+<div class="row">
+<label>Provider<select id="stockProvider"><option value="pexels">Pexels</option><option value="pixabay">Pixabay</option></select></label>
+<label>Media type<select id="stockKind"><option value="video">Looping Videos</option><option value="image">Photos</option></select></label>
+<label>Orientation<select id="stockOrientation"><option value="portrait">Portrait (9:16)</option><option value="landscape">Landscape (16:9)</option><option value="square">Square (1:1)</option><option value="all">All orientations</option></select></label>
+<label>Max duration (s)<input id="stockMaxDuration" type="number" min="0" max="600" step="5" value="60"></label>
+</div>
+<div class="row">
+<input id="stockQuery" type="text" maxlength="100" placeholder="e.g. neon city night, rain window, ocean waves, abstract loop…" aria-label="Stock search query">
+<button id="stockSearch" class="primary" type="button">Search stock</button>
+</div>
+<details id="stockKeyDetails"><summary id="stockKeySummary">API key setup (optional · local uploads work without keys)</summary>
+<p class="hint">Enter a free API key from <a href="https://www.pexels.com/api/" target="_blank" rel="noopener noreferrer">Pexels API</a> or <a href="https://pixabay.com/api/docs/" target="_blank" rel="noopener noreferrer">Pixabay API</a>. Stored locally on your PC.</p>
+<div class="row">
+<input id="stockApiKey" type="password" maxlength="200" placeholder="Paste API key for selected provider" aria-label="Stock provider API key">
+<button id="saveStockKey" type="button">Save key</button>
+</div>
+</details>
+<div id="stockResults" class="stockGrid" aria-label="Stock search results"></div>
+<div class="row"><button id="closeStock" type="button">Close</button></div>
+</dialog>
 </body></html>

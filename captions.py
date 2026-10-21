@@ -9,6 +9,7 @@ import re
 import shutil
 import threading
 import time
+import urllib.parse
 import uuid
 import wave
 from typing import Any
@@ -239,6 +240,14 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text'
                 rects = visualizer_bars(peaks, dur, (t0 + t1) / 2, width, height, style)
                 drawing = ' '.join(f'm {x1} {y1} l {x2} {y1} {x2} {y2} {x1} {y2}' for x1, y1, x2, y2 in rects)
                 output.append(f"Dialogue: -1,{timestamp(t0, True)},{timestamp(t1, True)},Vis,,0,0,0,,{{\\pos(0,0)\\p1}}{drawing}{{\\p0}}")
+    studio_settings = (project.get('studio') or {}).get('settings') or project.get('composition') or {}
+    title_text = str(studio_settings.get('title_text') or '').strip()
+    title_dur = float(studio_settings.get('title_duration') or 0)
+    if title_text and title_dur > 0:
+        t_end = min(float(project.get('duration') or title_dur), title_dur)
+        if round(t_end * 100) > 0:
+            title_size = round(font_size * 1.25, 1)
+            output.append(f"Dialogue: 1,{timestamp(0, True)},{timestamp(t_end, True)},Default,,0,0,0,,{{\\an5\\pos({width/2:.0f},{height*.28:.0f})\\fs{title_size}\\fad(250,350)}}{escape(title_text)}")
     for cue in project['cues']:
         use_words = bool((style.get('karaoke') or style.get('cumulative') or style.get('word_pop')) and cue['words'])
         pieces = [(cue['start'], cue['end'], None)]
@@ -686,7 +695,34 @@ def match_lyrics_to_transcription(cues, lyrics, duration, language=None, model=N
 def register_captions(app, save_dir, job_started, job_finished, refresh_gallery, get_whisper, allowed_path):
     bp = Blueprint('captions', __name__)
     root = Path(save_dir) / 'Caption Projects'
+    stock_dir = Path(save_dir) / 'Stock Media'
     lock = threading.RLock()
+
+    def is_allowed_media(path_str: str) -> bool:
+        if not path_str:
+            return False
+        if allowed_path(path_str):
+            return True
+        try:
+            target = Path(path_str).resolve()
+            return target.parent == stock_dir.resolve() and target.is_file()
+        except OSError:
+            return False
+
+    def read_stock_keys() -> dict[str, str]:
+        key_file = root / 'stock_keys.json'
+        stored: dict[str, str] = {}
+        if key_file.is_file():
+            try:
+                raw = json.loads(key_file.read_text(encoding='utf-8'))
+                if isinstance(raw, dict):
+                    stored = {k: str(raw.get(k, '')).strip() for k in ('pexels', 'pixabay') if raw.get(k)}
+            except (OSError, ValueError):
+                pass
+        for prov, env_name in (('pexels', 'PEXELS_API_KEY'), ('pixabay', 'PIXABAY_API_KEY')):
+            if not stored.get(prov) and os.environ.get(env_name):
+                stored[prov] = os.environ[env_name].strip()
+        return stored
 
     def folder(pid):
         if not re.fullmatch(r'[a-f0-9]{32}', pid):
@@ -815,13 +851,17 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                 raise ValueError('Choose a valid background color.')
             background = request.files.get('background')
             bg_path = request.form.get('background_path', '')
-            if bg_path and (not allowed_path(bg_path) or not Path(bg_path).is_file()):
+            if bg_path and (not is_allowed_media(bg_path) or not Path(bg_path).is_file()):
                 raise ValueError('Choose a background from your library.')
             bg_name = (background.filename if background and background.filename else bg_path) or ''
             bg_ext = Path(bg_name).suffix.lower() if bg_name else ''
             if (background or bg_path) and bg_ext not in {'.png','.jpg','.jpeg','.webp','.mp4','.mov','.mkv','.webm'}:
                 raise ValueError('Choose a photo or video background.')
             composition = dict(shape=shape, color=color, visualizer=request.form.get('visualizer') == 'true')
+            if (background or bg_path) and request.form.get('stock_provenance'):
+                composition['provenance'] = composition_model.validate_provenance(
+                    json.loads(request.form.get('stock_provenance', '{}'))
+                )
         destination.mkdir(parents=True)
         media = destination / ('original.mp4' if song else 'original' + extension)
         if song:
@@ -911,11 +951,11 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             f = folder(pid)
             added = []
             try:
-                for key, field in [('audio','audio'),('background','background')]:
+                for key, field in [('audio','audio'),('background','background'),('broll','broll')]:
                     upload = request.files.get(field)
                     library = request.form.get(field+'_path','') if not upload else ''
                     if not upload and not library: continue
-                    if library and (not allowed_path(library) or not Path(library).is_file()):
+                    if library and (not is_allowed_media(library) or not Path(library).is_file()):
                         raise ValueError('Choose media from your library or upload it.')
                     media_name = (upload.filename if upload and upload.filename else library) or ''
                     ext = Path(media_name).suffix.lower()
@@ -926,8 +966,14 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                     if upload: upload.save(target)
                     else: shutil.copy2(library,target)
                     added.append(target)
-                    assets[key] = dict(file=name,kind='audio' if key=='audio' else 'image' if ext in composition_model.IMAGES else 'video')
+                    entry: dict[str, Any] = dict(file=name,kind='audio' if key=='audio' else 'image' if ext in composition_model.IMAGES else 'video')
+                    if key == 'background' and request.form.get('stock_provenance'):
+                        entry['provenance'] = composition_model.validate_provenance(
+                            json.loads(request.form.get('stock_provenance', '{}'))
+                        )
+                    assets[key] = entry
                 if request.form.get('clear_background') == 'true': assets.pop('background',None)
+                if request.form.get('clear_broll') == 'true': assets.pop('broll',None)
                 for key,asset in assets.items():
                     if not composition_model.local_asset(f,asset).is_file():
                         raise ValueError('Missing '+key+' media. Choose its original file to relink it.')
@@ -1251,6 +1297,10 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                 raise ValueError('Add and save captions before rendering.')
             start = number(options.get('start', 0), 0, data['duration'])
             preview = bool(options.get('preview'))
+            quality = str(options.get('quality', 'standard')).strip().lower()
+            if quality not in composition_model.RENDER_QUALITIES:
+                raise ValueError('Choose a supported render quality preset.')
+            q_spec = composition_model.RENDER_QUALITIES[quality]
             def work(d, f):
                 token = uuid.uuid4().hex[:12]
                 ass = f / (token + '.ass')
@@ -1262,10 +1312,11 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                     fonts.mkdir(exist_ok=True)
                     for filename in BUNDLED_FONTS.values():
                         shutil.copy2(FONT_DIR / filename, fonts / filename)
-                    args = ['-i', d['source'], '-map', '0:v:0', '-map', '0:a:0?', '-vf', f'ass={ass.name}:fontsdir=caption_fonts,scale=trunc(iw/2)*2:trunc(ih/2)*2']
+                    scale_vf = "scale=w='min(720,iw)':h='min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2" if q_spec['max_side'] else 'scale=trunc(iw/2)*2:trunc(ih/2)*2'
+                    args = ['-i', d['source'], '-map', '0:v:0', '-map', '0:a:0?', '-vf', f'ass={ass.name}:fontsdir=caption_fonts,{scale_vf}']
                     if preview:
                         args += ['-ss', str(start), '-t', str(min(5, d['duration']-start))]
-                    ffmpeg([*args, '-c:v', 'libx264', '-preset', 'fast', '-crf', '18', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-movflags', '+faststart', temporary.name], f)
+                    ffmpeg([*args, '-c:v', 'libx264', '-preset', q_spec['preset'], '-crf', q_spec['crf'], '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', q_spec['audio_bitrate'], '-movflags', '+faststart', temporary.name], f)
                     os.replace(temporary, f / output)
                     d['exports'].append(output)
                     d['last_render'] = output
@@ -1285,6 +1336,76 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
         if name not in ['preview.mp4', data.get('preview'), *data.get('exports', [])]:
             return jsonify(error='Media not available.'), 404
         return send_file(folder(pid) / name, conditional=True, as_attachment=request.args.get('download') == '1')
+
+    @bp.route('/api/captions/stock/keys', methods=['GET', 'POST'])
+    def stock_keys():
+        with lock:
+            keys = read_stock_keys()
+            if request.method == 'POST':
+                payload = request.get_json() or {}
+                if not isinstance(payload, dict):
+                    raise ValueError('Invalid API key payload.')
+                for prov in ('pexels', 'pixabay'):
+                    if prov in payload:
+                        val = str(payload[prov] or '').strip()[:200]
+                        if val:
+                            keys[prov] = val
+                        else:
+                            keys.pop(prov, None)
+                root.mkdir(parents=True, exist_ok=True)
+                (root / 'stock_keys.json').write_text(json.dumps(keys, ensure_ascii=False), encoding='utf-8')
+            return jsonify(pexels=bool(keys.get('pexels')), pixabay=bool(keys.get('pixabay')))
+
+    @bp.post('/api/captions/stock/search')
+    def stock_search():
+        payload = request.get_json() or {}
+        if not isinstance(payload, dict):
+            raise ValueError('Invalid stock search request.')
+        provider = str(payload.get('provider', 'pexels')).strip().lower()
+        keys = read_stock_keys()
+        api_key = str(payload.get('api_key') or keys.get(provider, '')).strip()
+        if payload.get('api_key') and api_key:
+            with lock:
+                keys[provider] = api_key[:200]
+                root.mkdir(parents=True, exist_ok=True)
+                (root / 'stock_keys.json').write_text(json.dumps(keys, ensure_ascii=False), encoding='utf-8')
+        results = composition_model.search_stock(
+            provider=provider,
+            query=str(payload.get('query', '')),
+            kind=str(payload.get('kind', 'video')),
+            orientation=str(payload.get('orientation', 'portrait')),
+            max_duration=float(payload.get('max_duration') or 0),
+            api_key=api_key
+        )
+        return jsonify(results=results)
+
+    @bp.post('/api/captions/stock/download')
+    def stock_download():
+        payload = request.get_json() or {}
+        if not isinstance(payload, dict):
+            raise ValueError('Invalid stock download request.')
+        prov = composition_model.validate_provenance(payload)
+        provider = prov['provider']
+        kind = str(payload.get('kind', 'video')).strip().lower()
+        if kind not in {'video', 'image'}:
+            raise ValueError('Choose a stock video or image.')
+        dl_url = composition_model.validate_stock_url(str(payload.get('download_url', '')), provider)
+        url_path = urllib.parse.urlsplit(dl_url).path
+        ext = Path(url_path).suffix.lower()
+        if kind == 'video':
+            ext = ext if ext in {'.mp4', '.mov', '.webm'} else '.mp4'
+        else:
+            ext = ext if ext in {'.jpg', '.jpeg', '.png', '.webp'} else '.jpg'
+        safe_id = re.sub(r'[^a-zA-Z0-9_-]', '', str(payload.get('id', '')))[:24] or uuid.uuid4().hex[:8]
+        stock_dir.mkdir(parents=True, exist_ok=True)
+        dest = stock_dir / f'{provider}_{safe_id}_{uuid.uuid4().hex[:6]}{ext}'
+        process.begin_job()
+        try:
+            composition_model.download_stock_asset(dl_url, provider, kind, dest, check_cancel=process.check_cancelled)
+        finally:
+            process.end_job()
+        refresh_gallery()
+        return jsonify(path=str(dest), name=dest.name, kind=kind, provenance=prov)
 
     # A stopped process cannot resume its background thread after app restart.
     for path in root.glob('*/project.json'):

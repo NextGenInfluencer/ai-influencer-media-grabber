@@ -601,3 +601,105 @@ class CaptionWorkflowTests(unittest.TestCase):
         self.assertEqual(data['state'],'error')
         self.assertIn('interrupted',data['status'])
         self.assertEqual(data['cues'][0]['text'],'Saved before restart')
+
+    def test_stock_browser_search_download_and_provenance_in_composition(self):
+        # 1. Save Pexels API key and verify status
+        keys_res = self.j(self.client.post('/api/captions/stock/keys', json={'pexels': 'px-secret-123'}))
+        self.assertTrue(keys_res['pexels'])
+        self.assertFalse(keys_res['pixabay'])
+
+        # 2. Search stock via mocked search_stock
+        fake_item = dict(
+            id='777',
+            provider='pexels',
+            kind='video',
+            title='Pexels video #777 (2s)',
+            duration=2.0,
+            width=320,
+            height=240,
+            preview_url='https://images.pexels.com/videos/777/thumb.jpg',
+            download_url='https://videos.pexels.com/video-files/777/hd.mp4',
+            creator='Elena Visuals',
+            source_url='https://www.pexels.com/video/777/',
+            license='Pexels License',
+            attribution='Video by Elena Visuals on Pexels'
+        )
+        with patch('captions.composition_model.search_stock', return_value=[fake_item]) as mock_search:
+            search_res = self.j(self.client.post('/api/captions/stock/search', json={
+                'provider': 'pexels', 'query': 'sunset beach', 'kind': 'video', 'orientation': 'portrait'
+            }))
+            self.assertEqual(len(search_res['results']), 1)
+            self.assertEqual(mock_search.call_args.kwargs['api_key'], 'px-secret-123')
+
+        # 3. Download stock video (mocking download_stock_asset to write self.source bytes)
+        def fake_dl(url, provider, kind, dest, check_cancel=None):
+            dest.write_bytes(self.source.read_bytes())
+            return dest
+        with patch('captions.composition_model.download_stock_asset', side_effect=fake_dl):
+            dl_res = self.j(self.client.post('/api/captions/stock/download', json=fake_item))
+        self.assertTrue(Path(dl_res['path']).is_file())
+        self.assertEqual(dl_res['provenance']['creator'], 'Elena Visuals')
+        self.assertEqual(dl_res['provenance']['license'], 'Pexels License')
+
+        # 4. Apply downloaded stock background in composition and verify provenance is retained
+        pid, before = self.karaoke_project()
+        settings = {**before['studio']['settings'], 'shape': 'portrait'}
+        comp_res = self.client.post(f'/api/captions/{pid}/composition', data={
+            'revision': before['revision'],
+            'settings': json.dumps(settings),
+            'background_path': dl_res['path'],
+            'stock_provenance': json.dumps(dl_res['provenance'])
+        })
+        self.assertEqual(comp_res.status_code, 202, comp_res.json)
+        after = self.wait(pid)
+        bg_asset = after['studio']['assets']['background']
+        self.assertEqual(bg_asset['kind'], 'video')
+        self.assertEqual(bg_asset['provenance']['creator'], 'Elena Visuals')
+        self.assertEqual(bg_asset['provenance']['license'], 'Pexels License')
+        self.assertEqual(bg_asset['provenance']['source_url'], 'https://www.pexels.com/video/777/')
+
+    def test_phase5_multitrack_broll_title_card_and_render_quality_presets(self):
+        from PIL import Image
+        pid, before = self.karaoke_project()
+        broll_img = io.BytesIO()
+        Image.new('RGB', (160, 160), 'cyan').save(broll_img, format='PNG')
+        settings = {
+            **before['studio']['settings'],
+            'brightness': 0.05,
+            'contrast': 1.1,
+            'saturation': 1.1,
+            'transition_in': 0.2,
+            'transition_out': 0.2,
+            'keyframe_end_x': 65,
+            'keyframe_end_y': 40,
+            'title_text': 'Φταίω Εγώ · Intro',
+            'title_duration': 1.0,
+            'broll_start': 0.2,
+            'broll_duration': 1.0,
+            'broll_scale': 40,
+            'broll_opacity': 0.9,
+            'broll_fade': 0.2,
+            'background_volume': 0.4,
+            'ducking': True,
+        }
+        res = self.client.post(f'/api/captions/{pid}/composition', data={
+            'revision': before['revision'],
+            'settings': json.dumps(settings),
+            'broll': (io.BytesIO(broll_img.getvalue()), 'cutaway.png')
+        })
+        self.assertEqual(res.status_code, 202, res.json)
+        after = self.wait(pid)
+        self.assertIn('broll', after['studio']['assets'])
+        self.assertEqual(after['studio']['settings']['title_text'], 'Φταίω Εγώ · Intro')
+        self.assertEqual(len(after['studio']['tracks'][3]['clips']), 2)
+
+        # Verify ASS output includes Layer 1 Title Card dialogue event
+        ass = ass_text(after)
+        self.assertIn('Φταίω Εγώ · Intro', ass)
+        self.assertTrue(any(line.startswith('Dialogue: 1,') for line in ass.splitlines()))
+
+        # Render with 'draft' quality preset
+        r_draft = self.client.post(f'/api/captions/{pid}/render', json={'preview': True, 'quality': 'draft'})
+        self.assertEqual(r_draft.status_code, 202)
+        rendered = self.wait(pid)
+        self.assertTrue(rendered['last_render'])

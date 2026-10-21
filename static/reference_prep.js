@@ -1,9 +1,9 @@
 (() => {
     const el = id => document.getElementById(id);
     const dialog = el('referenceDialog');
-    let project = null, previewUrl = null, pollTimer = null, busy = false;
+    let project = null, previewUrl = null, pollTimer = null, busy = false, carousel = null;
     const status = text => { el('referenceStatus').textContent = text; };
-    const mediaUrl = name => '/api/media/' + ['Kling References', project.id, name].map(encodeURIComponent).join('/');
+    const mediaUrl = name => '/api/media/' + ['Kling References', project.id, name].map(encodeURIComponent).join('/') + '?t=' + Date.now();
     async function api(url, options) {
         const response = await fetch(url, options);
         const data = await response.json();
@@ -17,11 +17,13 @@
     function clearResults() {
         project = null;
         clearTimeout(pollTimer);
-        for (const id of ['referenceOriginalImage', 'referenceEditedImage', 'referenceFrameDownload', 'referenceExport']) {
+        for (const id of ['referenceOriginalImage', 'referenceEditedImage', 'referenceFrameDownload', 'referenceSheetDownload', 'referenceExport', 'referenceCandidatesSection']) {
+            if (!el(id)) continue;
             el(id).hidden = true;
             el(id).removeAttribute('src');
             el(id).removeAttribute('href');
         }
+        if (el('referenceCandidates')) el('referenceCandidates').replaceChildren();
         el('referenceImageInput').disabled = true;
         el('referenceImageInput').value = '';
         el('referenceOpenFolder').disabled = true;
@@ -32,6 +34,40 @@
         select.replaceChildren(new Option('New reference set', ''));
         for (const row of rows) select.add(new Option(`${row.name} — ${row.start_seconds}s — ${row.state}`, row.id));
         if (project) select.value = project.id;
+    }
+    function renderCandidates(data) {
+        const box = el('referenceCandidates');
+        const section = el('referenceCandidatesSection');
+        if (!box || !section) return;
+        box.replaceChildren();
+        if (!data.candidates?.length) { section.hidden = true; return; }
+        section.hidden = false;
+        if (data.contact_sheet && el('referenceSheetDownload')) {
+            el('referenceSheetDownload').href = mediaUrl(data.contact_sheet);
+            el('referenceSheetDownload').hidden = false;
+        }
+        data.candidates.forEach(cand => {
+            const card = document.createElement('div'); card.className = 'ref-card';
+            const img = document.createElement('img'); img.src = mediaUrl(cand.file); img.alt = `Frame at ${cand.seconds}s`;
+            const btn = document.createElement('button'); btn.type = 'button';
+            btn.textContent = `Use ${cand.seconds}s frame`;
+            btn.onclick = async () => {
+                if (busy) return;
+                setBusy(true);
+                el('referenceStart').value = cand.seconds;
+                updateHint();
+                try {
+                    await api(`/api/reference/${data.id}/select-frame`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({start_seconds: cand.seconds})
+                    });
+                    poll(data.id);
+                } catch (e) { status(e.message); setBusy(false); }
+            };
+            card.append(img, btn);
+            box.append(card);
+        });
     }
     function showProject(data) {
         project = data;
@@ -44,6 +80,7 @@
         el('referenceFrameDownload').hidden = false;
         el('referenceImageInput').disabled = false;
         el('referenceOpenFolder').disabled = false;
+        renderCandidates(data);
         if (data.edited_image) {
             el('referenceEditedImage').src = mediaUrl(data.edited_image);
             el('referenceEditedImage').hidden = false;
@@ -66,7 +103,7 @@
     }
     window.openReferencePrep = async () => {
         dialog.showModal();
-        try { await refreshProjects(); } catch (e) { status(e.message); }
+        try { await refreshProjects(); await refreshCarousels(); } catch (e) { status(e.message); }
     };
     el('referenceClose').onclick = () => dialog.close();
     el('referenceVideoInput').onchange = () => {
@@ -144,4 +181,96 @@
             if (data.state === 'processing') { setBusy(true); poll(id); }
         } catch (e) { status(e.message); }
     };
+
+    // --- Phase 6: Carousel & Still Image Studio ---
+    const cStatus = text => { if (el('carouselStatus')) el('carouselStatus').textContent = text; };
+    async function refreshCarousels() {
+        if (!el('carouselProjects')) return;
+        const rows = await api('/api/carousel/projects');
+        const sel = el('carouselProjects');
+        sel.replaceChildren(new Option('New carousel', ''));
+        for (const r of rows) sel.add(new Option(`${r.name} (${r.slides?.length || 0} slides)`, r.id));
+        if (carousel) sel.value = carousel.id;
+    }
+    function renderCarousel(data) {
+        carousel = data;
+        if (!el('carouselSlides')) return;
+        el('carouselAspect').value = data.settings.aspect || 'portrait';
+        el('carouselFit').value = data.settings.fit || 'fill';
+        el('carouselMargin').value = data.settings.margin || 0;
+        el('carouselBg').value = data.settings.background || '#141526';
+        el('carouselCaption').value = data.settings.shared_caption || '';
+        el('carouselApply').disabled = false;
+        el('carouselExport').href = `/api/carousel/${data.id}/export`;
+        el('carouselExport').hidden = false;
+        cStatus(`Carousel ready: ${data.slides.length} slides (${data.settings.aspect}). Reorder, rotate, or add text overlays.`);
+        const grid = el('carouselSlides');
+        grid.replaceChildren();
+        data.slides.forEach((s, idx) => {
+            const card = document.createElement('div'); card.className = 'ref-card';
+            const img = document.createElement('img');
+            img.src = `/api/carousel/${data.id}/media/${encodeURIComponent(s.file)}?t=${Date.now()}`;
+            img.alt = `Slide ${idx + 1}`;
+            const cap = document.createElement('input');
+            cap.type = 'text'; cap.placeholder = `Slide ${idx + 1} text…`; cap.value = s.caption || '';
+            cap.onchange = () => updateCarousel({slides: [{id: s.id, caption: cap.value}]});
+            const row = document.createElement('div'); row.className = 'ref-actions';
+            const left = document.createElement('button'); left.type = 'button'; left.textContent = '←'; left.disabled = idx === 0;
+            left.onclick = () => {
+                const order = data.slides.map(x => x.id);
+                [order[idx - 1], order[idx]] = [order[idx], order[idx - 1]];
+                updateCarousel({order});
+            };
+            const right = document.createElement('button'); right.type = 'button'; right.textContent = '→'; right.disabled = idx === data.slides.length - 1;
+            right.onclick = () => {
+                const order = data.slides.map(x => x.id);
+                [order[idx], order[idx + 1]] = [order[idx + 1], order[idx]];
+                updateCarousel({order});
+            };
+            const rot = document.createElement('button'); rot.type = 'button'; rot.textContent = '↻ 90°';
+            rot.onclick = () => updateCarousel({slides: [{id: s.id, rotate: ((s.rotate || 0) + 90) % 360}]});
+            row.append(left, right, rot);
+            card.append(img, cap, row);
+            grid.append(card);
+        });
+    }
+    async function updateCarousel(patch) {
+        if (!carousel) return;
+        try {
+            const updated = await api(`/api/carousel/${carousel.id}/update`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(patch)
+            });
+            renderCarousel(updated);
+        } catch (e) { cStatus(e.message); }
+    }
+    if (el('carouselCreate')) {
+        el('carouselCreate').onclick = async () => {
+            const files = el('carouselInput').files;
+            if (!files?.length) return cStatus('Choose at least one photo first.');
+            const body = new FormData();
+            for (const f of files) body.append('images', f);
+            body.append('aspect', el('carouselAspect').value);
+            try {
+                const created = await api('/api/carousel/create', {method: 'POST', body});
+                await refreshCarousels();
+                renderCarousel(created);
+            } catch (e) { cStatus(e.message); }
+        };
+        el('carouselApply').onclick = () => updateCarousel({
+            settings: {
+                aspect: el('carouselAspect').value,
+                fit: el('carouselFit').value,
+                margin: Number(el('carouselMargin').value || 0),
+                background: el('carouselBg').value,
+                shared_caption: el('carouselCaption').value
+            }
+        });
+        el('carouselProjects').onchange = async () => {
+            const cid = el('carouselProjects').value;
+            if (!cid) return;
+            try { renderCarousel(await api(`/api/carousel/${cid}`)); } catch (e) { cStatus(e.message); }
+        };
+    }
 })();

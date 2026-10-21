@@ -295,6 +295,75 @@ class MediaTests(unittest.TestCase):
             self.assertEqual(r.status_code, 400)
         self.assertEqual(self.client.get('/api/reference/not-a-project').status_code, 404)
 
+    def test_kling_contact_sheet_and_candidate_frame_selector(self):
+        data = self.prepare_reference()
+        folder = Path(data['folder'])
+        self.assertEqual(data['contact_sheet'], 'contact_sheet.png')
+        self.assertTrue((folder / 'contact_sheet.png').is_file())
+        self.assertGreaterEqual(len(data['candidates']), 2)
+
+        # Select a later candidate frame via /select-frame
+        r = self.client.post(f'/api/reference/{data["id"]}/select-frame', json={'start_seconds': 0.5}, headers=self.headers)
+        self.assertEqual(r.status_code, 202)
+        deadline = time.monotonic() + 20
+        while time.monotonic() < deadline:
+            updated = self.client.get('/api/reference/' + data['id']).json
+            if updated['state'] != 'processing':
+                self.assertEqual(updated['state'], 'ready', updated)
+                break
+            time.sleep(0.05)
+        self.assertAlmostEqual(updated['start_seconds'], 0.5)
+        self.assertEqual((folder / 'original_video.mp4').read_bytes(), self.source.read_bytes())
+
+    def test_carousel_workspace_reorder_shared_styling_and_ordered_export(self):
+        slides_raw = []
+        for col in ('red', 'green', 'blue'):
+            buf = io.BytesIO()
+            Image.new('RGB', (200, 120), col).save(buf, format='PNG')
+            slides_raw.append(buf.getvalue())
+
+        r = self.client.post('/api/carousel/create', data={
+            'aspect': 'portrait',
+            'images': [
+                (io.BytesIO(slides_raw[0]), 'one.png'),
+                (io.BytesIO(slides_raw[1]), 'two.png'),
+                (io.BytesIO(slides_raw[2]), 'three.png'),
+            ]
+        }, headers=self.headers)
+        self.assertEqual(r.status_code, 201, r.data)
+        created = r.json
+        cid = created['id']
+        self.assertEqual(len(created['slides']), 3)
+        self.assertEqual(created['slides'][0]['dimensions'], [1080, 1350])
+
+        # Reorder slides (reverse), rotate slide 1, and apply shared square preset + Greek/Korean caption
+        ids = [s['id'] for s in created['slides']]
+        rev_order = list(reversed(ids))
+        u = self.client.post(f'/api/carousel/{cid}/update', json={
+            'order': rev_order,
+            'settings': {'aspect': 'square', 'fit': 'fit', 'margin': 5, 'shared_caption': 'Φταίω Εγώ · 사랑해'},
+            'slides': [{'id': rev_order[0], 'rotate': 90, 'caption': 'Slide 1 Custom'}]
+        }, headers=self.headers)
+        self.assertEqual(u.status_code, 200, u.data)
+        updated = u.json
+        self.assertEqual([s['id'] for s in updated['slides']], rev_order)
+        self.assertEqual(updated['slides'][0]['dimensions'], [1080, 1080])
+
+        # Verify originals remain untouched on disk
+        c_folder = self.save / 'Carousels' / cid
+        self.assertEqual((c_folder / 'orig_01.png').read_bytes(), slides_raw[0])
+        self.assertEqual((c_folder / 'orig_02.png').read_bytes(), slides_raw[1])
+        self.assertEqual((c_folder / 'orig_03.png').read_bytes(), slides_raw[2])
+
+        # Verify ordered export ZIP
+        exp = self.client.get(f'/api/carousel/{cid}/export')
+        self.assertEqual(exp.status_code, 200)
+        with zipfile.ZipFile(io.BytesIO(exp.data)) as z:
+            self.assertEqual(z.namelist(), ['01_slide_01.png', '02_slide_02.png', '03_slide_03.png'])
+            with Image.open(io.BytesIO(z.read('01_slide_01.png'))) as im:
+                self.assertEqual(im.size, (1080, 1080))
+        exp.close()
+
 
 if __name__ == '__main__':
     unittest.main()

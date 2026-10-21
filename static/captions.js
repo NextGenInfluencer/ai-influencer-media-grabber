@@ -239,13 +239,20 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         drawVisualizer();
         const cue=project.cues.find(c=>c.start<=video.currentTime && c.end>video.currentTime);
         const s=project.style, h=$('stage').clientHeight;
+        const compSet=project.studio?.settings||project.composition||{};
+        const showTitle=compSet.title_text && compSet.title_duration>0 && video.currentTime>=0 && video.currentTime<=compSet.title_duration;
         Object.assign(box.style,{fontFamily:`"${s.font}",Roboto,"Noto Sans KR",sans-serif`,fontSize:h*s.size/100+'px',color:s.color,
-            top:s.position+'%',webkitTextStroke:`${2*h*s.outline/360}px black`});
-        $('playingCaption').textContent=cue ? 'Playing: '+cue.text+((s.karaoke||s.cumulative||s.word_pop)&&!cue.words?.length?' · No word timings — use Add karaoke timing.':'') : '';
-        if(!cue) return;
+            top:(showTitle&&!cue?28:s.position)+'%',webkitTextStroke:`${2*h*s.outline/360}px black`});
+        $('playingCaption').textContent=cue ? 'Playing: '+cue.text+((s.karaoke||s.cumulative||s.word_pop)&&!cue.words?.length?' · No word timings — use Add karaoke timing.':'') : (showTitle ? 'Title card: '+compSet.title_text : '');
+        if(!cue && !showTitle) return;
         const content=document.createElement('span');
-        content.style.background=s.background?'rgba(10,12,20,.78)':'transparent';
-        if(s.background) Object.assign(content.style,{padding:'.14em .45em',borderRadius:'.28em',boxDecorationBreak:'clone',webkitBoxDecorationBreak:'clone',boxShadow:'0 4px 16px rgba(0,0,0,.45)'});
+        content.style.background=(s.background||showTitle)?'rgba(10,12,20,.78)':'transparent';
+        if(s.background||showTitle) Object.assign(content.style,{padding:'.14em .45em',borderRadius:'.28em',boxDecorationBreak:'clone',webkitBoxDecorationBreak:'clone',boxShadow:'0 4px 16px rgba(0,0,0,.45)'});
+        if(!cue && showTitle) {
+            content.textContent=compSet.title_text;
+            box.append(content);
+            return;
+        }
         if((s.karaoke || s.cumulative || s.word_pop) && cue.words?.length) {
             cue.words.forEach((w,i)=>{
                 if(i) content.append((cue.text.match(/\s+/g)||[])[i-1]||' ');
@@ -298,10 +305,42 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
             $('words').append(row);
         });
     }
+    function snapTime(val, minBound, maxBound) {
+        if(!$('snapTimeline')?.checked) return Math.max(minBound, Math.min(maxBound, val));
+        const targets=[0, project.duration, video.currentTime, Math.round(val*4)/4];
+        for(const t of targets) {
+            if(t>=minBound && t<=maxBound && Math.abs(val-t)<0.08) return t;
+        }
+        return Math.max(minBound, Math.min(maxBound, val));
+    }
     function drawTimeline() {
         if(!project?.duration || dragging) return;
         const timeline=$('timeline');const width=Math.max(400,$('timelineScroll').clientWidth)*Number($('zoom').value);
         timeline.style.width=width+'px';
+        const vLane=$('videoTrackLane');
+        if(vLane) {
+            vLane.replaceChildren();
+            const cs=project.studio?.settings||project.composition||{};
+            const bgBlock=document.createElement('div');bgBlock.className='trackBlock';
+            const bgDur=cs.background_duration>0?Math.min(project.duration,cs.background_duration):project.duration;
+            bgBlock.style.left='0%';bgBlock.style.width=(bgDur/project.duration*100)+'%';
+            bgBlock.textContent=`Video: ${project.studio?.assets?.background?.kind||'Colour'} (${cs.shape||'portrait'}${cs.background_speed&&cs.background_speed!==1?' · '+cs.background_speed+'×':''})`;
+            bgBlock.onclick=()=>openCompositionEditor();
+            vLane.append(bgBlock);
+            if(cs.title_text && cs.title_duration>0) {
+                const tb=document.createElement('div');tb.className='trackBlock titleCard';
+                tb.style.left='0%';tb.style.width=(Math.min(project.duration,cs.title_duration)/project.duration*100)+'%';
+                tb.textContent='Title: '+cs.title_text;tb.onclick=()=>openCompositionEditor();
+                vLane.append(tb);
+            }
+            if(project.studio?.assets?.broll && cs.broll_duration>0) {
+                const bb=document.createElement('div');bb.className='trackBlock broll';
+                bb.style.left=(Math.min(project.duration,cs.broll_start||0)/project.duration*100)+'%';
+                bb.style.width=(Math.min(project.duration-(cs.broll_start||0),cs.broll_duration)/project.duration*100)+'%';
+                bb.textContent='B-Roll ('+(cs.broll_scale||100)+'%)';bb.onclick=()=>openCompositionEditor();
+                vLane.append(bb);
+            }
+        }
         const canvas=$('waveform');canvas.width=width;canvas.height=80;
         const ctx=canvas.getContext('2d');ctx.fillStyle='#72cfc5';
         const peaks=project.peaks||[], max=Math.max(.01,...peaks);
@@ -320,11 +359,12 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
                 block.onpointermove=ev=>{
                     const delta=(ev.clientX-x)/width*project.duration;
                     if(side==='move') {
-                        const shift=Math.max(before-original.start,Math.min(after-original.end,delta));
+                        const rawStart=snapTime(original.start+delta, before, after-(original.end-original.start));
+                        const shift=rawStart-original.start;
                         c.start=original.start+shift;c.end=original.end+shift;
                         c.words=original.words.map(w=>({...w,start:w.start+shift,end:w.end+shift}));
                     } else {
-                        c[side]=side==='start'?Math.max(before,Math.min(original.end-.05,original.start+delta)):Math.min(after,Math.max(original.start+.05,original.end+delta));
+                        c[side]=side==='start'?snapTime(original.start+delta,before,original.end-.05):snapTime(original.end+delta,original.start+.05,after);
                         c.words=[];
                     }
                     block.style.left=c.start/project.duration*100+'%';block.style.width=(c.end-c.start)/project.duration*100+'%';
@@ -350,20 +390,39 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         try {project=await api('/api/captions','POST',form);dirty=false;history=[];future=[];selected=-1;refresh();poll();}
         catch(e){setBusy(false);throw e;}
     }
+    const selectedStock={song:null,composition:null};
+    let stockTarget='composition';
+    async function refreshLibraries() {
+        const entries=await api('/api/gallery');
+        const prevLib=$('library').value, prevComp=$('compLibrary').value, prevSong=$('songLibrary').value, prevBroll=$('compBrollLibrary').value;
+        $('library').replaceChildren(new Option('Choose from library…',''),...entries.filter(e=>e.type==='video'&&e.folder!=='Caption Projects').map(e=>new Option(e.name,e.full_path)));
+        $('compLibrary').replaceChildren(new Option('Keep current background',''),...entries.filter(e=>['image','video'].includes(e.type)&&e.folder!=='Caption Projects').map(e=>new Option(e.name,e.full_path)));
+        $('compBrollLibrary').replaceChildren(new Option('Keep current B-roll',''),...entries.filter(e=>['image','video'].includes(e.type)&&e.folder!=='Caption Projects').map(e=>new Option(e.name,e.full_path)));
+        $('songLibrary').replaceChildren(new Option('Use colour / uploaded background',''),...entries.filter(e=>['image','video'].includes(e.type)&&e.folder!=='Caption Projects').map(e=>new Option(e.name,e.full_path)));
+        if(prevLib)$('library').value=prevLib;
+        if(prevComp)$('compLibrary').value=prevComp;
+        if(prevBroll)$('compBrollLibrary').value=prevBroll;
+        if(prevSong)$('songLibrary').value=prevSong;
+    }
     $('videoFile').onchange=act(async()=>{const file=$('videoFile').files[0];if(file){const f=new FormData();f.append('video',file);await create(f);}$('videoFile').value='';});
     $('newSong').onclick=()=>$('songDialog').showModal();
     $('cancelSong').onclick=()=>$('songDialog').close();
     $('createSong').onclick=act(async()=>{
         const song=$('songFile').files[0];if(!song)throw Error('Choose your song first.');
         const form=new FormData();form.append('audio',song);form.append('shape',$('songShape').value);form.append('color',$('songColor').value);form.append('visualizer',$('songVisualizer').checked);
-        const bg=$('songBackground').files[0];if(bg)form.append('background',bg);else if($('songLibrary').value)form.append('background_path',$('songLibrary').value);
+        const bg=$('songBackground').files[0];
+        if(bg)form.append('background',bg);
+        else if($('songLibrary').value){
+            form.append('background_path',$('songLibrary').value);
+            if(selectedStock.song?.path===$('songLibrary').value && selectedStock.song?.provenance) form.append('stock_provenance',JSON.stringify(selectedStock.song.provenance));
+        }
         $('createSong').disabled=true;
         try {await create(form);$('songDialog').close();} finally {$('createSong').disabled=false;}
     });
-    const compositionKeys=['shape','color','fit','x','y','blur','dim','overlay','opacity','zoom','start','end','offset','volume','fade_in','fade_out','background_volume','loop','background_start','background_duration','visualizer','visualizer_style','visualizer_position','visualizer_height','visualizer_sensitivity','visualizer_color'];
-    const compositionChecks=['loop','visualizer'], compositionStrings=['shape','color','fit','overlay','visualizer_style','visualizer_position','visualizer_color'];
+    const compositionKeys=['shape','color','fit','x','y','blur','dim','overlay','opacity','zoom','brightness','contrast','saturation','background_speed','transition_in','transition_out','keyframe_end_x','keyframe_end_y','title_text','title_duration','broll_start','broll_duration','broll_x','broll_y','broll_scale','broll_opacity','broll_fade','start','end','offset','volume','fade_in','fade_out','background_volume','ducking','loop','background_start','background_duration','visualizer','visualizer_style','visualizer_position','visualizer_height','visualizer_sensitivity','visualizer_color'];
+    const compositionChecks=['loop','visualizer','ducking'], compositionStrings=['shape','color','fit','overlay','visualizer_style','visualizer_position','visualizer_color','title_text'];
     function fillComposition(settings) {
-        for(const key of compositionKeys) {const input=$('comp_'+key);if(compositionChecks.includes(key))input.checked=!!settings[key];else input.value=settings[key];}
+        for(const key of compositionKeys) {const input=$('comp_'+key);if(compositionChecks.includes(key))input.checked=!!settings[key];else if(settings[key]!==undefined)input.value=settings[key];}
     }
     function compositionSettings() {
         return Object.fromEntries(compositionKeys.map(key=>{const input=$('comp_'+key);return [key,compositionChecks.includes(key)?input.checked:compositionStrings.includes(key)?input.value:Number(input.value)];}));
@@ -371,18 +430,26 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
     function drawComposition() {
         const studio=project?.studio;
         $('editComposition').disabled=busy||!studio;
+        $('openStockBrowser').disabled=busy;
         $('restoreComposition').disabled=busy||!project?.composition_backup;
         $('recoverEdits').disabled=busy||!readDraft('captions');
-        $('compositionSummary').textContent=studio ? `${studio.settings.shape} · ${studio.assets.background?.kind||'Colour'} background · song ${fmt(studio.settings.start)}–${fmt(studio.settings.end)} · ${studio.settings.offset}s delay`+(project.missing_assets?.length?` · Missing media: ${project.missing_assets.join(', ')}. Open Edit composition to relink.`:'') : 'Open a prepared project to edit its background and audio.';
+        const prov=studio?.assets?.background?.provenance;
+        const provText=prov?` · ${prov.attribution} (${prov.license})`:'';
+        const brollText=studio?.assets?.broll && studio?.settings?.broll_duration>0 ? ` · B-Roll ${studio.settings.broll_duration}s` : '';
+        $('compositionSummary').textContent=studio ? `${studio.settings.shape} · ${studio.assets.background?.kind||'Colour'} background${provText}${brollText} · song ${fmt(studio.settings.start)}–${fmt(studio.settings.end)} · ${studio.settings.offset}s delay`+(project.missing_assets?.length?` · Missing media: ${project.missing_assets.join(', ')}. Open Edit composition to relink.`:'') : 'Open a prepared project to edit its background and audio.';
     }
-    $('editComposition').onclick=act(()=>{
+    function openCompositionEditor() {
         if(!project?.studio)return;
         video.pause();const draft=readDraft('composition');
         fillComposition(draft?.source===project.source?draft.settings:project.studio.settings);
         $('compBackground').value='';$('compAudio').value='';$('compLibrary').value='';$('compClear').checked=false;
-        $('compositionAssets').textContent='Current song: '+project.studio.assets.audio.file+(project.missing_assets?.length?' · Missing: '+project.missing_assets.join(', ')+'. Upload the original file again.':'');
+        $('compBroll').value='';$('compBrollLibrary').value='';$('compClearBroll').checked=false;
+        const prov=project.studio.assets.background?.provenance;
+        const broll=project.studio.assets.broll;
+        $('compositionAssets').textContent='Current song: '+project.studio.assets.audio.file+(prov?` · Background: ${prov.attribution} (${prov.license})`:'')+(broll?` · B-Roll: ${broll.file}`:'')+(project.missing_assets?.length?' · Missing: '+project.missing_assets.join(', ')+'. Upload the original file again.':'');
         $('compositionDialog').showModal();
-    });
+    }
+    $('editComposition').onclick=act(openCompositionEditor);
     for(const key of compositionKeys) $('comp_'+key).onchange=()=>storeDraft('composition',{source:project.source,settings:compositionSettings()});
     $('resetCompositionDraft').onclick=()=>{fillComposition(project.studio.settings);storeDraft('composition',null);};
     $('closeComposition').onclick=()=>$('compositionDialog').close();
@@ -390,13 +457,113 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         if(!project||busy)return;
         await save();video.pause();
         const form=new FormData();form.append('revision',project.revision);form.append('settings',JSON.stringify(compositionSettings()));
-        const bg=$('compBackground').files[0],audio=$('compAudio').files[0];
-        if(bg)form.append('background',bg);else if($('compLibrary').value)form.append('background_path',$('compLibrary').value);
-        if(audio)form.append('audio',audio);form.append('clear_background',$('compClear').checked);
+        const bg=$('compBackground').files[0],audio=$('compAudio').files[0],broll=$('compBroll').files[0];
+        if(bg)form.append('background',bg);
+        else if($('compLibrary').value){
+            form.append('background_path',$('compLibrary').value);
+            if(selectedStock.composition?.path===$('compLibrary').value && selectedStock.composition?.provenance) form.append('stock_provenance',JSON.stringify(selectedStock.composition.provenance));
+        }
+        if(broll)form.append('broll',broll);
+        else if($('compBrollLibrary').value)form.append('broll_path',$('compBrollLibrary').value);
+        if(audio)form.append('audio',audio);
+        form.append('clear_background',$('compClear').checked);
+        form.append('clear_broll',$('compClearBroll').checked);
         $('applyComposition').disabled=true;
         try{project=await api(`/api/captions/${project.id}/composition`,'POST',form);history=[];future=[];dirty=false;storeDraft('composition',null);$('compositionDialog').close();refresh();poll();}
         finally{$('applyComposition').disabled=false;}
     });
+    async function syncStockKeyStatus() {
+        try {
+            const keys=await api('/api/captions/stock/keys');
+            const prov=$('stockProvider').value;
+            $('stockKeySummary').textContent=keys[prov]?`API key setup (${prov.toUpperCase()} key saved ✓)`:'API key setup (optional · local uploads work without keys)';
+        } catch {}
+    }
+    function openStockDialog(target) {
+        stockTarget=target;
+        $('stockStatus').textContent='';
+        const shape=target==='song'?$('songShape').value:($('comp_shape').value||project?.studio?.settings?.shape||'portrait');
+        if(['portrait','landscape','square'].includes(shape)) $('stockOrientation').value=shape;
+        syncStockKeyStatus();
+        $('stockDialog').showModal();
+    }
+    $('browseStockSong').onclick=()=>openStockDialog('song');
+    $('browseStockComp').onclick=()=>openStockDialog('composition');
+    $('openStockBrowser').onclick=()=>openStockDialog(project?.studio?'composition':'song');
+    $('closeStock').onclick=()=>$('stockDialog').close();
+    $('stockProvider').onchange=syncStockKeyStatus;
+    $('saveStockKey').onclick=act(async()=>{
+        const prov=$('stockProvider').value, key=$('stockApiKey').value.trim();
+        await api('/api/captions/stock/keys','POST',{[prov]:key});
+        $('stockApiKey').value='';
+        await syncStockKeyStatus();
+        $('stockStatus').textContent=key?`${prov.toUpperCase()} API key saved locally.`:`${prov.toUpperCase()} API key cleared.`;
+    });
+    async function runStockSearch() {
+        $('stockStatus').textContent='Searching stock backgrounds…';
+        $('stockSearch').disabled=true;
+        try {
+            const payload={
+                provider:$('stockProvider').value,
+                kind:$('stockKind').value,
+                orientation:$('stockOrientation').value,
+                max_duration:Number($('stockMaxDuration').value||0),
+                query:$('stockQuery').value,
+                api_key:$('stockApiKey').value.trim()
+            };
+            const data=await api('/api/captions/stock/search','POST',payload);
+            if(payload.api_key){$('stockApiKey').value='';syncStockKeyStatus();}
+            const grid=$('stockResults');grid.replaceChildren();
+            if(!data.results?.length){$('stockStatus').textContent='No matching stock backgrounds found. Try another search term or orientation.';return;}
+            $('stockStatus').textContent=`Found ${data.results.length} stock backgrounds. Hover video cards to preview.`;
+            data.results.forEach(item=>{
+                const card=document.createElement('div');card.className='stockCard';
+                if(item.kind==='video') {
+                    const vid=document.createElement('video');
+                    vid.src=item.download_url;vid.poster=item.preview_url;vid.muted=true;vid.loop=true;vid.playsInline=true;vid.preload='none';
+                    vid.onmouseenter=()=>vid.play?.().catch(()=>{});
+                    vid.onmouseleave=()=>{vid.pause?.();};
+                    card.append(vid);
+                } else {
+                    const img=document.createElement('img');img.src=item.preview_url;img.alt=item.title;img.loading='lazy';
+                    card.append(img);
+                }
+                const title=document.createElement('strong');title.textContent=item.title;title.style.fontSize='12px';
+                const meta=document.createElement('small');
+                const link=document.createElement('a');link.href=item.source_url;link.target='_blank';link.rel='noopener noreferrer';link.textContent=item.attribution;
+                meta.append(link, ` · ${item.width}×${item.height} · ${item.license}`);
+                const useBtn=document.createElement('button');useBtn.type='button';useBtn.className='primary';useBtn.textContent='Download & select';
+                useBtn.onclick=act(async()=>{
+                    useBtn.disabled=true;useBtn.textContent='Downloading…';
+                    try {
+                        const saved=await api('/api/captions/stock/download','POST',item);
+                        await refreshLibraries();
+                        if(stockTarget==='song' || !project?.studio) {
+                            selectedStock.song=saved;
+                            if(![...$('songLibrary').options].some(o=>o.value===saved.path)) $('songLibrary').append(new Option(saved.name,saved.path));
+                            $('songLibrary').value=saved.path;$('songBackground').value='';
+                            $('songStockNotice').hidden=false;
+                            $('songStockNotice').textContent=`Selected stock: ${saved.provenance.attribution} (${saved.provenance.license})`;
+                            $('stockDialog').close();
+                            if(!$('songDialog').open) $('songDialog').showModal();
+                        } else {
+                            selectedStock.composition=saved;
+                            if(!$('compositionDialog').open) openCompositionEditor();
+                            if(![...$('compLibrary').options].some(o=>o.value===saved.path)) $('compLibrary').append(new Option(saved.name,saved.path));
+                            $('compLibrary').value=saved.path;$('compBackground').value='';$('compClear').checked=false;
+                            $('compStockNotice').hidden=false;
+                            $('compStockNotice').textContent=`Selected stock: ${saved.provenance.attribution} (${saved.provenance.license})`;
+                            $('stockDialog').close();
+                        }
+                        say(`Downloaded ${saved.name} (${saved.provenance.attribution}).`);
+                    } finally {useBtn.disabled=false;useBtn.textContent='Download & select';}
+                });
+                card.append(title,meta,useBtn);grid.append(card);
+            });
+        } finally {$('stockSearch').disabled=false;}
+    }
+    $('stockSearch').onclick=act(runStockSearch);
+    $('stockQuery').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('stockSearch').click();}};
     $('restoreComposition').onclick=act(async()=>{
         if(!project||!confirm('Restore the previous composition and its captions? The current version will become the restore point.'))return;
         await save();video.pause();project=await api(`/api/captions/${project.id}/restore-composition`,'POST',{revision:project.revision});history=[];future=[];selected=0;mountVideo();refresh();
@@ -566,8 +733,8 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         if(project?.cues.length&&!confirm('Replace existing captions with automatic transcription? The current version stays saved if transcription fails.'))return;
         checkpoint();await job('transcribe',{language:$('language').value});
     });
-    $('renderCheck').onclick=act(()=>job('render',{preview:true,start:Math.min(video.currentTime,Math.max(0,project.duration-.1))}));
-    $('export').onclick=act(()=>job('render',{preview:false}));
+    $('renderCheck').onclick=act(()=>job('render',{preview:true,quality:$('renderQuality').value||'standard',start:Math.min(video.currentTime,Math.max(0,project.duration-.1))}));
+    $('export').onclick=act(()=>job('render',{preview:false,quality:$('renderQuality').value||'standard'}));
     $('srt').onclick=act(async()=>{await save();const a=document.createElement('a');a.href=`/api/captions/${project.id}/srt`;a.click();});
     $('stop').onclick=act(async()=>{if(confirm('Stop active app jobs, including downloads and caption processing?')){const d=await api('/api/cancel_all','POST',{});say(d.status||'Stopping…');}});
     $('closeRender').onclick=()=>{$('renderVideo').pause();$('renderDialog').close();};
@@ -592,9 +759,6 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
     setBusy(false);tick();
     (async()=>{
         await listProjects();
-        const entries=await api('/api/gallery');
-        $('library').replaceChildren(new Option('Choose from library…',''),...entries.filter(e=>e.type==='video'&&e.folder!=='Caption Projects').map(e=>new Option(e.name,e.full_path)));
-        $('compLibrary').replaceChildren(new Option('Keep current background',''),...entries.filter(e=>['image','video'].includes(e.type)&&e.folder!=='Caption Projects').map(e=>new Option(e.name,e.full_path)));
-        $('songLibrary').replaceChildren(new Option('Use colour / uploaded background',''),...entries.filter(e=>['image','video'].includes(e.type)&&e.folder!=='Caption Projects').map(e=>new Option(e.name,e.full_path)));
+        await refreshLibraries();
     })().catch(e=>say(e.message,true));
 })();

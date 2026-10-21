@@ -1,6 +1,6 @@
 # Free Creator Studio — implementation and resume plan
 
-Saved 21 October 2026. Phases 1, 2 and 3 implemented in the source checkout; later phases in progress. No scheduled run has been created.
+Saved 21 October 2026. Phases 1 through 6 implemented and verified in the source checkout. No scheduled run has been created.
 
 ## Product goal
 
@@ -121,3 +121,15 @@ Validation: real FFmpeg composition/export checks, browser library background re
 ## Phase 3 implementation status
 
 Implemented bundled multilingual Google Fonts (`Montserrat`, `Roboto`, `Noto Sans KR`, alongside `Oswald`, `Lobster`, `Bangers`) with OFL licenses, verified for Greek, Korean and French coverage across browser preview and FFmpeg/libass exports. Added cumulative karaoke highlighting, active word pop (115% scale), and high-contrast boxed captions. Added audio-reactive visualizer controls (Spectrum Bars vs. Waveform, Bottom/Center/Top position, height, sensitivity, and colour) with identical deterministic bar geometry between the browser `<canvas>` preview (`CaptionTiming.visualizerBars`) and ASS/FFmpeg export (`visualizer_bars`), plus composition `showfreqs`/`showwaves` support. Added 1-click aesthetic music-video presets (`Neon Karaoke`, `Cinematic Clean`, `Bold Pop`, `Minimalist Lyric`), Needleman-Wunsch lyric-to-transcription matching (`Correct transcription with my lyrics`), and localStorage lyric draft persistence.
+
+## Phase 4 implementation status
+
+Implemented the integrated Stock Background Browser (`#stockDialog`) supporting official Pexels and Pixabay video and photo search, orientation filtering (`portrait`, `landscape`, `square`, `all`), max-duration filtering, 5-minute TTL response caching, hover video previews, and optional local API key configuration (`/api/captions/stock/keys`) while keeping local uploads and library backgrounds working without API keys. Enforced strict HTTPS provider domain allowlists (`validate_stock_url`), redirect target validation (`_SafeRedirectHandler`), bounded streaming downloads (`<= 80 MB`) with cancellation support and magic-byte container verification (`download_stock_asset`), and full creator/license provenance retention (`validate_provenance`) stored on `studio.assets.background.provenance`.
+
+## Phase 5 implementation status
+
+Extended the version-1 composition schema (`creator_composition.py` and `captions.py`) and editor UI with a visual multi-lane timeline (`#videoTrackLane`, `#waveform`, `#blocks`) with snap-to-grid/playhead (`#snapTimeline`), B-roll / Picture-in-Picture overlay track (`broll` asset with start, duration, scale, X/Y position, opacity, and fade in/out), intro title cards (`title_text`, `title_duration` rendered in live preview and Layer-1 ASS subtitle export), keyframe camera pan/zoom (`keyframe_end_x`, `keyframe_end_y`), video fade-in/out transitions (`transition_in`, `transition_out`), background playback speed (`background_speed`) and cue speed rescaling (`shift_cues(..., speed)`), colour/exposure grading (`brightness`, `contrast`, `saturation`), automatic background audio ducking (`ducking`), and export quality presets (`draft` 720p proxy, `standard` HD 1080p, `high` Studio CRF 15 / 320 kbps).
+
+## Phase 6 implementation status
+
+Enhanced Kling Reference Prep (`reference_prep.py`, `templates/reference_prep.html`, `static/reference_prep.js`) with automatic extraction of up to 6 evenly spaced candidate frames (`candidate_0.png`..`candidate_5.png`), a composite 3×2 `contact_sheet.png`, and 1-click frame re-cutting (`POST /api/reference/<id>/select-frame`) alongside the default `first_frame.png` workflow. Added the Carousel & Still Image Studio (`/api/carousel/create`, `/api/carousel/projects`, `/api/carousel/<cid>/update`, `/api/carousel/<cid>/export`) supporting 1–30 still images, non-destructive original preservation (`orig_*`), slide reordering, 90° rotation, consistent canvas presets (`portrait` 4:5, `square` 1:1, `story` 9:16, `landscape` 16:9), safe margins, multilingual text overlays using bundled Google Fonts, and ordered ZIP export.
