@@ -1,10 +1,27 @@
-# v2.4.0
-
-See [release notes](RELEASE_NOTES.md) for the reference-preparation workflow, safety/reliability changes, runtime migration, and validation limits.
-
 # Changelog
 
 All notable changes to the AI Influencer Media Grabber project will be documented in this file.
+
+## [Creator Studio Update — v2.5.x Source] - 2026-10-21
+
+### Added & Improved
+- **CapCut-Style 4-Zone Desktop Studio (`/captions`)**:
+  - Redesigned the Captions & Lyrics editor into a full-viewport 4-zone workspace with a Left Icon Dock (`🎬 Media & Clips`, `🌐 Free Videos`, `📝 Lyrics & AI`, `✨ Filters & FX`, `🎵 Audio & Voice`, `🎞️ Canvas & PiP`), Center Video Player Stage, Right Inspector (`⚡ All`, `💬 Lines & Words`, `🎨 Text Style`), and Bottom Multitrack Timeline (`🎬 Clips`, `🎵 Audio`, `💬 Lyrics`) with zero blocking modal popups.
+- **Multi-Clip Video Sequence Storyboard**:
+  - Stitch up to **30 video or photo clips** into a sequence (`settings.sequence`), reorder clips (`←`/`→`), set per-clip durations (`0s` Auto split song evenly or custom seconds like `10s` to cycle clips across the song), preview every clip block on `#videoTrackLane`, and render stitched multi-clip sequences via FFmpeg `concat`.
+- **Free Video Search Without API Keys (Mixkit HD Stock & YouTube Shorts / Google) + Social Clip Grabber**:
+  - **🔥 Mixkit HD Stock (`mixkit`)**: Built-in zero-key search for 1,370+ free HD watermark-free dance & aesthetic stock videos.
+  - **📱 YouTube Shorts / Google (`youtube`)**: Built-in zero-key vertical video search via `yt-dlp`.
+  - **🔗 Direct TikTok / Instagram Reel / YouTube Short Clip Grabber (`POST /api/captions/stock/grab-url`)**: Paste any TikTok dance video, Instagram Reel, or YouTube Short URL directly inside the studio to download without watermark and append to your music video sequence (replacing the clip's audio with your song).
+  - **1-Click Dance & Vibe Category Chips**: Instant category buttons (`💃 Dance`, `🔥 Street / Hip-Hop`, `🪩 Club & Party`, `💃 Modern Dance`, `✨ Neon Aesthetic`, `🌆 Night Drive`, `🎤 Concert / DJ`, `🌊 Sunset Vibe`).
+- **CapCut-Style Video Filters, Visual FX & Audio FX Suite**:
+  - **Video Filters**: `B&W`, `Sepia`, `Vintage Film`, `Cyberpunk Neon`, `Warm Golden Hour`, `Cool Cinema`, `High-Contrast Dramatic`, and `Dreamy Glow` with live browser preview and FFmpeg export.
+  - **Visual FX**: Cinematic Vignette, Film Grain, Sharpen, and RGB Chromatic Glitch.
+  - **Audio Cleanup & Effects**: FFT Noise Cancellation (`afftdn`), Voice Isolation & Speech Clarity, `Echo`, `Concert Hall Reverb`, `Studio Vocal`, `Lo-Fi Radio`, `Bass Boost`, and `Chorus` in both `/captions` and the Media Tools converter (`/`).
+- **Multilingual Karaoke, Audio-Reactive Visualizers, Carousel Studio & Kling Contact Sheets**:
+  - 14-language + mixed-language (`en-fr`, `en-ko`, `en-fr-ko`) batch karaoke alignment with Needleman-Wunsch lyric correction, bundled Google Fonts (`Montserrat`, `Roboto`, `Noto Sans KR`, `Oswald`, `Lobster`, `Bangers`), audio-reactive Spectrum & Waveform visualizers, B-roll PiP overlays, intro title cards, Carousel & Still Image Studio, and 6-frame Kling contact sheets.
+
+## [v2.4.0]
 
 ## [v2.3] - 2026-10-01
 

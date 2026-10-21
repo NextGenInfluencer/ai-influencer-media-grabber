@@ -140,3 +140,13 @@ Implemented native offline video filters, visual FX, noise cancellation, voice i
 - **Video Filters (`VIDEO_FILTERS`)**: `bw` (Black & White), `sepia` (Sepia), `vintage` (Vintage Film curves + vignette), `cyberpunk` (Cyberpunk Neon contrast/colorbalance), `warm` (Warm Golden Hour), `cool` (Cool Cinema), `dramatic` (High-Contrast Dramatic), and `dreamy` (Soft Glow).
 - **Visual FX**: Cinematic Vignette (`vignette=PI/4`), Film Grain (`noise`), Sharpen (`unsharp`), and RGB Chromatic Glitch (`rgbashift`), with live browser preview on `#video` and `#stageVignette`.
 - **Audio Cleanup & Effects (`AUDIO_EFFECTS`)**: FFT Noise Cancellation (`afftdn`), Voice Isolation & Speech Clarity (`highpass=100Hz` + `lowpass=7500Hz` + `afftdn` + `3kHz` presence boost + `acompressor`), plus `echo`, `concert_hall` (multi-tap reverb), `studio_vocal`, `lofi_radio`, `bass_boost`, and `chorus`.
+
+## Phase 8 — CapCut 4-Zone Studio, Multi-Clip Storyboard & Free Video Search (Mixkit / Shorts / TikTok Grabber)
+
+- **CapCut-Style 4-Zone Studio Workspace (`templates/captions.html`, `static/captions.css`, `static/captions.js`)**: Redesigned `/captions` into a full-viewport desktop editor with a Left Icon Dock (`🎬 Media & Clips`, `🌐 Free Videos`, `📝 Lyrics & AI`, `✨ Filters & FX`, `🎵 Audio & Voice`, `🎞️ Canvas & PiP`), Center Video Player Stage, Right Inspector (`⚡ All`, `💬 Lines & Words`, `🎨 Text Style`), and Bottom Multitrack Timeline (`🎬 Clips`, `🎵 Audio`, `💬 Lyrics`), replacing blocking modal dialogs with inline dock panes.
+- **Multi-Clip Video Sequence Storyboard (`creator_composition.py`, `captions.py`)**: Added `settings.sequence` (`schedule_sequence`) supporting up to 30 video/image clips stitched via FFmpeg `concat`, with per-clip durations (`0s` Auto split song evenly or custom seconds like `10s` to cycle clips across the song), clip reordering (`←`/`→`), and multitrack timeline visualization (`#videoTrackLane`).
+- **Free Video Sources Without API Keys (`_search_mixkit`, `_search_youtube`) & Social Clip Grabber (`POST /api/captions/stock/grab-url`)**:
+  - **🔥 Mixkit HD Stock (`mixkit`)**: Built-in zero-key search for 1,370+ free HD dance and aesthetic stock videos (`-720.mp4`).
+  - **📱 YouTube Shorts / Google (`youtube`)**: Built-in zero-key vertical video search via `yt-dlp`.
+  - **🔗 Direct TikTok / Reel / Short Clip Grabber**: Paste any TikTok dance video, Instagram Reel, or YouTube Short URL directly in the studio to download without watermark and append to the clip sequence.
+  - **1-Click Dance & Vibe Chips**: Instant category pills (`💃 Dance`, `🔥 Street / Hip-Hop`, `🪩 Club & Party`, `💃 Modern Dance`, `✨ Neon Aesthetic`, `🌆 Night Drive`, `🎤 Concert / DJ`, `🌊 Sunset Vibe`).
