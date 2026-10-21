@@ -66,6 +66,8 @@ DEFAULTS = dict(shape='portrait', color='#141526', fit='fill', x=50, y=50,
                 title_text='', title_duration=0,
                 broll_start=0, broll_duration=0, broll_x=50, broll_y=50,
                 broll_scale=100, broll_opacity=1, broll_fade=0,
+                sticker_start=0, sticker_duration=0, sticker_x=85, sticker_y=15,
+                sticker_scale=25, sticker_opacity=1, sticker_fade=0.2, sticker_anim='pop',
                 start=0, end=0, offset=0, volume=1, fade_in=0, fade_out=0,
                 noise_cancel=False, voice_isolation=False, audio_effect='none',
                 background_volume=0, ducking=False, loop=True, background_start=0, background_duration=0,
@@ -165,8 +167,9 @@ def validate_sequence(seq) -> list[dict]:
         if not re.fullmatch(r'(background|clip_[a-zA-Z0-9_]+)', asset):
             raise ValueError('Invalid clip asset reference.')
         dur = finite(item.get('duration', 0), 0, 1200)
+        speed = finite(item.get('speed', 1.0), 0.25, 4.0)
         name = re.sub(r'[\r\n\t]+', ' ', str(item.get('name') or asset)).strip()[:120]
-        cleaned.append(dict(asset=asset, name=name, duration=dur))
+        cleaned.append(dict(asset=asset, name=name, duration=dur, speed=speed))
     return cleaned
 
 
@@ -175,7 +178,8 @@ def schedule_sequence(seq: list, assets: dict, total_duration: float, loop: bool
     if not valid or (len(valid) == 1 and float(valid[0].get('duration') or 0) <= 0):
         if len(valid) == 1:
             a_key = valid[0]['asset']
-            return [dict(asset=a_key, name=str(valid[0].get('name') or assets[a_key]['file'])[:120], start=0.0, duration=round(total_duration, 3))]
+            spd = finite(valid[0].get('speed', 1.0), 0.25, 4.0)
+            return [dict(asset=a_key, name=str(valid[0].get('name') or assets[a_key]['file'])[:120], start=0.0, duration=round(total_duration, 3), speed=spd)]
         return []
     fixed_sum = sum(float(item['duration']) for item in valid if float(item.get('duration') or 0) > 0)
     auto_count = sum(1 for item in valid if float(item.get('duration') or 0) <= 0)
@@ -198,11 +202,13 @@ def schedule_sequence(seq: list, assets: dict, total_duration: float, loop: bool
             if seg_d < 0.05:
                 break
             a_key = item['asset']
+            spd = finite(item.get('speed', 1.0), 0.25, 4.0)
             segments.append(dict(
                 asset=a_key,
                 name=str(item.get('name') or assets[a_key].get('name') or assets[a_key]['file'])[:120],
                 start=round(t, 3),
                 duration=round(seg_d, 3),
+                speed=spd
             ))
             t += seg_d
         if not loop or auto_count > 0:
@@ -221,13 +227,16 @@ def schema(assets, settings, style):
     if 'broll' in assets and s.get('broll_duration', 0) > 0:
         overlay_clips.append(dict(kind='broll', asset='broll', start=s['broll_start'], duration=s['broll_duration'],
                                   transform={k: s[k] for k in ('broll_x','broll_y','broll_scale','broll_opacity','broll_fade')}))
+    if 'sticker' in assets and s.get('sticker_duration', 0) > 0:
+        overlay_clips.append(dict(kind='sticker', asset='sticker', start=s['sticker_start'], duration=s['sticker_duration'],
+                                  transform={k: s[k] for k in ('sticker_x','sticker_y','sticker_scale','sticker_opacity','sticker_fade','sticker_anim')}))
     tf = {k: s[k] for k in ('fit','x','y','blur','dim','overlay','opacity','zoom',
                             'brightness','contrast','saturation','transition_in','transition_out',
                             'keyframe_end_x','keyframe_end_y')}
     seq_segments = schedule_sequence(s.get('sequence') or [], assets, length, loop=s['loop'])
     if len(seq_segments) >= 2:
         bg_clips = [dict(asset=seg['asset'], name=seg['name'], start=seg['start'], duration=seg['duration'],
-                         source_offset=0, speed=s['background_speed'], transform=tf) for seg in seq_segments]
+                         source_offset=0, speed=seg.get('speed', s['background_speed']), transform=tf) for seg in seq_segments]
     else:
         bg_clips = [dict(asset='background', start=0, duration=length,
                          source_offset=s['background_start'], speed=s['background_speed'], transform=tf)]
@@ -312,8 +321,8 @@ def render_args(studio, folder, output, background_has_audio=False, bake_fx=True
         for key in sequence_assets:
             c_asset = assets[key]
             c_path = local_asset(folder, c_asset)
-            longest = max(seg['duration'] for seg in seq_segments if seg['asset'] == key)
-            in_dur = round(longest * max(1.0, s['background_speed']) + 0.5, 3)
+            longest = max(seg['duration'] * max(1.0, float(seg.get('speed', 1.0) or s['background_speed'])) for seg in seq_segments if seg['asset'] == key)
+            in_dur = round(longest + 0.5, 3)
             if c_asset['kind'] == 'image':
                 args += ['-loop', '1', '-framerate', '30', '-t', str(in_dur), '-i', c_path.name]
             else:
@@ -331,13 +340,27 @@ def render_args(studio, folder, output, background_has_audio=False, bake_fx=True
             args += ['-f','lavfi','-i',f"color=c={s['color']}:s={w}x{h}:r=30"]
     broll = assets.get('broll')
     has_broll = bool(broll and s['broll_duration'] > 0)
-    broll_idx = (1 + len(sequence_assets)) if multi_clip else 2
+    sticker = assets.get('sticker')
+    has_sticker = bool(sticker and s.get('sticker_duration', 0) > 0)
+
+    next_in_idx = (1 + len(sequence_assets)) if multi_clip else 2
     if has_broll and broll is not None:
+        broll_idx = next_in_idx
+        next_in_idx += 1
         bpath = local_asset(folder, broll)
         if broll['kind'] == 'image':
             args += ['-loop', '1', '-framerate', '30', '-i', bpath.name]
         else:
             args += ['-stream_loop', '-1', '-i', bpath.name]
+
+    if has_sticker and sticker is not None:
+        sticker_idx = next_in_idx
+        next_in_idx += 1
+        spath = local_asset(folder, sticker)
+        if sticker.get('kind') == 'image' or spath.suffix.lower() in ('.png', '.jpg', '.jpeg', '.webp'):
+            args += ['-loop', '1', '-framerate', '30', '-i', spath.name]
+        else:
+            args += ['-stream_loop', '-1', '-i', spath.name]
     graph=[]
     length=s['end']-s['start']
     af=f"[0:a]atrim=start={s['start']}:end={s['end']},asetpts=PTS-STARTPTS,volume={s['volume']}"
@@ -357,7 +380,14 @@ def render_args(studio, folder, output, background_has_audio=False, bake_fx=True
                 c_asset = assets[seg['asset']]
                 idx = sequence_assets.index(seg['asset']) + 1
                 if c_asset['kind'] == 'video' and c_asset.get('has_audio', True):
-                    graph.append(f"[{idx}:a]{atempo_filter}asetpts=PTS-STARTPTS,atrim=duration={seg['duration']},asetpts=PTS-STARTPTS,aformat=sample_rates=44100:channel_layouts=stereo[aseg{k}]")
+                    seg_spd = float(seg.get('speed', 1.0) or s.get('background_speed', 1.0))
+                    seg_atempo = ""
+                    if abs(seg_spd - 1.0) > 1e-4:
+                        if seg_spd >= 0.5:
+                            seg_atempo = f"atempo={seg_spd:.4f},"
+                        elif seg_spd >= 0.25:
+                            seg_atempo = f"atempo=0.5,atempo={seg_spd/0.5:.4f},"
+                    graph.append(f"[{idx}:a]{seg_atempo}asetpts=PTS-STARTPTS,atrim=duration={seg['duration']},asetpts=PTS-STARTPTS,aformat=sample_rates=44100:channel_layouts=stereo[aseg{k}]")
                 else:
                     graph.append(f"anullsrc=r=44100:cl=stereo,atrim=duration={seg['duration']}[aseg{k}]")
             a_concat_in = ''.join(f'[aseg{k}]' for k in range(len(seq_segments)))
@@ -387,7 +417,9 @@ def render_args(studio, folder, output, background_has_audio=False, bake_fx=True
 
         for k, seg in enumerate(seq_segments):
             seg_trim_dur = round(seq_segments[0]['duration'] if (xfade_active and k == 0) else (seg['duration'] + (td if xfade_active else 0.0)), 3)
-            seg_vf = f"[seqinput{k}]setpts={pts_expr},fps=30,tpad=stop_mode=clone:stop_duration={seg_trim_dur},trim=duration={seg_trim_dur},setpts=PTS-STARTPTS,{scale_crop},setsar=1,format=yuv420p"
+            seg_spd = float(seg.get('speed', 1.0) or s.get('background_speed', 1.0))
+            seg_pts = f"{1.0/seg_spd:.4f}*(PTS-STARTPTS)" if abs(seg_spd - 1.0) > 1e-4 else 'PTS-STARTPTS'
+            seg_vf = f"[seqinput{k}]setpts={seg_pts},fps=30,tpad=stop_mode=clone:stop_duration={seg_trim_dur},trim=duration={seg_trim_dur},setpts=PTS-STARTPTS,{scale_crop},setsar=1,format=yuv420p"
             if trans in ('fadeblack', 'fadewhite') and td >= 0.05:
                 fcol = 'black' if trans == 'fadeblack' else 'white'
                 seg_vf += f",fade=t=in:st=0:d={td:.2f}:color={fcol},fade=t=out:st={round(seg['duration']-td, 3):.2f}:d={td:.2f}:color={fcol}"
@@ -428,8 +460,8 @@ def render_args(studio, folder, output, background_has_audio=False, bake_fx=True
         vf+=f",fade=t=in:st=0:d={min(duration, s['transition_in'])}"
     if s['transition_out'] > 0:
         vf+=f",fade=t=out:st={max(0, duration - s['transition_out'])}:d={min(duration, s['transition_out'])}"
-    bg_label = '[bg0]' if has_broll else '[bg]'
-    graph.append(vf + bg_label)
+    cur_bg = 'bg0' if (has_broll or has_sticker) else 'bg'
+    graph.append(vf + f'[{cur_bg}]')
     if has_broll:
         bw = max(2, round(w * (s['broll_scale'] / 100) / 2) * 2)
         bh = max(2, round(h * (s['broll_scale'] / 100) / 2) * 2)
@@ -443,7 +475,22 @@ def render_args(studio, folder, output, background_has_audio=False, bake_fx=True
         ox = f"(W-w)*{s['broll_x']/100}"
         oy = f"(H-h)*{s['broll_y']/100}"
         b_end = round(s['broll_start'] + s['broll_duration'], 3)
-        graph += [bvf, f"[bg0][broll]overlay=x='{ox}':y='{oy}':enable='between(t,{s['broll_start']},{b_end})':eof_action=pass[bg]"]
+        next_bg = 'bg_mid' if has_sticker else 'bg'
+        graph += [bvf, f"[{cur_bg}][broll]overlay=x='{ox}':y='{oy}':enable='between(t,{s['broll_start']},{b_end})':eof_action=pass[{next_bg}]"]
+        cur_bg = next_bg
+    if has_sticker:
+        sw = max(2, round(w * (s['sticker_scale'] / 100) / 2) * 2)
+        svf = f"[{sticker_idx}:v]setpts=PTS-STARTPTS,fps=30,scale={sw}:-2,setsar=1,format=rgba"
+        if s['sticker_opacity'] < 1:
+            svf += f",colorchannelmixer=aa={s['sticker_opacity']}"
+        if s['sticker_fade'] > 0:
+            sf = min(s['sticker_duration'] / 2, s['sticker_fade'])
+            svf += f",fade=t=in:st=0:d={sf}:alpha=1,fade=t=out:st={max(0, s['sticker_duration'] - sf)}:alpha=1:d={sf}"
+        svf += f",trim=duration={s['sticker_duration']},setpts=PTS+{s['sticker_start']}/TB[sticker]"
+        sox = f"(W-w)*{s['sticker_x']/100}"
+        soy = f"(H-h)*{s['sticker_y']/100}"
+        s_end = round(s['sticker_start'] + s['sticker_duration'], 3)
+        graph += [svf, f"[{cur_bg}][sticker]overlay=x='{sox}':y='{soy}':enable='between(t,{s['sticker_start']},{s_end})':eof_action=pass[bg]"]
     if s['visualizer']:
         vh = max(2, round(h * (s['visualizer_height'] / 100) / 2) * 2)
         vy = '0' if s['visualizer_position'] == 'top' else '(H-h)/2' if s['visualizer_position'] == 'center' else 'H-h'

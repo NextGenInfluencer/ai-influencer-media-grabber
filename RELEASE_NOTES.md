@@ -1,3 +1,22 @@
+# v2.7.2 — Cut-to-the-Beat, Per-Clip Speed Ramping & Sticker Overlays
+
+- **Cut-to-the-Beat / Auto Beat-Drop Snapping (`⚡ Cut to Beat`)**:
+  - Added 1-click `⚡ Cut to Beat` button in the sequence storyboard bar.
+  - Automatically analyzes the song's audio waveform peaks and beat transients (`CaptionTiming.detectBeats`), snapping all clip cut points to the nearest musical beat drops for effortless rhythmic TikTok/Reels-style music video editing.
+- **Per-Clip Speed Ramping & Slow-Mo (0.25× to 4×)**:
+  - Added dedicated speed multiplier dropdown (`0.25× Slow`, `0.5× Slow`, `0.75×`, `1× Normal`, `1.25×`, `1.5×`, `2× Fast`, `4× Hyper`) on every clip pill in the sequence storyboard.
+  - Configures per-segment video presentation timestamps (`setpts=PTS/{speed}`) and audio speed filters (`atempo={speed}`), maintaining bit-exact audio synchronization and slow-mo video fluidity.
+- **Stickers, Emojis & Transparent Graphic Overlay Track**:
+  - Added a dedicated **Stickers** dock tab and pane (`data-dock-pane="stickers"`).
+  - 1-click viral reaction emojis (`🔥`, `💃`, `👑`, `✨`, `💯`, `💖`, `⚡`, `🎧`, `🚀`, `🪩`, `⭐`, `🎉`) rendered as high-res transparent PNG stickers with automatic Pillow typography.
+  - Direct upload support for custom transparent PNG, animated GIF, and WebP graphics.
+  - Precise timing & placement controls: start time, duration, X/Y screen position, size scale, opacity, fade in/out, and motion entrance animations (`pop` bounce, `fade`, `slide`).
+  - Real-time video player stage preview via `#stageSticker` and multitrack timeline visualization on `#videoTrackLane`.
+
+Validation: 100 automated tests passed across Python unit tests, FFmpeg render tests, and Node.js timing checks.
+
+Download the Windows Setup EXE below. Close the app before installing over your existing installation. This release preserves all your saved media and caption projects.
+
 # v2.7.1 — CapCut-Style Split Clip, Custom Font Upload, 60fps/4K & Audio Badges
 
 - **Split Clip at Playhead (`Ctrl+B` / Split Clip Button)**:

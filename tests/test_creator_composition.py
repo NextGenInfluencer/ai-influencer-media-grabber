@@ -481,6 +481,62 @@ class CompositionDataTests(unittest.TestCase):
             self.assertIn('vignette', fg_baked)
             self.assertIn('aecho', fg_baked)
 
+    def test_per_clip_speed_ramping_and_sticker_overlays(self):
+        with tempfile.TemporaryDirectory() as td:
+            folder = Path(td)
+            (folder / 'song.wav').write_bytes(b'RIFF' + b'\x00' * 40)
+            (folder / 'clip1.mp4').write_bytes(b'\x00' * 50)
+            (folder / 'clip2.mp4').write_bytes(b'\x00' * 50)
+            (folder / 'sticker.png').write_bytes(b'\x89PNG\r\n\x1a\n' + b'\x00' * 50)
+
+            seq = [
+                {'asset': 'clip_1', 'name': 'Intro Slow', 'duration': 3.0, 'speed': 0.5},
+                {'asset': 'clip_2', 'name': 'Drop Fast', 'duration': 3.0, 'speed': 2.0},
+            ]
+            cleaned_seq = comp.validate_sequence(seq)
+            self.assertEqual(cleaned_seq[0]['speed'], 0.5)
+            self.assertEqual(cleaned_seq[1]['speed'], 2.0)
+
+            assets = {
+                'audio': dict(file='song.wav', kind='audio', duration=6.0),
+                'clip_1': dict(file='clip1.mp4', kind='video', name='Intro Slow', has_audio=True),
+                'clip_2': dict(file='clip2.mp4', kind='video', name='Drop Fast', has_audio=True),
+                'sticker': dict(file='sticker.png', kind='image', name='Reaction Emoji'),
+            }
+            sched = comp.schedule_sequence(cleaned_seq, assets, 6.0)
+            self.assertEqual(len(sched), 2)
+            self.assertEqual(sched[0]['speed'], 0.5)
+            self.assertEqual(sched[1]['speed'], 2.0)
+
+            settings = comp.validate({
+                **comp.DEFAULTS,
+                'end': 6.0,
+                'sequence': cleaned_seq,
+                'sticker_start': 1.0,
+                'sticker_duration': 2.5,
+                'sticker_x': 90,
+                'sticker_y': 10,
+                'sticker_scale': 30,
+                'sticker_opacity': 0.9,
+                'sticker_fade': 0.2,
+                'background_volume': 0.5,
+            }, 6.0)
+
+            studio = comp.schema(assets, settings, {'font': 'Montserrat'})
+            self.assertEqual(len(studio['tracks'][3]['clips']), 1)
+            self.assertEqual(studio['tracks'][3]['clips'][0]['kind'], 'sticker')
+
+            args = comp.render_args(studio, folder, 'speed_sticker.mp4', background_has_audio=True)
+            self.assertIn('-i', args)
+            self.assertIn('sticker.png', ' '.join(args))
+            fg = next(args[i+1] for i, a in enumerate(args) if a == '-filter_complex')
+            self.assertIn('2.0000*(PTS-STARTPTS)', fg)
+            self.assertIn('0.5000*(PTS-STARTPTS)', fg)
+            self.assertIn('atempo=0.5000', fg)
+            self.assertIn('atempo=2.0000', fg)
+            self.assertIn("overlay=x='(W-w)*0.9'", fg)
+            self.assertIn("between(t,1.0,3.5)", fg)
+
 
 
 

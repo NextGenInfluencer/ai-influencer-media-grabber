@@ -278,6 +278,45 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         if(vig) vig.hidden = !(s.vignette || activeFilter==='vintage' || activeFilter==='dramatic');
         const compSet=project.studio?.settings||project.composition||{};
         const showTitle=compSet.title_text && compSet.title_duration>0 && video.currentTime>=0 && video.currentTime<=compSet.title_duration;
+        const st=$('stageSticker');
+        if(st) {
+            const stickerAsset=project.studio?.assets?.sticker;
+            const hasStk=(stickerAsset || selectedEmoji) && (Number(compSet.sticker_duration)>0);
+            const stkStart=Number(compSet.sticker_start)||0;
+            const stkDur=Number(compSet.sticker_duration)||0;
+            const inRange=hasStk && video.currentTime>=stkStart && video.currentTime<=(stkStart+stkDur);
+            if(inRange) {
+                st.hidden=false;
+                const scalePct=Number(compSet.sticker_scale)||25;
+                const posX=compSet.sticker_x!==undefined?Number(compSet.sticker_x):85;
+                const posY=compSet.sticker_y!==undefined?Number(compSet.sticker_y):15;
+                const op=(compSet.sticker_opacity!==undefined?Number(compSet.sticker_opacity):100)/100;
+                st.style.left=posX+'%';
+                st.style.top=posY+'%';
+                st.style.opacity=String(op);
+                let stTransform=`translate(-50%, -50%) scale(${scalePct/25})`;
+                const elapsed=video.currentTime-stkStart;
+                const remain=(stkStart+stkDur)-video.currentTime;
+                if(compSet.sticker_anim==='pop' && elapsed<0.22) {
+                    const sc=0.5+0.5*(elapsed/0.22);
+                    stTransform=`translate(-50%, -50%) scale(${(scalePct/25*sc).toFixed(2)})`;
+                } else if(compSet.sticker_anim==='fade') {
+                    st.style.opacity=String(Math.min(op, op*elapsed/0.2, op*remain/0.2));
+                }
+                st.style.transform=stTransform;
+                if(selectedEmoji) {
+                    st.innerHTML=`<span style="font-size:52px;line-height:1;filter:drop-shadow(0 4px 12px rgba(0,0,0,0.6));">${selectedEmoji}</span>`;
+                } else if(stickerAsset) {
+                    const src=media(stickerAsset.file);
+                    if(st.dataset.src!==src) {
+                        st.dataset.src=src;
+                        st.innerHTML=`<img src="${src}" style="max-width:130px;max-height:130px;object-fit:contain;filter:drop-shadow(0 4px 12px rgba(0,0,0,0.6));" alt="sticker">`;
+                    }
+                }
+            } else {
+                st.hidden=true;
+            }
+        }
         const glowPx=Number(s.glow||0)*2.5;
         let animTransform='translateY(-100%)', animOpacity='1';
         if(cue && s.animation && s.animation!=='none') {
@@ -426,6 +465,13 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
                 bb.textContent='B-Roll ('+(cs.broll_scale||100)+'%)';bb.onclick=()=>openCompositionEditor();
                 vLane.append(bb);
             }
+            if(project.studio?.assets?.sticker && cs.sticker_duration>0) {
+                const sb=document.createElement('div');sb.className='trackBlock sticker';
+                sb.style.left=(Math.min(project.duration,cs.sticker_start||0)/project.duration*100)+'%';
+                sb.style.width=(Math.min(project.duration-(cs.sticker_start||0),cs.sticker_duration)/project.duration*100)+'%';
+                sb.textContent='🎨 Sticker ('+(cs.sticker_scale||25)+'%)';sb.onclick=()=>switchDock('stickers');
+                vLane.append(sb);
+            }
         }
         const canvas=$('waveform');canvas.width=width;canvas.height=80;
         const ctx=canvas.getContext('2d');ctx.fillStyle='#72cfc5';
@@ -496,14 +542,16 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
             clipSequence=savedSeq.map(item=>({
                 asset:item.asset,
                 name:item.name||project.studio.assets?.[item.asset]?.name||project.studio.assets?.[item.asset]?.file||item.asset,
-                duration:Number(item.duration)||0
+                duration:Number(item.duration)||0,
+                speed:Number(item.speed)||1
             }));
         } else if(project.studio.assets?.background) {
             const bg=project.studio.assets.background;
             clipSequence=[{
                 asset:'background',
                 name:bg.name||bg.provenance?.attribution||bg.file||'Current background',
-                duration:0
+                duration:0,
+                speed:1
             }];
         } else {
             clipSequence=[];
@@ -526,13 +574,20 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
             durInput.value=String(item.duration||0);durInput.title='Clip duration in seconds (0 = Auto split song evenly)';durInput.disabled=busy;
             durInput.onchange=()=>{item.duration=Math.max(0,Number(durInput.value)||0);drawSequenceLists();};
             const durUnit=document.createElement('small');durUnit.textContent=(Number(item.duration)>0?'s':'s (Auto)');
+            const spdSel=document.createElement('select');spdSel.className='seqSpeed';spdSel.title='Clip playback speed';spdSel.disabled=busy;
+            [{l:'0.25× Slow',v:0.25},{l:'0.5× Slow',v:0.5},{l:'0.75×',v:0.75},{l:'1× Normal',v:1},{l:'1.25×',v:1.25},{l:'1.5×',v:1.5},{l:'2× Fast',v:2},{l:'4× Hyper',v:4}].forEach(o=>{
+                const opt=new Option(o.l,String(o.v));
+                if(Math.abs((Number(item.speed)||1)-o.v)<0.05) opt.selected=true;
+                spdSel.add(opt);
+            });
+            spdSel.onchange=()=>{item.speed=Number(spdSel.value)||1;drawSequenceLists();};
             const leftBtn=document.createElement('button');leftBtn.type='button';leftBtn.textContent='←';leftBtn.title='Move clip earlier';leftBtn.disabled=busy||idx===0;
             leftBtn.onclick=()=>{const tmp=clipSequence[idx-1];clipSequence[idx-1]=clipSequence[idx];clipSequence[idx]=tmp;drawSequenceLists();};
             const rightBtn=document.createElement('button');rightBtn.type='button';rightBtn.textContent='→';rightBtn.title='Move clip later';rightBtn.disabled=busy||idx===clipSequence.length-1;
             rightBtn.onclick=()=>{const tmp=clipSequence[idx+1];clipSequence[idx+1]=clipSequence[idx];clipSequence[idx]=tmp;drawSequenceLists();};
             const delBtn=document.createElement('button');delBtn.type='button';delBtn.textContent='✕';delBtn.title='Remove clip from sequence';delBtn.disabled=busy;
             delBtn.onclick=()=>{clipSequence.splice(idx,1);drawSequenceLists();};
-            pill.append(num,name,durInput,durUnit,leftBtn,rightBtn,delBtn);
+            pill.append(num,name,durInput,durUnit,spdSel,leftBtn,rightBtn,delBtn);
             container.append(pill);
         });
     }
@@ -573,8 +628,8 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         $('createSong').disabled=true;
         try {await create(form);$('songDialog').close();} finally {$('createSong').disabled=false;}
     });
-    const compositionKeys=['shape','color','fit','x','y','blur','dim','overlay','opacity','zoom','brightness','contrast','saturation','video_filter','vignette','film_grain','sharpen','chromatic','background_speed','transition_in','transition_out','keyframe_end_x','keyframe_end_y','title_text','title_duration','broll_start','broll_duration','broll_x','broll_y','broll_scale','broll_opacity','broll_fade','start','end','offset','volume','fade_in','fade_out','noise_cancel','voice_isolation','audio_effect','background_volume','ducking','loop','background_start','background_duration','visualizer','visualizer_style','visualizer_position','visualizer_height','visualizer_sensitivity','visualizer_color','sequence_transition','sequence_transition_duration'];
-    const compositionChecks=['loop','visualizer','ducking','vignette','noise_cancel','voice_isolation'], compositionStrings=['shape','color','fit','overlay','visualizer_style','visualizer_position','visualizer_color','title_text','video_filter','audio_effect','sequence_transition'];
+    const compositionKeys=['shape','color','fit','x','y','blur','dim','overlay','opacity','zoom','brightness','contrast','saturation','video_filter','vignette','film_grain','sharpen','chromatic','background_speed','transition_in','transition_out','keyframe_end_x','keyframe_end_y','title_text','title_duration','broll_start','broll_duration','broll_x','broll_y','broll_scale','broll_opacity','broll_fade','sticker_start','sticker_duration','sticker_x','sticker_y','sticker_scale','sticker_opacity','sticker_fade','sticker_anim','start','end','offset','volume','fade_in','fade_out','noise_cancel','voice_isolation','audio_effect','background_volume','ducking','loop','background_start','background_duration','visualizer','visualizer_style','visualizer_position','visualizer_height','visualizer_sensitivity','visualizer_color','sequence_transition','sequence_transition_duration'];
+    const compositionChecks=['loop','visualizer','ducking','vignette','noise_cancel','voice_isolation'], compositionStrings=['shape','color','fit','overlay','visualizer_style','visualizer_position','visualizer_color','title_text','video_filter','audio_effect','sequence_transition','sticker_anim'];
     function fillComposition(settings) {
         for(const key of compositionKeys) {const input=$('comp_'+key);if(compositionChecks.includes(key))input.checked=!!settings[key];else if(settings[key]!==undefined)input.value=settings[key];}
     }
@@ -676,15 +731,16 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         if(!clearBg && !((bg||libBg) && clipSequence.length<=1 && clipSequence[0]?.asset==='background')) {
             seqPayload=clipSequence.map(item=>{
                 const dur=Math.max(0,Number(item.duration)||0);
+                const spd=Math.max(0.25,Math.min(4.0,Number(item.speed)||1));
                 if(item.file) {
                     const idx=uploadFiles.length;
                     uploadFiles.push(item.file);
-                    return {upload_index:idx,name:item.name,duration:dur};
+                    return {upload_index:idx,name:item.name,duration:dur,speed:spd};
                 }
                 if(item.path) {
-                    return {path:item.path,name:item.name,duration:dur,...(item.provenance?{provenance:item.provenance}:{})};
+                    return {path:item.path,name:item.name,duration:dur,speed:spd,...(item.provenance?{provenance:item.provenance}:{})};
                 }
-                return {asset:item.asset,name:item.name,duration:dur};
+                return {asset:item.asset,name:item.name,duration:dur,speed:spd};
             });
         }
         settings.sequence=seqPayload;
@@ -697,6 +753,10 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
             form.append('background_path',libBg);
             if(selectedStock.composition?.path===libBg && selectedStock.composition?.provenance) form.append('stock_provenance',JSON.stringify(selectedStock.composition.provenance));
         }
+        const stickerFile=$('stickerFile')?.files?.[0];
+        if(stickerFile) form.append('sticker', stickerFile);
+        if(selectedEmoji) form.append('emoji_sticker', selectedEmoji);
+        form.append('clear_sticker', clearStickerPending);
         if(fromDialog) {
             const audio=$('compAudio').files[0],broll=$('compBroll').files[0];
             if(broll)form.append('broll',broll);
@@ -821,12 +881,14 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         const leftClip = {
             ...orig,
             name: `${cleanName} (Part 1)`,
-            duration: leftDur
+            duration: leftDur,
+            speed: orig.speed || 1
         };
         const rightClip = {
             ...orig,
             name: `${cleanName} (Part 2)`,
-            duration: rightDur
+            duration: rightDur,
+            speed: orig.speed || 1
         };
 
         clipSequence.splice(splitIdx, 1, leftClip, rightClip);
@@ -836,6 +898,70 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
     }
     if($('seqSplitAtPlayhead')) $('seqSplitAtPlayhead').onclick=()=>splitClipAtPlayhead();
     if($('splitClip')) $('splitClip').onclick=()=>splitClipAtPlayhead();
+    if($('seqSyncBeats')) $('seqSyncBeats').onclick=()=>{
+        if(!project?.duration || clipSequence.length < 2) {
+            say('Add at least 2 clips to sequence to cut to the beat.', true);
+            return;
+        }
+        const beats = CaptionTiming.detectBeats(project.peaks, project.duration);
+        if(!beats || !beats.length) {
+            say('No distinct beat peaks detected in this audio. Using even split instead.', true);
+            return;
+        }
+        const K = clipSequence.length;
+        const D = project.duration;
+        let lastCut = 0;
+        for (let j = 1; j < K; j++) {
+            const ideal = (j * D) / K;
+            const minTime = lastCut + 0.35;
+            const maxTime = D - 0.35 * (K - j);
+            const candidates = beats.filter(b => b >= minTime && b <= maxTime);
+            let chosen = ideal;
+            if (candidates.length > 0) {
+                chosen = candidates.reduce((prev, curr) => Math.abs(curr - ideal) < Math.abs(prev - ideal) ? curr : prev);
+            }
+            chosen = Math.round(chosen * 100) / 100;
+            const dur = Math.round((chosen - lastCut) * 100) / 100;
+            clipSequence[j - 1].duration = dur;
+            lastCut = chosen;
+        }
+        clipSequence[K - 1].duration = Math.max(0.1, Math.round((D - lastCut) * 100) / 100);
+        drawSequenceLists();
+        say(`⚡ Synced ${K} clips to musical beats! Click "Apply clip sequence" to bake.`);
+    };
+
+    let selectedEmoji = null;
+    let clearStickerPending = false;
+    document.querySelectorAll('.emojiBtn').forEach(btn => {
+        btn.onclick = () => {
+            selectedEmoji = btn.dataset.emoji;
+            clearStickerPending = false;
+            if ($('activeStickerNotice')) $('activeStickerNotice').textContent = `Active sticker: Emoji ${selectedEmoji} (Click Apply to save)`;
+            if ($('stickerFile')) $('stickerFile').value = '';
+            drawCaption();
+        };
+    });
+    if ($('stickerFile')) {
+        $('stickerFile').onchange = () => {
+            const f = $('stickerFile').files[0];
+            if (f) {
+                selectedEmoji = null;
+                clearStickerPending = false;
+                if ($('activeStickerNotice')) $('activeStickerNotice').textContent = `Active sticker: File "${f.name}" (Click Apply to upload)`;
+                drawCaption();
+            }
+        };
+    }
+    if ($('clearStickerBtn')) {
+        $('clearStickerBtn').onclick = () => {
+            selectedEmoji = null;
+            clearStickerPending = true;
+            if ($('activeStickerNotice')) $('activeStickerNotice').textContent = 'Sticker removed. Click Apply to save.';
+            if ($('comp_sticker_duration')) $('comp_sticker_duration').value = '0';
+            drawCaption();
+        };
+    }
+    if ($('applyStickerBtn')) $('applyStickerBtn').onclick = act(() => applyCompositionChanges(true));
     async function syncStockKeyStatus() {
         try {
             const prov=$('stockProvider').value;

@@ -81,6 +81,10 @@
           <span class="dockIcon">🎞️</span>
           <span>Canvas &amp; PiP</span>
         </button>
+        <button type="button" class="dockTab" data-dock="stickers">
+          <span class="dockIcon">🎨</span>
+          <span>Stickers</span>
+        </button>
       </nav>
 
       <div class="dockDrawer">
@@ -121,6 +125,7 @@
               <div class="row" style="margin-bottom:8px;">
                 <select id="seqLibrarySelect" aria-label="Add clip from library" style="flex:1;"><option value="">+ Add clip from library…</option></select>
                 <button id="seqSplitAtPlayhead" type="button" title="Split active clip into two at the current video playhead (Ctrl+B)">✂️ Split at Playhead</button>
+                <button id="seqSyncBeats" type="button" title="Align clip cut points so transitions drop exactly on musical beats">⚡ Cut to Beat</button>
                 <button id="seqEvenSplit" type="button" title="Set all clip durations to 0 (split song evenly)">Split evenly</button>
                 <button id="seqCycle10" type="button" title="Set each clip to 10s so clips cycle across the song">10s each</button>
               </div>
@@ -568,6 +573,69 @@
             <button id="applyComposition" class="primary" type="button" style="flex:1;">✨ Apply Canvas &amp; Composition</button>
           </div>
         </section>
+
+        <!-- PANE 7: STICKERS & EMOJI OVERLAYS -->
+        <section class="dockPane" data-dock-pane="stickers">
+          <div class="paneHeader">
+            <h2>🎨 Stickers, Emojis &amp; Overlays</h2>
+          </div>
+          <div class="subCard">
+            <h3>1. Choose Sticker or Graphic</h3>
+            <p class="hint" style="margin-top:0;">Pick an animated/transparent sticker or 1-click reaction emoji.</p>
+            <div class="emojiPickRow" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">
+              <button type="button" class="emojiBtn" data-emoji="🔥" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;">🔥</button>
+              <button type="button" class="emojiBtn" data-emoji="💃" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;">💃</button>
+              <button type="button" class="emojiBtn" data-emoji="👑" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;">👑</button>
+              <button type="button" class="emojiBtn" data-emoji="✨" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;">✨</button>
+              <button type="button" class="emojiBtn" data-emoji="💯" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;">💯</button>
+              <button type="button" class="emojiBtn" data-emoji="💖" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;">💖</button>
+              <button type="button" class="emojiBtn" data-emoji="⚡" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;">⚡</button>
+              <button type="button" class="emojiBtn" data-emoji="🎧" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;">🎧</button>
+              <button type="button" class="emojiBtn" data-emoji="🚀" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;">🚀</button>
+              <button type="button" class="emojiBtn" data-emoji="🪩" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;">🪩</button>
+              <button type="button" class="emojiBtn" data-emoji="⭐" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;">⭐</button>
+              <button type="button" class="emojiBtn" data-emoji="🎉" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;">🎉</button>
+            </div>
+            <div class="row">
+              <label class="upload primaryBtn" style="flex:1;text-align:center;">
+                📁 Upload Custom PNG / GIF / WebP
+                <input id="stickerFile" type="file" accept=".png,.gif,.webp,.jpg,.jpeg">
+              </label>
+            </div>
+            <p id="activeStickerNotice" class="hint" style="margin-top:6px;font-weight:600;"></p>
+          </div>
+
+          <div class="subCard stackForm">
+            <h3>2. Timing &amp; Placement</h3>
+            <div class="row">
+              <label style="flex:1;">Start time (s)<input id="comp_sticker_start" type="number" min="0" max="1200" step="0.1" value="0"></label>
+              <label style="flex:1;">Duration (s)<input id="comp_sticker_duration" type="number" min="0" max="1200" step="0.1" value="3"></label>
+            </div>
+            <div class="row">
+              <label style="flex:1;">Position X (%)<input id="comp_sticker_x" type="range" min="0" max="100" value="85"></label>
+              <label style="flex:1;">Position Y (%)<input id="comp_sticker_y" type="range" min="0" max="100" value="15"></label>
+            </div>
+            <div class="row">
+              <label style="flex:1;">Size Scale (%)<input id="comp_sticker_scale" type="range" min="5" max="100" value="25"></label>
+              <label style="flex:1;">Opacity (%)<input id="comp_sticker_opacity" type="range" min="10" max="100" value="100"></label>
+            </div>
+            <div class="row">
+              <label style="flex:1;">Fade In/Out (s)<input id="comp_sticker_fade" type="number" min="0" max="3" step="0.1" value="0.2"></label>
+              <label style="flex:1;">Animation
+                <select id="comp_sticker_anim">
+                  <option value="pop">Pop / Bounce</option>
+                  <option value="fade">Smooth Fade</option>
+                  <option value="slide">Slide Down</option>
+                  <option value="none">Static</option>
+                </select>
+              </label>
+            </div>
+            <div class="row" style="margin-top:10px;">
+              <button id="clearStickerBtn" type="button" title="Remove active sticker from video">✕ Remove Sticker</button>
+              <button id="applyStickerBtn" class="primary" type="button" style="flex:1;">🎨 Apply Sticker to Video</button>
+            </div>
+          </div>
+        </section>
       </div>
     </aside>
 
@@ -581,6 +649,7 @@
         <div id="stageVignette" hidden></div>
         <canvas id="stageVisualizer" hidden></canvas>
         <div id="guides" hidden></div>
+        <div id="stageSticker" hidden style="position:absolute;pointer-events:none;transition:transform 0.15s ease, opacity 0.15s ease;display:flex;align-items:center;justify-content:center;z-index:4;"></div>
         <div id="caption"></div>
         <div id="empty">Your video preview<br><small>Pick media on the left to begin · Originals are kept untouched</small></div>
       </div>

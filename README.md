@@ -66,6 +66,12 @@ The alignment-language selector supports English, French, Korean, Greek, Spanish
 
 Failed lines retain their earlier words/timings. **Estimate missing timings** is an explicit approximate fallback, labelled for review. A cancelled operation preserves saved captions; **Restore previous karaoke version** restores the captions from before the last completed karaoke operation, including after reopening the project. Undo also works in the editing session. Long individual lines over 60 seconds need splitting before alignment.
 
+### New in v2.7.2 (Cut-to-the-Beat, Per-Clip Speed & Sticker Overlays)
+
+- **Cut-to-the-Beat / Auto Beat-Drop Snapping (`⚡ Cut to Beat`):** Analyze audio transients and snap all clip cuts directly to musical beat drops with 1 click for rhythmic TikTok and Reels videos.
+- **Per-Clip Speed Ramping & Slow-Mo (0.25× to 4×):** Individual speed controls on each clip in the sequence storyboard with pitch-corrected audio and slow-motion video fluidity.
+- **Stickers, Emojis & Transparent Graphic Overlay Track:** Dedicated Stickers pane with 1-click reaction emojis (`🔥`, `💃`, `👑`, `✨`, `💯`, etc.), custom transparent PNG/GIF/WebP file uploads, timing, X/Y placement, scaling, opacity, and entrance animations (`pop`, `fade`, `slide`).
+
 ### New in v2.7.1 (Split Clip, Custom Font Upload, 60fps/4K & Audio Badges)
 
 - **Split Clip at Playhead (`Ctrl+B` / Split Clip Button):** Instantly cut any video or photo clip in the sequence at the current playhead position into two adjacent segments with millisecond precision, keeping all lyrics and surrounding clip timings locked.
@@ -137,6 +143,7 @@ The in-app GitHub updater checks published releases and validates staged changes
 
 | Version | Highlights |
 | --- | --- |
+| v2.7.2 | Cut-to-the-beat auto snapping, per-clip speed ramping (0.25x to 4x), stickers & emoji graphic overlay track |
 | v2.7.1 | Split clip at playhead (Ctrl+B), custom font upload (.ttf/.otf), 1080p 60fps & 4K UHD presets, timeline audio indicators |
 | v2.7.0 | Video transitions between multi-clip cuts, 100% reversible non-destructive effects, multi-clip background audio mixing and caption motion presets (Zoom In, Typewriter) |
 | v2.6.1 | Clip-grabber repair, download/search safeguards, cancellation and long-song cycling fixes |

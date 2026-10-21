@@ -1049,7 +1049,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             f = folder(pid)
             added = []
             try:
-                for key, field in [('audio','audio'),('background','background'),('broll','broll')]:
+                for key, field in [('audio','audio'),('background','background'),('broll','broll'),('sticker','sticker')]:
                     upload = request.files.get(field)
                     library = request.form.get(field+'_path','') if not upload else ''
                     if not upload and not library: continue
@@ -1070,18 +1070,34 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                             json.loads(request.form.get('stock_provenance', '{}'))
                         )
                     assets[key] = entry
+                emoji_raw = (request.form.get('emoji_sticker') or '').strip()
+                if emoji_raw:
+                    from PIL import Image, ImageDraw
+                    e_img = Image.new('RGBA', (256, 256), (0, 0, 0, 0))
+                    e_draw = ImageDraw.Draw(e_img)
+                    try:
+                        e_font = ImageFont.truetype(str(FONT_DIR / 'NotoSansKR[wght].ttf'), 170)
+                    except Exception:
+                        e_font = ImageFont.load_default()
+                    e_draw.text((128, 128), emoji_raw, font=e_font, anchor='mm', embedded_color=True)
+                    e_name = 'asset_' + uuid.uuid4().hex + '.png'
+                    e_target = f / e_name
+                    e_img.save(e_target, format='PNG')
+                    added.append(e_target)
+                    assets['sticker'] = dict(file=e_name, kind='image', name=f'Emoji {emoji_raw}')
                 clip_uploads = request.files.getlist('clip_files')
                 resolved_seq = []
                 for item in raw_seq:
                     if not isinstance(item, dict):
                         raise ValueError('Invalid clip sequence entry.')
                     dur = composition_model.finite(item.get('duration', 0), 0, 1200)
+                    spd = composition_model.finite(item.get('speed', 1.0), 0.25, 4.0)
                     if item.get('asset'):
                         a_key = str(item['asset']).strip()
                         if a_key not in assets:
                             raise ValueError(f'Missing clip asset: {a_key}')
                         c_name = str(item.get('name') or assets[a_key].get('name') or assets[a_key]['file'])[:120]
-                        resolved_seq.append(dict(asset=a_key, name=c_name, duration=dur))
+                        resolved_seq.append(dict(asset=a_key, name=c_name, duration=dur, speed=spd))
                     elif item.get('upload_index') is not None:
                         idx = int(item['upload_index'])
                         if idx < 0 or idx >= len(clip_uploads) or not clip_uploads[idx] or not clip_uploads[idx].filename:
@@ -1098,7 +1114,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                         c_key = 'clip_'+uuid.uuid4().hex[:8]
                         c_name = str(item.get('name') or Path(up_name).name)[:120]
                         assets[c_key] = dict(file=fname, kind='image' if ext in composition_model.IMAGES else 'video', name=c_name)
-                        resolved_seq.append(dict(asset=c_key, name=c_name, duration=dur))
+                        resolved_seq.append(dict(asset=c_key, name=c_name, duration=dur, speed=spd))
                     elif item.get('path'):
                         lib_path = str(item['path'])
                         if not is_allowed_media(lib_path) or not Path(lib_path).is_file():
@@ -1116,7 +1132,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                         if isinstance(item.get('provenance'), dict):
                             c_entry['provenance'] = composition_model.validate_provenance(item['provenance'])
                         assets[c_key] = c_entry
-                        resolved_seq.append(dict(asset=c_key, name=c_name, duration=dur))
+                        resolved_seq.append(dict(asset=c_key, name=c_name, duration=dur, speed=spd))
                     else:
                         raise ValueError('Clip entry must reference an asset, library path, or upload.')
                 if request.form.get('clear_background') == 'true':
@@ -1130,6 +1146,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                 settings['sequence'] = resolved_seq
                 composition_model.validate(settings, 7200)
                 if request.form.get('clear_broll') == 'true': assets.pop('broll',None)
+                if request.form.get('clear_sticker') == 'true': assets.pop('sticker',None)
                 for key,asset in assets.items():
                     if not composition_model.local_asset(f,asset).is_file():
                         raise ValueError('Missing '+key+' media. Choose its original file to relink it.')

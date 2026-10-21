@@ -2,7 +2,7 @@
 ; AI Influencer Media Grabber v2.6.1 Installer Script
 
 #define MyAppName "AI Influencer Media Grabber"
-#define MyAppVersion "2.7.1"
+#define MyAppVersion "2.7.2"
 #define MyAppPublisher "NextGenInfluencer"
 #define MyAppURL "https://github.com/NextGenInfluencer/ai-influencer-media-grabber"
 #define MyAppExeName "launch-silent.vbs"
@@ -20,14 +20,14 @@ DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 OutputDir=dist
-OutputBaseFilename=AI-Influencer-Media-Grabber-v2.7.1-Setup
+OutputBaseFilename=AI-Influencer-Media-Grabber-v2.7.2-Setup
 SetupIconFile=assets\app_icon.ico
 Compression=lzma2/normal
 SolidCompression=yes
 WizardStyle=modern
 ArchitecturesInstallIn64BitMode=x64compatible
 UninstallDisplayIcon={app}\assets\app_icon.ico
-VersionInfoVersion=2.7.1.0
+VersionInfoVersion=2.7.2.0
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoDescription={#MyAppName} Setup
 

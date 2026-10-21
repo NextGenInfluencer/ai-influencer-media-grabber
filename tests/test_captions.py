@@ -872,3 +872,46 @@ class CaptionWorkflowTests(unittest.TestCase):
                 custom_file.unlink(missing_ok=True)
             refresh_custom_fonts()
 
+    def test_sticker_emoji_and_clip_speed_in_composition(self):
+        pid, before = self.karaoke_project()
+        settings = {
+            **before['studio']['settings'],
+            'sticker_start': 0.5,
+            'sticker_duration': 2.0,
+            'sticker_x': 80,
+            'sticker_y': 20,
+            'sticker_scale': 35,
+            'sticker_opacity': 0.9,
+            'sticker_fade': 0.2,
+            'sticker_anim': 'pop',
+            'sequence': [
+                {'asset': 'background', 'name': 'Clip 1 Slow', 'duration': 1.0, 'speed': 0.5},
+                {'asset': 'background', 'name': 'Clip 2 Fast', 'duration': 1.0, 'speed': 2.0},
+            ]
+        }
+        res = self.client.post(f'/api/captions/{pid}/composition', data={
+            'revision': before['revision'],
+            'settings': json.dumps(settings),
+            'emoji_sticker': '🔥',
+        })
+        self.assertEqual(res.status_code, 202, res.json)
+        after = self.wait(pid)
+        self.assertIn('sticker', after['studio']['assets'])
+        self.assertEqual(after['studio']['assets']['sticker']['name'], 'Emoji 🔥')
+        overlay_clips = after['studio']['tracks'][3]['clips']
+        self.assertTrue(any(c.get('kind') == 'sticker' for c in overlay_clips))
+        bg_clips = after['studio']['tracks'][0]['clips']
+        self.assertEqual(len(bg_clips), 2)
+        self.assertEqual(bg_clips[0]['speed'], 0.5)
+        self.assertEqual(bg_clips[1]['speed'], 2.0)
+
+        # Clear sticker
+        clear_res = self.client.post(f'/api/captions/{pid}/composition', data={
+            'revision': after['revision'],
+            'settings': json.dumps(after['studio']['settings']),
+            'clear_sticker': 'true',
+        })
+        self.assertEqual(clear_res.status_code, 202, clear_res.json)
+        after_clear = self.wait(pid)
+        self.assertNotIn('sticker', after_clear['studio']['assets'])
+
