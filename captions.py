@@ -980,7 +980,10 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             settings = json.loads(request.form.get('settings','{}'))
             if not isinstance(settings,dict): raise ValueError('Invalid composition settings.')
             # Validate all numeric controls before saving media; replacement duration is checked in the worker.
-            composition_model.validate(settings, 7200)
+            raw_seq = settings.get('sequence') or []
+            if not isinstance(raw_seq, list) or len(raw_seq) > 30:
+                raise ValueError('A video sequence can contain at most 30 clips.')
+            composition_model.validate({**settings, 'sequence': []}, 7200)
             assets = copy.deepcopy(data['studio']['assets'])
             f = folder(pid)
             added = []
@@ -1006,7 +1009,65 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                             json.loads(request.form.get('stock_provenance', '{}'))
                         )
                     assets[key] = entry
-                if request.form.get('clear_background') == 'true': assets.pop('background',None)
+                clip_uploads = request.files.getlist('clip_files')
+                resolved_seq = []
+                for item in raw_seq:
+                    if not isinstance(item, dict):
+                        raise ValueError('Invalid clip sequence entry.')
+                    dur = composition_model.finite(item.get('duration', 0), 0, 1200)
+                    if item.get('asset'):
+                        a_key = str(item['asset']).strip()
+                        if a_key not in assets:
+                            raise ValueError(f'Missing clip asset: {a_key}')
+                        c_name = str(item.get('name') or assets[a_key].get('name') or assets[a_key]['file'])[:120]
+                        resolved_seq.append(dict(asset=a_key, name=c_name, duration=dur))
+                    elif item.get('upload_index') is not None:
+                        idx = int(item['upload_index'])
+                        if idx < 0 or idx >= len(clip_uploads) or not clip_uploads[idx] or not clip_uploads[idx].filename:
+                            raise ValueError('Uploaded clip file is missing.')
+                        up = clip_uploads[idx]
+                        up_name = str(up.filename or 'clip.mp4')
+                        ext = Path(up_name).suffix.lower()
+                        if ext not in (composition_model.IMAGES | composition_model.VIDEOS):
+                            raise ValueError('Unsupported clip media type.')
+                        fname = 'asset_'+uuid.uuid4().hex+ext
+                        target = f/fname
+                        up.save(target)
+                        added.append(target)
+                        c_key = 'clip_'+uuid.uuid4().hex[:8]
+                        c_name = str(item.get('name') or Path(up_name).name)[:120]
+                        assets[c_key] = dict(file=fname, kind='image' if ext in composition_model.IMAGES else 'video', name=c_name)
+                        resolved_seq.append(dict(asset=c_key, name=c_name, duration=dur))
+                    elif item.get('path'):
+                        lib_path = str(item['path'])
+                        if not is_allowed_media(lib_path) or not Path(lib_path).is_file():
+                            raise ValueError('Choose clip media from your library or upload it.')
+                        ext = Path(lib_path).suffix.lower()
+                        if ext not in (composition_model.IMAGES | composition_model.VIDEOS):
+                            raise ValueError('Unsupported clip media type.')
+                        fname = 'asset_'+uuid.uuid4().hex+ext
+                        target = f/fname
+                        shutil.copy2(lib_path, target)
+                        added.append(target)
+                        c_key = 'clip_'+uuid.uuid4().hex[:8]
+                        c_name = str(item.get('name') or Path(lib_path).name)[:120]
+                        c_entry: dict[str, Any] = dict(file=fname, kind='image' if ext in composition_model.IMAGES else 'video', name=c_name)
+                        if isinstance(item.get('provenance'), dict):
+                            c_entry['provenance'] = composition_model.validate_provenance(item['provenance'])
+                        assets[c_key] = c_entry
+                        resolved_seq.append(dict(asset=c_key, name=c_name, duration=dur))
+                    else:
+                        raise ValueError('Clip entry must reference an asset, library path, or upload.')
+                if request.form.get('clear_background') == 'true':
+                    assets.pop('background', None)
+                    resolved_seq = []
+                elif resolved_seq and not request.files.get('background') and not request.form.get('background_path'):
+                    assets['background'] = copy.deepcopy(assets[resolved_seq[0]['asset']])
+                used_clips = {c['asset'] for c in resolved_seq}
+                for k in [k for k in list(assets.keys()) if k.startswith('clip_') and k not in used_clips]:
+                    assets.pop(k, None)
+                settings['sequence'] = resolved_seq
+                composition_model.validate(settings, 7200)
                 if request.form.get('clear_broll') == 'true': assets.pop('broll',None)
                 for key,asset in assets.items():
                     if not composition_model.local_asset(f,asset).is_file():

@@ -2,7 +2,7 @@
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="media-token" content="{{ api_token }}"><title>Captions & Lyrics — Media Grabber</title>
-<link rel="stylesheet" href="/static/captions.css"><script src="/static/captions.js?v=phase7-fx" defer></script></head>
+<link rel="stylesheet" href="/static/captions.css?v=multiclip1"><script src="/static/captions.js?v=multiclip1" defer></script></head>
 <body>
 <header><a href="/">← Studio</a><div><h1>Captions & Lyrics</h1><small>Your words. Your timing. Your style.</small></div><span id="saveStatus" role="status">Open a video to begin</span><button id="save">Save now</button></header>
 <main>
@@ -14,7 +14,7 @@
 <select id="projects" aria-label="Saved project"><option value="">Saved projects…</option></select>
 <button id="reload">Reload project</button><button id="duplicateProject">Duplicate project</button><button id="recoverEdits">Recover unsaved captions</button>
 </section>
-<section class="panel" id="compositionPanel"><div class="toolbar"><h2>Background & audio</h2><button id="editComposition">Edit composition</button><button id="openStockBrowser">Browse stock backgrounds</button><button id="restoreComposition">Restore previous composition</button></div><p id="compositionSummary" class="hint">Open a project to edit its background and audio.</p><p class="hint">Original media stays separate from your edits. Apply settings to prepare a synchronized preview. Lyric styling updates live.</p></section>
+<section class="panel" id="compositionPanel"><div class="toolbar"><h2>Background & audio</h2><button id="editComposition">Edit composition</button><button id="openStockBrowser">Browse Pixabay / stock</button><button id="restoreComposition">Restore previous composition</button></div><p id="compositionSummary" class="hint">Open a project to edit its background and audio.</p><div id="sequenceBar" class="sequenceSection" hidden><div class="toolbar"><strong style="font-size:13px;color:#dcd6f7;">Video Clips Sequence (Multi-Clip Storyboard)</strong><button id="seqBrowseStock" type="button">+ Add clip from Pixabay</button><label class="upload">+ Upload clips<input id="seqUploadInput" type="file" multiple accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,.mkv,.webm"></label><select id="seqLibrarySelect" aria-label="Add clip from library"><option value="">+ Add clip from library…</option></select><button id="seqEvenSplit" type="button" title="Set all clip durations to 0 (split song evenly)">Split evenly</button><button id="seqCycle10" type="button" title="Set each clip to 10s so clips cycle across the song">10s per clip</button><button id="applySequenceNow" class="primary" type="button">Apply clip sequence</button></div><div id="sequenceList" class="sequenceList" aria-label="Video clip sequence"></div><p class="hint" style="margin-top:6px;">Add multiple videos or photos from Pixabay, your library, or uploads to play one after another instead of looping a single clip. Duration <strong>0s</strong> splits the song evenly across clips; setting e.g. <strong>10s</strong> per clip cycles through your clips when looping is enabled.</p></div><p class="hint">Original media stays separate from your edits. Apply settings to prepare a synchronized preview. Lyric styling updates live.</p></section>
 <p id="status" role="status">Open a video, then transcribe its audio or add your own lyrics.</p>
 <div class="workspace">
 <section class="panel preview">
@@ -77,9 +77,9 @@
 <div class="compositionGrid">
 <fieldset><legend>Canvas & background</legend>
 <label>Format<select id="comp_shape"><option value="portrait">Portrait 9:16</option><option value="landscape">Landscape 16:9</option><option value="square">Square 1:1</option></select></label>
-<label>Background file<input id="compBackground" type="file" accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,.mkv,.webm"></label>
-<label>From library<select id="compLibrary"><option value="">Keep current background</option></select></label>
-<button id="browseStockComp" type="button">Search Pexels / Pixabay stock</button>
+<div class="sequenceSection" style="margin-bottom:12px;"><div class="row" style="justify-content:space-between;margin-bottom:8px;"><strong style="font-size:13px;color:#dcd6f7;">Video Clips Sequence</strong><div class="row" style="margin:0;"><button id="browseStockComp" class="primary" type="button">+ Add from Pixabay</button><label class="upload">+ Upload clips<input id="compSeqUpload" type="file" multiple accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,.mkv,.webm"></label></div></div><div id="compSequenceList" class="sequenceList"></div><p class="hint" style="margin-top:6px;">Add 2 or more clips to stitch a multi-clip video sequence across your song, or use a single background below.</p></div>
+<label>Single background file<input id="compBackground" type="file" accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,.mkv,.webm"></label>
+<label>From library / add clip<select id="compLibrary"><option value="">Keep current / choose clip…</option></select></label>
 <p id="compStockNotice" class="hint" hidden></p>
 <label><input id="compClear" type="checkbox"> Use a plain colour instead</label>
 <label>Canvas colour<input id="comp_color" type="color"></label>
@@ -164,6 +164,6 @@
 </div>
 </details>
 <div id="stockResults" class="stockGrid" aria-label="Stock search results"></div>
-<div class="row"><button id="closeStock" type="button">Close</button></div>
+<div class="row"><button id="closeStock" type="button">Done / Close</button><button id="applyStockSequence" class="primary" type="button" hidden>Apply clips to video now</button></div>
 </dialog>
 </body></html>

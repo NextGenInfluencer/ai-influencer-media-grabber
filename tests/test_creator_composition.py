@@ -266,4 +266,40 @@ class CompositionDataTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'video filter and audio effect'):
             comp.validate({**comp.DEFAULTS, 'end': 3.0, 'audio_effect': 'autotune99'}, 3.0)
 
+    def test_multi_clip_sequence_scheduling_and_render_args(self):
+        assets = {
+            'audio': dict(file='song.wav', kind='audio', duration=12.0),
+            'background': dict(file='clip1.mp4', kind='video', name='Clip 1'),
+            'clip_a1b2c3d4': dict(file='clip2.png', kind='image', name='Clip 2'),
+            'clip_e5f60718': dict(file='clip3.mp4', kind='video', name='Clip 3'),
+        }
+        seq = [
+            dict(asset='background', name='Clip 1', duration=0),
+            dict(asset='clip_a1b2c3d4', name='Clip 2', duration=0),
+            dict(asset='clip_e5f60718', name='Clip 3', duration=0),
+        ]
+        settings = comp.validate({**comp.DEFAULTS, 'end': 12.0, 'sequence': seq}, 12.0)
+        studio = comp.schema(assets, settings, {'font': 'Montserrat'})
+        clips = studio['tracks'][0]['clips']
+        self.assertEqual(len(clips), 3)
+        self.assertAlmostEqual(clips[0]['start'], 0.0)
+        self.assertAlmostEqual(clips[0]['duration'], 4.0)
+        self.assertAlmostEqual(clips[1]['start'], 4.0)
+        self.assertAlmostEqual(clips[1]['duration'], 4.0)
+        self.assertAlmostEqual(clips[2]['start'], 8.0)
+        self.assertAlmostEqual(clips[2]['duration'], 4.0)
+
+        args = comp.render_args(studio, Path.cwd(), 'multi_out.mp4')
+        joined = ' '.join(args)
+        self.assertIn('concat=n=3:v=1:a=0', joined)
+        self.assertIn('[vseg0][vseg1][vseg2]', joined)
+
+        cycle_seq = [
+            dict(asset='background', name='Clip 1', duration=3.0),
+            dict(asset='clip_a1b2c3d4', name='Clip 2', duration=3.0),
+        ]
+        sched = comp.schedule_sequence(cycle_seq, assets, 12.0, loop=True)
+        self.assertEqual(len(sched), 4)
+        self.assertEqual([s['asset'] for s in sched], ['background', 'clip_a1b2c3d4', 'background', 'clip_a1b2c3d4'])
+
 

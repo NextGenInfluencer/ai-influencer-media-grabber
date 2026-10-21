@@ -759,3 +759,27 @@ class CaptionWorkflowTests(unittest.TestCase):
         self.assertEqual(after_comp['style']['audio_effect'], 'concert_hall')
         self.assertTrue(after_comp['style']['noise_cancel'])
 
+        # 3. Apply a multi-clip video sequence (existing background + 2 uploaded clips) and verify stitched render
+        multi_settings = {
+            **after_comp['studio']['settings'],
+            'sequence': [
+                dict(asset='background', name='Clip 1', duration=0),
+                dict(upload_index=0, name='Clip 2 Video', duration=0),
+                dict(upload_index=1, name='Clip 3 Video', duration=0),
+            ],
+        }
+        m_res = self.client.post(f'/api/captions/{pid}/composition', data={
+            'revision': after_comp['revision'],
+            'settings': json.dumps(multi_settings),
+            'clip_files': [
+                (io.BytesIO(self.source.read_bytes()), 'clip2.mp4'),
+                (io.BytesIO(self.source.read_bytes()), 'clip3.mp4'),
+            ],
+        }, content_type='multipart/form-data')
+        self.assertEqual(m_res.status_code, 202, m_res.json)
+        after_multi = self.wait(pid)
+        self.assertEqual(after_multi['state'], 'ready')
+        self.assertEqual(len(after_multi['studio']['settings']['sequence']), 3)
+        self.assertEqual(len(after_multi['studio']['tracks'][0]['clips']), 3)
+        self.assertTrue((self.root / 'library' / 'Caption Projects' / pid / after_multi['source']).is_file())
+

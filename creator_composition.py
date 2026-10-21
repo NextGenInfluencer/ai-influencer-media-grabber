@@ -65,7 +65,7 @@ DEFAULTS = dict(shape='portrait', color='#141526', fit='fill', x=50, y=50,
                 noise_cancel=False, voice_isolation=False, audio_effect='none',
                 background_volume=0, ducking=False, loop=True, background_start=0, background_duration=0,
                 visualizer=False, visualizer_style='waveform', visualizer_position='bottom',
-                visualizer_height=20, visualizer_sensitivity=1, visualizer_color='#bba6ff')
+                visualizer_height=20, visualizer_sensitivity=1, visualizer_color='#bba6ff', sequence=[])
 
 
 def video_fx_chain(cfg: dict) -> list[str]:
@@ -146,6 +146,64 @@ def migrate(project, folder):
     return schema(assets, settings, project['style'])
 
 
+def validate_sequence(seq) -> list[dict]:
+    if not seq:
+        return []
+    if not isinstance(seq, list) or len(seq) > 30:
+        raise ValueError('A video sequence can contain at most 30 clips.')
+    cleaned = []
+    for item in seq:
+        if not isinstance(item, dict):
+            raise ValueError('Invalid clip sequence entry.')
+        asset = str(item.get('asset') or '').strip()
+        if not re.fullmatch(r'(background|clip_[a-zA-Z0-9_]+)', asset):
+            raise ValueError('Invalid clip asset reference.')
+        dur = finite(item.get('duration', 0), 0, 1200)
+        name = re.sub(r'[\r\n\t]+', ' ', str(item.get('name') or asset)).strip()[:120]
+        cleaned.append(dict(asset=asset, name=name, duration=dur))
+    return cleaned
+
+
+def schedule_sequence(seq: list, assets: dict, total_duration: float, loop: bool = True) -> list[dict]:
+    valid = [item for item in (seq or []) if isinstance(item, dict) and item.get('asset') in assets and assets[item['asset']].get('kind') in {'video', 'image'}]
+    if len(valid) <= 1:
+        if len(valid) == 1:
+            a_key = valid[0]['asset']
+            return [dict(asset=a_key, name=str(valid[0].get('name') or assets[a_key]['file'])[:120], start=0.0, duration=round(total_duration, 3))]
+        return []
+    fixed_sum = sum(float(item['duration']) for item in valid if float(item.get('duration') or 0) > 0)
+    auto_count = sum(1 for item in valid if float(item.get('duration') or 0) <= 0)
+    if auto_count > 0:
+        auto_dur = max(0.2, (total_duration - fixed_sum) / auto_count) if total_duration > fixed_sum else max(0.2, total_duration / len(valid))
+    else:
+        auto_dur = 5.0
+    base = [(item, float(item['duration']) if float(item.get('duration') or 0) > 0 else auto_dur) for item in valid]
+    segments: list[dict] = []
+    t = 0.0
+    passes = 0
+    while t < total_duration - 0.05 and len(segments) < 60:
+        passes += 1
+        for item, b_dur in base:
+            if t >= total_duration - 0.05 or len(segments) >= 60:
+                break
+            seg_d = min(b_dur, total_duration - t)
+            if seg_d < 0.05:
+                break
+            a_key = item['asset']
+            segments.append(dict(
+                asset=a_key,
+                name=str(item.get('name') or assets[a_key].get('name') or assets[a_key]['file'])[:120],
+                start=round(t, 3),
+                duration=round(seg_d, 3),
+            ))
+            t += seg_d
+        if not loop or auto_count > 0 or passes >= 20:
+            break
+    if segments and t < total_duration - 0.05:
+        segments[-1]['duration'] = round(segments[-1]['duration'] + (total_duration - t), 3)
+    return segments
+
+
 def schema(assets, settings, style):
     s = {**DEFAULTS, **settings}
     length = s['end'] - s['start'] + s['offset']
@@ -155,12 +213,18 @@ def schema(assets, settings, style):
     if 'broll' in assets and s.get('broll_duration', 0) > 0:
         overlay_clips.append(dict(kind='broll', asset='broll', start=s['broll_start'], duration=s['broll_duration'],
                                   transform={k: s[k] for k in ('broll_x','broll_y','broll_scale','broll_opacity','broll_fade')}))
+    tf = {k: s[k] for k in ('fit','x','y','blur','dim','overlay','opacity','zoom',
+                            'brightness','contrast','saturation','transition_in','transition_out',
+                            'keyframe_end_x','keyframe_end_y')}
+    seq_segments = schedule_sequence(s.get('sequence') or [], assets, length, loop=s['loop'])
+    if len(seq_segments) >= 2:
+        bg_clips = [dict(asset=seg['asset'], name=seg['name'], start=seg['start'], duration=seg['duration'],
+                         source_offset=0, speed=s['background_speed'], transform=tf) for seg in seq_segments]
+    else:
+        bg_clips = [dict(asset='background', start=0, duration=length,
+                         source_offset=s['background_start'], speed=s['background_speed'], transform=tf)]
     tracks = [
-        dict(kind='background', clips=[dict(asset='background', start=0, duration=length,
-             source_offset=s['background_start'], speed=s['background_speed'],
-             transform={k: s[k] for k in ('fit','x','y','blur','dim','overlay','opacity','zoom',
-                                          'brightness','contrast','saturation','transition_in','transition_out',
-                                          'keyframe_end_x','keyframe_end_y')})]),
+        dict(kind='background', clips=bg_clips),
         dict(kind='audio', clips=[dict(asset='audio', start=s['offset'],
              duration=s['end']-s['start'], source_offset=s['start'], ducking=s['ducking'])]),
         dict(kind='captions', cue_source='cues', style=copy.deepcopy(style)),
@@ -171,6 +235,7 @@ def schema(assets, settings, style):
 
 def validate(settings, source_duration):
     s = {**DEFAULTS, **{k:v for k,v in settings.items() if k in DEFAULTS}}
+    s['sequence'] = validate_sequence(settings.get('sequence', []))
     if s['shape'] not in SHAPES or s['fit'] not in {'fit','fill'}:
         raise ValueError('Choose a supported canvas format and fit mode.')
     if s['visualizer_style'] not in VISUALIZER_STYLES or s['visualizer_position'] not in VISUALIZER_POSITIONS:
@@ -229,17 +294,31 @@ def render_args(studio, folder, output, background_has_audio=False):
     w,h = SHAPES[s['shape']]
     duration = s['end']-s['start']+s['offset']
     args = ['-i',local_asset(folder,assets['audio']).name]
-    bg = assets.get('background')
-    if bg:
-        path = local_asset(folder,bg)
-        if bg['kind']=='image': args += ['-loop','1','-framerate','30']
-        elif s['loop']: args += ['-stream_loop','-1']
-        args += ['-ss',str(s['background_start'])] if bg['kind']=='video' else []
-        args += ['-i',path.name]
+    seq_segments = schedule_sequence(s.get('sequence') or [], assets, duration, loop=s['loop'])
+    multi_clip = len(seq_segments) >= 2
+    if multi_clip:
+        for seg in seq_segments:
+            c_asset = assets[seg['asset']]
+            c_path = local_asset(folder, c_asset)
+            in_dur = round(seg['duration'] * max(1.0, s['background_speed']) + 0.5, 3)
+            if c_asset['kind'] == 'image':
+                args += ['-loop', '1', '-framerate', '30', '-t', str(in_dur), '-i', c_path.name]
+            else:
+                args += (['-stream_loop', '-1'] if s['loop'] else []) + ['-t', str(in_dur), '-i', c_path.name]
     else:
-        args += ['-f','lavfi','-i',f"color=c={s['color']}:s={w}x{h}:r=30"]
+        bg_key = seq_segments[0]['asset'] if len(seq_segments) == 1 else 'background'
+        bg = assets.get(bg_key) or assets.get('background')
+        if bg:
+            path = local_asset(folder,bg)
+            if bg['kind']=='image': args += ['-loop','1','-framerate','30']
+            elif s['loop']: args += ['-stream_loop','-1']
+            args += ['-ss',str(s['background_start'])] if bg['kind']=='video' else []
+            args += ['-i',path.name]
+        else:
+            args += ['-f','lavfi','-i',f"color=c={s['color']}:s={w}x{h}:r=30"]
     broll = assets.get('broll')
     has_broll = bool(broll and s['broll_duration'] > 0)
+    broll_idx = (1 + len(seq_segments)) if multi_clip else 2
     if has_broll and broll is not None:
         bpath = local_asset(folder, broll)
         if broll['kind'] == 'image':
@@ -255,20 +334,28 @@ def render_args(studio, folder, output, background_has_audio=False):
     if s['fade_out']: af+=f",afade=t=out:st={length-s['fade_out']}:d={s['fade_out']}"
     af+=f",adelay={round(s['offset']*1000)}:all=1,apad,atrim=duration={duration}[song]"
     graph.append(af)
-    if background_has_audio and s['background_volume']:
+    if background_has_audio and s['background_volume'] and not multi_clip:
         bg_vol = f"volume='if(between(t,{s['offset']},{duration}),{round(s['background_volume']*0.3,4)},{s['background_volume']})':eval=frame" if s['ducking'] else f"volume={s['background_volume']}"
         graph.append(f"[1:a]asetpts=PTS-STARTPTS,{bg_vol},apad,atrim=duration={duration}[ba]")
         graph.append('[song][ba]amix=inputs=2:duration=first:normalize=0[mix]')
     else: graph.append('[song]anull[mix]')
     pts_expr = f"{1.0/s['background_speed']:.4f}*(PTS-STARTPTS)" if abs(s['background_speed'] - 1.0) > 1e-4 else 'PTS-STARTPTS'
-    vf=f'[1:v]setpts={pts_expr},fps=30'
-    if s['background_duration']: vf+=f",trim=duration={s['background_duration']}"
-    vf+=f",tpad=stop_mode=clone:stop_duration={duration},trim=duration={duration}"
-    if s['fit']=='fill':
-        vf+=f",scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}:(iw-ow)*{s['x']/100}:(ih-oh)*{s['y']/100}"
+    scale_crop = (
+        f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}:(iw-ow)*{s['x']/100}:(ih-oh)*{s['y']/100}"
+        if s['fit']=='fill' else
+        f"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)*{s['x']/100}:(oh-ih)*{s['y']/100}:color={s['color']}"
+    )
+    if multi_clip:
+        for k, seg in enumerate(seq_segments):
+            idx = 1 + k
+            seg_vf = f"[{idx}:v]setpts={pts_expr},fps=30,tpad=stop_mode=clone:stop_duration={seg['duration']},trim=duration={seg['duration']},setpts=PTS-STARTPTS,{scale_crop},setsar=1,format=yuv420p[vseg{k}]"
+            graph.append(seg_vf)
+        concat_in = ''.join(f'[vseg{k}]' for k in range(len(seq_segments)))
+        vf = f"{concat_in}concat=n={len(seq_segments)}:v=1:a=0,setsar=1"
     else:
-        vf+=f",scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)*{s['x']/100}:(oh-ih)*{s['y']/100}:color={s['color']}"
-    vf+=',setsar=1'
+        vf=f'[1:v]setpts={pts_expr},fps=30'
+        if s['background_duration']: vf+=f",trim=duration={s['background_duration']}"
+        vf+=f",tpad=stop_mode=clone:stop_duration={duration},trim=duration={duration},{scale_crop},setsar=1"
     if s['zoom'] or s['keyframe_end_x'] != s['x'] or s['keyframe_end_y'] != s['y']:
         frames = max(1, round(duration * 30) - 1)
         z_amt = max(s['zoom'], 0.04 if (s['keyframe_end_x'] != s['x'] or s['keyframe_end_y'] != s['y']) else 0)
@@ -291,7 +378,7 @@ def render_args(studio, folder, output, background_has_audio=False):
     if has_broll:
         bw = max(2, round(w * (s['broll_scale'] / 100) / 2) * 2)
         bh = max(2, round(h * (s['broll_scale'] / 100) / 2) * 2)
-        bvf = f"[2:v]setpts=PTS-STARTPTS,fps=30,scale={bw}:{bh}:force_original_aspect_ratio=increase,crop={bw}:{bh},setsar=1,format=rgba"
+        bvf = f"[{broll_idx}:v]setpts=PTS-STARTPTS,fps=30,scale={bw}:{bh}:force_original_aspect_ratio=increase,crop={bw}:{bh},setsar=1,format=rgba"
         if s['broll_opacity'] < 1:
             bvf += f",colorchannelmixer=aa={s['broll_opacity']}"
         if s['broll_fade'] > 0:
