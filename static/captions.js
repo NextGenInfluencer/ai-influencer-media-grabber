@@ -723,8 +723,13 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
     };
     async function syncStockKeyStatus() {
         try {
-            const keys=await api('/api/captions/stock/keys');
             const prov=$('stockProvider').value;
+            if(prov==='youtube'||prov==='mixkit') {
+                $('stockKeySummary').textContent=`✅ No API Key Needed (${prov==='youtube'?'YouTube Shorts / Google':'Mixkit HD Stock'} is free)`;
+                if($('stockKeyDetails')) $('stockKeyDetails').open=false;
+                return;
+            }
+            const keys=await api('/api/captions/stock/keys');
             $('stockKeySummary').textContent=keys[prov]?`API key setup (${prov.toUpperCase()} key saved ✓)`:'API key setup (paste your free API key below)';
             if($('stockKeyDetails')) $('stockKeyDetails').open=!keys[prov];
         } catch {}
@@ -785,7 +790,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
             const defaultBtnLabel = isProjectMode ? '+ Add clip to video' : 'Download & select';
             data.results.forEach(item=>{
                 const card=document.createElement('div');card.className='stockCard';
-                if(item.kind==='video') {
+                if(item.kind==='video' && item.provider!=='youtube') {
                     const vid=document.createElement('video');
                     vid.src=item.download_url;vid.poster=item.preview_url;vid.muted=true;vid.loop=true;vid.playsInline=true;vid.preload='none';
                     vid.onmouseenter=()=>vid.play?.().catch(()=>{});

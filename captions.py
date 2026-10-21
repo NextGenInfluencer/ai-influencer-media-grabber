@@ -1502,6 +1502,9 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
         if kind not in {'video', 'image'}:
             raise ValueError('Choose a stock video or image.')
         dl_url = composition_model.validate_stock_url(str(payload.get('download_url', '')), provider)
+        if provider == 'youtube':
+            found, _ = _grab_social_video(dl_url, prefix='youtube')
+            return jsonify(path=str(found), name=found.name, kind='video', provenance=prov)
         url_path = urllib.parse.urlsplit(dl_url).path
         ext = Path(url_path).suffix.lower()
         if kind == 'video':
@@ -1519,20 +1522,11 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
         refresh_gallery()
         return jsonify(path=str(dest), name=dest.name, kind=kind, provenance=prov)
 
-    @bp.post('/api/captions/stock/grab-url')
-    def stock_grab_url():
+    def _grab_social_video(raw_url: str, prefix: str = 'social') -> tuple[Path, str]:
         import yt_dlp
-        payload = request.get_json() or {}
-        if not isinstance(payload, dict):
-            raise ValueError('Invalid clip URL request.')
-        raw_url = str(payload.get('url') or '').strip()
-        parsed = urllib.parse.urlsplit(raw_url)
-        host = (parsed.hostname or '').lower()
-        if parsed.scheme not in {'http', 'https'} or not host or host in {'localhost', '127.0.0.1', '0.0.0.0', '::1'}:
-            raise ValueError('Paste a valid TikTok, Instagram, or YouTube video URL.')
         stock_dir.mkdir(parents=True, exist_ok=True)
         token = uuid.uuid4().hex[:8]
-        outtmpl = str(stock_dir / f'social_%(id)s_{token}.%(ext)s')
+        outtmpl = str(stock_dir / f'{prefix}_%(id)s_{token}.%(ext)s')
         node_exe = Path(__file__).resolve().parent / 'node_runtime' / 'node.exe'
         ydl_opts: dict[str, Any] = {
             'format': 'bestvideo[height<=1920]+bestaudio[ext=m4a]/bestvideo[height<=1920]+bestaudio/best[height<=1920]/best',
@@ -1562,6 +1556,19 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
         found = video_matches[0]
         title = str(info.get('title') or info.get('id') or found.stem).strip()[:80]
         refresh_gallery()
+        return found, title
+
+    @bp.post('/api/captions/stock/grab-url')
+    def stock_grab_url():
+        payload = request.get_json() or {}
+        if not isinstance(payload, dict):
+            raise ValueError('Invalid clip URL request.')
+        raw_url = str(payload.get('url') or '').strip()
+        parsed = urllib.parse.urlsplit(raw_url)
+        host = (parsed.hostname or '').lower()
+        if parsed.scheme not in {'http', 'https'} or not host or host in {'localhost', '127.0.0.1', '0.0.0.0', '::1'}:
+            raise ValueError('Paste a valid TikTok, Instagram, or YouTube video URL.')
+        found, title = _grab_social_video(raw_url, prefix='social')
         return jsonify(path=str(found), name=found.name, title=title, kind='video')
 
     # A stopped process cannot resume its background thread after app restart.

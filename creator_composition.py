@@ -3,7 +3,7 @@
 All timeline values use seconds from output zero. Assets are immutable local
 basenames. Caption edits remain in the enclosing project for backwards reading.
 """
-import copy
+import copy, html
 import json
 import math
 import os
@@ -407,10 +407,18 @@ def render_args(studio, folder, output, background_has_audio=False):
 
 # --- Phase 4: Integrated Stock Background Browser (Pexels & Pixabay) ---
 
-STOCK_PROVIDERS = {'pexels', 'pixabay'}
+STOCK_PROVIDERS = {'pexels', 'pixabay', 'mixkit', 'youtube'}
 STOCK_HOSTS = {
     'pexels': ('pexels.com', 'akamaized.net', 'vimeo.com'),
     'pixabay': ('pixabay.com', 'vimeocdn.com'),
+    'mixkit': ('mixkit.co', 'envatousercontent.com'),
+    'youtube': ('youtube.com', 'youtu.be', 'ytimg.com', 'ggpht.com'),
+}
+STOCK_LICENSES = {
+    'pexels': 'Pexels License',
+    'pixabay': 'Pixabay Content License',
+    'mixkit': 'Mixkit Stock Video Free License',
+    'youtube': 'YouTube / Google Video',
 }
 MAX_STOCK_BYTES = 80 * 1024 * 1024
 _STOCK_CACHE: dict[tuple, tuple[float, list[dict]]] = {}
@@ -419,7 +427,7 @@ _STOCK_CACHE: dict[tuple, tuple[float, list[dict]]] = {}
 def validate_stock_url(url: str, provider: str) -> str:
     """Validate that a remote stock URL uses HTTPS and belongs to the provider's official domains."""
     if provider not in STOCK_PROVIDERS:
-        raise ValueError('Choose Pexels or Pixabay.')
+        raise ValueError('Choose Pexels, Pixabay, Mixkit, or YouTube.')
     url = str(url or '').strip()
     parsed = urllib.parse.urlsplit(url)
     host = (parsed.hostname or '').lower()
@@ -440,7 +448,7 @@ def validate_provenance(prov: dict) -> dict:
         raise ValueError('Invalid stock provider in provenance.')
     source_url = validate_stock_url(prov.get('source_url', ''), provider)
     creator = str(prov.get('creator', 'Unknown Creator')).strip()[:120] or 'Unknown Creator'
-    license_name = 'Pexels License' if provider == 'pexels' else 'Pixabay Content License'
+    license_name = STOCK_LICENSES.get(provider, 'Pixabay Content License')
     attribution = str(prov.get('attribution', '')).strip()[:240] or f'Media by {creator} on {provider.capitalize()}'
     return dict(provider=provider, creator=creator, source_url=source_url,
                 license=license_name, attribution=attribution)
@@ -463,12 +471,126 @@ def _stock_opener(provider: str, opener=None):
     return urllib.request.build_opener(_SafeRedirectHandler(provider))
 
 
+_MIXKIT_CARD_RE = re.compile(
+    r'data-item-grid--video-player-item-id-value="(\d+)".*?'
+    r'<img\s+src="(https://assets\.mixkit\.co/videos/[^"]+\.jpg)"[^>]*alt="([^"]*)"[^>]*width="(\d+)"[^>]*height="(\d+)".*?'
+    r'<video\s+src="(https://assets\.mixkit\.co/videos/[^"]+\.mp4)"',
+    re.S
+)
+
+
+def _search_mixkit(query: str, orientation: str, opener=None) -> list[dict]:
+    """Search Mixkit free HD stock video catalog without requiring any API key."""
+    slug = re.sub(r'[^a-z0-9]+', '-', query.lower()).strip('-') or 'dance'
+    slugs = [slug]
+    if orientation == 'portrait' and not slug.startswith('vertical'):
+        slugs = [f'vertical-{slug}', slug]
+    client = _stock_opener('mixkit', opener)
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+    seen: set[str] = set()
+    results: list[dict] = []
+    for s in slugs:
+        url = f'https://mixkit.co/free-stock-video/discover/{s}/'
+        validate_stock_url(url, 'mixkit')
+        req = urllib.request.Request(url, headers=headers)
+        try:
+            with client.open(req, timeout=10) as resp:
+                page = resp.read(4 * 1024 * 1024).decode('utf-8', errors='replace')
+        except (urllib.error.URLError, TimeoutError, OSError):
+            continue
+        for vid_id, thumb_raw, alt_raw, w_str, h_str, video_360 in _MIXKIT_CARD_RE.findall(page):
+            if vid_id in seen:
+                continue
+            seen.add(vid_id)
+            dl_raw = re.sub(r'-360\.mp4$', '-720.mp4', video_360)
+            try:
+                dl_url = validate_stock_url(dl_raw, 'mixkit')
+                prev_url = validate_stock_url(thumb_raw, 'mixkit')
+            except ValueError:
+                continue
+            vw, vh = int(w_str or 460), int(h_str or 259)
+            title = html.unescape(alt_raw or '').strip('. ')[:100] or f'Mixkit clip #{vid_id}'
+            results.append(dict(
+                id=str(vid_id),
+                provider='mixkit',
+                kind='video',
+                title=title,
+                duration=15.0,
+                width=1080 if vh >= vw else 1280,
+                height=1920 if vh >= vw else 720,
+                preview_url=prev_url,
+                download_url=dl_url,
+                creator='Mixkit Studio',
+                source_url='https://mixkit.co/free-stock-video/',
+                license='Mixkit Stock Video Free License',
+                attribution='Free HD Stock Video on Mixkit'
+            ))
+    if orientation == 'portrait':
+        results.sort(key=lambda r: (1 if r['height'] >= r['width'] else 0), reverse=True)
+    return results[:24]
+
+
+def _search_youtube(query: str, orientation: str, max_duration: float) -> list[dict]:
+    """Search YouTube Shorts / Google Video via yt-dlp without requiring any API key."""
+    import yt_dlp
+    search_q = query
+    if orientation == 'portrait' and '#shorts' not in query.lower():
+        search_q = f'{query} #shorts vertical'
+    ydl_opts = {
+        'quiet': True,
+        'no_warnings': True,
+        'extract_flat': 'in_playlist',
+        'skip_download': True,
+    }
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(f'ytsearch24:{search_q}', download=False)
+    except Exception as exc:
+        raise ValueError(f'YouTube Shorts search failed: {exc}') from None
+    entries = (info or {}).get('entries') or []
+    results: list[dict] = []
+    dur_cap = max(max_duration, 65.0) if max_duration > 0 else 180.0
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        vid_id = str(entry.get('id') or '').strip()
+        if not re.match(r'^[a-zA-Z0-9_-]{6,20}$', vid_id):
+            continue
+        dur = float(entry.get('duration') or 0)
+        if dur > dur_cap:
+            continue
+        if dur <= 0:
+            dur = 15.0
+        dl_url = f'https://www.youtube.com/watch?v={vid_id}'
+        prev_url = f'https://i.ytimg.com/vi/{vid_id}/hqdefault.jpg'
+        creator = str(entry.get('channel') or entry.get('uploader') or 'YouTube Creator').strip()[:120]
+        raw_title = str(entry.get('title') or f'YouTube Short #{vid_id}').strip()[:90]
+        results.append(dict(
+            id=vid_id,
+            provider='youtube',
+            kind='video',
+            title=f'{raw_title} ({int(dur)}s)',
+            duration=round(dur, 1),
+            width=1080 if orientation == 'portrait' else 1920,
+            height=1920 if orientation == 'portrait' else 1080,
+            preview_url=prev_url,
+            download_url=dl_url,
+            creator=creator,
+            source_url=dl_url,
+            license='YouTube / Google Video',
+            attribution=f'Video by {creator} on YouTube'
+        ))
+        if len(results) >= 24:
+            break
+    return results
+
+
 def search_stock(provider: str, query: str, kind: str = 'video', orientation: str = 'portrait',
                  max_duration: float = 0, api_key: str = '', opener=None) -> list[dict]:
-    """Search official Pexels or Pixabay API with orientation/duration filtering and provenance."""
+    """Search Pexels, Pixabay, Mixkit (no key), or YouTube Shorts (no key) with filtering and provenance."""
     provider = str(provider or '').strip().lower()
     if provider not in STOCK_PROVIDERS:
-        raise ValueError('Choose Pexels or Pixabay.')
+        raise ValueError('Choose Pexels, Pixabay, Mixkit, or YouTube.')
     kind = str(kind or 'video').strip().lower()
     if kind not in {'video', 'image'}:
         raise ValueError('Choose video or image search.')
@@ -479,14 +601,27 @@ def search_stock(provider: str, query: str, kind: str = 'video', orientation: st
     query = re.sub(r'\s+', ' ', str(query or '').strip())[:100]
     if not query:
         raise ValueError('Enter a search term for stock backgrounds.')
-    api_key = str(api_key or '').strip()
-    if not api_key:
-        raise ValueError(f'Enter your free {provider.capitalize()} API key to search {provider.capitalize()} inside the app. Local uploads and library backgrounds work without a key.')
 
     cache_key = (provider, query.lower(), kind, orientation, max_duration)
     cached = _STOCK_CACHE.get(cache_key)
     if cached and time.time() - cached[0] < 300 and opener is None:
         return copy.deepcopy(cached[1])
+
+    if provider == 'mixkit':
+        results = _search_mixkit(query, orientation, opener=opener)
+        if opener is None:
+            _STOCK_CACHE[cache_key] = (time.time(), copy.deepcopy(results))
+        return results
+
+    if provider == 'youtube':
+        results = _search_youtube(query, orientation, max_duration)
+        if opener is None:
+            _STOCK_CACHE[cache_key] = (time.time(), copy.deepcopy(results))
+        return results
+
+    api_key = str(api_key or '').strip()
+    if not api_key:
+        raise ValueError(f'Enter your free {provider.capitalize()} API key to search {provider.capitalize()} inside the app. Local uploads and library backgrounds work without a key.')
 
     q_enc = urllib.parse.quote(query)
     headers = {'User-Agent': 'AI-Influencer-Media-Grabber/2.5'}

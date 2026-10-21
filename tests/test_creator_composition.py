@@ -344,5 +344,31 @@ class CompositionDataTests(unittest.TestCase):
         self.assertEqual(results[0]['id'], '502')
         self.assertEqual(results[1]['id'], '501')
 
+    def test_mixkit_search_without_api_key_and_youtube_provenance(self):
+        mixkit_html = (
+            '<div data-item-grid--video-player-item-id-value="51275">'
+            '<img src="https://assets.mixkit.co/videos/51275/51275-thumb-360-0.jpg" '
+            'alt="Vertical video of a dancer." width="460" height="818">'
+            '<video src="https://assets.mixkit.co/videos/51275/51275-360.mp4"></video>'
+            '</div>'
+        ).encode('utf-8')
+        opener = _FakeOpener(_FakeResponse(mixkit_html))
+        results = comp.search_stock('mixkit', 'dance', kind='video', orientation='portrait', api_key='', opener=opener)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]['id'], '51275')
+        self.assertEqual(results[0]['download_url'], 'https://assets.mixkit.co/videos/51275/51275-720.mp4')
+        self.assertEqual(results[0]['height'], 1920)
+        prov = comp.validate_provenance(results[0])
+        self.assertEqual(prov['license'], 'Mixkit Stock Video Free License')
+
+        yt_prov = comp.validate_provenance(dict(
+            provider='youtube',
+            creator='Dance Channel',
+            source_url='https://www.youtube.com/watch?v=abc123XYZ',
+            attribution='Video by Dance Channel on YouTube'
+        ))
+        self.assertEqual(yt_prov['license'], 'YouTube / Google Video')
+
+
 
 
