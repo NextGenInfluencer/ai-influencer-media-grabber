@@ -33,6 +33,27 @@ class CaptionDataTests(unittest.TestCase):
         result['segments'][0]['words'][0]['end']=.1
         with self.assertRaises(ValueError): aligned_cues(result,['Γεια σου','Γεια σου'],0,6,2)
 
+    def test_pasted_lyrics_recover_uncertain_words_and_flag_only_affected_lines(self):
+        result={'segments':[{'words':[
+            dict(word='Καλή',start=.1,end=.4),dict(word='μέρα',start=.4,end=.8),
+            dict(word='για',start=1,end=1),dict(word='σένα',start=1.5,end=1.9),
+            dict(word='ξανά',start=2,end=2.3)]}]}
+        cues=aligned_cues(result,['Καλή μέρα','για σένα','ξανά'],0,3,3,recover=True)
+        self.assertEqual([c['text'] for c in cues],['Καλή μέρα','για σένα','ξανά'])
+        self.assertNotIn('karaoke',cues[0]);self.assertNotIn('karaoke',cues[2])
+        self.assertEqual(cues[1]['karaoke']['state'],'review')
+        self.assertIn('estimated',cues[1]['karaoke']['note'])
+        self.assertEqual(cues[1]['words'][0]['start'],.8)
+        self.assertEqual(cues[1]['words'][0]['end'],1.5)
+        self.assertEqual(cues[2]['start'],2)
+        result['segments'][0]['words'][-1].update(start=3,end=3)
+        cues=aligned_cues(result,['Καλή μέρα','για σένα','ξανά'],0,3,3,recover=True)
+        self.assertEqual(cues[-1]['end'],3)
+        self.assertEqual(cues[-1]['karaoke']['state'],'review')
+        for word in result['segments'][0]['words']: word.update(start=0,end=0)
+        with self.assertRaisesRegex(ValueError,'reliable'):
+            aligned_cues(result,['Καλή μέρα','για σένα','ξανά'],0,3,3,recover=True)
+
     def test_unicode_roundtrip_and_lrc_repeated_lines(self):
         text = '1\n00:00:00,100 --> 00:00:01,500\nΓεια σου\nHello\n'
         cues = parse_subtitles(text, 4)
@@ -276,6 +297,18 @@ class CaptionWorkflowTests(unittest.TestCase):
         failed=self.wait(pid,'error')
         for key in ('source','preview','studio','cues','duration','peaks'): self.assertEqual(failed[key],after[key])
         self.assertFalse(list(folder.glob('duration_*.wav')))
+
+    def test_pasted_lyrics_partial_timing_replaces_text_and_keeps_restore_point(self):
+        pid,before=self.karaoke_project()
+        result={'segments':[{'words':[dict(word='Καλή',start=.1,end=.4),dict(word='μέρα',start=.4,end=.4),dict(word='ξανά',start=1,end=1.5)]}]}
+        with patch('captions.align_lyrics',return_value=result):
+            response=self.client.post(f'/api/captions/{pid}/align',json=dict(text='Καλή μέρα\nξανά',language='el',start=0,end=2))
+            self.assertEqual(response.status_code,202,response.json)
+            after=self.wait(pid)
+        self.assertEqual([c['text'] for c in after['cues']],['Καλή μέρα','ξανά'])
+        self.assertEqual(after['cues'][0]['karaoke']['state'],'review')
+        self.assertEqual(after['karaoke_backup']['cues'],before['cues'])
+        self.assertEqual(after['style'],before['style'])
 
     def test_composition_delay_keeps_rendered_audio_and_words_synchronized(self):
         import numpy as np

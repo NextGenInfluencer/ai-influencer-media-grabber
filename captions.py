@@ -202,16 +202,53 @@ def lyric_lines(text):
     return lines
 
 
-def aligned_cues(result, lines, offset, duration, limit):
+def aligned_cues(result, lines, offset, duration, limit, recover=False):
     """Rejoin token fragments while preserving supplied spelling and line breaks."""
     pieces = [w for s in result.get('segments', []) for w in s.get('words', [])
               if str(w.get('word', '')).strip()]
     expected = ''.join(''.join(line.split()) for line in lines)
     if ''.join(''.join(str(w['word']).split()) for w in pieces) != expected:
         raise ValueError('Some lyrics could not be aligned. Check that the pasted words match this audio range.')
+    repaired = set()
+    if recover:
+        # Retain valid anchors. Only uncertain runs are estimated between anchors,
+        # and any line touching those runs is explicitly flagged for listening review.
+        pieces = copy.deepcopy(pieces)
+        anchors, pending = [], []
+        previous = 0
+        for i, piece in enumerate(pieces):
+            try:
+                a, b = number(piece['start'], 0, limit), number(piece['end'], 0, limit)
+                valid = b > a and a >= previous and (not pending or a-previous >= .01*len(pending))
+            except (ValueError, TypeError, KeyError):
+                valid = False
+            if not valid:
+                pending.append(i)
+                continue
+            if pending:
+                step = (a-previous)/len(pending)
+                for n, index in enumerate(pending):
+                    pieces[index].update(start=previous+n*step, end=previous+(n+1)*step)
+                    repaired.add(index)
+                pending = []
+            anchors.append(i)
+            previous = b
+        if pending:
+            while anchors and limit-previous < .01*len(pending):
+                index = anchors.pop()
+                pending = list(range(index,len(pieces)))
+                previous = pieces[index]['start']
+            if not anchors or limit-previous < .01*len(pending):
+                raise ValueError('Too few reliable timing anchors. Try syncing a shorter section; your saved captions were kept.')
+            step = (limit-previous)/len(pending)
+            for n,index in enumerate(pending):
+                pieces[index].update(start=previous+n*step, end=limit if n==len(pending)-1 else previous+(n+1)*step)
+                repaired.add(index)
+        if not anchors:
+            raise ValueError('No reliable lyric timing was found. Try a shorter section; your saved captions were kept.')
     spans, cursor = [], 0
     previous = 0
-    for piece in pieces:
+    for piece_index, piece in enumerate(pieces):
         a = number(piece['start'], 0, limit)
         b = number(piece['end'], 0, limit)
         if b <= a or a < previous - .001:
@@ -219,11 +256,12 @@ def aligned_cues(result, lines, offset, duration, limit):
         a = max(a, previous)
         previous = b
         length = len(''.join(piece['word'].split()))
-        spans.append((cursor, cursor + length, a + offset, b + offset))
+        spans.append((cursor, cursor + length, a + offset, b + offset, piece_index in repaired))
         cursor += length
     cues, cursor, index = [], 0, 0
     for line in lines:
         words = []
+        estimated = False
         for text in line.split():
             end = cursor + len(text)
             while index < len(spans) and spans[index][1] <= cursor:
@@ -235,9 +273,13 @@ def aligned_cues(result, lines, offset, duration, limit):
                 j += 1
             if not matches:
                 raise ValueError('Missing word timings. Try a shorter section.')
+            estimated = estimated or any(span[4] for span in matches)
             words.append(dict(text=text, start=matches[0][2], end=matches[-1][3]))
             cursor = end
-        cues.append(dict(text=line, start=words[0]['start'], end=words[-1]['end'], words=words))
+        cue = dict(text=line, start=words[0]['start'], end=words[-1]['end'], words=words)
+        if estimated:
+            cue['karaoke'] = dict(state='review', note='Some uncertain word timings were estimated between audio anchors. Listen and adjust or retry this line.')
+        cues.append(cue)
     return validate_edit(dict(cues=cues), duration)['cues']
 
 
@@ -294,7 +336,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             try:
                 work(data, folder(data['id']))
                 process.check_cancelled()
-                data['state'], data['status'] = 'ready', 'Ready'
+                data['state'], data['status'] = 'ready', data.pop('_completion_notice', 'Ready')
                 data['revision'] += 1
                 refresh_gallery()
             except Exception as exc:
@@ -754,9 +796,13 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                     if not samples.size or np.max(np.abs(samples)) < .0001:
                         raise ValueError('The selected audio range is silent. Choose a range with vocals.')
                     result = align_lyrics(model, samples, '\n'.join(lines), language)
-                    cues = aligned_cues(result, lines, start, d['duration'], end-start)
+                    cues = aligned_cues(result, lines, start, d['duration'], end-start, recover=True)
                     process.check_cancelled()
+                    d['karaoke_backup'] = dict(cues=copy.deepcopy(d['cues']), timing=d['timing'])
                     d.update(cues=cues, timing='aligned')
+                    flagged = sum(c.get('karaoke',{}).get('state') == 'review' for c in cues)
+                    if flagged:
+                        d['_completion_notice'] = f'Lyrics updated. {flagged} lines contain estimated word timings — use Next line to review.'
                 finally:
                     audio_file.unlink(missing_ok=True)
             return launch(data, 'Matching your lyrics to the audio (existing captions are kept if this fails)…', work)
