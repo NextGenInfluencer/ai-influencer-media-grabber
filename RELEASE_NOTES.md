@@ -1,3 +1,31 @@
+# v2.8.0 — TikTok & Snapchat Aesthetic Filters + OpenCV AR Face Tracking Suite
+
+- **TikTok & Snapchat Signature Aesthetic Filters (1-Click Presets & 0ms Live Preview)**:
+  - Added viral social media aesthetic color grading and visual styling presets with instant CSS live stage preview and native FFmpeg hardware export:
+    - **✨ TikTok Beauty Glow** (eauty): Iconic 'Smooth Cam' skin softening, delicate highlight bloom, and luminous porcelain skin tone.
+    - **📼 VHS 90s Camcorder** (hs): Authentic vintage home-video look with magnetic chromatic aberration, retro analog tape noise, and scanline depth.
+    - **🌅 Teal & Orange Cinematic** (	eal_orange): High-fashion travel influencer color grade with deep teal shadows and warm sunset skin tones.
+    - **💖 Vaporwave Neon** (aporwave): Cyberpunk magenta and electric cyan anime aesthetic with high-saturation pop.
+    - **💎 KiraKira / Bling Sparkle** (ling): Specular highlight boost and starburst glitz pop.
+    - **🐟 Fish-Eye Lens** (isheye): Convex wide-angle bubble lens distortion for skate videos, meme POVs, and dynamic camera angles.
+    - **🎞️ Film Noir / Gotham Dark** (
+oir): High-contrast crushed blacks, desaturated silver tones, and moody TikTok noir aesthetic.
+- **OpenCV-Powered AR Face Tracking & Auto-Snapping (🎯 Auto-Snap to Face)**:
+  - Added local AI computer vision face tracking using OpenCV (haarcascade_frontalface_default.xml & haarcascade_eye.xml) with zero cloud dependencies or external API subscriptions.
+  - Added **'🎯 Auto-Snap to Face'** in the Stickers pane: automatically detects the subject's face at the playhead and snaps stickers directly to the target with normalized coordinates.
+  - Three smart AR snapping targets:
+    - 👑 Head / Crown: Positions stickers floating naturally above the head (ideal for crowns, halos, dog/cat ears).
+    - 🕶️ Eyes / Shades: Tracks and aligns glasses/sunglasses directly across the eye level.
+    - 🎭 Face Center: Centers props and masks directly over the facial midpoint.
+  - Smart emoji prop presets: 1-click selection for 🕶️ (Sunglasses), 👑 (Crown), 😇 (Halo), 🐶 (Dog Ears), 🐱 (Cat Ears), 💖 (Heart Eyes), 🎭 (Mask), 🐰 (Bunny).
+- **Sub-Millisecond Float Precision Sanitization & Auto-Clamping**:
+  - Resolved ValueError: Value must be between ... caused by high-precision floating-point fractions when dividing audio ranges during lyric synchronization.
+  - alidate_edit now gracefully clamps sub-millisecond float imprecision, ensuring lyrics and word timings remain 100% resilient during drag-and-drop, alignment, and auto-estimation.
+
+Validation: 102 automated tests passed across Python unit tests, FFmpeg render tests, and Node.js timing checks.
+
+Download the Windows Setup EXE below. Close the app before installing over your existing installation. This release preserves all your saved media and caption projects.
+
 # v2.7.2 — Cut-to-the-Beat, Per-Clip Speed Ramping & Sticker Overlays
 
 - **Cut-to-the-Beat / Auto Beat-Drop Snapping (`⚡ Cut to Beat`)**:
