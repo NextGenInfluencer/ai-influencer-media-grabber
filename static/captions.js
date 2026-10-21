@@ -213,6 +213,11 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         setBusy(project?.state==='busy');
         if(!project) return;
         for(const key of styleKeys) {
+            if(key==='font' && project.style.font) {
+                if(!Array.from($('font').options).some(o=>o.value===project.style.font)) {
+                    $('font').add(new Option(project.style.font, project.style.font));
+                }
+            }
             if(styleChecks.includes(key)) $(key).checked=!!project.style[key]; else if(project.style[key]!==undefined) $(key).value=project.style[key];
         }
         $('saveStatus').textContent=dirty?'Unsaved changes':'All changes saved';
@@ -382,14 +387,18 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         if(vLane) {
             vLane.replaceChildren();
             const cs=project.studio?.settings||project.composition||{};
+            const assets=project.studio?.assets||{};
             const bgClips=project.studio?.tracks?.[0]?.clips||[];
             if(bgClips.length>=2) {
                 bgClips.forEach((clip,idx)=>{
                     const cb=document.createElement('div');cb.className='trackBlock'+(idx%2===1?' clipAlt':'');
                     cb.style.left=(clip.start/project.duration*100)+'%';
                     cb.style.width=(clip.duration/project.duration*100)+'%';
-                    cb.textContent=`Clip ${idx+1}: ${clip.name||clip.asset} (${clip.duration.toFixed(1)}s)`;
-                    cb.title=`Clip ${idx+1}: ${clip.name||clip.asset} (${fmt(clip.start)} → ${fmt(clip.start+clip.duration)})`;
+                    const clipAsset=assets[clip.asset]||{};
+                    const isMuted=(cs.background_volume===0)||(clipAsset.kind==='image')||(clipAsset.has_audio===false);
+                    const audioIcon=isMuted?'🔇':'🔊';
+                    cb.textContent=`${audioIcon} Clip ${idx+1}: ${clip.name||clip.asset} (${clip.duration.toFixed(1)}s)`;
+                    cb.title=`Clip ${idx+1}: ${clip.name||clip.asset} (${fmt(clip.start)} → ${fmt(clip.start+clip.duration)}) [${isMuted?'Muted/No audio':'Audio active'}]`;
                     cb.onclick=()=>{switchDock('media');video.currentTime=clip.start;};
                     vLane.append(cb);
                 });
@@ -397,7 +406,10 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
                 const bgBlock=document.createElement('div');bgBlock.className='trackBlock';
                 const bgDur=cs.background_duration>0?Math.min(project.duration,cs.background_duration):project.duration;
                 bgBlock.style.left='0%';bgBlock.style.width=(bgDur/project.duration*100)+'%';
-                bgBlock.textContent=`Video: ${project.studio?.assets?.background?.kind||'Colour'} (${cs.shape||'portrait'}${cs.background_speed&&cs.background_speed!==1?' · '+cs.background_speed+'×':''})`;
+                const bgKind=assets.background?.kind||'Colour';
+                const isMuted=(cs.background_volume===0)||(bgKind==='image')||(assets.background?.has_audio===false);
+                const audioIcon=isMuted?'🔇':'🔊';
+                bgBlock.textContent=`${audioIcon} Video: ${bgKind} (${cs.shape||'portrait'}${cs.background_speed&&cs.background_speed!==1?' · '+cs.background_speed+'×':''})`;
                 bgBlock.onclick=()=>switchDock('media');
                 vLane.append(bgBlock);
             }
@@ -740,6 +752,90 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         drawSequenceLists();
         say('All clips set to 10s each (clips will cycle every 10 seconds across the song).');
     };
+    function splitClipAtPlayhead() {
+        if(!project) {
+            say('Open a video project to split clips.', true);
+            return;
+        }
+        if(!clipSequence.length) {
+            syncSequenceFromProject(true);
+        }
+        if(!clipSequence.length) {
+            say('No clips in sequence to split. Add clips or background first.', true);
+            return;
+        }
+        const currTime = Number(video.currentTime) || 0;
+        const totalDuration = Number(project.duration) || 0;
+        if(currTime < 0.1 || currTime > totalDuration - 0.1) {
+            say('Playhead must be inside the video to split (at least 0.1s from start/end).', true);
+            return;
+        }
+
+        const fixedSum = clipSequence.reduce((sum, c) => sum + (Number(c.duration) > 0 ? Number(c.duration) : 0), 0);
+        const autoCount = clipSequence.filter(c => !(Number(c.duration) > 0)).length;
+        const autoDur = autoCount > 0 ? Math.max(0.1, (totalDuration > fixedSum ? (totalDuration - fixedSum) / autoCount : totalDuration / clipSequence.length)) : 5.0;
+
+        let t = 0;
+        let splitIdx = -1;
+        let clipStart = 0;
+        let clipDur = 0;
+
+        for (let i = 0; i < clipSequence.length; i++) {
+            const c = clipSequence[i];
+            const d = (Number(c.duration) > 0) ? Number(c.duration) : autoDur;
+            const segD = Math.min(d, Math.max(0, totalDuration - t));
+            if (currTime >= t && currTime < t + segD) {
+                splitIdx = i;
+                clipStart = t;
+                clipDur = segD;
+                break;
+            }
+            t += segD;
+            if (t >= totalDuration - 0.01) break;
+        }
+
+        if (splitIdx === -1) {
+            splitIdx = clipSequence.length - 1;
+            const lastC = clipSequence[splitIdx];
+            clipDur = (Number(lastC.duration) > 0) ? Number(lastC.duration) : autoDur;
+            clipStart = Math.max(0, totalDuration - clipDur);
+        }
+
+        const leftDur = Math.round((currTime - clipStart) * 100) / 100;
+        const rightDur = Math.round((clipDur - leftDur) * 100) / 100;
+
+        if (leftDur < 0.1 || rightDur < 0.1) {
+            say('Split point is too close to clip boundary (minimum 0.1s).', true);
+            return;
+        }
+
+        clipSequence.forEach((c, idx) => {
+            if (idx !== splitIdx && !(Number(c.duration) > 0)) {
+                c.duration = Math.round(autoDur * 100) / 100;
+            }
+        });
+
+        const orig = clipSequence[splitIdx];
+        const baseName = orig.name || `Clip ${splitIdx + 1}`;
+        const cleanName = baseName.replace(/\s*\(Part\s*\d+[a-z]?\)$/i, '');
+        const leftClip = {
+            ...orig,
+            name: `${cleanName} (Part 1)`,
+            duration: leftDur
+        };
+        const rightClip = {
+            ...orig,
+            name: `${cleanName} (Part 2)`,
+            duration: rightDur
+        };
+
+        clipSequence.splice(splitIdx, 1, leftClip, rightClip);
+        drawSequenceLists();
+        switchDock('media');
+        say(`✂️ Split clip into two parts at ${fmt(currTime)} (${leftDur}s and ${rightDur}s). Click "Apply clip sequence" to bake!`);
+    }
+    if($('seqSplitAtPlayhead')) $('seqSplitAtPlayhead').onclick=()=>splitClipAtPlayhead();
+    if($('splitClip')) $('splitClip').onclick=()=>splitClipAtPlayhead();
     async function syncStockKeyStatus() {
         try {
             const prov=$('stockProvider').value;
@@ -968,6 +1064,56 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
     document.querySelectorAll('[data-preset]').forEach(b=>b.onclick=()=>{edit(()=>Object.assign(project.style,presets[b.dataset.preset]));refresh();});
     $('saveStyle').onclick=act(()=>{if(project){localStorage.setItem('captionStyle',JSON.stringify(project.style));say('Style saved in this browser.');}});
     $('loadStyle').onclick=act(()=>{const s=JSON.parse(localStorage.getItem('captionStyle')||'null');if(!s)throw Error('Save a style first.');edit(()=>{project.style=s;});refresh();});
+    function injectFontFace(family, url) {
+        let tag = $('dynamicCustomFonts');
+        if (!tag) {
+            tag = document.createElement('style');
+            tag.id = 'dynamicCustomFonts';
+            document.head.appendChild(tag);
+        }
+        const rule = `@font-face { font-family: "${family}"; src: url("${url}"); font-display: swap; }`;
+        if (!tag.textContent.includes(`"${family}"`)) {
+            tag.textContent += '\n' + rule;
+        }
+    }
+    async function loadCustomFonts() {
+        try {
+            const res = await api('/api/captions/fonts');
+            if (res.custom && Array.isArray(res.custom)) {
+                res.custom.forEach(f => {
+                    injectFontFace(f.family, f.url);
+                    if (!Array.from($('font').options).some(o => o.value === f.family)) {
+                        $('font').add(new Option(`${f.family} (Custom)`, f.family));
+                    }
+                });
+            }
+        } catch {}
+    }
+    if ($('fontUploadInput')) {
+        $('fontUploadInput').onchange = act(async () => {
+            const file = $('fontUploadInput').files[0];
+            if (!file) return;
+            const fd = new FormData();
+            fd.append('font_file', file);
+            say('Uploading custom font…');
+            const res = await api('/api/captions/fonts/upload', 'POST', fd);
+            if (res.family && res.url) {
+                injectFontFace(res.family, res.url);
+                let opt = Array.from($('font').options).find(o => o.value === res.family);
+                if (!opt) {
+                    opt = new Option(`${res.family} (Custom)`, res.family);
+                    $('font').add(opt);
+                }
+                $('font').value = res.family;
+                if (project?.style) {
+                    edit(() => { project.style.font = res.family; }, false);
+                    drawCaption();
+                }
+                say(`Custom font "${res.family}" imported and applied!`);
+            }
+            $('fontUploadInput').value = '';
+        });
+    }
     $('text').oninput=()=>{
         if(current()) {
             edit(()=>{current().text=$('text').value;current().words=[];},false);
@@ -1100,6 +1246,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         if(/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)||document.querySelector('dialog[open]'))return;
         if(e.code==='Space'){e.preventDefault();$('play').click();}
         if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();undo(e.shiftKey);}
+        if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='b'){e.preventDefault();splitClipAtPlayhead();}
     });
     setInterval(()=>fetch('/api/heartbeat').catch(()=>{}),2000);
     async function checkRestart() {
@@ -1114,6 +1261,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
     checkRestart();setInterval(checkRestart,30000);
     setBusy(false);tick();
     (async()=>{
+        await loadCustomFonts();
         await listProjects();
         await refreshLibraries();
     })().catch(e=>say(e.message,true));

@@ -66,6 +66,13 @@ The alignment-language selector supports English, French, Korean, Greek, Spanish
 
 Failed lines retain their earlier words/timings. **Estimate missing timings** is an explicit approximate fallback, labelled for review. A cancelled operation preserves saved captions; **Restore previous karaoke version** restores the captions from before the last completed karaoke operation, including after reopening the project. Undo also works in the editing session. Long individual lines over 60 seconds need splitting before alignment.
 
+### New in v2.7.1 (Split Clip, Custom Font Upload, 60fps/4K & Audio Badges)
+
+- **Split Clip at Playhead (`Ctrl+B` / Split Clip Button):** Instantly cut any video or photo clip in the sequence at the current playhead position into two adjacent segments with millisecond precision, keeping all lyrics and surrounding clip timings locked.
+- **Custom Font Upload / User Font Import (`.ttf` / `.otf`):** Upload your own TrueType or OpenType typography with magic-byte validation, 0ms live web preview via dynamic `@font-face` injection, and automatic bundling into FFmpeg ASS libass exports.
+- **Advanced Export Quality & Framerate Presets:** Export with smooth **1080p 60fps** (CRF 17, 320k audio) and **4K Ultra HD 2160p** (CRF 15 studio master) for high-end cinematic vertical and horizontal video.
+- **Timeline Audio Indicators:** Visual audio badges (`🔊`/`🔇`) on sequence clip blocks in the bottom timeline for instant audio status verification.
+
 ### New in v2.7.0 (Video Transitions, Non-Destructive Effects & Motion Presets)
 
 - **CapCut-style Video Transitions Between Multi-Clip Cuts:** Add smooth cinematic transitions between cuts in multi-clip sequences (`Dissolve / Crossfade`, `Fade to Black`, `Flash White`, `Slide Left`, `Slide Right`, `Zoom / Circle Crop`, `Wipe Left`, `Wipe Right`) with customizable duration (0.1s to 2.0s) and frame-accurate FFmpeg `xfade` chaining.
@@ -130,6 +137,7 @@ The in-app GitHub updater checks published releases and validates staged changes
 
 | Version | Highlights |
 | --- | --- |
+| v2.7.1 | Split clip at playhead (Ctrl+B), custom font upload (.ttf/.otf), 1080p 60fps & 4K UHD presets, timeline audio indicators |
 | v2.7.0 | Video transitions between multi-clip cuts, 100% reversible non-destructive effects, multi-clip background audio mixing and caption motion presets (Zoom In, Typewriter) |
 | v2.6.1 | Clip-grabber repair, download/search safeguards, cancellation and long-song cycling fixes |
 | v2.6.0 | CapCut-style 4-zone studio, Multi-Clip Video Sequence Storyboard, Free Mixkit HD Stock & YouTube Shorts search (no API key needed), direct TikTok/Reel/Short clip grabber, 1-click dance category chips, multilingual batch karaoke, CapCut video filters & audio effects (noise cancellation, voice isolation, echo/reverb), Carousel Studio & Kling contact sheets |

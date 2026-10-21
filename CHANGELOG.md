@@ -2,6 +2,26 @@
 
 All notable changes to the AI Influencer Media Grabber project will be documented in this file.
 
+## [v2.7.1] - 2026-10-21
+
+### Added & Improved
+- **Split Clip at Playhead (`Ctrl+B` / Split Clip Button)**:
+  - Added 1-click `✂️ Split Clip` button in the center playback controls, `✂️ Split at Playhead` in the storyboard sequence bar, and universal `Ctrl+B` / `Cmd+B` keyboard shortcut.
+  - Automatically splits the active video or photo clip in the sequence at the current playhead position (`video.currentTime`) into two adjacent segments with exact millisecond precision.
+  - Automatically freezes relative auto-split durations so surrounding clip timings and lyrics alignment remain 100% stable.
+- **Custom Font Upload / User Font Import (`.ttf` / `.otf`)**:
+  - Direct font drag-and-drop / file upload (`POST /api/captions/fonts/upload`) supporting any TrueType or OpenType font up to 25MB.
+  - Strict security validation: verified TrueType/OpenType magic headers (`\x00\x01\x00\x00`, `OTTO`, `true`, `typ1`, `ttcf`), Pillow parsing, and font table metadata extraction.
+  - Instant live typography: dynamically injects `@font-face` rules for 0ms web canvas preview without page reloads.
+  - Bit-exact ASS/libass export: custom fonts are automatically copied to temporary `caption_fonts/` during rendering so FFmpeg renders custom typography without requiring OS-level administrator font installation.
+- **Advanced Export Quality & Framerate Presets**:
+  - Added **Smooth 1080p 60fps** (`60fps`: CRF 17, 320k audio, 60fps framerate) for ultra-fluid dance and social media reels.
+  - Added **4K Ultra HD 2160p** (`4k`: CRF 15 studio master, 320k audio, 2160p scaling) for vertical 2160×3840 and horizontal 3840×2160 exports.
+  - Integrated into the finish bar (`#renderQuality`) and validated in backend pipeline.
+- **Timeline Audio Indicators**:
+  - Visual audio badge (`🔊` / `🔇`) rendered directly on sequence clip blocks in the bottom timeline (`#videoTrackLane`).
+  - Displays instant visual feedback whether each clip has active audio or is muted/silent.
+
 ## [v2.7.0] - 2026-10-21
 
 ### Added & Improved

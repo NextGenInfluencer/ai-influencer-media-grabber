@@ -47,6 +47,32 @@ BUNDLED_FONTS = {
 }
 FONTS.update(BUNDLED_FONTS)
 FONT_DIR = Path(__file__).resolve().parent / 'static' / 'fonts'
+CUSTOM_FONT_DIR = FONT_DIR / 'custom'
+CUSTOM_FONTS = {}
+
+
+def refresh_custom_fonts():
+    CUSTOM_FONTS.clear()
+    if CUSTOM_FONT_DIR.is_dir():
+        for font_file in CUSTOM_FONT_DIR.glob('*.*'):
+            if font_file.suffix.lower() in ('.ttf', '.otf'):
+                family = None
+                try:
+                    f = ImageFont.truetype(str(font_file), 32)
+                    name_tuple = f.getname()
+                    if name_tuple and name_tuple[0]:
+                        family = str(name_tuple[0]).strip()
+                except Exception:
+                    pass
+                if not family:
+                    stem = font_file.stem
+                    family = re.sub(r'[_\-]+', ' ', stem).strip()
+                if family:
+                    CUSTOM_FONTS[family] = font_file.name
+                    FONTS.add(family)
+
+
+refresh_custom_fonts()
 
 
 def number(value, low, high):
@@ -131,7 +157,12 @@ def font_scale(name):
     files = {'Arial':'arial.ttf', 'Verdana':'verdana.ttf', 'Georgia':'georgia.ttf',
              'Impact':'impact.ttf', 'Trebuchet MS':'trebuc.ttf'}
     try:
-        path = FONT_DIR / BUNDLED_FONTS[name] if name in BUNDLED_FONTS else Path(os.environ.get('WINDIR', 'C:/Windows')) / 'Fonts' / files[name]
+        if name in BUNDLED_FONTS:
+            path = FONT_DIR / BUNDLED_FONTS[name]
+        elif name in CUSTOM_FONTS:
+            path = CUSTOM_FONT_DIR / CUSTOM_FONTS[name]
+        else:
+            path = Path(os.environ.get('WINDIR', 'C:/Windows')) / 'Fonts' / files[name]
         font = ImageFont.truetype(str(path), 1000)
         return sum(font.getmetrics()) / 1000
     except (OSError, KeyError):
@@ -1449,6 +1480,10 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                     fonts.mkdir(exist_ok=True)
                     for filename in BUNDLED_FONTS.values():
                         shutil.copy2(FONT_DIR / filename, fonts / filename)
+                    for filename in CUSTOM_FONTS.values():
+                        cf = CUSTOM_FONT_DIR / filename
+                        if cf.is_file():
+                            shutil.copy2(cf, fonts / filename)
                     style_cfg = {**DEFAULT_STYLE, **d.get('style', {})}
                     baked = d.get('composition') if isinstance(d.get('composition'), dict) else {}
                     fx_already_baked = baked.get('fx_baked', True)
@@ -1457,7 +1492,14 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                         for k in ('video_filter', 'vignette', 'film_grain', 'sharpen', 'chromatic',
                                   'noise_cancel', 'voice_isolation', 'audio_effect')
                     }
-                    scale_vf = "scale=w='min(720,iw)':h='min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2" if q_spec['max_side'] else 'scale=trunc(iw/2)*2:trunc(ih/2)*2'
+                    if q_spec.get('max_side') == 720:
+                        scale_vf = "scale=w='min(720,iw)':h='min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2"
+                    elif q_spec.get('max_side') == 2160:
+                        scale_vf = "scale=w='if(gt(iw,ih),3840,2160)':h='if(gt(iw,ih),2160,3840)':force_original_aspect_ratio=increase:force_divisible_by=2"
+                    else:
+                        scale_vf = 'scale=trunc(iw/2)*2:trunc(ih/2)*2'
+                    if q_spec.get('fps'):
+                        scale_vf += f",fps={q_spec['fps']}"
                     vf_chain = [*composition_model.video_fx_chain(render_fx), f'ass={ass.name}:fontsdir=caption_fonts', scale_vf]
                     af_chain = composition_model.audio_fx_chain(render_fx)
                     args = ['-i', d['source'], '-map', '0:v:0', '-map', '0:a:0?', '-vf', ','.join(vf_chain)]
@@ -1630,6 +1672,63 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             raise ValueError('Paste a valid TikTok, Instagram, or YouTube video URL.')
         found, title = _grab_social_video(raw_url, prefix='social')
         return jsonify(path=str(found), name=found.name, title=title, kind='video')
+
+    @bp.get('/api/captions/fonts')
+    def get_available_fonts():
+        refresh_custom_fonts()
+        return jsonify(
+            bundled=list(BUNDLED_FONTS.keys()),
+            custom=[{'family': k, 'filename': v, 'url': f'/static/fonts/custom/{v}'} for k, v in CUSTOM_FONTS.items()],
+            all=sorted(FONTS)
+        )
+
+    @bp.post('/api/captions/fonts/upload')
+    def upload_custom_font():
+        if 'font_file' not in request.files:
+            raise ValueError('No font file provided.')
+        file = request.files['font_file']
+        if not file or not file.filename:
+            raise ValueError('No file selected.')
+        ext = Path(file.filename).suffix.lower()
+        if ext not in ('.ttf', '.otf'):
+            raise ValueError('Only .ttf and .otf font files are supported.')
+        raw_bytes = file.read(26 * 1024 * 1024)
+        if len(raw_bytes) > 25 * 1024 * 1024:
+            raise ValueError('Font file exceeds maximum size of 25MB.')
+        if not (raw_bytes.startswith(b'\x00\x01\x00\x00') or
+                raw_bytes.startswith(b'OTTO') or
+                raw_bytes.startswith(b'true') or
+                raw_bytes.startswith(b'typ1') or
+                raw_bytes.startswith(b'ttcf')):
+            raise ValueError('Invalid font file format. Please upload a valid TrueType or OpenType font.')
+
+        safe_stem = re.sub(r'[^a-zA-Z0-9_\-\s]', '', Path(file.filename).stem).strip()
+        fallback_family = re.sub(r'[_\-]+', ' ', safe_stem).strip() or 'Custom Font'
+        family_name = fallback_family
+
+        try:
+            f = ImageFont.truetype(io.BytesIO(raw_bytes), 32)
+            name_tuple = f.getname()
+            if name_tuple and name_tuple[0]:
+                extracted = str(name_tuple[0]).strip()
+                if extracted:
+                    family_name = extracted
+        except Exception as e:
+            raise ValueError(f'Could not parse font: {e}')
+
+        CUSTOM_FONT_DIR.mkdir(parents=True, exist_ok=True)
+        safe_filename = f"{re.sub(r'[^a-zA-Z0-9_]', '_', safe_stem)}{ext}"
+        dest_path = CUSTOM_FONT_DIR / safe_filename
+        dest_path.write_bytes(raw_bytes)
+
+        CUSTOM_FONTS[family_name] = safe_filename
+        FONTS.add(family_name)
+        return jsonify(
+            success=True,
+            family=family_name,
+            filename=safe_filename,
+            url=f'/static/fonts/custom/{safe_filename}'
+        )
 
     # A stopped process cannot resume its background thread after app restart.
     for path in root.glob('*/project.json'):

@@ -27,9 +27,11 @@ AUDIO = {'.mp3','.wav','.m4a','.flac','.ogg'}
 VISUALIZER_STYLES = {'waveform', 'spectrum'}
 VISUALIZER_POSITIONS = {'bottom', 'center', 'top'}
 RENDER_QUALITIES = {
-    'draft': dict(preset='veryfast', crf='24', audio_bitrate='160k', max_side=720),
-    'standard': dict(preset='fast', crf='18', audio_bitrate='256k', max_side=0),
-    'high': dict(preset='medium', crf='15', audio_bitrate='320k', max_side=0),
+    'draft': dict(preset='veryfast', crf='24', audio_bitrate='160k', max_side=720, fps=0),
+    'standard': dict(preset='fast', crf='18', audio_bitrate='256k', max_side=0, fps=0),
+    'high': dict(preset='medium', crf='15', audio_bitrate='320k', max_side=0, fps=0),
+    '60fps': dict(preset='fast', crf='17', audio_bitrate='320k', max_side=0, fps=60),
+    '4k': dict(preset='medium', crf='15', audio_bitrate='320k', max_side=2160, fps=0),
 }
 VIDEO_FILTERS = {
     'none': '',

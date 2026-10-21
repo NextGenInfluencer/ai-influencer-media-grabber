@@ -800,3 +800,75 @@ class CaptionWorkflowTests(unittest.TestCase):
         lines = [line for line in ass_typewriter.splitlines() if line.startswith('Dialogue: 0,')]
         self.assertGreater(len(lines), 3)
 
+    def test_custom_font_upload_validation_and_render_presets(self):
+        from captions import CUSTOM_FONT_DIR, CUSTOM_FONTS, refresh_custom_fonts
+        # 1. GET /api/captions/fonts
+        res = self.client.get('/api/captions/fonts')
+        self.assertEqual(res.status_code, 200)
+        data = res.get_json()
+        self.assertIn('bundled', data)
+        self.assertIn('Montserrat', data['bundled'])
+        self.assertIn('custom', data)
+
+        # 2. Reject missing file
+        bad_res1 = self.client.post('/api/captions/fonts/upload', data={})
+        self.assertIn(bad_res1.status_code, (400, 500))
+
+        # 3. Reject invalid extension
+        bad_res2 = self.client.post('/api/captions/fonts/upload', data={
+            'font_file': (io.BytesIO(b'not a font'), 'malicious.exe')
+        })
+        self.assertIn(bad_res2.status_code, (400, 500))
+
+        # 4. Reject corrupt magic bytes
+        bad_res3 = self.client.post('/api/captions/fonts/upload', data={
+            'font_file': (io.BytesIO(b'corrupt_content_not_real_ttf'), 'bad.ttf')
+        })
+        self.assertIn(bad_res3.status_code, (400, 500))
+
+        # 5. Upload valid font
+        real_ttf = FONT_DIR / 'Bangers-Regular.ttf'
+        self.assertTrue(real_ttf.is_file())
+        raw_bytes = real_ttf.read_bytes()
+        test_font_name = 'Test_Custom_Bangers.ttf'
+        up_res = self.client.post('/api/captions/fonts/upload', data={
+            'font_file': (io.BytesIO(raw_bytes), test_font_name)
+        })
+        self.assertEqual(up_res.status_code, 200, up_res.data)
+        up_data = up_res.get_json()
+        self.assertTrue(up_data.get('success'))
+        family = up_data.get('family')
+        self.assertTrue(family)
+        custom_file = CUSTOM_FONT_DIR / up_data.get('filename')
+        try:
+            self.assertTrue(custom_file.is_file())
+            self.assertIn(family, CUSTOM_FONTS)
+
+            # 6. Verify font is returned in font list
+            list_res = self.client.get('/api/captions/fonts')
+            families = [f['family'] for f in list_res.get_json()['custom']]
+            self.assertIn(family, families)
+
+            # 7. Render with the new custom font and 60fps & 4k quality presets
+            pid, before = self.karaoke_project()
+            custom_style = {**before['style'], 'font': family}
+            self.client.put(f'/api/captions/{pid}', json={
+                'revision': before['revision'],
+                'cues': before['cues'],
+                'style': custom_style,
+                'timing': before['timing'],
+            })
+            r_60 = self.client.post(f'/api/captions/{pid}/render', json={'preview': True, 'quality': '60fps'})
+            self.assertEqual(r_60.status_code, 202)
+            done_60 = self.wait(pid)
+            self.assertTrue(done_60.get('last_render'))
+
+            r_4k = self.client.post(f'/api/captions/{pid}/render', json={'preview': True, 'quality': '4k'})
+            self.assertEqual(r_4k.status_code, 202)
+            done_4k = self.wait(pid)
+            self.assertTrue(done_4k.get('last_render'))
+        finally:
+            if custom_file.is_file():
+                custom_file.unlink(missing_ok=True)
+            refresh_custom_fonts()
+

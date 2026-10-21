@@ -31,8 +31,10 @@
     <h2 class="srOnly">Finish your video</h2>
     <label>Quality
       <select id="renderQuality">
-        <option value="standard">1080p HD</option>
+        <option value="standard">1080p HD (30fps)</option>
         <option value="high">Studio HQ (CRF 15)</option>
+        <option value="60fps">Smooth 1080p (60fps)</option>
+        <option value="4k">4K Ultra HD (2160p)</option>
         <option value="draft">Fast 720p Draft</option>
       </select>
     </label>
@@ -118,6 +120,7 @@
               </div>
               <div class="row" style="margin-bottom:8px;">
                 <select id="seqLibrarySelect" aria-label="Add clip from library" style="flex:1;"><option value="">+ Add clip from library…</option></select>
+                <button id="seqSplitAtPlayhead" type="button" title="Split active clip into two at the current video playhead (Ctrl+B)">✂️ Split at Playhead</button>
                 <button id="seqEvenSplit" type="button" title="Set all clip durations to 0 (split song evenly)">Split evenly</button>
                 <button id="seqCycle10" type="button" title="Set each clip to 10s so clips cycle across the song">10s each</button>
               </div>
@@ -584,6 +587,7 @@
       <p id="playingCaption" class="hint" role="status"></p>
       <div class="transport">
         <button id="play">▶ Play</button>
+        <button id="splitClip" type="button" title="Split active video clip at playhead (Ctrl+B)">✂️ Split Clip</button>
         <span id="time">0:00.00</span>
         <select id="speed" aria-label="Playback speed">
           <option value="0.5">0.5×</option>
@@ -671,6 +675,12 @@
                 <option>Trebuchet MS</option>
               </select>
             </label>
+            <div class="row" style="margin-bottom:6px;">
+              <label class="upload" style="flex:1;text-align:center;font-size:0.82em;padding:4px 8px;" title="Upload custom TrueType or OpenType font (.ttf, .otf)">
+                📁 + Upload Custom Font (.ttf/.otf)
+                <input id="fontUploadInput" type="file" accept=".ttf,.otf">
+              </label>
+            </div>
             <label>Size <input id="size" type="range" min="2" max="12" step=".25" value="5"></label>
             <div class="row">
               <label>Text <input id="color" type="color" value="#ffffff"></label>
