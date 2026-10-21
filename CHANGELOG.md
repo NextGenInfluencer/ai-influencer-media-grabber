@@ -2,7 +2,7 @@
 
 All notable changes to the AI Influencer Media Grabber project will be documented in this file.
 
-## [Creator Studio Update — v2.5.x Source] - 2026-10-21
+## [v2.6.0] - 2026-10-21
 
 ### Added & Improved
 - **CapCut-Style 4-Zone Desktop Studio (`/captions`)**:

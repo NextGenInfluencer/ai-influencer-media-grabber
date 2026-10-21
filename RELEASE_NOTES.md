@@ -1,3 +1,19 @@
+# v2.6.0 — CapCut-Style Creator Studio, Multi-Clip Storyboard & Free Video Search
+
+- **CapCut-Style 4-Zone Desktop Studio (`/captions`)**: Redesigned the Captions & Lyrics workspace into a single-screen desktop editor with a Left Icon Dock (`🎬 Media & Clips`, `🌐 Free Videos`, `📝 Lyrics & AI`, `✨ Filters & FX`, `🎵 Audio & Voice`, `🎞️ Canvas & PiP`), Center Video Player Stage, Right Inspector (`⚡ All`, `💬 Lines & Words`, `🎨 Text Style`), and Bottom Multitrack Timeline (`🎬 Clips`, `🎵 Audio`, `💬 Lyrics`) with no blocking modal popups.
+- **Multi-Clip Video Sequence Storyboard**: Add up to 30 video or photo clips into a sequence, reorder clips (`←`/`→`), set per-clip durations (`0s` Auto split song evenly or custom seconds like `10s` to cycle clips across the song), preview every clip block on the timeline, and render stitched multi-clip sequences via FFmpeg `concat`.
+- **Free Video Search Without API Keys (Mixkit HD Stock & YouTube Shorts / Google) + Social Clip Grabber**:
+  - **🔥 Mixkit HD Stock (Free · No Key)**: Built-in zero-key search for 1,370+ free HD watermark-free dance & aesthetic stock videos.
+  - **📱 YouTube Shorts / Google (Free · No Key)**: Built-in zero-key vertical video search inside the studio via `yt-dlp`.
+  - **🔗 Direct TikTok / Instagram Reel / YouTube Short Clip Grabber**: Paste any TikTok dance video, Instagram Reel, or YouTube Short URL directly in the studio to download without watermark and append to your music video sequence (replacing the clip's audio with your song).
+  - **1-Click Dance & Vibe Category Chips**: Instant category buttons (`💃 Dance`, `🔥 Street / Hip-Hop`, `🪩 Club & Party`, `💃 Modern Dance`, `✨ Neon Aesthetic`, `🌆 Night Drive`, `🎤 Concert / DJ`, `🌊 Sunset Vibe`).
+- **CapCut-Style Video Filters, Visual FX & Audio FX Suite**:
+  - **Video Filters**: `B&W`, `Sepia`, `Vintage Film`, `Cyberpunk Neon`, `Warm Golden Hour`, `Cool Cinema`, `High-Contrast Dramatic`, and `Dreamy Glow` with live browser preview and FFmpeg export.
+  - **Visual FX**: Cinematic Vignette, Film Grain, Sharpen, and RGB Chromatic Glitch.
+  - **Audio Cleanup & Effects**: FFT Noise Cancellation (`afftdn`), Voice Isolation & Speech Clarity, `Echo`, `Concert Hall Reverb`, `Studio Vocal`, `Lo-Fi Radio`, `Bass Boost`, and `Chorus` in both `/captions` and the Media Tools converter (`/`).
+- **Multilingual Karaoke, Audio-Reactive Visualizers, Carousel Studio & Kling Contact Sheets**:
+  - 14-language + mixed-language (`en-fr`, `en-ko`, `en-fr-ko`) batch karaoke alignment with Needleman-Wunsch lyric correction, bundled Google Fonts (`Montserrat`, `Roboto`, `Noto Sans KR`, `Oswald`, `Lobster`, `Bangers`), audio-reactive Spectrum & Waveform visualizers, B-roll PiP overlays, intro title cards, Carousel & Still Image Studio, and 6-frame Kling contact sheets.
+
 # v2.5.0 — Captions & Lyrics editor
 
 **Upgrade from v2.4.x using the Windows installer attached to this release.** The older in-app source updater cannot add the new captions component; its startup check will reject the update and preserve your existing app. Close the app before installing. Your media library is retained.
