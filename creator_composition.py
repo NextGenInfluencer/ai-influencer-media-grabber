@@ -521,8 +521,13 @@ def render_args(studio, folder, output, background_has_audio=False, bake_fx=True
             vfilter = f"[vis]volume={sens},showwaves=s={w}x{vh}:mode=cline:rate=30:colors={vcol}:scale=sqrt[wave]"
         graph += ['[mix]asplit=2[aout][vis]', vfilter, f'[bg][wave]overlay=0:{vy}:shortest=1[out]']
     else: graph += ['[mix]anull[aout]','[bg]null[out]']
+    try:
+        import hwaccel
+        enc_args = hwaccel.get_video_encoder_args(codec='h264', quality='high')
+    except Exception:
+        enc_args = ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18']
     return [*args,'-filter_complex',';'.join(graph),'-map','[out]','-map','[aout]',
-            '-t',str(duration),'-c:v','libx264','-preset','veryfast','-crf','18','-pix_fmt','yuv420p',
+            '-t',str(duration),*enc_args,'-pix_fmt','yuv420p',
             '-c:a','aac','-b:a','256k','-movflags','+faststart',output]
 
 

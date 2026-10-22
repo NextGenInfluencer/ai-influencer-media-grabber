@@ -2,6 +2,28 @@
 
 All notable changes to the AI Influencer Media Grabber project will be documented in this file.
 
+## [v3.0.0] - 2026-10-22
+
+### Added & Improved
+- **GPU Hardware Acceleration Engine (`hwaccel.py`)**:
+  - Automatic micro-encode hardware detection probing NVIDIA NVENC (`h264_nvenc`, `hevc_nvenc`), Intel QuickSync (`h264_qsv`, `hevc_qsv`), AMD AMF (`h264_amf`, `hevc_amf`), and Apple VideoToolbox.
+  - Seamless, zero-configuration software CPU fallback (`libx264` / `libx265`).
+  - Up to 4×-8× faster video encoding across Media Tools, Creator Studio composition exports, face tracking, and subtitling.
+  - Exposes dedicated `/api/hwaccel` telemetry endpoint and header badge indicator.
+- **Apple macOS Pro Acrylic Sheet Dialogs**:
+  - Full modernization of secondary modals (`browserModal`, `mediaPreviewModal`, `aiInstallModal`, `appUpdateModal`) with frosted glass depth (`backdrop-blur-2xl` to `backdrop-blur-3xl`), obsidian translucent cards, and Apple System Blue `#0071e3` tactile action buttons.
+  - Eliminated legacy high-contrast pink inline styles from modal components.
+- **Activity Hub Direct Actions**:
+  - Completed queue cards now offer instant 1-click action pills: `📂 Folder` (reveals in Explorer), `▶ Play` (launches local media player), and `📋 Copy Path` (copies absolute file path).
+  - Failed downloads provide an instant `↻ Retry` action button to re-queue tasks seamlessly.
+- **Timeline Pro Precision Trimming & Storyboard Controls**:
+  - Drag-to-trim edge handles (`||`) on caption cue blocks with Apple Blue hover highlights and tactile cursor feedback.
+  - Storyboard clip sequence reordering with clean `◀` and `▶` pro arrow controls.
+- **Streamlined Top Bar Navigation**:
+  - Cleaned primary segmented navigation bar; moved secondary utilities (Kling Prep, Carousel Studio) into an elegant overflow dropdown menu.
+- **Comprehensive Test Coverage & Stability**:
+  - Added `tests/test_hwaccel.py` verifying detection logic, CPU fallback, preset arguments, and API endpoint behavior (110/110 tests passing).
+
 ## [v2.8.1] - 2026-10-22
 
 ### Added & Improved

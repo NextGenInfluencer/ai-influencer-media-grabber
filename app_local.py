@@ -32,6 +32,7 @@ import math
 from media_safety import contained_path, safe_media_name, crop_filter, MEDIA_EXTENSIONS
 from ai_runtime import serialized, transcribe, translate_srt
 import creator_composition
+import hwaccel
 from typing import Any, Optional, cast
 
 # --- Constants ---
@@ -641,11 +642,12 @@ def dynamic_auto_crop(input_path, output_path, q=None, prefix="", tracking_mode=
         cap = cv2.VideoCapture(input_path)
         ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe() if imageio_ffmpeg else "ffmpeg"
 
+        enc_args = hwaccel.get_video_encoder_args(codec='h264', quality='high')
         cmd = [
             ffmpeg_exe, '-y', '-f', 'rawvideo', '-vcodec', 'rawvideo',
             '-s', f'{target_width}x{height}', '-pix_fmt', 'bgr24', '-r', str(fps),
             '-i', '-', '-i', input_path, '-map', '0:v', '-map', '1:a?',
-            '-c:v', 'libx264', '-preset', 'medium', '-crf', '14', '-pix_fmt', 'yuv420p', '-c:a', 'copy',
+            *enc_args, '-pix_fmt', 'yuv420p', '-c:a', 'copy',
             output_path
         ]
 
@@ -778,7 +780,7 @@ def shazam_file(audio_path):
         print("Shazam error:", e)
         return None
 
-APP_VERSION = "2.8.1"
+APP_VERSION = "3.0.0"
 SERVER_START_TIME = time.time()
 
 # --- Active Job & Auto-Shutdown Watchdog State ---
@@ -1050,7 +1052,8 @@ def convert_media():
                                 trim_cmd.extend(["-t", str(end_s)])
 
                         # High-quality intermediate CRF 12 so subsequent crop never degrades
-                        trim_cmd.extend(["-i", input_path, "-c:v", "libx264", "-preset", "medium", "-crf", "12", "-c:a", "aac", "-b:a", "320k", trimmed_temp_path])
+                        trim_enc = hwaccel.get_video_encoder_args(codec="h264", quality="high")
+                        trim_cmd.extend(["-i", input_path, *trim_enc, "-c:a", "aac", "-b:a", "320k", trimmed_temp_path])
 
                         res = subprocess.run(trim_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
                         if res.returncode == 0 and os.path.exists(trimmed_temp_path) and os.path.getsize(trimmed_temp_path) > 0:
@@ -1195,15 +1198,18 @@ def convert_media():
                             cmd.extend(["-af", ",".join(af_filters)])
 
                         if format_opt in ["mp4", "mkv", "avi"]:
-                            cmd.extend(["-c:v", "libx264", "-preset", "slow" if crf_val in ["0", "14"] else "medium", "-crf", crf_val, "-c:a", "aac", "-b:a", "320k", "-pix_fmt", "yuv420p"])
+                            enc_args = hwaccel.get_video_encoder_args(codec="h264", quality="high" if crf_val in ["0", "14"] else "standard")
+                            cmd.extend([*enc_args, "-c:a", "aac", "-b:a", "320k", "-pix_fmt", "yuv420p"])
                         elif format_opt == "mp4_hevc":
                             # 4K HEVC Master with Apple/Windows compatible hvc1 tag
-                            cmd.extend(["-c:v", "libx265", "-preset", "medium", "-crf", crf_val, "-tag:v", "hvc1", "-c:a", "aac", "-b:a", "320k", "-pix_fmt", "yuv420p"])
+                            enc_args = hwaccel.get_video_encoder_args(codec="hevc", quality="high" if crf_val in ["0", "14"] else "standard")
+                            cmd.extend([*enc_args, "-tag:v", "hvc1", "-c:a", "aac", "-b:a", "320k", "-pix_fmt", "yuv420p"])
                         elif format_opt == "mov_prores":
                             # Apple ProRes 422 Studio Master (HQ)
                             cmd.extend(["-c:v", "prores_ks", "-profile:v", "3", "-c:a", "pcm_s16le"])
                         elif format_opt == "mov":
-                            cmd.extend(["-c:v", "libx264", "-preset", "slow" if crf_val in ["0", "14"] else "medium", "-crf", crf_val, "-c:a", "aac", "-b:a", "320k", "-pix_fmt", "yuv420p"])
+                            enc_args = hwaccel.get_video_encoder_args(codec="h264", quality="high" if crf_val in ["0", "14"] else "standard")
+                            cmd.extend([*enc_args, "-c:a", "aac", "-b:a", "320k", "-pix_fmt", "yuv420p"])
                         elif format_opt == "webm":
                             cmd.extend(["-c:v", "libvpx-vp9", "-crf", crf_val, "-b:v", "0", "-c:a", "libopus"])
                         elif format_opt == "gif":
@@ -1689,9 +1695,10 @@ def download_video():
                                                     rel_srt = os.path.relpath(srt_path).replace('\\', '/')
                                                     rel_srt = rel_srt.replace(':', '\\:').replace(',', '\\,').replace("'", "\\'")
 
+                                                    sub_enc = hwaccel.get_video_encoder_args(codec="h264", quality="high")
                                                     ffmpeg_sub = [
                                                         imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-i", final_path,
-                                                        "-vf", f"subtitles='{rel_srt}'", "-c:v", "libx264", "-c:a", "aac", temp_sub
+                                                        "-vf", f"subtitles='{rel_srt}'", *sub_enc, "-c:a", "aac", temp_sub
                                                     ]
                                                     subprocess.run(ffmpeg_sub, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
                                                     if os.path.exists(temp_sub):
@@ -1713,9 +1720,10 @@ def download_video():
                                 if processing_options.get('forceH264') and final_path and final_path.endswith('.mp4'):
                                     q.put({"status": f"{prefix}Forcing Standard Encoding (H.264)..."})
                                     temp_h264 = base + "_h264_temp.mp4"
+                                    force_enc = hwaccel.get_video_encoder_args(codec="h264", quality="standard")
                                     ffmpeg_h264_cmd = [
                                         imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-i", final_path,
-                                        "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+                                        *force_enc,
                                         "-c:a", "aac", "-pix_fmt", "yuv420p", "-movflags", "+faststart", temp_h264
                                     ]
                                     subprocess.run(ffmpeg_h264_cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
@@ -1919,6 +1927,31 @@ def open_file():
         return jsonify({"success": True})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route('/api/hwaccel', methods=['GET'])
+def api_hwaccel():
+    try:
+        force_cpu = request.args.get('force_cpu', '').lower() in ['1', 'true', 'yes']
+        info = hwaccel.detect_best_encoder(force_cpu=force_cpu)
+        return jsonify({
+            "success": True,
+            "encoder": info.get("encoder"),
+            "display_name": info.get("display_name"),
+            "vendor": info.get("vendor"),
+            "type": info.get("type"),
+            "hardware_accelerated": info.get("hardware_accelerated", False),
+            "codec": info.get("codec")
+        })
+    except Exception as exc:
+        return jsonify({
+            "success": False,
+            "encoder": "libx264",
+            "display_name": "CPU Software Encoder (libx264)",
+            "vendor": "Software",
+            "type": "cpu",
+            "hardware_accelerated": False,
+            "error": str(exc)
+        })
 
 @app.route('/api/extract_prompt', methods=['POST'])
 def extract_prompt():

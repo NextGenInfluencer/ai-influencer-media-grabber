@@ -66,6 +66,15 @@ The alignment-language selector supports English, French, Korean, Greek, Spanish
 
 Failed lines retain their earlier words/timings. **Estimate missing timings** is an explicit approximate fallback, labelled for review. A cancelled operation preserves saved captions; **Restore previous karaoke version** restores the captions from before the last completed karaoke operation, including after reopening the project. Undo also works in the editing session. Long individual lines over 60 seconds need splitting before alignment.
 
+### New in v3.0.0 (GPU Hardware Acceleration Engine + Apple Pro Acrylic Studio Suite)
+
+- **Hardware-Accelerated Video Encoding (NVENC / QSV / AMF / Apple VideoToolbox):** Automatic GPU acceleration probe detects host graphics capabilities on startup, using native NVENC (NVIDIA), QuickSync (Intel), AMF (AMD), or Apple VideoToolbox for ultra-fast exports and trimming, with zero-configuration automatic software CPU fallback (`libx264`/`libx265`).
+- **Live GPU Telemetry Badge:** Dedicated header status indicator displaying the active hardware encoder engine (e.g. `⚡ NVIDIA NVENC`, `⚡ Intel QSV`, `⚡ AMD AMF`) with real-time health feedback.
+- **Apple macOS Pro Acrylic Sheet Dialogs:** Complete redesign of secondary modals (`browserModal`, `mediaPreviewModal`, `aiInstallModal`, `appUpdateModal`) using frosted glass backdrop blur (28px - 32px), translucent obsidian surfaces, and Apple System Blue `#0071e3` tactile action buttons.
+- **Activity Hub Direct Actions:** Completed queue tasks now feature instant 1-click action pills: `📂 Open Folder` (reveals in Explorer), `▶ Play` (launches system media player), and `📋 Copy Path` (copies absolute file path to clipboard). Failed items feature an instant `↻ Retry` button.
+- **Timeline Pro Edge Trimming & Storyboard Sequence Control:** Precision drag-to-trim edge handles (`||`) on timeline cue blocks with hover glow feedback and Apple Blue highlights; tactile storyboard reordering controls (`◀` / `▶`) on sequence clip cards.
+- **Streamlined Pro Navigation:** Clean, uncluttered segmented top bar focusing on primary workflows (Downloader, Media Tools, AI Cleaner, Captions Studio, Gallery, History), with Kling Prep and Carousel Studio tucked into a sleek secondary tools overflow menu.
+
 ### New in v2.8.1 (Apple macOS Pro UI/UX Overhaul + TikTok/Snapchat Suite)
 
 - **TikTok & Snapchat Signature Aesthetic Filters (1-Click Presets & 0ms Live Preview):** Instantly apply iconic social media visual presets with real-time CSS stage preview and native FFmpeg export:
@@ -157,6 +166,7 @@ The in-app GitHub updater checks published releases and validates staged changes
 
 | Version | Highlights |
 | --- | --- |
+| v3.0.0 | GPU Hardware Acceleration (NVENC/QSV/AMF), macOS acrylic sheet modals, Activity Hub direct actions (Play/Folder/Copy/Retry), Timeline Pro edge trimming handles |
 | v2.8.1 | Apple macOS Pro UI/UX overhaul, 1-click paste & open, shortcuts modal, timeline zoom, TikTok & Snapchat filters |
 | v2.8.0 | TikTok & Snapchat aesthetic filters, OpenCV AR face tracking & auto-snapping, float precision auto-clamping |
 | v2.7.2 | Cut-to-the-beat auto snapping, per-clip speed ramping (0.25x to 4x), stickers & emoji graphic overlay track |

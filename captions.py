@@ -1691,7 +1691,12 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                         args += ['-af', ','.join(af_chain)]
                     if preview:
                         args += ['-ss', str(start), '-t', str(min(5, d['duration']-start))]
-                    ffmpeg([*args, '-c:v', 'libx264', '-preset', q_spec['preset'], '-crf', q_spec['crf'], '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', q_spec['audio_bitrate'], '-movflags', '+faststart', temporary.name], f)
+                    try:
+                        import hwaccel
+                        enc_args = hwaccel.get_video_encoder_args(codec='h264', quality=quality)
+                    except Exception:
+                        enc_args = ['-c:v', 'libx264', '-preset', q_spec['preset'], '-crf', q_spec['crf']]
+                    ffmpeg([*args, *enc_args, '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', q_spec['audio_bitrate'], '-movflags', '+faststart', temporary.name], f)
                     os.replace(temporary, f / output)
                     d['exports'].append(output)
                     d['last_render'] = output

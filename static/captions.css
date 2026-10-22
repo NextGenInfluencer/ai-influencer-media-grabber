@@ -260,18 +260,26 @@ textarea{width:100%;resize:vertical}
 .seqItem{
   display:flex;
   align-items:center;
-  gap:5px;
-  background:#1d2133;
-  border:1px solid #393f5c;
-  border-radius:7px;
-  padding:5px 8px;
+  gap:6px;
+  background:rgba(255,255,255,0.04);
+  border:1px solid rgba(255,255,255,0.08);
+  border-radius:10px;
+  padding:6px 10px;
   font-size:11.5px;
+  box-shadow:0 2px 6px rgba(0,0,0,0.2);
+  transition:all 0.15s ease;
 }
-.seqItem strong{color:#c4b5fd;font-size:11px;min-width:20px}
-.seqItem .seqName{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.seqItem input[type=number]{width:54px;padding:3px 5px;font-size:11px}
-.seqItem select.seqSpeed{width:78px;padding:2px 4px;font-size:10.5px;background:#151824;color:#f3f4f6;border:1px solid #3b4261;border-radius:4px}
-.seqItem button{padding:2px 6px;font-size:11px}
+.seqItem:hover{
+  background:rgba(255,255,255,0.06);
+  border-color:rgba(255,255,255,0.15);
+}
+.seqItem strong{color:#60a5fa;font-size:11px;min-width:22px;font-weight:700}
+.seqItem .seqName{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#f3f4f6;font-weight:500}
+.seqItem input[type=number]{width:56px;padding:3px 6px;font-size:11px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#ffffff}
+.seqItem select.seqSpeed{width:82px;padding:3px 6px;font-size:10.5px;background:rgba(0,0,0,0.3);color:#f3f4f6;border:1px solid rgba(255,255,255,0.1);border-radius:6px}
+.seqItem button{padding:3px 8px;font-size:11px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#d1d5db;cursor:pointer;transition:all 0.15s ease}
+.seqItem button:hover:not(:disabled){background:rgba(10,132,255,0.25);border-color:rgba(10,132,255,0.5);color:#ffffff}
+.seqItem button:disabled{opacity:0.3;cursor:not-allowed}
 
 /* Stock Grid inside Left Drawer */
 .stockGrid{
@@ -529,23 +537,68 @@ textarea{width:100%;resize:vertical}
 #blocks{height:54px;position:relative;background:#191b29}
 .block{
   position:absolute;
-  top:5px;
+  top:6px;
   height:42px;
-  background:#624696;
-  border:1px solid #a586d9;
-  border-radius:6px;
+  background:rgba(139, 92, 246, 0.45);
+  border:1px solid rgba(196, 181, 253, 0.55);
+  border-radius:8px;
   overflow:hidden;
   white-space:nowrap;
   text-overflow:ellipsis;
-  padding:10px;
+  padding:10px 12px;
   cursor:grab;
   touch-action:none;
   font-size:11.5px;
+  font-weight:500;
+  color:#ffffff;
+  box-shadow:0 4px 12px rgba(0, 0, 0, 0.35);
+  transition:border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
 }
-.block.selected{background:#8b63d1;border-color:#f0e6ff}
-.edge{position:absolute;top:0;bottom:0;width:8px;background:#ffffff22;cursor:ew-resize}
-.edge.left{left:0}
-.edge.right{right:0}
+.block.selected{
+  background:rgba(10, 132, 255, 0.5);
+  border-color:#ffffff;
+  box-shadow:0 0 0 1px rgba(255, 255, 255, 0.8), 0 4px 16px rgba(10, 132, 255, 0.4);
+}
+.edge{
+  position:absolute;
+  top:0;
+  bottom:0;
+  width:10px;
+  background:rgba(255, 255, 255, 0.15);
+  cursor:ew-resize;
+  transition:all 0.15s ease;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  z-index:2;
+}
+.edge::after{
+  content:'';
+  display:block;
+  width:2px;
+  height:14px;
+  border-radius:1px;
+  background:rgba(255, 255, 255, 0.7);
+  box-shadow:0 0 2px rgba(0, 0, 0, 0.6);
+  transition:background 0.15s ease;
+}
+.edge:hover, .edge:active{
+  background:rgba(10, 132, 255, 0.55);
+}
+.edge:hover::after, .edge:active::after{
+  background:#ffffff;
+  box-shadow:0 0 6px #0a84ff;
+}
+.edge.left{
+  left:0;
+  border-top-left-radius:7px;
+  border-bottom-left-radius:7px;
+}
+.edge.right{
+  right:0;
+  border-top-right-radius:7px;
+  border-bottom-right-radius:7px;
+}
 #playhead{position:absolute;top:0;bottom:0;width:2px;background:#ffd60a;box-shadow:0 0 8px rgba(255,214,10,0.55);pointer-events:none;z-index:3}
 
 dialog{

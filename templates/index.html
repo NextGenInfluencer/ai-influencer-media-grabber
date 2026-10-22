@@ -212,10 +212,8 @@
             <button id="tab-cleaner" onclick="switchTab('cleaner')" class="px-3.5 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-white hover:bg-white/5 transition-all flex items-center">
                 <i class="fa-solid fa-shield-halved mr-1.5 text-zinc-400 text-xs"></i> AI Cleaner
             </button>
-            <button onclick="openReferencePrep()" class="px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-white hover:bg-white/5 transition-all">Kling Prep</button>
-            <button onclick="openCarouselStudio()" class="px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-white hover:bg-white/5 transition-all">Carousel</button>
-            <a href="/captions" class="px-3 py-1.5 rounded-lg text-xs font-medium text-blue-400 hover:text-blue-300 hover:bg-white/5 transition-all flex items-center">
-                <i class="fa-solid fa-closed-captioning mr-1 text-xs"></i> Captions Studio
+            <a href="/captions" class="px-3.5 py-1.5 rounded-lg text-xs font-medium text-blue-400 hover:text-blue-300 hover:bg-white/5 transition-all flex items-center">
+                <i class="fa-solid fa-closed-captioning mr-1.5 text-xs"></i> Captions Studio
             </a>
             <button id="tab-gallery" onclick="switchTab('gallery')" class="px-3.5 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-white hover:bg-white/5 transition-all flex items-center">
                 <i class="fa-solid fa-photo-film mr-1.5 text-zinc-400 text-xs"></i> Gallery
@@ -223,12 +221,31 @@
             <button id="tab-history" onclick="switchTab('history')" class="px-3.5 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-white hover:bg-white/5 transition-all flex items-center">
                 <i class="fa-solid fa-clock-rotate-left mr-1.5 text-zinc-400 text-xs"></i> History
             </button>
+            <!-- Secondary Tools Overflow Dropdown -->
+            <div class="relative group">
+                <button class="px-2.5 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-white hover:bg-white/5 transition-all flex items-center gap-1" title="More Tools">
+                    <i class="fa-solid fa-ellipsis"></i>
+                </button>
+                <div class="absolute right-0 mt-1.5 hidden group-hover:block group-focus-within:block w-44 p-1.5 rounded-xl bg-[#12131a]/95 backdrop-blur-2xl border border-white/10 shadow-2xl z-50">
+                    <button onclick="openReferencePrep()" class="w-full text-left px-3 py-2 rounded-lg text-xs text-zinc-300 hover:text-white hover:bg-white/10 flex items-center gap-2 transition">
+                        <i class="fa-solid fa-film text-purple-400 text-xs"></i> Kling Prep
+                    </button>
+                    <button onclick="openCarouselStudio()" class="w-full text-left px-3 py-2 rounded-lg text-xs text-zinc-300 hover:text-white hover:bg-white/10 flex items-center gap-2 transition">
+                        <i class="fa-solid fa-images text-blue-400 text-xs"></i> Carousel Studio
+                    </button>
+                </div>
+            </div>
         </div>
 
         <!-- Right System Status Control -->
         <div class="hidden lg:flex items-center space-x-2.5 text-xs">
             <div id="queueCountBadge" class="hidden px-2 py-1 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded-lg font-medium text-[11px]">Queue: 0</div>
             
+            <div id="gpuStatusBadge" class="hidden px-2.5 py-1 bg-violet-500/10 text-violet-300 border border-violet-500/20 rounded-full font-medium text-[11px] items-center space-x-1.5 backdrop-blur-md" title="Hardware Acceleration Telemetry">
+                <i class="fa-solid fa-bolt text-violet-400 text-[10px]"></i>
+                <span id="gpuStatusText">GPU Active</span>
+            </div>
+
             <div id="aiEngineBadgeContainer"></div>
             <div id="appUpdateBadgeContainer"></div>
 
@@ -1010,84 +1027,92 @@ https://www.youtube.com/watch?v=..."></textarea>
 
     </main>
 
-    <!-- Folder/File Browser Modal -->
-    <div id="browserModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.75); backdrop-filter:blur(8px); align-items:center; justify-content:center;">
-        <div style="background:#111113; border:1px solid #27272a; border-radius:1.25rem; width:min(520px,90vw); max-height:80vh; display:flex; flex-direction:column; box-shadow:0 25px 50px -12px rgba(0,0,0,0.8);">
+    <!-- Folder/File Browser Modal (Apple macOS Acrylic Sheet Standard) -->
+    <div id="browserModal" style="display:none;" class="fixed inset-0 z-[9999] bg-black/65 backdrop-blur-2xl flex items-center justify-center p-4">
+        <div class="relative w-full max-w-lg max-h-[82vh] flex flex-col bg-[#12131a]/90 backdrop-blur-3xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden transition-all">
             <!-- Header -->
-            <div style="display:flex; align-items:center; justify-content:space-between; padding:1rem 1.25rem; border-bottom:1px solid #27272a;">
-                <div style="display:flex; align-items:center; gap:0.5rem;">
-                    <i id="browserModalIcon" class="fa-solid fa-folder-open" style="color:#ec4899;"></i>
-                    <span id="browserModalTitle" style="font-size:0.8rem; font-weight:800; color:#e4e4e7; text-transform:uppercase; letter-spacing:0.08em;">Select Folder</span>
+            <div class="flex items-center justify-between px-5 py-3.5 border-b border-white/[0.08] bg-white/[0.02]">
+                <div class="flex items-center space-x-2.5">
+                    <i id="browserModalIcon" class="fa-solid fa-folder-open text-[#0a84ff] text-sm"></i>
+                    <span id="browserModalTitle" class="text-xs font-semibold text-zinc-100 tracking-wide">Select Folder</span>
                 </div>
-                <button onclick="closeBrowserModal()" style="background:none; border:none; color:#71717a; cursor:pointer; font-size:1.1rem; padding:0.25rem;" title="Close"><i class="fa-solid fa-xmark"></i></button>
+                <button onclick="closeBrowserModal()" class="w-7 h-7 rounded-full bg-white/[0.06] hover:bg-white/[0.12] text-zinc-400 hover:text-white flex items-center justify-center transition" title="Close (Esc)">
+                    <i class="fa-solid fa-xmark text-xs"></i>
+                </button>
             </div>
-            <!-- Current Path -->
-            <div style="display:flex; align-items:center; gap:0.5rem; padding:0.65rem 1.25rem; border-bottom:1px solid #18181b; background:#0c0c0e;">
-                <i class="fa-solid fa-location-dot" style="color:#a855f7; font-size:0.65rem;"></i>
-                <span id="browserPath" style="font-size:0.7rem; font-family:monospace; color:#a1a1aa; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1;"></span>
-                <!-- Drive selector for Windows -->
-                <select id="drivePicker" style="background:#18181b; border:1px solid #27272a; border-radius:0.5rem; color:#d4d4d8; font-size:0.7rem; padding:0.25rem 0.5rem; cursor:pointer;" onchange="browserNavigate(this.value)"></select>
+            <!-- Current Path Bar -->
+            <div class="flex items-center space-x-2 px-4 py-2 border-b border-white/[0.06] bg-black/30">
+                <i class="fa-solid fa-location-dot text-blue-400 text-xs"></i>
+                <span id="browserPath" class="text-[11px] font-mono text-zinc-300 truncate flex-1"></span>
+                <!-- Windows Drive Picker -->
+                <select id="drivePicker" class="bg-white/[0.06] border border-white/[0.1] rounded-lg text-zinc-200 text-xs px-2 py-1 cursor-pointer focus:outline-none focus:border-blue-500/50" onchange="browserNavigate(this.value)"></select>
             </div>
-            <!-- Up button row -->
-            <div style="padding:0.4rem 1.25rem 0; display:flex; gap:0.5rem;">
-                <button onclick="browserGoUp()" style="background:#18181b; border:1px solid #27272a; border-radius:0.5rem; color:#a1a1aa; font-size:0.65rem; padding:0.35rem 0.75rem; cursor:pointer; display:flex; align-items:center; gap:0.35rem; transition:all 0.15s;" onmouseover="this.style.borderColor='#ec4899';this.style.color='#ec4899'" onmouseout="this.style.borderColor='#27272a';this.style.color='#a1a1aa'"><i class="fa-solid fa-arrow-up"></i> Up</button>
-                <button onclick="browserGoHome()" style="background:#18181b; border:1px solid #27272a; border-radius:0.5rem; color:#a1a1aa; font-size:0.65rem; padding:0.35rem 0.75rem; cursor:pointer; display:flex; align-items:center; gap:0.35rem; transition:all 0.15s;" onmouseover="this.style.borderColor='#ec4899';this.style.color='#ec4899'" onmouseout="this.style.borderColor='#27272a';this.style.color='#a1a1aa'"><i class="fa-solid fa-house"></i> Home</button>
+            <!-- Navigation Toolbar -->
+            <div class="px-4 py-2 flex items-center space-x-2 border-b border-white/[0.04]">
+                <button onclick="browserGoUp()" class="px-3 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-xs text-zinc-300 hover:text-white flex items-center space-x-1.5 transition">
+                    <i class="fa-solid fa-arrow-up text-[10px]"></i>
+                    <span>Up</span>
+                </button>
+                <button onclick="browserGoHome()" class="px-3 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-xs text-zinc-300 hover:text-white flex items-center space-x-1.5 transition">
+                    <i class="fa-solid fa-house text-[10px]"></i>
+                    <span>Home</span>
+                </button>
             </div>
             <!-- Entries list -->
-            <div id="browserEntries" style="flex:1; overflow-y:auto; padding:0.75rem 1.25rem; min-height:200px; max-height:45vh;">
-                <div style="color:#71717a; font-size:0.75rem; text-align:center; padding:2rem;">Loading...</div>
+            <div id="browserEntries" class="flex-1 overflow-y-auto p-3 space-y-1 min-h-[220px] max-h-[48vh] select-none">
+                <div class="text-zinc-500 text-xs text-center py-8">Loading...</div>
             </div>
             <!-- Footer -->
-            <div style="display:flex; align-items:center; justify-content:flex-end; gap:0.75rem; padding:0.85rem 1.25rem; border-top:1px solid #27272a;">
-                <button onclick="closeBrowserModal()" style="padding:0.5rem 1.25rem; background:#18181b; border:1px solid #27272a; border-radius:0.75rem; color:#a1a1aa; font-size:0.7rem; font-weight:700; cursor:pointer; transition:all 0.15s;" onmouseover="this.style.borderColor='#52525b'" onmouseout="this.style.borderColor='#27272a'">Cancel</button>
-                <button id="browserSelectBtn" onclick="browserConfirmSelection()" style="padding:0.5rem 1.25rem; background:linear-gradient(to right,#ec4899,#a855f7); border:none; border-radius:0.75rem; color:white; font-size:0.7rem; font-weight:800; cursor:pointer; text-transform:uppercase; letter-spacing:0.05em; transition:all 0.15s;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">Select This Folder</button>
+            <div class="flex items-center justify-end space-x-2.5 px-5 py-3 border-t border-white/[0.08] bg-white/[0.02]">
+                <button onclick="closeBrowserModal()" class="px-4 py-1.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-xs font-medium text-zinc-300 hover:text-white transition">Cancel</button>
+                <button id="browserSelectBtn" onclick="browserConfirmSelection()" class="px-4 py-1.5 rounded-xl bg-[#0071e3] hover:bg-[#0077ed] text-white text-xs font-semibold shadow-md transition active:scale-95">Select This Folder</button>
             </div>
         </div>
     </div>
 
     <!-- Media Preview Lightbox Modal -->
-    <div id="mediaPreviewModal" style="display:none; position:fixed; inset:0; z-index:99999; background:rgba(0,0,0,0.88); backdrop-filter:blur(12px); align-items:center; justify-content:center; flex-direction:column;" onclick="closeMediaPreview()">
-        <div class="relative w-full max-w-5xl max-h-[92vh] flex flex-col bg-[#0d0d10] border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden m-4" onclick="event.stopPropagation()">
+    <div id="mediaPreviewModal" style="display:none; position:fixed; inset:0; z-index:99999; background:rgba(0,0,0,0.85); backdrop-filter:blur(24px); align-items:center; justify-content:center; flex-direction:column;" onclick="closeMediaPreview()">
+        <div class="relative w-full max-w-5xl max-h-[92vh] flex flex-col bg-[#101116]/95 border border-white/10 rounded-2xl shadow-2xl overflow-hidden m-4 backdrop-blur-2xl" onclick="event.stopPropagation()">
             <!-- Modal Header -->
-            <div class="flex items-center justify-between px-5 py-3 border-b border-zinc-800/80 bg-black/40">
+            <div class="flex items-center justify-between px-5 py-3 border-b border-white/[0.08] bg-white/[0.02]">
                 <div class="flex items-center space-x-3 overflow-hidden pr-3">
-                    <span id="previewModalBadge" class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-pink-500/20 text-pink-400 border border-pink-500/30 shrink-0">Video</span>
+                    <span id="previewModalBadge" class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-blue-500/15 text-blue-400 border border-blue-500/25 shrink-0">Video</span>
                     <span id="previewModalTitle" class="text-sm font-semibold text-zinc-100 truncate" title="">File Name</span>
                     <span id="previewModalMeta" class="text-[11px] text-zinc-500 shrink-0"></span>
                 </div>
                 <div class="flex items-center space-x-2 shrink-0">
-                    <button id="previewModalCloseBtn" onclick="closeMediaPreview()" class="w-8 h-8 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center transition" title="Close (Esc)">
+                    <button id="previewModalCloseBtn" onclick="closeMediaPreview()" class="w-8 h-8 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] text-zinc-400 hover:text-white flex items-center justify-center transition" title="Close (Esc)">
                         <i class="fa-solid fa-xmark text-sm"></i>
                     </button>
                 </div>
             </div>
 
             <!-- Media Container -->
-            <div class="relative flex-1 bg-black flex items-center justify-center p-2 min-h-[300px] max-h-[70vh] overflow-hidden select-none">
+            <div class="relative flex-1 bg-black/90 flex items-center justify-center p-2 min-h-[300px] max-h-[70vh] overflow-hidden select-none">
                 <!-- Video Viewer -->
                 <video id="previewModalVideo" controls autoplay playsinline class="max-h-[68vh] max-w-full rounded object-contain shadow-2xl" style="display:none;"></video>
                 <!-- Image Viewer -->
                 <img id="previewModalImage" class="max-h-[68vh] max-w-full object-contain rounded shadow-2xl" style="display:none;" />
                 <!-- Audio Viewer -->
                 <div id="previewModalAudioContainer" class="flex flex-col items-center justify-center p-8 space-y-4 w-full max-w-md" style="display:none;">
-                    <div class="w-20 h-20 rounded-2xl bg-gradient-to-tr from-pink-500/20 to-purple-500/20 border border-pink-500/30 flex items-center justify-center shadow-lg">
-                        <i class="fa-solid fa-music text-3xl text-pink-400 animate-pulse"></i>
+                    <div class="w-20 h-20 rounded-2xl bg-gradient-to-tr from-blue-500/20 to-purple-500/20 border border-blue-500/30 flex items-center justify-center shadow-lg">
+                        <i class="fa-solid fa-music text-3xl text-blue-400 animate-pulse"></i>
                     </div>
                     <span id="previewModalAudioName" class="text-sm font-bold text-zinc-200 text-center break-all"></span>
                     <audio id="previewModalAudio" controls class="w-full mt-2"></audio>
                 </div>
 
                 <!-- Nav Buttons on Modal -->
-                <button id="previewModalPrevBtn" onclick="navigateMediaPreview(-1)" class="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/60 hover:bg-pink-600/80 text-white flex items-center justify-center backdrop-blur transition border border-white/10 shadow-lg" title="Previous (Left Arrow)">
+                <button id="previewModalPrevBtn" onclick="navigateMediaPreview(-1)" class="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/60 hover:bg-[#0071e3] text-white flex items-center justify-center backdrop-blur transition border border-white/10 shadow-lg" title="Previous (Left Arrow)">
                     <i class="fa-solid fa-chevron-left text-sm"></i>
                 </button>
-                <button id="previewModalNextBtn" onclick="navigateMediaPreview(1)" class="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/60 hover:bg-pink-600/80 text-white flex items-center justify-center backdrop-blur transition border border-white/10 shadow-lg" title="Next (Right Arrow)">
+                <button id="previewModalNextBtn" onclick="navigateMediaPreview(1)" class="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/60 hover:bg-[#0071e3] text-white flex items-center justify-center backdrop-blur transition border border-white/10 shadow-lg" title="Next (Right Arrow)">
                     <i class="fa-solid fa-chevron-right text-sm"></i>
                 </button>
             </div>
 
             <!-- Modal Footer Toolbar -->
-            <div class="flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-t border-zinc-800/80 bg-zinc-950/60">
+            <div class="flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-t border-white/[0.08] bg-[#0c0d12]">
                 <div class="flex items-center space-x-2 text-[11px] text-zinc-400 font-mono truncate max-w-md" id="previewModalPath">
                     <!-- Path display -->
                 </div>
@@ -1214,17 +1239,20 @@ https://www.youtube.com/watch?v=..."></textarea>
                 items.forEach(item => {
                     const row = document.createElement('div');
                     const isDir = item.is_dir !== undefined ? item.is_dir : true;
-                    row.style.cssText = 'display:flex; align-items:center; gap:0.6rem; padding:0.55rem 0.75rem; border-radius:0.6rem; cursor:pointer; transition:all 0.12s; border:1px solid transparent;';
-                    row.onmouseover = () => { row.style.background = '#18181b'; row.style.borderColor = '#27272a'; };
+                    row.className = 'flex items-center space-x-2.5 px-3 py-2 rounded-xl cursor-pointer transition-all border border-transparent select-none';
+                    row.onmouseover = () => { if (_browserSelectedFile !== item.path) row.style.background = 'rgba(255,255,255,0.06)'; };
                     row.onmouseout = () => { 
                         if (_browserSelectedFile !== item.path) { row.style.background = 'transparent'; row.style.borderColor = 'transparent'; }
                     };
 
                     if (isDir) {
-                        row.innerHTML = `<i class="fa-solid fa-folder" style="color:#f59e0b; font-size:0.85rem; width:1.2rem; text-align:center;"></i><span style="font-size:0.75rem; color:#d4d4d8; font-weight:500;">${escapeHtml(item.name)}</span>`;
+                        row.innerHTML = `<i class="fa-solid fa-folder text-[#0a84ff] text-sm w-5 text-center"></i><span class="text-xs text-zinc-200 font-medium truncate">${escapeHtml(item.name)}</span>`;
                         row.ondblclick = () => browserNavigate(item.path);
                         row.onclick = () => {
                             if (_browserMode === 'folder') {
+                                container.querySelectorAll('div').forEach(r => { r.style.background = 'transparent'; r.style.borderColor = 'transparent'; });
+                                row.style.background = 'rgba(10,132,255,0.18)';
+                                row.style.borderColor = 'rgba(10,132,255,0.35)';
                                 _browserCurrentPath = item.path;
                                 document.getElementById('browserPath').textContent = item.path;
                             } else {
@@ -1234,14 +1262,13 @@ https://www.youtube.com/watch?v=..."></textarea>
                     } else {
                         const ext = item.name.split('.').pop().toLowerCase();
                         const isImg = ['jpg','jpeg','png','webp'].includes(ext);
-                        const iconClass = isImg ? 'fa-solid fa-image' : 'fa-solid fa-file-video';
-                        const iconColor = isImg ? '#22d3ee' : '#a78bfa';
-                        row.innerHTML = `<i class="${iconClass}" style="color:${iconColor}; font-size:0.85rem; width:1.2rem; text-align:center;"></i><span style="font-size:0.75rem; color:#d4d4d8; font-weight:500;">${escapeHtml(item.name)}</span>`;
+                        const iconClass = isImg ? 'fa-solid fa-image text-cyan-400' : 'fa-solid fa-file-video text-blue-400';
+                        row.innerHTML = `<i class="${iconClass} text-sm w-5 text-center"></i><span class="text-xs text-zinc-200 font-medium truncate">${escapeHtml(item.name)}</span>`;
                         row.onclick = () => {
                             // Deselect previous
                             container.querySelectorAll('div').forEach(r => { r.style.background = 'transparent'; r.style.borderColor = 'transparent'; });
-                            row.style.background = '#1e1b2e';
-                            row.style.borderColor = '#a855f7';
+                            row.style.background = 'rgba(10,132,255,0.2)';
+                            row.style.borderColor = 'rgba(10,132,255,0.4)';
                             _browserSelectedFile = item.path;
                             document.getElementById('browserSelectBtn').style.display = '';
                             document.getElementById('browserSelectBtn').textContent = 'Select This File';
@@ -2198,6 +2225,84 @@ https://www.youtube.com/watch?v=..."></textarea>
             }
         }
 
+        async function playCompletedFile(path) {
+            try {
+                await fetch('/api/open_file', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: path })
+                });
+            } catch (e) {
+                console.error("Failed to play file", e);
+                showToast('Playback Error', 'Could not open file in player');
+            }
+        }
+
+        function copyCompletedPath(path) {
+            if (!path) return;
+            navigator.clipboard.writeText(path).then(() => {
+                showToast('Path Copied', path);
+            }).catch(() => {
+                showToast('Copy Failed', 'Unable to copy path');
+            });
+        }
+
+        function retryDownloadTask(taskData, oldRow) {
+            if (!taskData || !taskData.payload) return;
+            if (oldRow) oldRow.remove();
+            const newTaskId = uuidv4();
+            const singleUrl = taskData.payload.url || 'Download';
+            const queueContainer = document.getElementById('queueContainer');
+            const row = document.createElement('div');
+            row.id = `task-${newTaskId}`;
+            row.className = 'p-4 rounded-2xl bg-[#080809] border border-white/10 space-y-2 relative group shadow-inner';
+            row.innerHTML = `
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-3 overflow-hidden pr-2">
+                        <i class="task-icon fa-solid fa-clock text-zinc-500"></i>
+                        <span class="text-xs font-bold text-zinc-200 truncate">${escapeHtml(singleUrl)}</span>
+                    </div>
+                    <button type="button" onclick="cancelDownload('${newTaskId}')" class="task-stop text-zinc-500 hover:text-red-400 transition text-xs shrink-0" title="Cancel Download">
+                        <i class="fa-solid fa-circle-xmark"></i>
+                    </button>
+                </div>
+                <div class="w-full bg-zinc-900 rounded-full h-1">
+                    <div class="task-progress bg-blue-500 h-1 rounded-full transition-all duration-300" style="width: 0%"></div>
+                </div>
+                <span class="task-status text-[10px] font-bold uppercase tracking-widest text-zinc-500 block">Queued (Retry)</span>
+            `;
+            queueContainer.prepend(row);
+            downloadQueue.push({ taskId: newTaskId, payload: taskData.payload, cancelled: false });
+            updateQueueCount();
+            processQueue();
+        }
+
+        async function initHwaccelTelemetry() {
+            try {
+                const res = await fetch('/api/hwaccel');
+                const data = await res.json();
+                const badge = document.getElementById('gpuStatusBadge');
+                const text = document.getElementById('gpuStatusText');
+                if (badge && text && data.success) {
+                    badge.classList.remove('hidden');
+                    badge.classList.add('flex');
+                    if (data.hardware_accelerated) {
+                        let label = `${data.vendor} NVENC`;
+                        if (data.vendor === 'Intel') label = 'Intel QSV';
+                        else if (data.vendor === 'AMD') label = 'AMD AMF';
+                        else if (data.vendor === 'Apple') label = 'Apple Metal';
+                        text.textContent = label;
+                        badge.className = 'px-2.5 py-1 bg-violet-500/15 text-violet-300 border border-violet-500/30 rounded-full font-medium text-[11px] flex items-center space-x-1.5 backdrop-blur-md shadow-[0_0_12px_rgba(139,92,246,0.15)]';
+                    } else {
+                        text.textContent = 'CPU (x264)';
+                        badge.className = 'px-2.5 py-1 bg-zinc-800/80 text-zinc-400 border border-white/10 rounded-full font-medium text-[11px] flex items-center space-x-1.5 backdrop-blur-md';
+                    }
+                }
+            } catch (e) {
+                console.warn("GPU telemetry fetch failed", e);
+            }
+        }
+
         const activeDownloads = {};
         const downloadQueue = [];
         let isQueueRunning = false;
@@ -2238,7 +2343,7 @@ https://www.youtube.com/watch?v=..."></textarea>
             }
         }
 
-        async function handleSSEStream(response, taskId, row, controller, stopBtn, statusText, statusIcon, progressBar) {
+        async function handleSSEStream(response, taskId, row, controller, stopBtn, statusText, statusIcon, progressBar, taskData = null) {
             const reader = response.body.getReader();
             const decoder = new MediaEventDecoder();
             let finished = false;
@@ -2261,6 +2366,13 @@ https://www.youtube.com/watch?v=..."></textarea>
                                 progressBar.className = 'task-progress bg-red-500 h-1 rounded-full transition-all duration-300';
                                 if(stopBtn) stopBtn.remove();
                                 delete activeDownloads[taskId];
+                                if (taskData && taskData.payload && !row.querySelector('.task-retry')) {
+                                    const retryBtn = document.createElement('button');
+                                    retryBtn.className = 'task-retry mt-2 px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.08] text-[11px] font-semibold text-amber-300 hover:text-amber-200 flex items-center space-x-1.5 transition';
+                                    retryBtn.innerHTML = '<i class="fa-solid fa-rotate-right text-[10px]"></i> <span>Retry</span>';
+                                    retryBtn.onclick = () => retryDownloadTask(taskData, row);
+                                    row.appendChild(retryBtn);
+                                }
                                 finished = true;
                                 break;
                             }
@@ -2285,11 +2397,31 @@ https://www.youtube.com/watch?v=..."></textarea>
                                 showToast('Download Complete', data.file_path ? `Saved to ${data.file_path}` : 'Task finished successfully.');
                                 
                                 if (data.file_path) {
-                                    const actionBtn = document.createElement('button');
-                                    actionBtn.className = 'mt-2 text-[10px] text-pink-400 hover:text-pink-300 font-bold uppercase tracking-wider flex items-center space-x-1 transition';
-                                    actionBtn.innerHTML = '<i class="fa-solid fa-folder-open text-xs"></i> <span>Open Folder</span>';
-                                    actionBtn.onclick = () => openFolder(data.file_path);
-                                    row.appendChild(actionBtn);
+                                    const actionsDiv = document.createElement('div');
+                                    actionsDiv.className = 'mt-2.5 flex items-center space-x-2 flex-wrap gap-y-1.5';
+
+                                    // Open Folder Action
+                                    const folderBtn = document.createElement('button');
+                                    folderBtn.className = 'px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.08] text-[11px] font-semibold text-zinc-200 hover:text-white flex items-center space-x-1.5 transition';
+                                    folderBtn.innerHTML = '<i class="fa-solid fa-folder-open text-[#0a84ff] text-[10px]"></i> <span>Folder</span>';
+                                    folderBtn.onclick = () => openFolder(data.file_path);
+                                    actionsDiv.appendChild(folderBtn);
+
+                                    // Play File Action
+                                    const playBtn = document.createElement('button');
+                                    playBtn.className = 'px-2.5 py-1 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-[11px] font-semibold text-blue-300 hover:text-white flex items-center space-x-1.5 transition';
+                                    playBtn.innerHTML = '<i class="fa-solid fa-play text-blue-400 text-[10px]"></i> <span>Play</span>';
+                                    playBtn.onclick = () => playCompletedFile(data.file_path);
+                                    actionsDiv.appendChild(playBtn);
+
+                                    // Copy Path Action
+                                    const copyBtn = document.createElement('button');
+                                    copyBtn.className = 'px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.08] text-[11px] font-semibold text-zinc-300 hover:text-white flex items-center space-x-1.5 transition';
+                                    copyBtn.innerHTML = '<i class="fa-regular fa-copy text-zinc-400 text-[10px]"></i> <span>Copy Path</span>';
+                                    copyBtn.onclick = () => copyCompletedPath(data.file_path);
+                                    actionsDiv.appendChild(copyBtn);
+
+                                    row.appendChild(actionsDiv);
                                 }
                                 if (typeof loadGallery === 'function') loadGallery();
                                 if (typeof loadHistory === 'function') loadHistory();
@@ -2322,7 +2454,7 @@ https://www.youtube.com/watch?v=..."></textarea>
 
             try {
                 statusText.textContent = 'Starting processing...';
-                statusIcon.className = 'task-icon fa-solid fa-circle-notch fa-spin text-pink-500';
+                statusIcon.className = 'task-icon fa-solid fa-circle-notch fa-spin text-blue-500';
 
                 const response = await fetch('/api/download', {
                     method: 'POST',
@@ -2335,7 +2467,7 @@ https://www.youtube.com/watch?v=..."></textarea>
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
 
-                await handleSSEStream(response, taskId, row, controller, stopBtn, statusText, statusIcon, progressBar);
+                await handleSSEStream(response, taskId, row, controller, stopBtn, statusText, statusIcon, progressBar, taskData);
 
             } catch (err) {
                 if (err.name === 'AbortError') {
@@ -2348,6 +2480,13 @@ https://www.youtube.com/watch?v=..."></textarea>
                     statusText.className = 'task-status text-[10px] font-bold uppercase tracking-widest text-red-500 mt-2 block';
                     statusIcon.className = 'task-icon fa-solid fa-circle-exclamation text-red-500';
                     progressBar.className = 'task-progress bg-red-500 h-1 rounded-full transition-all duration-300';
+                    if (taskData && taskData.payload && !row.querySelector('.task-retry')) {
+                        const retryBtn = document.createElement('button');
+                        retryBtn.className = 'task-retry mt-2 px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.08] text-[11px] font-semibold text-amber-300 hover:text-amber-200 flex items-center space-x-1.5 transition';
+                        retryBtn.innerHTML = '<i class="fa-solid fa-rotate-right text-[10px]"></i> <span>Retry</span>';
+                        retryBtn.onclick = () => retryDownloadTask(taskData, row);
+                        row.appendChild(retryBtn);
+                    }
                 }
                 if(stopBtn) stopBtn.remove();
                 delete activeDownloads[taskId];
@@ -3327,9 +3466,10 @@ https://www.youtube.com/watch?v=..."></textarea>
             return String(str ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
         }
 
-        // Initialize AI Status on startup
+        // Initialize AI Status & GPU Telemetry on startup
         document.addEventListener('DOMContentLoaded', () => {
             fetchAiStatus();
+            initHwaccelTelemetry();
 
             // Intercept AI checkboxes to guide user if AI is not yet installed
             const aiWatchers = [
@@ -3596,22 +3736,22 @@ https://www.youtube.com/watch?v=..."></textarea>
 
     {% include 'reference_prep.html' %}
 
-    <!-- AI Engine Pack Modal -->
-    <div id="aiInstallModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4">
-        <div class="bg-[#0f0f12] border border-zinc-800 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl transition-all">
+    <!-- AI Engine Pack Modal (Apple macOS Acrylic Standard) -->
+    <div id="aiInstallModal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-2xl hidden flex items-center justify-center p-4">
+        <div class="bg-[#12131a]/95 backdrop-blur-3xl border border-white/10 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl transition-all">
             <!-- Modal Header -->
-            <div class="px-6 py-5 border-b border-zinc-800/80 flex items-center justify-between bg-gradient-to-r from-purple-900/20 via-pink-900/10 to-transparent">
+            <div class="px-6 py-4 border-b border-white/[0.08] flex items-center justify-between bg-white/[0.02]">
                 <div class="flex items-center space-x-3">
-                    <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-purple-600 to-pink-500 flex items-center justify-center shadow-[0_0_20px_rgba(168,85,247,0.4)]">
-                        <i class="fa-solid fa-wand-magic-sparkles text-white text-base"></i>
+                    <div class="w-10 h-10 rounded-xl bg-purple-500/15 border border-purple-500/25 flex items-center justify-center shadow-md">
+                        <i class="fa-solid fa-wand-magic-sparkles text-purple-400 text-sm"></i>
                     </div>
                     <div>
-                        <h3 class="text-sm font-extrabold text-white tracking-wide uppercase">AI Engine Pack</h3>
-                        <p class="text-[11px] text-zinc-400 font-medium">Whisper, Vision Prompter & Offline LLaMA</p>
+                        <h3 class="text-xs font-semibold text-zinc-100 tracking-wide uppercase">AI Engine Pack</h3>
+                        <p class="text-[11px] text-zinc-400">Whisper, Vision Prompter & Offline LLaMA</p>
                     </div>
                 </div>
-                <button onclick="closeAiInstallModal()" class="w-8 h-8 rounded-full bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center transition">
-                    <i class="fa-solid fa-xmark text-sm"></i>
+                <button onclick="closeAiInstallModal()" class="w-7 h-7 rounded-full bg-white/[0.06] hover:bg-white/[0.12] text-zinc-400 hover:text-white flex items-center justify-center transition">
+                    <i class="fa-solid fa-xmark text-xs"></i>
                 </button>
             </div>
 
@@ -3623,32 +3763,32 @@ https://www.youtube.com/watch?v=..."></textarea>
                 </div>
 
                 <div class="grid grid-cols-1 gap-2.5">
-                    <div class="p-3 rounded-xl bg-[#09090b] border border-zinc-800/80 flex items-start space-x-3">
-                        <div class="w-8 h-8 rounded-lg bg-pink-500/10 text-pink-400 flex items-center justify-center shrink-0 mt-0.5">
+                    <div class="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] flex items-start space-x-3">
+                        <div class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0 mt-0.5">
                             <i class="fa-solid fa-microphone-lines text-xs"></i>
                         </div>
                         <div class="flex-1 min-w-0">
-                            <div class="text-xs font-bold text-zinc-200">Local Whisper Speech AI</div>
+                            <div class="text-xs font-semibold text-zinc-200">Local Whisper Speech AI</div>
                             <div class="text-[10px] text-zinc-400">Local audio transcription (model download required) & auto-burned video subtitles (.srt export)</div>
                         </div>
                     </div>
 
-                    <div class="p-3 rounded-xl bg-[#09090b] border border-zinc-800/80 flex items-start space-x-3">
+                    <div class="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] flex items-start space-x-3">
                         <div class="w-8 h-8 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center shrink-0 mt-0.5">
                             <i class="fa-solid fa-eye text-xs"></i>
                         </div>
                         <div class="flex-1 min-w-0">
-                            <div class="text-xs font-bold text-zinc-200">BLIP Scene Description</div>
+                            <div class="text-xs font-semibold text-zinc-200">BLIP Scene Description</div>
                             <div class="text-[10px] text-zinc-400">Extracts photorealistic prompts formatted for Nano Banana 2/Pro & GPT Image 2</div>
                         </div>
                     </div>
 
-                    <div class="p-3 rounded-xl bg-[#09090b] border border-zinc-800/80 flex items-start space-x-3">
+                    <div class="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] flex items-start space-x-3">
                         <div class="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center shrink-0 mt-0.5">
                             <i class="fa-solid fa-brain text-xs"></i>
                         </div>
                         <div class="flex-1 min-w-0">
-                            <div class="text-xs font-bold text-zinc-200">Offline LLaMA Intelligence</div>
+                            <div class="text-xs font-semibold text-zinc-200">Offline LLaMA Intelligence</div>
                             <div class="text-[10px] text-zinc-400">Generates video summaries, viral captions, and hashtags without sending data to the cloud</div>
                         </div>
                     </div>
@@ -3656,79 +3796,79 @@ https://www.youtube.com/watch?v=..."></textarea>
 
                 <div class="flex items-center justify-between text-[11px] text-zinc-400 px-1">
                     <span><i class="fa-solid fa-hard-drive mr-1.5 text-zinc-500"></i>Download Size: <strong class="text-zinc-200">~1.2 GB - 1.8 GB</strong></span>
-                    <span><i class="fa-solid fa-shield-check mr-1.5 text-emerald-400"></i>Media processing is local; downloads and updates use the internet</span>
+                    <span><i class="fa-solid fa-shield-check mr-1.5 text-emerald-400"></i>Media processing is local</span>
                 </div>
 
                 <!-- Live Installation Progress (Hidden when idle) -->
                 <div id="aiInstallProgressBox" class="hidden space-y-2.5 pt-2">
                     <div class="flex items-center justify-between text-xs">
-                        <span id="aiInstallStatusText" class="font-bold text-purple-300 truncate max-w-[320px]">Downloading packages...</span>
+                        <span id="aiInstallStatusText" class="font-semibold text-purple-300 truncate max-w-[320px]">Downloading packages...</span>
                         <span id="aiInstallPercentText" class="font-mono text-zinc-400">0%</span>
                     </div>
-                    <div class="w-full h-2 rounded-full bg-zinc-800 overflow-hidden">
-                        <div id="aiInstallProgressBar" class="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-300" style="width: 0%;"></div>
+                    <div class="w-full h-1.5 rounded-full bg-white/[0.08] overflow-hidden">
+                        <div id="aiInstallProgressBar" class="h-full bg-[#0071e3] transition-all duration-300" style="width: 0%;"></div>
                     </div>
                     <!-- Live console snippet -->
-                    <div id="aiInstallLogBox" class="p-2.5 rounded-xl bg-black border border-zinc-800/80 font-mono text-[9.5px] text-zinc-400 max-h-24 overflow-y-auto space-y-1">
+                    <div id="aiInstallLogBox" class="p-2.5 rounded-xl bg-black/50 border border-white/[0.08] font-mono text-[9.5px] text-zinc-400 max-h-24 overflow-y-auto space-y-1">
                         <div>Ready.</div>
                     </div>
                 </div>
             </div>
 
             <!-- Modal Footer -->
-            <div class="px-6 py-4 bg-[#0a0a0c] border-t border-zinc-800/80 flex items-center justify-end space-x-3">
-                <button onclick="closeAiInstallModal()" class="px-4 py-2 rounded-xl text-xs font-bold text-zinc-400 hover:text-white transition">Close</button>
-                <button id="aiInstallActionBtn" onclick="triggerAiInstall()" class="px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider text-white bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 shadow-[0_0_20px_rgba(168,85,247,0.3)] transition-all flex items-center space-x-2">
-                    <i class="fa-solid fa-cloud-arrow-down"></i>
+            <div class="px-6 py-3.5 bg-white/[0.02] border-t border-white/[0.08] flex items-center justify-end space-x-2.5">
+                <button onclick="closeAiInstallModal()" class="px-4 py-1.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-xs font-medium text-zinc-300 hover:text-white transition">Close</button>
+                <button id="aiInstallActionBtn" onclick="triggerAiInstall()" class="px-4 py-1.5 rounded-xl text-xs font-semibold text-white bg-[#0071e3] hover:bg-[#0077ed] shadow-md transition active:scale-95 flex items-center space-x-2">
+                    <i class="fa-solid fa-cloud-arrow-down text-xs"></i>
                     <span>Download & Install AI Pack</span>
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- Software Update Modal -->
-    <div id="appUpdateModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4">
-        <div class="bg-[#0f0f12] border border-zinc-800 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl transition-all">
+    <!-- Software Update Modal (Apple macOS Acrylic Standard) -->
+    <div id="appUpdateModal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-2xl hidden flex items-center justify-center p-4">
+        <div class="bg-[#12131a]/95 backdrop-blur-3xl border border-white/10 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl transition-all">
             <!-- Modal Header -->
-            <div class="px-6 py-5 border-b border-zinc-800/80 flex items-center justify-between bg-gradient-to-r from-cyan-900/20 via-blue-900/10 to-transparent">
+            <div class="px-6 py-4 border-b border-white/[0.08] flex items-center justify-between bg-white/[0.02]">
                 <div class="flex items-center space-x-3">
-                    <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-[0_0_20px_rgba(6,182,212,0.4)]">
-                        <i class="fa-solid fa-arrows-rotate text-white text-base"></i>
+                    <div class="w-10 h-10 rounded-xl bg-blue-500/15 border border-blue-500/25 flex items-center justify-center shadow-md">
+                        <i class="fa-solid fa-arrows-rotate text-blue-400 text-sm"></i>
                     </div>
                     <div>
-                        <h3 class="text-sm font-extrabold text-white tracking-wide uppercase">Software Update</h3>
+                        <h3 class="text-xs font-semibold text-zinc-100 tracking-wide uppercase">Software Update</h3>
                         <p class="text-[11px] text-zinc-400 font-medium" id="updateModalSubtitle">Over-The-Air GitHub Auto-Updater</p>
                     </div>
                 </div>
-                <button onclick="closeUpdateModal()" class="w-8 h-8 rounded-full bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center transition">
-                    <i class="fa-solid fa-xmark text-sm"></i>
+                <button onclick="closeUpdateModal()" class="w-7 h-7 rounded-full bg-white/[0.06] hover:bg-white/[0.12] text-zinc-400 hover:text-white flex items-center justify-center transition">
+                    <i class="fa-solid fa-xmark text-xs"></i>
                 </button>
             </div>
 
             <!-- Modal Body -->
             <div class="p-6 space-y-4">
                 <!-- Version Comparison Card -->
-                <div class="p-4 rounded-2xl bg-[#08080a] border border-zinc-800/80 flex items-center justify-between">
+                <div class="p-4 rounded-xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-between">
                     <div>
-                        <span class="text-[10px] uppercase tracking-wider text-zinc-500 font-bold block mb-0.5">Current Installed</span>
+                        <span class="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold block mb-0.5">Current Installed</span>
                         <span id="updateModalCurrentVer" class="text-sm font-mono font-bold text-zinc-300">v{{ version }}</span>
                     </div>
-                    <div class="w-8 h-8 rounded-full bg-zinc-800/60 flex items-center justify-center text-zinc-500">
+                    <div class="w-8 h-8 rounded-full bg-white/[0.06] flex items-center justify-center text-zinc-400">
                         <i class="fa-solid fa-arrow-right text-xs"></i>
                     </div>
                     <div class="text-right">
-                        <span class="text-[10px] uppercase tracking-wider text-cyan-400 font-bold block mb-0.5">Latest Release</span>
-                        <span id="updateModalLatestVer" class="text-sm font-mono font-bold text-cyan-300">Checking...</span>
+                        <span class="text-[10px] uppercase tracking-wider text-blue-400 font-semibold block mb-0.5">Latest Release</span>
+                        <span id="updateModalLatestVer" class="text-sm font-mono font-bold text-blue-300">Checking...</span>
                     </div>
                 </div>
 
                 <!-- Release Info & Notes -->
                 <div class="space-y-2">
-                    <div class="flex items-center justify-between text-xs font-bold text-zinc-300">
-                        <span class="uppercase tracking-wider text-[11px]"><i class="fa-solid fa-clipboard-list text-cyan-400 mr-1.5"></i> Release Notes</span>
+                    <div class="flex items-center justify-between text-xs font-semibold text-zinc-300">
+                        <span class="uppercase tracking-wider text-[11px]"><i class="fa-solid fa-clipboard-list text-blue-400 mr-1.5"></i> Release Notes</span>
                         <span id="updateModalReleaseDate" class="text-[10px] text-zinc-500 font-normal font-mono"></span>
                     </div>
-                    <div id="updateModalNotes" class="p-3.5 rounded-xl bg-black border border-zinc-800/80 font-mono text-[11px] text-zinc-300 max-h-36 overflow-y-auto leading-relaxed whitespace-pre-wrap select-text">
+                    <div id="updateModalNotes" class="p-3.5 rounded-xl bg-black/40 border border-white/[0.08] font-mono text-[11px] text-zinc-300 max-h-36 overflow-y-auto leading-relaxed whitespace-pre-wrap select-text">
                         Checking GitHub for updates...
                     </div>
                 </div>
@@ -3736,23 +3876,23 @@ https://www.youtube.com/watch?v=..."></textarea>
                 <!-- Live Progress Box (Hidden until updating or completed) -->
                 <div id="updateProgressBox" class="hidden space-y-2.5 pt-1">
                     <div class="flex items-center justify-between text-xs">
-                        <span id="updateStatusText" class="font-bold text-cyan-300 truncate max-w-[320px]">Downloading update package...</span>
+                        <span id="updateStatusText" class="font-semibold text-blue-300 truncate max-w-[320px]">Downloading update package...</span>
                         <span id="updatePercentText" class="font-mono text-zinc-400">0%</span>
                     </div>
-                    <div class="w-full h-2 rounded-full bg-zinc-800 overflow-hidden">
-                        <div id="updateProgressBar" class="h-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-300" style="width: 0%;"></div>
+                    <div class="w-full h-1.5 rounded-full bg-white/[0.08] overflow-hidden">
+                        <div id="updateProgressBar" class="h-full bg-[#0071e3] transition-all duration-300" style="width: 0%;"></div>
                     </div>
                     <!-- Log feed -->
-                    <div id="updateLogBox" class="p-2.5 rounded-xl bg-black border border-zinc-800/80 font-mono text-[9.5px] text-zinc-400 max-h-24 overflow-y-auto space-y-1">
+                    <div id="updateLogBox" class="p-2.5 rounded-xl bg-black/50 border border-white/[0.08] font-mono text-[9.5px] text-zinc-400 max-h-24 overflow-y-auto space-y-1">
                         <div>Connecting to GitHub...</div>
                     </div>
                 </div>
 
                 <!-- Completion Card (Hidden until complete) -->
-                <div id="updateSuccessCard" class="hidden p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 space-y-2 text-center">
-                    <div class="flex items-center justify-center space-x-2 text-emerald-400 font-bold text-xs uppercase tracking-wider">
-                        <i class="fa-solid fa-circle-check text-base"></i>
-                        <span>Hot Patch Applied Successfully!</span>
+                <div id="updateSuccessCard" class="hidden p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/25 space-y-2 text-center">
+                    <div class="flex items-center justify-center space-x-2 text-emerald-400 font-semibold text-xs uppercase tracking-wider">
+                        <i class="fa-solid fa-circle-check text-sm"></i>
+                        <span>Update Applied Successfully!</span>
                     </div>
                     <p class="text-xs text-zinc-300">All updated files and features have been applied to your installation.</p>
                     <p class="text-[11px] text-zinc-400">Please close and restart the application from your Desktop shortcut to run the newest version.</p>
@@ -3760,8 +3900,8 @@ https://www.youtube.com/watch?v=..."></textarea>
             </div>
 
             <!-- Modal Footer -->
-            <div class="px-6 py-4 bg-[#0a0a0c] border-t border-zinc-800/80 flex items-center justify-between">
-                <a id="updateViewOnGithub" href="https://github.com/NextGenInfluencer/ai-influencer-media-grabber/releases" target="_blank" class="text-[11px] text-zinc-400 hover:text-cyan-400 transition flex items-center space-x-1">
+            <div class="px-6 py-3.5 bg-white/[0.02] border-t border-white/[0.08] flex items-center justify-between">
+                <a id="updateViewOnGithub" href="https://github.com/NextGenInfluencer/ai-influencer-media-grabber/releases" target="_blank" class="text-[11px] text-zinc-400 hover:text-blue-400 transition flex items-center space-x-1">
                     <i class="fa-brands fa-github text-xs"></i>
                     <span>View on GitHub</span>
                 </a>

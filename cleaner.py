@@ -49,7 +49,12 @@ def clean_video(file_path, ffmpeg_exe=None, inject_exif=False):
     if ext == '.webm':
         cmd.extend(['-c:v', 'libvpx-vp9', '-crf', '17', '-b:v', '0', '-c:a', 'libopus'])
     else:
-        cmd.extend(['-c:v', 'libx264', '-crf', '17', '-preset', 'fast', '-c:a', 'aac'])
+        try:
+            import hwaccel
+            enc_args = hwaccel.get_video_encoder_args(codec='h264', quality='high')
+            cmd.extend([*enc_args, '-c:a', 'aac'])
+        except Exception:
+            cmd.extend(['-c:v', 'libx264', '-crf', '17', '-preset', 'fast', '-c:a', 'aac'])
     if ext in {'.mp4', '.mov', '.m4v'}:
         cmd.extend(['-movflags', '+faststart'])
     

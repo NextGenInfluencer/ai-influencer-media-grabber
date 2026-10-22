@@ -31,6 +31,7 @@ from flask import Flask, Response, abort, jsonify, render_template, request, ses
 from media_safety import MEDIA_EXTENSIONS, contained_path, safe_media_name, crop_filter
 from reference_prep import register_reference_prep
 import creator_composition
+import hwaccel
 
 
 class MediaTests(unittest.TestCase):
