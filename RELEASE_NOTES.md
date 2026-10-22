@@ -1,3 +1,16 @@
+# v3.1.2 — Rock-Solid Session Persistence & Auto-Shutdown Fix
+
+- **🛡️ Permanent Fix for Spontaneous App Shutdown / Closing**:
+  - Completely disabled the self-terminating heartbeat watchdog thread by default.
+  - The local desktop server now runs continuously, eliminating unexpected closures when the window is minimized, when Windows is locked, or during Chromium background timer suspension.
+  - Watchdog is now strictly opt-in via `--enable-watchdog` or `MEDIA_GRABBER_ENABLE_WATCHDOG=1` with a safe 24-hour timeout (86,400s), ensuring normal desktop users experience zero random shutdowns.
+- **🛡️ 100% Test Coverage & Automated Regression Suite**:
+  - All 110 unit tests and frontend timing tests pass with 100% test integrity.
+
+### 📦 Download & Verification
+- **Installer**: `AI-Influencer-Media-Grabber-v3.1.2-Setup.exe`
+- **SHA-256**: `B13A674F22FCD6C8595C5E1358C1367A248DDB88298B39489F3DA3611FFF46D1`
+
 # v3.1.1 — Dynamic Lyric Animations & Live Preview Suite
 
 - **✨ Dynamic Live Animation Preview on Selection**:

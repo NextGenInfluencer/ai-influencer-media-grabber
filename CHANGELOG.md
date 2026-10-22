@@ -2,6 +2,13 @@
 
 All notable changes to the AI Influencer Media Grabber project will be documented in this file.
 
+## [v3.1.2] - 2026-10-22
+
+### Fixed
+- **Permanent Fix for Desktop Auto-Shutdown / Spontaneous Closing**:
+  - Completely disabled the self-terminating heartbeat watchdog by default so the desktop app runs continuously without unexpected closures after periods of inactivity, window minimization, or Chromium background timer throttling.
+  - Watchdog is now strictly opt-in via `--enable-watchdog` or `MEDIA_GRABBER_ENABLE_WATCHDOG=1` with a safe 24-hour timeout (86,400s), ensuring everyday desktop users experience zero random shutdowns.
+
 ## [v3.1.1] - 2026-10-22
 
 ### Added & Fixed

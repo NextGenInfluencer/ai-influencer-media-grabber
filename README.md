@@ -66,6 +66,11 @@ The alignment-language selector supports English, French, Korean, Greek, Spanish
 
 Failed lines retain their earlier words/timings. **Estimate missing timings** is an explicit approximate fallback, labelled for review. A cancelled operation preserves saved captions; **Restore previous karaoke version** restores the captions from before the last completed karaoke operation, including after reopening the project. Undo also works in the editing session. Long individual lines over 60 seconds need splitting before alignment.
 
+### New in v3.1.2 (Permanent Fix for Desktop Spontaneous Closing)
+
+- **Eliminated Spontaneous Desktop Shutdowns**: The background heartbeat watchdog thread has been completely disabled by default. The local Python server now runs continuously, eliminating unexpected closures when the window is minimized, when Windows is locked, or during Chromium background timer suspension.
+- **Opt-in Headless Watchdog**: Watchdog is now strictly opt-in via `--enable-watchdog` or `MEDIA_GRABBER_ENABLE_WATCHDOG=1` with a safe 24-hour timeout (86,400s).
+
 ### New in v3.1.1 (Dynamic Lyric Animations & Instant Live Preview)
 
 - **Live Animation Preview on Selection**: Selecting any animation style (*Typewriter*, *Pop Entrance*, *Smooth Fade*, *Slide Up*, *Zoom In*) plays an instant 60fps preview directly on the canvas, even while the video is paused.
@@ -184,6 +189,7 @@ The in-app GitHub updater checks published releases and validates staged changes
 
 | Version | Highlights |
 | --- | --- |
+| v3.1.2 | Permanent fix for auto-shutdown / crash: disabled spontaneous watchdog timeout, rock-solid desktop session persistence |
 | v3.1.1 | Dynamic lyric animations, instant 60fps live animation preview, typewriter + karaoke sync, pro spring easing |
 | v3.1.0 | Background watchdog keepalive fix (no unexpected closing), GPU Hardware Acceleration (NVENC/QSV/AMF), macOS acrylic sheet modals, Activity Hub direct actions |
 | v3.0.0 | GPU Hardware Acceleration (NVENC/QSV/AMF), macOS acrylic sheet modals, Activity Hub direct actions (Play/Folder/Copy/Retry), Timeline Pro edge trimming handles |

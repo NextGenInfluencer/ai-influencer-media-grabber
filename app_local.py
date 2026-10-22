@@ -780,12 +780,14 @@ def shazam_file(audio_path):
         print("Shazam error:", e)
         return None
 
-APP_VERSION = "3.1.1"
+APP_VERSION = "3.1.2"
 SERVER_START_TIME = time.time()
 
 # --- Active Job & Auto-Shutdown Watchdog State ---
-HEARTBEAT_TIMEOUT = float(os.environ.get("MEDIA_GRABBER_HEARTBEAT_TIMEOUT", "300.0"))  # Default: 5 minutes idle tolerance
-DISABLE_WATCHDOG = os.environ.get("MEDIA_GRABBER_NO_WATCHDOG", "").lower() in ["1", "true", "yes"] or "--no-watchdog" in sys.argv
+# Desktop applications must stay running without spontaneous timeouts or shutdowns.
+# Watchdog is opt-in via --enable-watchdog or MEDIA_GRABBER_ENABLE_WATCHDOG=1.
+HEARTBEAT_TIMEOUT = float(os.environ.get("MEDIA_GRABBER_HEARTBEAT_TIMEOUT", "86400.0"))  # Default: 24h if enabled
+ENABLE_WATCHDOG = os.environ.get("MEDIA_GRABBER_ENABLE_WATCHDOG", "").lower() in ["1", "true", "yes"] or "--enable-watchdog" in sys.argv
 _last_heartbeat = time.time()
 _has_received_heartbeat = False
 _active_jobs_lock = threading.Lock()
@@ -2319,11 +2321,11 @@ def heartbeat():
     return jsonify({"status": "alive", "busy": is_busy()})
 
 def _watchdog_loop():
-    if DISABLE_WATCHDOG:
+    if not ENABLE_WATCHDOG:
         return
-    time.sleep(60)  # Initial grace period for desktop window launch
+    time.sleep(120)  # Initial grace period for desktop window launch
     while True:
-        time.sleep(10)
+        time.sleep(15)
         if _has_received_heartbeat:
             elapsed = time.time() - _last_heartbeat
             if elapsed > HEARTBEAT_TIMEOUT:
@@ -2331,7 +2333,7 @@ def _watchdog_loop():
                     print(f"[Watchdog] No client heartbeat for {int(elapsed)}s (timeout={int(HEARTBEAT_TIMEOUT)}s). Shutting down cleanly...", flush=True)
                     os._exit(0)
 
-if not DISABLE_WATCHDOG:
+if ENABLE_WATCHDOG:
     threading.Thread(target=_watchdog_loop, daemon=True).start()
 
 @app.route('/api/shutdown', methods=['POST'])
