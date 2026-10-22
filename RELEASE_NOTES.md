@@ -18,6 +18,7 @@
 
 ### 📦 Download & Verification
 - **Installer**: `AI-Influencer-Media-Grabber-v3.1.1-Setup.exe`
+- **SHA-256**: `6DCE141C812096DFFC1D271BE0E1060D83AF701C94F1DE93B780107EB5E5633B`
 
 # v3.1.0 — Watchdog Keepalive Fix & Production Stability Suite
 

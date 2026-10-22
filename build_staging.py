@@ -148,6 +148,7 @@ def main():
         "job_process.py",
         "download_support.py",
         "reference_prep.py",
+        "hwaccel.py",
         "captions.py",
         "creator_composition.py", "carousel_studio.py", "social_worker.py", "CREATOR_STUDIO_ROADMAP.md",
         "launch-silent.vbs",
