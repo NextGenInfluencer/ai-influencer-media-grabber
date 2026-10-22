@@ -534,7 +534,7 @@ class CompositionDataTests(unittest.TestCase):
             self.assertIn('0.5000*(PTS-STARTPTS)', fg)
             self.assertIn('atempo=0.5000', fg)
             self.assertIn('atempo=2.0000', fg)
-            self.assertIn("overlay=x='(W-w)*0.9'", fg)
+            self.assertIn("overlay=x='clip(W*0.9-w/2,0,W-w)'", fg)
             self.assertIn("between(t,1.0,3.5)", fg)
 
 

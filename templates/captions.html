@@ -597,14 +597,14 @@
             <h3>1. Choose Sticker or Graphic</h3>
             <p class="hint" style="margin-top:0;">Pick an animated/transparent sticker or 1-click reaction emoji.</p>
             <div class="emojiPickRow" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">
-              <button type="button" class="emojiBtn" data-emoji="🕶️" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;" title="Sunglasses (Auto-snaps to eyes)">🕶️</button>
-              <button type="button" class="emojiBtn" data-emoji="👑" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;" title="Golden Crown (Auto-snaps above head)">👑</button>
-              <button type="button" class="emojiBtn" data-emoji="😇" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;" title="Angel Halo (Auto-snaps above head)">😇</button>
-              <button type="button" class="emojiBtn" data-emoji="🐶" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;" title="Dog Face / Ears">🐶</button>
-              <button type="button" class="emojiBtn" data-emoji="🐱" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;" title="Cat Ears &amp; Whiskers">🐱</button>
-              <button type="button" class="emojiBtn" data-emoji="💖" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;" title="Heart Eyes">💖</button>
-              <button type="button" class="emojiBtn" data-emoji="🎭" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;" title="Theater Face Mask">🎭</button>
-              <button type="button" class="emojiBtn" data-emoji="🐰" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;" title="Bunny Ears">🐰</button>
+              <button type="button" class="emojiBtn" data-emoji="🕶️" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;" title="Sunglasses (Snap to Face selects Eyes)">🕶️</button>
+              <button type="button" class="emojiBtn" data-emoji="👑" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;" title="Crown (Snap to Face selects Head)">👑</button>
+              <button type="button" class="emojiBtn" data-emoji="😇" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;" title="Halo face (Snap to Face selects Head)">😇</button>
+              <button type="button" class="emojiBtn" data-emoji="🐶" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;" title="Dog face">🐶</button>
+              <button type="button" class="emojiBtn" data-emoji="🐱" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;" title="Cat face">🐱</button>
+              <button type="button" class="emojiBtn" data-emoji="💖" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;" title="Sparkling heart">💖</button>
+              <button type="button" class="emojiBtn" data-emoji="🎭" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;" title="Theater masks">🎭</button>
+              <button type="button" class="emojiBtn" data-emoji="🐰" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;" title="Rabbit face">🐰</button>
               <button type="button" class="emojiBtn" data-emoji="🔥" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;">🔥</button>
               <button type="button" class="emojiBtn" data-emoji="✨" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;">✨</button>
               <button type="button" class="emojiBtn" data-emoji="💃" style="font-size:1.35em;padding:4px 8px;cursor:pointer;border-radius:6px;border:1px solid #444;background:#2a2b36;">💃</button>
@@ -652,7 +652,7 @@
             </div>
             <!-- AR FACE TRACKING & AUTO-SNAP -->
             <div class="row" style="margin-top:10px;background:rgba(255,255,255,0.04);padding:8px;border-radius:8px;align-items:center;gap:8px;">
-              <button id="snapToFaceBtn" class="primary" type="button" style="flex:1;" title="Auto-detect face at playhead and snap sticker">🎯 Auto-Snap to Face</button>
+              <button id="snapToFaceBtn" class="primary" type="button" style="flex:1;" title="Find the face in the frame at the playhead and place the sticker there (single frame — the sticker does not follow movement)">🎯 Snap to Face (this frame)</button>
               <select id="snapTarget" style="width:130px;" aria-label="AR Face Target">
                 <option value="head">👑 Head / Crown</option>
                 <option value="eyes">🕶️ Eyes / Shades</option>

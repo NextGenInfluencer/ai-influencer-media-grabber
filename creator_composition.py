@@ -52,6 +52,7 @@ VIDEO_FILTERS = {
     'noir': 'colorbalance=rs=-0.1:gs=-0.1:bs=0.05,eq=contrast=1.4:saturation=0.5:brightness=-0.04',
 }
 CAPTION_ANIMATIONS = {'none', 'fade', 'pop', 'slide_up', 'typewriter', 'zoom_in'}
+STICKER_ANIMATIONS = {'none', 'fade', 'pop', 'slide'}
 SEQUENCE_TRANSITIONS = {'none', 'fade', 'dissolve', 'fadeblack', 'fadewhite', 'slideleft', 'slideright', 'circlecrop', 'wipeleft', 'wiperight'}
 AUDIO_EFFECTS = {
     'none': '',
@@ -273,12 +274,22 @@ def validate(settings, source_duration):
         if not re.fullmatch('#[0-9a-fA-F]{6}', str(s[key])):
             raise ValueError('Choose a valid composition color.')
     s['title_text'] = re.sub(r'[\r\n\t]+', ' ', str(s.get('title_text') or '')).strip()[:120]
+    # Older editors saved sticker opacity as a 10-100 slider percentage; canonical unit is 0-1.
+    try:
+        if float(s['sticker_opacity']) > 1:
+            s['sticker_opacity'] = float(s['sticker_opacity']) / 100
+    except (TypeError, ValueError):
+        raise ValueError('Invalid sticker opacity.')
+    if s['sticker_anim'] not in STICKER_ANIMATIONS:
+        raise ValueError('Choose a supported sticker animation.')
     bounds = dict(x=(0,100),y=(0,100),blur=(0,30),dim=(0,1),opacity=(0,1),zoom=(0,.2),
                   brightness=(-.5,.5),contrast=(.5,2),saturation=(0,3),background_speed=(.25,2),
                   film_grain=(0,30),sharpen=(0,2),chromatic=(0,10),
                   transition_in=(0,10),transition_out=(0,10),keyframe_end_x=(0,100),keyframe_end_y=(0,100),
                   title_duration=(0,15),broll_start=(0,7200),broll_duration=(0,7200),
                   broll_x=(0,100),broll_y=(0,100),broll_scale=(20,100),broll_opacity=(.1,1),broll_fade=(0,5),
+                  sticker_start=(0,7200),sticker_duration=(0,7200),sticker_x=(0,100),sticker_y=(0,100),
+                  sticker_scale=(5,100),sticker_opacity=(.1,1),sticker_fade=(0,3),
                   start=(0,source_duration),end=(0,source_duration),offset=(0,120),volume=(0,2),
                   fade_in=(0,60),fade_out=(0,60),background_volume=(0,2),
                   background_start=(0,7200),background_duration=(0,7200),
@@ -494,8 +505,9 @@ def render_args(studio, folder, output, background_has_audio=False, bake_fx=True
             sf = min(s['sticker_duration'] / 2, s['sticker_fade'])
             svf += f",fade=t=in:st=0:d={sf}:alpha=1,fade=t=out:st={max(0, s['sticker_duration'] - sf)}:alpha=1:d={sf}"
         svf += f",trim=duration={s['sticker_duration']},setpts=PTS+{s['sticker_start']}/TB[sticker]"
-        sox = f"(W-w)*{s['sticker_x']/100}"
-        soy = f"(H-h)*{s['sticker_y']/100}"
+        # Centre-anchored like the live preview (and face-snap coordinates), clamped inside the frame.
+        sox = f"clip(W*{s['sticker_x']/100}-w/2,0,W-w)"
+        soy = f"clip(H*{s['sticker_y']/100}-h/2,0,H-h)"
         s_end = round(s['sticker_start'] + s['sticker_duration'], 3)
         graph += [svf, f"[{cur_bg}][sticker]overlay=x='{sox}':y='{soy}':enable='between(t,{s['sticker_start']},{s_end})':eof_action=pass[bg]"]
     if s['visualizer']:

@@ -75,6 +75,9 @@ def refresh_custom_fonts():
 refresh_custom_fonts()
 
 
+WORD_TIME_TOLERANCE = 0.01  # seconds of edge drift absorbed when validating word timings
+
+
 def number(value, low, high):
     value = float(value)
     if not math.isfinite(value) or not low <= value <= high:
@@ -97,25 +100,20 @@ def validate_edit(data, duration):
         if end <= start or not text or len(text) > 1000:
             raise ValueError('Each caption needs text and an end after its start (maximum 1,000 characters).')
         words = []
-        raw_words = cue.get('words', [])
-        n_words = len(raw_words)
         previous = start
-        for w_idx, word in enumerate(raw_words):
-            raw_a = float(word.get('start', start))
-            raw_b = float(word.get('end', end))
-            # Gracefully clamp with floating-point tolerance to caption bounds
-            raw_a = max(start, min(end, raw_a))
-            raw_b = max(start, min(end, raw_b))
-            if raw_a < previous:
+        for word in cue.get('words', []):
+            if not isinstance(word, dict):
+                raise ValueError('Invalid word timing data.')
+            raw_a, raw_b = float(word['start']), float(word['end'])
+            # Absorb only floating-point/rounding drift at the caption edges; real errors are still rejected.
+            if start - WORD_TIME_TOLERANCE <= raw_a < start:
+                raw_a = start
+            if end < raw_b <= end + WORD_TIME_TOLERANCE:
+                raw_b = end
+            if previous - WORD_TIME_TOLERANCE <= raw_a < previous:
                 raw_a = previous
-            if raw_b <= raw_a:
-                rem = n_words - 1 - w_idx
-                available = max(0.001, end - raw_a)
-                step = available / max(1, rem + 1)
-                raw_b = min(end, raw_a + step)
-            a = number(raw_a, start, end)
-            b = number(raw_b, start, end)
-            t = str(word.get('text', '')).strip()
+            a, b = number(raw_a, start, end), number(raw_b, start, end)
+            t = str(word['text']).strip()
             if b <= a or a < previous or not t or len(t) > 100:
                 raise ValueError('Word timings must be ordered and inside their caption.')
             previous = b
@@ -814,6 +812,33 @@ def match_lyrics_to_transcription(cues, lyrics, duration, language=None, model=N
     return validate_edit(dict(cues=final_cues), duration)['cues']
 
 
+EMOJI_FONT_CANDIDATES = (
+    Path(os.environ.get('WINDIR', r'C:\Windows')) / 'Fonts' / 'seguiemj.ttf',
+    Path('/System/Library/Fonts/Apple Color Emoji.ttc'),
+    Path('/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf'),
+)
+# Colour emoji fonts only rasterise at specific strike sizes (Segoe UI Emoji: 109 for 256px output).
+EMOJI_FONT_SIZES = {'seguiemj.ttf': 109, 'Apple Color Emoji.ttc': 160, 'NotoColorEmoji.ttf': 109}
+
+
+def render_emoji_sticker(emoji: str, size: int = 256):
+    """Render one emoji as a transparent colour PNG; fail clearly instead of exporting a missing-glyph box."""
+    from PIL import Image, ImageDraw
+    for font_path in EMOJI_FONT_CANDIDATES:
+        if not font_path.exists():
+            continue
+        try:
+            font = ImageFont.truetype(str(font_path), EMOJI_FONT_SIZES.get(font_path.name, 109))
+        except OSError:
+            continue
+        img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+        ImageDraw.Draw(img).text((size // 2, size // 2), emoji, font=font, anchor='mm', embedded_color=True)
+        alpha = np.asarray(img)[..., 3]
+        if alpha.any():
+            return img.crop(img.getbbox()) if img.getbbox() else img
+    raise ValueError('No colour emoji font is available on this system. Upload a PNG sticker instead.')
+
+
 def detect_face_in_video(video_path: Path, time_sec: float = 0.0, target: str = 'head') -> dict[str, Any]:
     """Detect prominent face at or around time_sec using local OpenCV and return normalized coordinates."""
     if not video_path.exists():
@@ -1185,14 +1210,9 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                     assets[key] = entry
                 emoji_raw = (request.form.get('emoji_sticker') or '').strip()
                 if emoji_raw:
-                    from PIL import Image, ImageDraw
-                    e_img = Image.new('RGBA', (256, 256), (0, 0, 0, 0))
-                    e_draw = ImageDraw.Draw(e_img)
-                    try:
-                        e_font = ImageFont.truetype(str(FONT_DIR / 'NotoSansKR[wght].ttf'), 170)
-                    except Exception:
-                        e_font = ImageFont.load_default()
-                    e_draw.text((128, 128), emoji_raw, font=e_font, anchor='mm', embedded_color=True)
+                    if len(emoji_raw) > 16:
+                        raise ValueError('Choose a single emoji sticker.')
+                    e_img = render_emoji_sticker(emoji_raw)
                     e_name = 'asset_' + uuid.uuid4().hex + '.png'
                     e_target = f / e_name
                     e_img.save(e_target, format='PNG')

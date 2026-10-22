@@ -1004,5 +1004,20 @@ class CaptionWorkflowTests(unittest.TestCase):
             self.assertEqual(data['x'], 31)
             self.assertEqual(data['y'], 14)
 
+    def test_render_emoji_sticker(self):
+        """Verify render_emoji_sticker returns an RGBA image with non-zero alpha or raises clean ValueError."""
+        import numpy as np
+        from captions import render_emoji_sticker
+        try:
+            img = render_emoji_sticker('👑', size=256)
+            self.assertEqual(img.mode, 'RGBA')
+            alpha = np.asarray(img)[..., 3]
+            self.assertTrue(alpha.any(), 'Rendered emoji must have non-zero alpha channel')
+            self.assertGreater(img.width, 0)
+            self.assertGreater(img.height, 0)
+        except ValueError as err:
+            self.assertIn('No colour emoji font is available', str(err))
+
+
 
 

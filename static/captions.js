@@ -133,6 +133,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         dreamy:'blur(1.2px) brightness(1.06) contrast(0.95) saturate(1.2)'
     };
     let project = null, selected = -1, history = [], future = [], dirty = false;
+    let compFilledSource = null;
     let saveTimer, pollTimer, saving = null, generation = 0, busy = false, dragging = false, pendingPreview = false;
     const say = (text, error = false) => {
         $('status').textContent = text; $('status').classList.toggle('error', error);
@@ -299,37 +300,53 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         const showTitle=compSet.title_text && compSet.title_duration>0 && video.currentTime>=0 && video.currentTime<=compSet.title_duration;
         const st=$('stageSticker');
         if(st) {
+            // Use live form values so placement/face-snap changes show before Apply; fall back to saved settings.
+            const stk={...compSet, ...liveStickerSettings()};
             const stickerAsset=project.studio?.assets?.sticker;
-            const hasStk=(stickerAsset || selectedEmoji) && (Number(compSet.sticker_duration)>0);
-            const stkStart=Number(compSet.sticker_start)||0;
-            const stkDur=Number(compSet.sticker_duration)||0;
+            const hasStk=(stickerAsset || selectedEmoji) && (Number(stk.sticker_duration)>0);
+            const stkStart=Number(stk.sticker_start)||0;
+            const stkDur=Number(stk.sticker_duration)||0;
             const inRange=hasStk && video.currentTime>=stkStart && video.currentTime<=(stkStart+stkDur);
             if(inRange) {
                 st.hidden=false;
-                const scalePct=Number(compSet.sticker_scale)||25;
-                const posX=compSet.sticker_x!==undefined?Number(compSet.sticker_x):85;
-                const posY=compSet.sticker_y!==undefined?Number(compSet.sticker_y):15;
-                const op=(compSet.sticker_opacity!==undefined?Number(compSet.sticker_opacity):100)/100;
-                st.style.left=posX+'%';
-                st.style.top=posY+'%';
+                const scalePct=Number(stk.sticker_scale)||25;
+                const posX=stk.sticker_x!==undefined?Number(stk.sticker_x):85;
+                const posY=stk.sticker_y!==undefined?Number(stk.sticker_y):15;
+                const rawOp=stk.sticker_opacity!==undefined?Number(stk.sticker_opacity):1;
+                const op=rawOp>1?rawOp/100:rawOp;
+                // Same geometry as export: centre at x%/y%, width = video width × scale%, kept inside the frame.
+                const stageW=$('stage').clientWidth||1, stageH=$('stage').clientHeight||1;
+                const boxW=stageW*scalePct/100;
+                const boxH=st.offsetHeight||boxW;
+                st.style.width=boxW+'px';
+                st.style.left=Math.max(0,Math.min(stageW-boxW,stageW*posX/100-boxW/2))+'px';
+                st.style.top=Math.max(0,Math.min(stageH-boxH,stageH*posY/100-boxH/2))+'px';
                 st.style.opacity=String(op);
-                let stTransform=`translate(-50%, -50%) scale(${scalePct/25})`;
+                let stTransform='none';
                 const elapsed=video.currentTime-stkStart;
                 const remain=(stkStart+stkDur)-video.currentTime;
-                if(compSet.sticker_anim==='pop' && elapsed<0.22) {
-                    const sc=0.5+0.5*(elapsed/0.22);
-                    stTransform=`translate(-50%, -50%) scale(${(scalePct/25*sc).toFixed(2)})`;
-                } else if(compSet.sticker_anim==='fade') {
-                    st.style.opacity=String(Math.min(op, op*elapsed/0.2, op*remain/0.2));
+                if(stk.sticker_anim==='pop' && elapsed<0.22) {
+                    stTransform=`scale(${(0.5+0.5*(elapsed/0.22)).toFixed(2)})`;
+                } else if(stk.sticker_anim==='fade') {
+                    st.style.opacity=String(Math.max(0,Math.min(op, op*elapsed/0.2, op*remain/0.2)));
                 }
                 st.style.transform=stTransform;
                 if(selectedEmoji) {
-                    st.innerHTML=`<span style="font-size:52px;line-height:1;filter:drop-shadow(0 4px 12px rgba(0,0,0,0.6));">${selectedEmoji}</span>`;
+                    const key='emoji:'+selectedEmoji;
+                    if(st.dataset.src!==key) {
+                        st.dataset.src=key;
+                        st.replaceChildren();
+                        const span=document.createElement('span');
+                        span.textContent=selectedEmoji;
+                        span.style.cssText='line-height:1;display:block;text-align:center;filter:drop-shadow(0 4px 12px rgba(0,0,0,0.6));';
+                        st.append(span);
+                    }
+                    st.firstChild.style.fontSize=(boxW*0.86)+'px';
                 } else if(stickerAsset) {
                     const src=media(stickerAsset.file);
                     if(st.dataset.src!==src) {
                         st.dataset.src=src;
-                        st.innerHTML=`<img src="${src}" style="max-width:130px;max-height:130px;object-fit:contain;filter:drop-shadow(0 4px 12px rgba(0,0,0,0.6));" alt="sticker">`;
+                        st.innerHTML=`<img src="${src}" style="width:100%;height:auto;display:block;filter:drop-shadow(0 4px 12px rgba(0,0,0,0.6));" alt="sticker">`;
                     }
                 }
             } else {
@@ -651,10 +668,34 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
     const compositionKeys=['shape','color','fit','x','y','blur','dim','overlay','opacity','zoom','brightness','contrast','saturation','video_filter','vignette','film_grain','sharpen','chromatic','background_speed','transition_in','transition_out','keyframe_end_x','keyframe_end_y','title_text','title_duration','broll_start','broll_duration','broll_x','broll_y','broll_scale','broll_opacity','broll_fade','sticker_start','sticker_duration','sticker_x','sticker_y','sticker_scale','sticker_opacity','sticker_fade','sticker_anim','start','end','offset','volume','fade_in','fade_out','noise_cancel','voice_isolation','audio_effect','background_volume','ducking','loop','background_start','background_duration','visualizer','visualizer_style','visualizer_position','visualizer_height','visualizer_sensitivity','visualizer_color','sequence_transition','sequence_transition_duration'];
     const compositionChecks=['loop','visualizer','ducking','vignette','noise_cancel','voice_isolation'], compositionStrings=['shape','color','fit','overlay','visualizer_style','visualizer_position','visualizer_color','title_text','video_filter','audio_effect','sequence_transition','sticker_anim'];
     function fillComposition(settings) {
-        for(const key of compositionKeys) {const input=$('comp_'+key);if(compositionChecks.includes(key))input.checked=!!settings[key];else if(settings[key]!==undefined)input.value=settings[key];}
+        for(const key of compositionKeys) {
+            const input=$('comp_'+key);
+            if(compositionChecks.includes(key)) input.checked=!!settings[key];
+            else if(key==='sticker_opacity' && settings[key]!==undefined) {
+                const v=Number(settings[key]);
+                input.value=String(Math.round(v>1?v:v*100));  // slider shows %, canonical value is 0-1
+            }
+            else if(settings[key]!==undefined) input.value=settings[key];
+        }
+    }
+    function compositionValue(key) {
+        const input=$('comp_'+key);
+        if(compositionChecks.includes(key)) return input.checked;
+        if(compositionStrings.includes(key)) return input.value;
+        if(key==='sticker_opacity') return Number(input.value)/100;
+        return Number(input.value);
     }
     function compositionSettings() {
-        return Object.fromEntries(compositionKeys.map(key=>{const input=$('comp_'+key);return [key,compositionChecks.includes(key)?input.checked:compositionStrings.includes(key)?input.value:Number(input.value)];}));
+        return Object.fromEntries(compositionKeys.map(key=>[key,compositionValue(key)]));
+    }
+    const stickerKeys=['sticker_start','sticker_duration','sticker_x','sticker_y','sticker_scale','sticker_opacity','sticker_fade','sticker_anim'];
+    function liveStickerSettings() {
+        if(compFilledSource===null) return {};
+        return Object.fromEntries(stickerKeys.filter(k=>$('comp_'+k)).map(k=>[k,compositionValue(k)]));
+    }
+    for(const key of stickerKeys) {
+        const input=$('comp_'+key);
+        if(input) input.addEventListener('input',()=>drawCaption());
     }
     function switchDock(name) {
         document.querySelectorAll('[data-dock]').forEach(b=>b.classList.toggle('active',b.dataset.dock===name));
@@ -682,7 +723,6 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
             el.close=()=>{el.open=false;if(id==='stockDialog')switchDock('media');};
         }
     }
-    let compFilledSource=null;
     function drawComposition() {
         const studio=project?.studio;
         $('editComposition').disabled=busy||!studio;
@@ -984,7 +1024,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
                     $('comp_sticker_duration').value = '4';
                     $('comp_sticker_start').value = Math.max(0, video.currentTime).toFixed(1);
                 }
-                const msg = `🎯 Locked to face (${target}) at ${data.x}%, ${data.y}% · Scale ${data.scale}%`;
+                const msg = `🎯 Sticker placed on the face (${target}) found at ${data.time}s — ${data.x}%, ${data.y}%, scale ${data.scale}%. It stays at this spot; press Apply to save.`;
                 if ($('snapFaceStatus')) $('snapFaceStatus').textContent = msg;
                 say(msg);
                 drawCaption();

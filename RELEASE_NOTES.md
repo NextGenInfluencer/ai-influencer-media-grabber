@@ -1,28 +1,29 @@
-# v2.8.0 — TikTok & Snapchat Aesthetic Filters + OpenCV AR Face Tracking Suite
+# v2.8.0 — TikTok & Snapchat Aesthetic Filters + OpenCV Face Snapping Suite
 
 - **TikTok & Snapchat Signature Aesthetic Filters (1-Click Presets & 0ms Live Preview)**:
-  - Added viral social media aesthetic color grading and visual styling presets with instant CSS live stage preview and native FFmpeg hardware export:
-    - **✨ TikTok Beauty Glow** (eauty): Iconic 'Smooth Cam' skin softening, delicate highlight bloom, and luminous porcelain skin tone.
-    - **📼 VHS 90s Camcorder** (hs): Authentic vintage home-video look with magnetic chromatic aberration, retro analog tape noise, and scanline depth.
-    - **🌅 Teal & Orange Cinematic** (	eal_orange): High-fashion travel influencer color grade with deep teal shadows and warm sunset skin tones.
-    - **💖 Vaporwave Neon** (aporwave): Cyberpunk magenta and electric cyan anime aesthetic with high-saturation pop.
-    - **💎 KiraKira / Bling Sparkle** (ling): Specular highlight boost and starburst glitz pop.
-    - **🐟 Fish-Eye Lens** (isheye): Convex wide-angle bubble lens distortion for skate videos, meme POVs, and dynamic camera angles.
-    - **🎞️ Film Noir / Gotham Dark** (
-oir): High-contrast crushed blacks, desaturated silver tones, and moody TikTok noir aesthetic.
-- **OpenCV-Powered AR Face Tracking & Auto-Snapping (🎯 Auto-Snap to Face)**:
-  - Added local AI computer vision face tracking using OpenCV (haarcascade_frontalface_default.xml & haarcascade_eye.xml) with zero cloud dependencies or external API subscriptions.
-  - Added **'🎯 Auto-Snap to Face'** in the Stickers pane: automatically detects the subject's face at the playhead and snaps stickers directly to the target with normalized coordinates.
-  - Three smart AR snapping targets:
-    - 👑 Head / Crown: Positions stickers floating naturally above the head (ideal for crowns, halos, dog/cat ears).
-    - 🕶️ Eyes / Shades: Tracks and aligns glasses/sunglasses directly across the eye level.
+  - Added viral social media aesthetic color grading and visual styling presets with instant CSS live stage preview and native FFmpeg export filters:
+    - **✨ TikTok Beauty Glow** (`beauty`): Iconic 'Smooth Cam' skin softening, delicate highlight bloom, and luminous porcelain skin tone.
+    - **📼 VHS 90s Camcorder** (`vhs`): Authentic vintage home-video look with magnetic chromatic aberration, retro analog tape noise, and scanline depth.
+    - **🌅 Teal & Orange Cinematic** (`teal_orange`): High-fashion travel influencer color grade with deep teal shadows and warm sunset skin tones.
+    - **💖 Vaporwave Neon** (`vaporwave`): Cyberpunk magenta and electric cyan anime aesthetic with high-saturation pop.
+    - **💎 KiraKira / Bling Sparkle** (`bling`): Specular highlight boost and starburst glitz pop.
+    - **🐟 Fish-Eye Lens** (`fisheye`): Convex wide-angle bubble lens distortion for skate videos, meme POVs, and dynamic camera angles.
+    - **🎞️ Film Noir / Gotham Dark** (`noir`): High-contrast crushed blacks, desaturated silver tones, and moody TikTok noir aesthetic.
+- **OpenCV Face Snapping for Stickers & Props (🎯 Snap to Face)**:
+  - Added local computer vision face detection using OpenCV (`haarcascade_frontalface_default.xml` & `haarcascade_eye.xml`) with zero cloud dependencies or external API subscriptions.
+  - Added **'🎯 Snap to Face (this frame)'** in the Stickers pane: finds the subject's face at the playhead and snaps the sticker to that position (single frame coordinate grab).
+  - Three smart snapping targets:
+    - 👑 Head / Crown: Positions stickers floating above the head (ideal for crowns, halos, dog/cat ears).
+    - 🕶️ Eyes / Shades: Aligns glasses/sunglasses across eye level.
     - 🎭 Face Center: Centers props and masks directly over the facial midpoint.
-  - Smart emoji prop presets: 1-click selection for 🕶️ (Sunglasses), 👑 (Crown), 😇 (Halo), 🐶 (Dog Ears), 🐱 (Cat Ears), 💖 (Heart Eyes), 🎭 (Mask), 🐰 (Bunny).
+  - True-color emoji stickers powered by Segoe UI Emoji with proper alpha transparency.
 - **Sub-Millisecond Float Precision Sanitization & Auto-Clamping**:
-  - Resolved ValueError: Value must be between ... caused by high-precision floating-point fractions when dividing audio ranges during lyric synchronization.
-  - alidate_edit now gracefully clamps sub-millisecond float imprecision, ensuring lyrics and word timings remain 100% resilient during drag-and-drop, alignment, and auto-estimation.
+  - Resolved `ValueError: Value must be between ...` caused by floating-point rounding drift when dividing audio ranges during lyric synchronization.
+  - `validate_edit` absorbs edge drift (tolerance 0.01s), ensuring lyrics and word timings remain resilient during alignment and auto-estimation while preserving validation integrity.
+- **Unified Preview & Export Geometry**:
+  - Synchronized sticker coordinate math between the web stage preview and FFmpeg filtergraph using center-anchored bounding boxes.
 
-Validation: 102 automated tests passed across Python unit tests, FFmpeg render tests, and Node.js timing checks.
+Validation: 103 automated tests passed across Python unit tests, FFmpeg render tests, and Node.js timing checks.
 
 Download the Windows Setup EXE below. Close the app before installing over your existing installation. This release preserves all your saved media and caption projects.
 

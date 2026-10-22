@@ -66,7 +66,7 @@ The alignment-language selector supports English, French, Korean, Greek, Spanish
 
 Failed lines retain their earlier words/timings. **Estimate missing timings** is an explicit approximate fallback, labelled for review. A cancelled operation preserves saved captions; **Restore previous karaoke version** restores the captions from before the last completed karaoke operation, including after reopening the project. Undo also works in the editing session. Long individual lines over 60 seconds need splitting before alignment.
 
-### New in v2.8.0 (TikTok & Snapchat Aesthetic Filters + OpenCV AR Face Tracking)
+### New in v2.8.0 (TikTok & Snapchat Aesthetic Filters + OpenCV Face Snapping)
 
 - **TikTok & Snapchat Signature Aesthetic Filters (1-Click Presets & 0ms Live Preview):** Instantly apply iconic social media visual presets with real-time CSS stage preview and native FFmpeg export:
   - **✨ TikTok Beauty Glow:** Soft-skin porcelain smoothing and luminous highlight bloom.
@@ -76,8 +76,9 @@ Failed lines retain their earlier words/timings. **Estimate missing timings** is
   - **💎 KiraKira / Bling Sparkle:** Specular highlight pop and glitz starburst highlights.
   - **🐟 Fish-Eye Bubble Lens:** Convex wide-angle lens distortion for skate videos and meme POVs.
   - **🎞️ Film Noir / Gotham Dark:** Crushed moody blacks and desaturated silver tones.
-- **OpenCV-Powered AR Face Tracking & Auto-Snapping (🎯 Auto-Snap to Face):** Local computer vision face detection tracks subjects across video frames and automatically snaps stickers/props to the 👑 Head / Crown, 🕶️ Eyes / Shades, or 🎭 Face Center with zero cloud subscriptions or API keys.
-- **Sub-Millisecond Float Precision Sanitization & Auto-Clamping:** Resilient boundary clamping prevents floating-point fraction errors when aligning lyrics, timing words, or dragging cue blocks on the timeline.
+- **OpenCV Face Snapping for Stickers & Props (🎯 Snap to Face):** Local computer vision face detection finds subjects in the current video frame and snaps stickers/props to the 👑 Head / Crown, 🕶️ Eyes / Shades, or 🎭 Face Center with zero cloud subscriptions or API keys.
+- **Sub-Millisecond Float Precision Sanitization & Auto-Clamping:** Resilient boundary tolerance prevents floating-point rounding errors when aligning lyrics, timing words, or editing cue blocks.
+- **Unified Preview & Export Geometry:** Perfectly aligned center-anchored coordinates between web stage preview and FFmpeg sticker overlay.
 
 ### New in v2.7.2 (Cut-to-the-Beat, Per-Clip Speed & Sticker Overlays)
 
