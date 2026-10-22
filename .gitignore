@@ -41,3 +41,13 @@ audit_artifacts/
 .updates/
 *.update.zip
 *.update-tmp
+
+# Internal AI & Development Notes
+AGENTS.md
+GEMINI.md
+APP_AUDIT.md
+AUDIT_*.md
+CAPTIONS_PLAN.md
+CREATOR_STUDIO_ROADMAP.md
+IMPLEMENTATION_NOTES.md
+audit_checks.py

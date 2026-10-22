@@ -150,7 +150,7 @@ def main():
         "reference_prep.py",
         "hwaccel.py",
         "captions.py",
-        "creator_composition.py", "carousel_studio.py", "social_worker.py", "CREATOR_STUDIO_ROADMAP.md",
+        "creator_composition.py", "carousel_studio.py", "social_worker.py",
         "launch-silent.vbs",
         "run.bat",
         "install_ai.bat",
@@ -158,9 +158,7 @@ def main():
         "requirements-ai.txt",
         "README.md",
         "CHANGELOG.md",
-        "IMPLEMENTATION_NOTES.md",
-        "RELEASE_NOTES.md",
-        "CAPTIONS_PLAN.md"
+        "RELEASE_NOTES.md"
     ]
     for fn in files_to_copy:
         src = os.path.join(ROOT_DIR, fn)
