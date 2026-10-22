@@ -23,6 +23,7 @@ All notable changes to the AI Influencer Media Grabber project will be documente
   - Cleaned primary segmented navigation bar; moved secondary utilities (Kling Prep, Carousel Studio) into an elegant overflow dropdown menu.
 - **Comprehensive Test Coverage & Stability**:
   - Added `tests/test_hwaccel.py` verifying detection logic, CPU fallback, preset arguments, and API endpoint behavior (110/110 tests passing).
+  - **Watchdog & Keepalive Resilience**: Eliminated aggressive 18-second auto-shutdown watchdog that killed the app when minimized or backgrounded; increased idle tolerance to 300 seconds (5 minutes), added `visibilitychange` and `focus` instant keepalive reconnects, and removed hair-trigger 4-second shutdown on page navigation.
 
 ## [v2.8.1] - 2026-10-22
 

@@ -784,13 +784,12 @@ APP_VERSION = "3.0.0"
 SERVER_START_TIME = time.time()
 
 # --- Active Job & Auto-Shutdown Watchdog State ---
-HEARTBEAT_TIMEOUT = 18.0  # Seconds without client heartbeat before auto-shutdown
+HEARTBEAT_TIMEOUT = float(os.environ.get("MEDIA_GRABBER_HEARTBEAT_TIMEOUT", "300.0"))  # Default: 5 minutes idle tolerance
+DISABLE_WATCHDOG = os.environ.get("MEDIA_GRABBER_NO_WATCHDOG", "").lower() in ["1", "true", "yes"] or "--no-watchdog" in sys.argv
 _last_heartbeat = time.time()
 _has_received_heartbeat = False
 _active_jobs_lock = threading.Lock()
 _active_jobs_count = 0
-_quick_shutdown_timer = None
-_quick_shutdown_lock = threading.Lock()
 
 def increment_active_job():
     subprocess.begin_job()
@@ -2314,40 +2313,26 @@ def api_install_ai():
 
 @app.route('/api/heartbeat', methods=['GET', 'POST'])
 def heartbeat():
-    global _last_heartbeat, _has_received_heartbeat, _quick_shutdown_timer
+    global _last_heartbeat, _has_received_heartbeat
     _last_heartbeat = time.time()
     _has_received_heartbeat = True
-
-    closing = request.args.get('closing') == 'true'
-    if closing:
-        # Window closed by user: schedule a 4-second exit if no other tab reconnects
-        with _quick_shutdown_lock:
-            if _quick_shutdown_timer is None:
-                def quick_exit():
-                    time.sleep(4)
-                    if time.time() - _last_heartbeat >= 3.5 and not is_busy():
-                        print("[Watchdog] App window closed. Shutting down server...", flush=True)
-                        os._exit(0)
-                _quick_shutdown_timer = threading.Thread(target=quick_exit, daemon=True)
-                _quick_shutdown_timer.start()
-    else:
-        with _quick_shutdown_lock:
-            _quick_shutdown_timer = None
-
     return jsonify({"status": "alive", "busy": is_busy()})
 
 def _watchdog_loop():
-    time.sleep(25)  # Initial grace period for desktop window launch
+    if DISABLE_WATCHDOG:
+        return
+    time.sleep(60)  # Initial grace period for desktop window launch
     while True:
-        time.sleep(3)
+        time.sleep(10)
         if _has_received_heartbeat:
             elapsed = time.time() - _last_heartbeat
             if elapsed > HEARTBEAT_TIMEOUT:
                 if not is_busy():
-                    print(f"[Watchdog] No client heartbeat for {int(elapsed)}s. Shutting down cleanly...", flush=True)
+                    print(f"[Watchdog] No client heartbeat for {int(elapsed)}s (timeout={int(HEARTBEAT_TIMEOUT)}s). Shutting down cleanly...", flush=True)
                     os._exit(0)
 
-threading.Thread(target=_watchdog_loop, daemon=True).start()
+if not DISABLE_WATCHDOG:
+    threading.Thread(target=_watchdog_loop, daemon=True).start()
 
 @app.route('/api/shutdown', methods=['POST'])
 def shutdown_app():

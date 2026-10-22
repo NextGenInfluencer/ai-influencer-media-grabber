@@ -18,6 +18,11 @@
   - Segmented top bar cleaned of non-primary tools; secondary utilities (Kling Prep, Carousel Studio) tucked into an elegant overflow dropdown menu.
 - **🛡️ 100% Test Coverage & Automated Regression Suite**:
   - Added `tests/test_hwaccel.py` unit tests verifying probe logic, fallback, and presets (110/110 passing).
+  - **Fixed Background Auto-Shutdown**: Replaced aggressive 18-second timeout with 300-second (5 minute) grace period, added instant keepalive on window refocus / tab visibility, and removed fragile shutdown on page navigation.
+
+### 📦 Download & Verification
+- **Installer**: `AI-Influencer-Media-Grabber-v3.0.0-Setup.exe`
+- **SHA-256**: `B4082B1F4A41C759AA1F46F90F9F970686D85BA3A7100D69BE0E87A08C4AC611`
 
 # v2.8.1 — Apple macOS Pro UI/UX Polish & Effortless Creator Workflows
 

@@ -1496,7 +1496,15 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
             if(loopEl){loopEl.checked = !loopEl.checked; loopEl.dispatchEvent(new Event('change'));}
         }
     });
-    setInterval(()=>fetch('/api/heartbeat').catch(()=>{}),2000);
+    function sendCaptionsHeartbeat() {
+        fetch('/api/heartbeat', { method: 'POST', keepalive: true }).catch(()=>{});
+    }
+    setInterval(sendCaptionsHeartbeat, 4000);
+    sendCaptionsHeartbeat();
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') sendCaptionsHeartbeat();
+    });
+    window.addEventListener('focus', () => sendCaptionsHeartbeat());
     
     // Shortcuts Dialog Wireup
     if($('shortcutsBtn')) $('shortcutsBtn').onclick = () => {

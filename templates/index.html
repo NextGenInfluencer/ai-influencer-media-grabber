@@ -3723,15 +3723,18 @@ https://www.youtube.com/watch?v=..."></textarea>
             }
         }
 
-        // --- Client Heartbeat & Auto-Shutdown Watchdog ---
-        function sendClientHeartbeat(closing = false) {
-            const url = closing ? '/api/heartbeat?closing=true' : '/api/heartbeat';
-            fetch(url, { method: 'POST', keepalive: true }).catch(() => {});
+        // --- Client Heartbeat Keepalive ---
+        function sendClientHeartbeat() {
+            fetch('/api/heartbeat', { method: 'POST', keepalive: true }).catch(() => {});
         }
-        setInterval(() => sendClientHeartbeat(false), 6000);
-        sendClientHeartbeat(false);
-        window.addEventListener('pagehide', () => sendClientHeartbeat(true));
-        window.addEventListener('beforeunload', () => sendClientHeartbeat(true));
+        setInterval(sendClientHeartbeat, 4000);
+        sendClientHeartbeat();
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                sendClientHeartbeat();
+            }
+        });
+        window.addEventListener('focus', () => sendClientHeartbeat());
     </script>
 
     {% include 'reference_prep.html' %}
