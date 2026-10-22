@@ -262,11 +262,56 @@
 
                     <!-- Video URLs -->
                     <div class="space-y-2">
-                        <label class="block text-xs font-bold text-zinc-300 uppercase tracking-widest flex items-center justify-between">
-                            <span><span class="text-pink-500 mr-1.5">01.</span> Video or Carousel URLs</span>
-                            <span class="text-[10px] text-zinc-500 font-normal">One link per line for batch downloading</span>
-                        </label>
-                        <textarea id="url" name="url" rows="4" class="w-full px-4 py-3 bg-[#080809] border border-zinc-800 rounded-2xl text-xs text-zinc-200 focus:outline-none focus:border-pink-500 focus:ring-1 focus:ring-pink-500 transition shadow-inner placeholder-zinc-600 resize-none font-mono" placeholder="https://www.tiktok.com/@username/video/...\nhttps://www.instagram.com/reel/..."></textarea>
+                        <div class="flex items-center justify-between">
+                            <label class="block text-xs font-bold text-zinc-300 uppercase tracking-widest flex items-center">
+                                <span class="text-pink-500 mr-1.5">01.</span> Video or Carousel URLs
+                            </label>
+                            <div class="flex items-center space-x-2">
+                                <button type="button" id="pasteUrlBtn" onclick="pasteFromClipboard()" class="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 hover:text-white text-[11px] font-semibold transition flex items-center space-x-1 cursor-pointer" title="Paste URL from clipboard">
+                                    <i class="fa-regular fa-clipboard text-pink-400"></i>
+                                    <span>Paste URL</span>
+                                </button>
+                                <button type="button" id="clearUrlBtn" onclick="clearUrlInput()" class="hidden px-2 py-1 rounded-lg bg-zinc-800/80 hover:bg-zinc-700/80 text-zinc-400 hover:text-rose-400 text-[11px] font-semibold transition items-center space-x-1 cursor-pointer" title="Clear input">
+                                    <i class="fa-solid fa-xmark"></i>
+                                    <span>Clear</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="relative">
+                            <textarea id="url" name="url" rows="4" oninput="updateUrlBadges()" class="w-full px-4 py-3 bg-[#080809] border border-zinc-800 rounded-2xl text-xs text-zinc-200 focus:outline-none focus:border-pink-500 focus:ring-1 focus:ring-pink-500 transition shadow-inner placeholder-zinc-600 resize-none font-mono" placeholder="Paste links from TikTok, Instagram Reels, YouTube, X/Twitter, Pinterest, or Vimeo... (One per line for batch)"></textarea>
+                        </div>
+
+                        <!-- Detected Platform Badges & Link Count -->
+                        <div class="flex flex-wrap items-center justify-between gap-2 pt-1">
+                            <div class="flex flex-wrap items-center gap-1.5" id="platformBadges">
+                                <span data-platform="tiktok" class="platform-badge px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-zinc-900 border border-zinc-800 text-zinc-500 transition-all flex items-center space-x-1">
+                                    <i class="fa-brands fa-tiktok text-[11px]"></i>
+                                    <span>TikTok</span>
+                                </span>
+                                <span data-platform="instagram" class="platform-badge px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-zinc-900 border border-zinc-800 text-zinc-500 transition-all flex items-center space-x-1">
+                                    <i class="fa-brands fa-instagram text-[11px]"></i>
+                                    <span>Instagram</span>
+                                </span>
+                                <span data-platform="youtube" class="platform-badge px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-zinc-900 border border-zinc-800 text-zinc-500 transition-all flex items-center space-x-1">
+                                    <i class="fa-brands fa-youtube text-[11px]"></i>
+                                    <span>YouTube</span>
+                                </span>
+                                <span data-platform="twitter" class="platform-badge px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-zinc-900 border border-zinc-800 text-zinc-500 transition-all flex items-center space-x-1">
+                                    <i class="fa-brands fa-x-twitter text-[11px]"></i>
+                                    <span>X / Twitter</span>
+                                </span>
+                                <span data-platform="pinterest" class="platform-badge px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-zinc-900 border border-zinc-800 text-zinc-500 transition-all flex items-center space-x-1">
+                                    <i class="fa-brands fa-pinterest text-[11px]"></i>
+                                    <span>Pinterest</span>
+                                </span>
+                                <span data-platform="vimeo" class="platform-badge px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-zinc-900 border border-zinc-800 text-zinc-500 transition-all flex items-center space-x-1">
+                                    <i class="fa-brands fa-vimeo-v text-[11px]"></i>
+                                    <span>Vimeo</span>
+                                </span>
+                            </div>
+                            <span id="urlCountPill" class="text-[10px] text-zinc-400 font-mono hidden bg-white/5 border border-white/10 px-2 py-0.5 rounded-full">0 links</span>
+                        </div>
                     </div>
 
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -312,7 +357,13 @@
 
                         <!-- Custom Path -->
                         <div class="space-y-2">
-                            <label class="block text-xs font-bold text-zinc-400 uppercase tracking-widest">Save Folder</label>
+                            <div class="flex items-center justify-between">
+                                <label class="block text-xs font-bold text-zinc-400 uppercase tracking-widest">Save Folder</label>
+                                <button type="button" onclick="openCurrentFolder('path')" class="text-[11px] text-pink-400 hover:text-pink-300 font-semibold transition flex items-center space-x-1 cursor-pointer" title="Open download folder in Explorer">
+                                    <i class="fa-regular fa-folder-open text-xs"></i>
+                                    <span>Open</span>
+                                </button>
+                            </div>
                             <div class="relative cursor-pointer group" onclick="browseFolder()">
                                 <input type="text" id="path" name="path" class="w-full px-4 py-3 bg-[#080809] border border-zinc-800 rounded-xl text-xs font-medium text-zinc-300 focus:outline-none focus:border-pink-500 shadow-inner group-hover:border-zinc-700 transition" placeholder="Auto... (Documents/Media Grabber)" readonly>
                                 <div class="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none opacity-60 group-hover:opacity-100 transition">
@@ -732,16 +783,20 @@
                             <div class="h-px bg-zinc-800 flex-1"></div>
                         </div>
 
-                        <div class="flex space-x-3">
+                        <div class="flex space-x-2">
                             <div class="relative cursor-pointer group flex-1" onclick="browseCleanerFolder()">
                                 <input type="text" id="cleaner_dir" name="cleaner_dir" class="w-full px-4 py-3.5 bg-[#080809] border border-zinc-800 rounded-xl text-xs font-medium text-zinc-300 focus:outline-none focus:border-pink-500 shadow-inner group-hover:border-zinc-700 transition" placeholder="Click to choose folder..." readonly>
                                 <div class="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none opacity-60 group-hover:opacity-100 transition">
                                     <i class="fa-solid fa-folder-open text-pink-500"></i>
                                 </div>
                             </div>
-                            <button type="button" onclick="browseCleanerFile()" class="px-5 py-3.5 bg-[#080809] border border-zinc-800 hover:border-pink-500/50 rounded-xl text-zinc-400 hover:text-pink-400 transition flex items-center space-x-2" title="Select a single AI file">
+                            <button type="button" onclick="browseCleanerFile()" class="px-4 py-3.5 bg-[#080809] border border-zinc-800 hover:border-pink-500/50 rounded-xl text-zinc-400 hover:text-pink-400 transition flex items-center space-x-2" title="Select a single AI file">
                                 <i class="fa-solid fa-file-video text-pink-500"></i>
                                 <span class="text-xs font-bold">Pick File</span>
+                            </button>
+                            <button type="button" onclick="openCurrentFolder('cleaner_dir')" class="px-3.5 py-3.5 bg-[#080809] border border-zinc-800 hover:border-pink-500/50 rounded-xl text-zinc-400 hover:text-pink-400 transition flex items-center space-x-1.5 cursor-pointer" title="Open directory in Explorer">
+                                <i class="fa-regular fa-folder-open text-pink-500"></i>
+                                <span class="text-xs font-bold">Open</span>
                             </button>
                         </div>
                     </div>
@@ -1476,9 +1531,52 @@
                 
                 if (filtered.length === 0) {
                     if (filter === 'Favorites') {
-                        grid.innerHTML = '<div class="col-span-full py-16 text-center text-zinc-500 text-xs flex flex-col items-center justify-center space-y-2"><i class="fa-regular fa-heart text-2xl text-zinc-600 mb-1"></i><span>No liked media found. Click the heart icon on any card to add it to quick access!</span></div>';
+                        grid.innerHTML = `
+                            <div class="col-span-full py-14 px-6 text-center flex flex-col items-center justify-center space-y-3 rounded-2xl bg-gradient-to-b from-rose-500/10 via-zinc-900/40 to-transparent border border-rose-500/20 my-2 shadow-xl backdrop-blur-xl">
+                                <div class="w-14 h-14 rounded-2xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400 shadow-inner">
+                                    <i class="fa-regular fa-heart text-2xl"></i>
+                                </div>
+                                <div class="max-w-md space-y-1">
+                                    <h4 class="text-sm font-bold text-zinc-200">No Liked Media Yet</h4>
+                                    <p class="text-xs text-zinc-400 leading-relaxed">Click the heart icon on any video or photo card in the gallery to pin it here for instant 1-click access.</p>
+                                </div>
+                                <button type="button" onclick="document.getElementById('galleryFilter').value='All'; loadGallery();" class="mt-2 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-white text-xs font-semibold transition cursor-pointer shadow-md">
+                                    View All Gallery Media
+                                </button>
+                            </div>
+                        `;
+                    } else if (query) {
+                        grid.innerHTML = `
+                            <div class="col-span-full py-12 px-6 text-center flex flex-col items-center justify-center space-y-3 rounded-2xl bg-[#080809] border border-zinc-800/80 my-2">
+                                <div class="w-12 h-12 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-500">
+                                    <i class="fa-solid fa-magnifying-glass text-lg"></i>
+                                </div>
+                                <h4 class="text-xs font-bold text-zinc-300">No media matches "${escapeHtml(query)}"</h4>
+                                <button type="button" onclick="document.getElementById('gallerySearch').value=''; loadGallery();" class="text-xs text-pink-400 hover:text-pink-300 hover:underline">Clear Search Filter</button>
+                            </div>
+                        `;
                     } else {
-                        grid.innerHTML = '<div class="col-span-full py-16 text-center text-zinc-500 text-xs">No media found in gallery. Download or convert media to view here.</div>';
+                        grid.innerHTML = `
+                            <div class="col-span-full py-14 px-6 text-center flex flex-col items-center justify-center space-y-3 rounded-2xl bg-gradient-to-b from-white/[0.04] via-zinc-900/40 to-transparent border border-white/10 my-2 shadow-2xl backdrop-blur-xl">
+                                <div class="w-14 h-14 rounded-2xl bg-zinc-900/90 border border-white/10 flex items-center justify-center text-pink-400 shadow-inner">
+                                    <i class="fa-solid fa-photo-film text-2xl"></i>
+                                </div>
+                                <div class="max-w-md space-y-1">
+                                    <h4 class="text-sm font-bold text-zinc-200">Output Gallery is Empty</h4>
+                                    <p class="text-xs text-zinc-400 leading-relaxed">Download references from TikTok, YouTube, Instagram, or process clips in the Media Editor to view and inspect them here.</p>
+                                </div>
+                                <div class="flex items-center space-x-3 pt-2">
+                                    <button type="button" onclick="switchTab('downloader')" class="px-4 py-2 rounded-xl apple-btn-primary text-xs font-semibold shadow-lg shadow-blue-500/25 transition flex items-center space-x-1.5 cursor-pointer">
+                                        <i class="fa-solid fa-cloud-arrow-down text-xs"></i>
+                                        <span>Start a Download</span>
+                                    </button>
+                                    <button type="button" onclick="openCurrentFolder('path')" class="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 text-zinc-200 text-xs font-semibold transition flex items-center space-x-1.5 cursor-pointer">
+                                        <i class="fa-regular fa-folder-open text-xs"></i>
+                                        <span>Open Folder</span>
+                                    </button>
+                                </div>
+                            </div>
+                        `;
                     }
                     return;
                 }
@@ -1671,7 +1769,21 @@
                 list.innerHTML = '';
                 
                 if (!data || data.length === 0) {
-                    list.innerHTML = '<div class="text-center text-zinc-500 text-xs py-8">No download history found.</div>';
+                    list.innerHTML = `
+                        <div class="py-14 px-6 text-center flex flex-col items-center justify-center space-y-3 rounded-2xl bg-gradient-to-b from-white/[0.04] via-zinc-900/40 to-transparent border border-white/10 my-2 shadow-2xl backdrop-blur-xl">
+                            <div class="w-14 h-14 rounded-2xl bg-zinc-900/90 border border-white/10 flex items-center justify-center text-indigo-400 shadow-inner">
+                                <i class="fa-solid fa-clock-rotate-left text-2xl"></i>
+                            </div>
+                            <div class="max-w-md space-y-1">
+                                <h4 class="text-sm font-bold text-zinc-200">No Download History Yet</h4>
+                                <p class="text-xs text-zinc-400 leading-relaxed">Your downloaded videos, audios, and converted media will automatically appear here with 1-click folder access and playback.</p>
+                            </div>
+                            <button type="button" onclick="switchTab('downloader')" class="mt-2 px-4 py-2 rounded-xl apple-btn-primary text-xs font-semibold shadow-lg shadow-blue-500/25 transition flex items-center space-x-1.5 cursor-pointer">
+                                <i class="fa-solid fa-cloud-arrow-down text-xs"></i>
+                                <span>Download First Video</span>
+                            </button>
+                        </div>
+                    `;
                     return;
                 }
 
@@ -1748,7 +1860,15 @@
                 });
                 
                 if (displayed === 0) {
-                    list.innerHTML = '<div class="text-center text-zinc-500 text-xs py-8">No matching downloads found.</div>';
+                    list.innerHTML = `
+                        <div class="py-12 px-6 text-center flex flex-col items-center justify-center space-y-3 rounded-2xl bg-[#080809] border border-zinc-800/80 my-2">
+                            <div class="w-12 h-12 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-500">
+                                <i class="fa-solid fa-magnifying-glass text-lg"></i>
+                            </div>
+                            <h4 class="text-xs font-bold text-zinc-300">No history entries match "${escapeHtml(query)}"</h4>
+                            <button type="button" onclick="document.getElementById('historySearch').value=''; loadHistory();" class="text-xs text-pink-400 hover:text-pink-300 hover:underline">Clear Search</button>
+                        </div>
+                    `;
                 }
             } catch (err) {
                 console.error("History loading failed:", err);
@@ -1884,6 +2004,106 @@
             return Math.random().toString(36).substring(2) + Date.now().toString(36);
         }
         
+        // --- UX Polish: Clipboard, URL Detection & Folder Shortcuts ---
+        async function pasteFromClipboard() {
+            try {
+                const text = await navigator.clipboard.readText();
+                if (!text || !text.trim()) {
+                    showToast('Clipboard Empty', 'No text found on clipboard');
+                    return;
+                }
+                const textarea = document.getElementById('url');
+                if (!textarea) return;
+                if (textarea.value.trim()) {
+                    textarea.value = textarea.value.trim() + '\n' + text.trim();
+                } else {
+                    textarea.value = text.trim();
+                }
+                updateUrlBadges();
+                showToast('URL Pasted', 'Link added to download queue');
+            } catch (err) {
+                showToast('Clipboard Access', 'Press Ctrl+V to paste directly into the box');
+            }
+        }
+
+        function clearUrlInput() {
+            const textarea = document.getElementById('url');
+            if (textarea) {
+                textarea.value = '';
+                updateUrlBadges();
+            }
+        }
+
+        function updateUrlBadges() {
+            const val = (document.getElementById('url')?.value || '').trim();
+            const clearBtn = document.getElementById('clearUrlBtn');
+            if (clearBtn) {
+                clearBtn.classList.toggle('hidden', !val);
+                clearBtn.classList.toggle('flex', !!val);
+            }
+
+            const lines = val ? val.split('\n').map(l => l.trim()).filter(Boolean) : [];
+            const countPill = document.getElementById('urlCountPill');
+            if (countPill) {
+                if (lines.length > 0) {
+                    countPill.textContent = lines.length === 1 ? '1 link detected' : `${lines.length} links (Batch mode)`;
+                    countPill.classList.remove('hidden');
+                } else {
+                    countPill.classList.add('hidden');
+                }
+            }
+
+            const platforms = {
+                tiktok: /tiktok\.com/i,
+                instagram: /instagram\.com/i,
+                youtube: /(youtube\.com|youtu\.be)/i,
+                twitter: /(twitter\.com|x\.com)/i,
+                pinterest: /(pinterest\.com|pin\.it)/i,
+                vimeo: /vimeo\.com/i
+            };
+
+            const activeStyles = {
+                tiktok: 'bg-teal-500/20 border-teal-500/50 text-teal-300 font-semibold shadow-[0_0_12px_rgba(20,184,166,0.3)]',
+                instagram: 'bg-rose-500/20 border-rose-500/50 text-rose-300 font-semibold shadow-[0_0_12px_rgba(244,63,94,0.3)]',
+                youtube: 'bg-red-500/20 border-red-500/50 text-red-300 font-semibold shadow-[0_0_12px_rgba(239,68,68,0.3)]',
+                twitter: 'bg-sky-500/20 border-sky-500/50 text-sky-300 font-semibold shadow-[0_0_12px_rgba(14,165,233,0.3)]',
+                pinterest: 'bg-red-600/20 border-red-600/50 text-red-300 font-semibold shadow-[0_0_12px_rgba(220,38,38,0.3)]',
+                vimeo: 'bg-blue-500/20 border-blue-500/50 text-blue-300 font-semibold shadow-[0_0_12px_rgba(59,130,246,0.3)]'
+            };
+
+            const baseStyle = 'platform-badge px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-zinc-900 border border-zinc-800 text-zinc-500 transition-all flex items-center space-x-1';
+
+            Object.keys(platforms).forEach(p => {
+                const badge = document.querySelector(`[data-platform="${p}"]`);
+                if (!badge) return;
+                const isMatched = lines.some(line => platforms[p].test(line));
+                if (isMatched) {
+                    badge.className = `platform-badge px-2.5 py-0.5 rounded-full text-[10px] transition-all flex items-center space-x-1 ${activeStyles[p]}`;
+                } else {
+                    badge.className = baseStyle;
+                }
+            });
+        }
+
+        async function openCurrentFolder(inputId = 'path') {
+            const p = document.getElementById(inputId)?.value || '';
+            try {
+                const res = await fetch('/api/open_folder', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: p })
+                });
+                const data = await res.json();
+                if (data.status === 'success' || data.success) {
+                    showToast('Folder Opened', 'Showing directory in File Explorer');
+                } else {
+                    showToast('Explorer Notice', data.message || 'Could not open folder');
+                }
+            } catch (e) {
+                showToast('Explorer Error', 'Unable to open folder');
+            }
+        }
+
         async function openFolder(path) {
             try {
                 await fetch('/api/open_folder', {

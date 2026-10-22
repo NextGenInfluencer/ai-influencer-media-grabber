@@ -1865,7 +1865,13 @@ def serve_media(filename):
 @app.route('/api/open_folder', methods=['POST'])
 def open_folder():
     path = request.json.get('path') if request.json else None
-    if not path or not is_safe_path(path):
+    if not path:
+        path = DEFAULT_SAVE_DIR
+        try:
+            os.makedirs(path, exist_ok=True)
+        except Exception:
+            pass
+    if not is_safe_path(path):
         return jsonify({"error": "Path not found or forbidden"}), 403
 
     abs_path = os.path.abspath(path)

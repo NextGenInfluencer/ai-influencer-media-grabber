@@ -348,14 +348,37 @@ textarea{width:100%;resize:vertical}
 #empty{
   position:absolute;
   inset:0;
-  display:grid;
-  place-content:center;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
   text-align:center;
-  color:#b8b3cc;
-  font-size:16px;
-  padding:16px;
+  color:#f5f5f7;
+  font-size:15px;
+  font-weight:600;
+  padding:24px;
+  background:radial-gradient(ellipse at center, rgba(168,85,247,0.08) 0%, rgba(10,11,16,0.96) 80%);
 }
-#empty small{font-size:11.5px}
+#empty .emptyIcon{
+  width:56px;
+  height:56px;
+  border-radius:16px;
+  background:rgba(255,255,255,0.06);
+  border:1px solid rgba(255,255,255,0.12);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:26px;
+  box-shadow:0 8px 24px rgba(0,0,0,0.45);
+}
+#empty small{
+  font-size:12px;
+  font-weight:400;
+  color:#a1a1a6;
+  max-width:320px;
+  line-height:1.5;
+}
 #guides{position:absolute;inset:10% 12% 20% 6%;border:1px dashed #ffffff70;pointer-events:none}
 #guides:after{content:"Safe text area";font-size:10px;position:absolute;top:2px;left:4px;color:#fff9}
 .transport{margin-top:8px;justify-content:center;font-size:12px}
@@ -544,4 +567,94 @@ dialog::backdrop{background:#000b}
   body.capcutStudio{height:auto;overflow:auto}
   .capcutUpper{grid-template-columns:1fr}
   .capcutLeft{max-height:520px}
+}
+
+/* --- Apple Pro Studio Shortcuts Modal & Controls --- */
+kbd {
+  display: inline-block;
+  padding: 3px 7px;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Mono", monospace;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  color: #f5f5f7;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-bottom: 2px solid rgba(255, 255, 255, 0.28);
+  border-radius: 6px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.shortcutsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+  margin: 16px 0;
+}
+.shortcutRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  font-size: 12px;
+  color: #c7c7cc;
+}
+.dialogHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.dialogCloseBtn {
+  background: rgba(255, 255, 255, 0.08);
+  border: none;
+  color: #aeaeb2;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  transition: all 0.15s ease;
+}
+.dialogCloseBtn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+}
+
+/* Timeline Zoom Controls */
+.zoomBtn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #d1d1d6;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.15s ease;
+}
+.zoomBtn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.25);
+}
+.zoomBtn.fitBtn {
+  width: auto;
+  padding: 0 8px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
 }

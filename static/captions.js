@@ -1463,12 +1463,71 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
     window.addEventListener('resize',()=>{fitVideo();drawTimeline();});
     window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue='';}});
     document.addEventListener('keydown',e=>{
-        if(/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)||document.querySelector('dialog[open]'))return;
+        if(document.querySelector('dialog[open]')) {
+            if(e.key === 'Escape') {
+                const openModal = document.querySelector('dialog[open]');
+                if(openModal) openModal.close();
+            }
+            return;
+        }
+        if(/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
         if(e.code==='Space'){e.preventDefault();$('play').click();}
         if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();undo(e.shiftKey);}
         if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='b'){e.preventDefault();splitClipAtPlayhead();}
+        if(e.key==='ArrowLeft'){
+            e.preventDefault();
+            const step = e.shiftKey ? 1.0 : 0.1;
+            video.currentTime = Math.max(0, video.currentTime - step);
+            drawTimeline();
+        }
+        if(e.key==='ArrowRight'){
+            e.preventDefault();
+            const step = e.shiftKey ? 1.0 : 0.1;
+            video.currentTime = Math.min(video.duration || 0, video.currentTime + step);
+            drawTimeline();
+        }
+        if((e.key==='Delete' || e.key==='Backspace') && selected !== null && selected !== undefined && project?.cues?.[selected]){
+            e.preventDefault();
+            $('delete').click();
+        }
+        if(e.key.toLowerCase()==='l' && !e.ctrlKey && !e.metaKey){
+            e.preventDefault();
+            const loopEl = $('loop');
+            if(loopEl){loopEl.checked = !loopEl.checked; loopEl.dispatchEvent(new Event('change'));}
+        }
     });
     setInterval(()=>fetch('/api/heartbeat').catch(()=>{}),2000);
+    
+    // Shortcuts Dialog Wireup
+    if($('shortcutsBtn')) $('shortcutsBtn').onclick = () => {
+        const d = $('shortcutsDialog');
+        if(d) d.showModal();
+    };
+    if($('closeShortcuts')) $('closeShortcuts').onclick = () => {
+        const d = $('shortcutsDialog');
+        if(d) d.close();
+    };
+
+    // Timeline Zoom Quick Actions
+    if($('zoomOutBtn')) $('zoomOutBtn').onclick = () => {
+        const z = $('zoom');
+        if(!z) return;
+        z.value = Math.max(1, Number(z.value) - 2);
+        z.dispatchEvent(new Event('input'));
+    };
+    if($('zoomInBtn')) $('zoomInBtn').onclick = () => {
+        const z = $('zoom');
+        if(!z) return;
+        z.value = Math.min(20, Number(z.value) + 2);
+        z.dispatchEvent(new Event('input'));
+    };
+    if($('zoomFitBtn')) $('zoomFitBtn').onclick = () => {
+        const z = $('zoom');
+        if(!z) return;
+        z.value = 1;
+        z.dispatchEvent(new Event('input'));
+    };
+
     async function checkRestart() {
         try {const health=await api('/api/health_check');$('restartNotice').hidden=!health.needs_restart;} catch {}
     }

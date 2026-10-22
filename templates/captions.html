@@ -24,6 +24,7 @@
   <div class="headerCenter">
     <button id="undo" title="Undo (Ctrl+Z)">↶ Undo</button>
     <button id="redo" title="Redo (Ctrl+Shift+Z)">↷ Redo</button>
+    <button id="shortcutsBtn" type="button" title="View Keyboard Shortcuts">⌨️ Shortcuts</button>
     <span id="saveStatus" role="status">Open a video or song to begin</span>
     <button id="save">Save</button>
   </div>
@@ -681,7 +682,11 @@
         <div id="guides" hidden></div>
         <div id="stageSticker" hidden style="position:absolute;pointer-events:none;transition:transform 0.15s ease, opacity 0.15s ease;display:flex;align-items:center;justify-content:center;z-index:4;"></div>
         <div id="caption"></div>
-        <div id="empty">Your video preview<br><small>Pick media on the left to begin · Originals are kept untouched</small></div>
+        <div id="empty">
+          <div class="emptyIcon">🎬</div>
+          <div>Stage Canvas Ready</div>
+          <small>Pick a video or create from a song on the left drawer to begin editing. Originals are kept 100% untouched.</small>
+        </div>
       </div>
       <p id="playingCaption" class="hint" role="status"></p>
       <div class="transport">
@@ -819,7 +824,12 @@
       <label>Shift all (s)<input id="shift" type="number" value="0" step=".1" style="width:68px;"></label>
       <button id="shiftAll" type="button">Shift</button>
       <label><input id="snapTimeline" type="checkbox" checked> 🧲 Snap to Beats</label>
-      <label style="margin-left:auto;">🔍 Zoom <input id="zoom" type="range" min="1" max="20" value="1"></label>
+      <div class="zoomControls" style="margin-left:auto;display:flex;align-items:center;gap:6px;">
+        <button type="button" id="zoomOutBtn" class="zoomBtn" title="Zoom Out (−)">−</button>
+        <label style="display:flex;align-items:center;gap:4px;font-size:11px;">🔍 <input id="zoom" type="range" min="1" max="20" value="1" style="width:75px;"></label>
+        <button type="button" id="zoomInBtn" class="zoomBtn" title="Zoom In (+)">+</button>
+        <button type="button" id="zoomFitBtn" class="zoomBtn fitBtn" title="Fit Entire Timeline to Screen">Fit</button>
+      </div>
     </div>
     <div class="timelineTracksWrapper">
       <div class="trackLabels" aria-hidden="true">
@@ -843,6 +853,28 @@
   <h2>Rendered 5-Second Check</h2>
   <video id="renderVideo" controls></video>
   <div class="row"><button id="closeRender" type="button">Close preview</button></div>
+</dialog>
+<dialog id="shortcutsDialog" class="apple-modal">
+  <div class="dialogHeader">
+    <h2 style="font-size:16px;font-weight:700;margin:0;display:flex;align-items:center;gap:8px;">
+      <span>⌨️</span> Studio Keyboard Shortcuts
+    </h2>
+    <button type="button" id="closeShortcuts" class="dialogCloseBtn" aria-label="Close dialog">✕</button>
+  </div>
+  <div class="shortcutsGrid">
+    <div class="shortcutRow"><kbd>Space</kbd><span>Play / Pause Video</span></div>
+    <div class="shortcutRow"><kbd>Ctrl</kbd> + <kbd>B</kbd><span>Split Clip at Playhead</span></div>
+    <div class="shortcutRow"><kbd>Ctrl</kbd> + <kbd>Z</kbd><span>Undo Last Action</span></div>
+    <div class="shortcutRow"><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Z</kbd><span>Redo Action</span></div>
+    <div class="shortcutRow"><kbd>←</kbd> / <kbd>→</kbd><span>Step 0.1s (Frame Step)</span></div>
+    <div class="shortcutRow"><kbd>Shift</kbd> + <kbd>←</kbd> / <kbd>→</kbd><span>Jump 1.0s</span></div>
+    <div class="shortcutRow"><kbd>Delete</kbd> / <kbd>Backspace</kbd><span>Delete Selected Caption</span></div>
+    <div class="shortcutRow"><kbd>L</kbd><span>Toggle Line Loop</span></div>
+    <div class="shortcutRow"><kbd>Esc</kbd><span>Close Any Dialog</span></div>
+  </div>
+  <div style="margin-top:16px;text-align:right;">
+    <button type="button" onclick="document.getElementById('shortcutsDialog').close()" class="primary" style="padding:6px 16px;border-radius:10px;">Got it</button>
+  </div>
 </dialog>
 </body>
 </html>
