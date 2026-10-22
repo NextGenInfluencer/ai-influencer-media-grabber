@@ -695,7 +695,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
     }
     for(const key of stickerKeys) {
         const input=$('comp_'+key);
-        if(input) input.addEventListener('input',()=>drawCaption());
+        if(input && input.addEventListener) input.addEventListener('input',()=>drawCaption());
     }
     function switchDock(name) {
         document.querySelectorAll('[data-dock]').forEach(b=>b.classList.toggle('active',b.dataset.dock===name));

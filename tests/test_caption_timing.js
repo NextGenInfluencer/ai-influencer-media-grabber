@@ -22,6 +22,8 @@ class Element {
     getAttribute(k){return this.attrs[k];}
     getContext(){return {fillRect(){}};}
     pause(){this.paused=true;}
+    addEventListener(){ }
+    removeEventListener(){ }
 }
 const nodes=new Map();
 const element=id=>{if(!nodes.has(id))nodes.set(id,new Element());return nodes.get(id);};
