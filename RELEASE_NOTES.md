@@ -1,3 +1,13 @@
+# v2.8.1 — Apple macOS Pro UI/UX Polish & Effortless Creator Workflows
+
+- **📋 1-Click Clipboard Paste & Clear**: Instant "Paste URL" button that reads from the clipboard and adds links to the queue, plus dynamic "✕ Clear" button.
+- **✨ Reactive Platform Detection Badges**: Live badges for TikTok, Instagram Reels, YouTube, X / Twitter, Pinterest, and Vimeo that automatically illuminate with brand glows upon pasting.
+- **📂 1-Click File Explorer Access**: Added direct "Open" buttons beside the Save Folder and Cleaner Directory inputs to immediately open the local folder in Windows Explorer.
+- **Modern Apple Frosted Empty States**: Replaced raw plain text in Gallery and Download History with frosted acrylic cards, icons, guidance, and 1-click action buttons.
+- **⌨️ Creator Studio Keyboard Shortcuts Modal & Navigation**: Added a "⌨️ Shortcuts" quick-reference modal, frame-by-frame stepping (`←/→` 0.1s / Shift 1.0s), quick line deletion (`Delete` / `Backspace`), and line loop toggle (`L`).
+- **🔍 Timeline Zoom Controls**: Added 1-click Zoom In (`+`), Zoom Out (`−`), and `Fit` buttons for instant timeline overview.
+- **Stage Canvas Ready Badge**: Polished empty video preview stage with an acrylic movie canvas badge.
+
 # v2.8.0 — TikTok & Snapchat Aesthetic Filters + OpenCV Face Snapping Suite
 
 - **TikTok & Snapchat Signature Aesthetic Filters (1-Click Presets & 0ms Live Preview)**:

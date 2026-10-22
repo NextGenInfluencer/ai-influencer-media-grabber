@@ -2,6 +2,18 @@
 
 All notable changes to the AI Influencer Media Grabber project will be documented in this file.
 
+## [v2.8.1] - 2026-10-22
+
+### Added & Improved
+- **Apple macOS Pro UI / UX Overhaul & Effortless Workflows**:
+  - **📋 1-Click Clipboard Paste & Clear**: Added instant "📋 Paste URL" button that grabs clipboard text and adds it to the download queue, plus a dynamic "✕ Clear" button.
+  - **✨ Reactive Platform Detection Badges**: Live badges for TikTok, Instagram Reels, YouTube, X / Twitter, Pinterest, and Vimeo that illuminate with signature brand glows when links are pasted.
+  - **📂 1-Click File Explorer Access**: Added direct "📂 Open" buttons adjacent to Save Folder and Cleaner inputs to immediately reveal files in Windows Explorer.
+  - **Modern Apple Frosted Empty States**: Replaced raw unstyled text in Gallery and Download History with frosted acrylic cards containing iconography, friendly guidance, and 1-click CTA buttons ("Start a Download", "Open Folder", "View All Media").
+  - **⌨️ Creator Studio Keyboard Shortcuts Modal & Navigation**: Added a "⌨️ Shortcuts" quick-reference modal, frame-by-frame stepping (`←/→` 0.1s / Shift 1.0s), quick line deletion (`Delete` / `Backspace`), and line loop toggle (`L`).
+  - **🔍 Timeline Zoom Controls**: Added 1-click Zoom In (`+`), Zoom Out (`−`), and `Fit` buttons for instant timeline overview.
+  - **Stage Canvas Ready Badge**: Polished empty video preview stage with an acrylic movie canvas badge.
+
 ## [v2.8.0] - 2026-10-22
 
 ### Added & Improved
@@ -31,13 +43,6 @@ All notable changes to the AI Influencer Media Grabber project will be documente
   - Upgraded both the Main Dashboard and the Caption Studio to an Apple-inspired Pro design language.
   - Native SF Pro typography stack (`-apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display"`), frosted glass acrylic materials (`backdrop-filter: blur(28px) saturate(190%)`), hairline border highlights, and Apple System Blue primary action buttons.
   - Segmented control navigation pills with smooth active indicator physics, refined Apple custom range sliders, and macOS-style sheet dialogs.
-- **Intuitive Desktop UI / UX Polish & Effortless Workflows**:
-  - **📋 1-Click Clipboard Paste & Clear**: Added a quick "📋 Paste URL" button that reads from the system clipboard and appends links automatically, alongside an intuitive "✕ Clear" button.
-  - **✨ Reactive Platform Detection Badges**: Added live badges (TikTok, Instagram Reels, YouTube, X/Twitter, Pinterest, Vimeo) that immediately illuminate with signature platform glows when matching URLs are pasted.
-  - **📂 1-Click File Explorer Access**: Added direct "📂 Open" buttons adjacent to the Save Folder and Cleaner Directory inputs, automatically revealing the local download directory in Windows Explorer.
-  - **Modern Apple-Styled Empty States**: Replaced raw unstyled empty text in the Gallery and Download History with frosted acrylic cards featuring icons, helpful guidance, and 1-click call-to-actions ("Start a Download", "Open Folder", "Clear Search").
-  - **⌨️ Creator Studio Keyboard Shortcuts Modal & Navigation**: Added a "⌨️ Shortcuts" quick-reference modal, frame stepping (`←/→` for 0.1s / Shift for 1.0s), quick line deletion (`Delete` / `Backspace`), and loop toggling (`L`).
-  - **🔍 Timeline Zoom Controls**: Added 1-click Zoom In (`+`), Zoom Out (`−`), and `Fit` buttons flanking the timeline zoom slider for instant timeline overview.
 
 ## [v2.7.2] - 2026-10-21
 

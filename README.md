@@ -66,7 +66,7 @@ The alignment-language selector supports English, French, Korean, Greek, Spanish
 
 Failed lines retain their earlier words/timings. **Estimate missing timings** is an explicit approximate fallback, labelled for review. A cancelled operation preserves saved captions; **Restore previous karaoke version** restores the captions from before the last completed karaoke operation, including after reopening the project. Undo also works in the editing session. Long individual lines over 60 seconds need splitting before alignment.
 
-### New in v2.8.0 (TikTok & Snapchat Aesthetic Filters + OpenCV Face Snapping)
+### New in v2.8.1 (Apple macOS Pro UI/UX Overhaul + TikTok/Snapchat Suite)
 
 - **TikTok & Snapchat Signature Aesthetic Filters (1-Click Presets & 0ms Live Preview):** Instantly apply iconic social media visual presets with real-time CSS stage preview and native FFmpeg export:
   - **✨ TikTok Beauty Glow:** Soft-skin porcelain smoothing and luminous highlight bloom.
@@ -157,6 +157,7 @@ The in-app GitHub updater checks published releases and validates staged changes
 
 | Version | Highlights |
 | --- | --- |
+| v2.8.1 | Apple macOS Pro UI/UX overhaul, 1-click paste & open, shortcuts modal, timeline zoom, TikTok & Snapchat filters |
 | v2.8.0 | TikTok & Snapchat aesthetic filters, OpenCV AR face tracking & auto-snapping, float precision auto-clamping |
 | v2.7.2 | Cut-to-the-beat auto snapping, per-clip speed ramping (0.25x to 4x), stickers & emoji graphic overlay track |
 | v2.7.1 | Split clip at playhead (Ctrl+B), custom font upload (.ttf/.otf), 1080p 60fps & 4K UHD presets, timeline audio indicators |
