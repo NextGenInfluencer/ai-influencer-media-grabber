@@ -7,9 +7,13 @@
 
 :root{
   color-scheme:dark;
-  font:13px/1.4 "Segoe UI",Inter,Roboto,Arial,sans-serif;
-  background:#0a0b10;
-  color:#ececf4;
+  font:13px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","SF Pro","Helvetica Neue","Segoe UI",Inter,sans-serif;
+  background:#0c0d12;
+  color:#f5f5f7;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  text-rendering:optimizeLegibility;
+  letter-spacing:-0.01em;
 }
 *{box-sizing:border-box}
 body.capcutStudio{
@@ -18,7 +22,7 @@ body.capcutStudio{
   flex-direction:column;
   height:100vh;
   overflow:hidden;
-  background:#0a0b10;
+  background:#0c0d12;
 }
 .srOnly{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
 h1{font-size:16px;margin:0;font-weight:700;letter-spacing:-.01em}
@@ -35,8 +39,9 @@ a:hover{text-decoration:underline}
   justify-content:space-between;
   gap:12px;
   padding:8px 16px;
-  background:#11131c;
-  border-bottom:1px solid #242736;
+  background:rgba(18,20,28,0.88);
+  backdrop-filter:blur(28px) saturate(190%);
+  border-bottom:1px solid rgba(255,255,255,0.08);
   flex-shrink:0;
 }
 .headerLeft,.headerCenter,.headerRight{
@@ -46,11 +51,11 @@ a:hover{text-decoration:underline}
   flex-wrap:wrap;
 }
 .backBtn{
-  background:#1c1f2e;
-  border:1px solid #32364d;
-  padding:6px 10px;
-  border-radius:7px;
-  color:#e0daf7;
+  background:rgba(255,255,255,0.08);
+  border:1px solid rgba(255,255,255,0.1);
+  padding:6px 12px;
+  border-radius:8px;
+  color:#fff;
   font-weight:600;
   font-size:12px;
 }
@@ -62,24 +67,27 @@ a:hover{text-decoration:underline}
 button,.upload,select,input[type=number],input[type=text],input[type=password],textarea{
   font:inherit;
   color:inherit;
-  background:#1d2030;
-  border:1px solid #34384f;
-  border-radius:7px;
+  background:rgba(26,29,39,0.78);
+  border:1px solid rgba(255,255,255,0.09);
+  border-radius:8px;
   padding:6px 10px;
   font-size:12px;
-  transition:border-color .15s,background .15s;
+  transition:border-color .15s,background .15s,transform .1s ease;
 }
 button,.upload{cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap}
-button:hover,.upload:hover{border-color:#a882ff;background:#292c42}
+button:hover,.upload:hover{border-color:rgba(255,255,255,0.18);background:rgba(38,42,56,0.88)}
+button:active{transform:scale(0.98)}
 button:disabled,input:disabled,select:disabled,textarea:disabled{opacity:.42;cursor:default}
 button.primary,.upload.primaryBtn{
-  background:linear-gradient(135deg,#8b5cf6,#6d28d9);
+  background:linear-gradient(180deg,#0a84ff 0%,#0071e3 100%);
   color:#fff;
-  border-color:#a78bfa;
+  border-color:rgba(255,255,255,0.22);
+  box-shadow:0 2px 8px rgba(10,132,255,0.35);
   font-weight:600;
 }
 button.primary:hover,.upload.primaryBtn:hover{
-  background:linear-gradient(135deg,#9b6dff,#7c3aed);
+  background:linear-gradient(180deg,#2491ff 0%,#0a84ff 100%);
+  box-shadow:0 3px 12px rgba(10,132,255,0.5);
 }
 button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{
   outline:2px solid #c9a9ff;
@@ -88,7 +96,29 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 select{max-width:240px}
 label{display:flex;gap:6px;align-items:center;font-size:12px}
 input[type=checkbox]{accent-color:#a855f7}
-input[type=range]{accent-color:#a855f7;min-width:80px;flex:1}
+input[type=range]{
+  -webkit-appearance:none;
+  appearance:none;
+  height:4px;
+  border-radius:4px;
+  background:rgba(255,255,255,0.16);
+  outline:none;
+  min-width:80px;
+  flex:1;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;
+  appearance:none;
+  width:15px;
+  height:15px;
+  border-radius:50%;
+  background:#fff;
+  box-shadow:0 2px 6px rgba(0,0,0,0.45);
+  cursor:pointer;
+  border:0.5px solid rgba(0,0,0,0.1);
+  transition:transform .1s ease;
+}
+input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.15)}
 input[type=number]{width:76px;padding:5px 7px}
 input[type=color]{width:38px;height:26px;padding:2px;border:1px solid #3a3d52;border-radius:5px;background:#181a26;cursor:pointer}
 textarea{width:100%;resize:vertical}
@@ -140,8 +170,8 @@ textarea{width:100%;resize:vertical}
 .capcutLeft{
   display:grid;
   grid-template-columns:74px 1fr;
-  background:#11131c;
-  border-right:1px solid #242736;
+  background:rgba(16,18,26,0.85);
+  border-right:1px solid rgba(255,255,255,0.08);
   min-height:0;
   overflow:hidden;
 }
@@ -150,8 +180,8 @@ textarea{width:100%;resize:vertical}
   flex-direction:column;
   gap:4px;
   padding:8px 6px;
-  background:#0c0e15;
-  border-right:1px solid #1f2230;
+  background:rgba(11,12,18,0.95);
+  border-right:1px solid rgba(255,255,255,0.06);
   overflow-y:auto;
 }
 .dockTab{
@@ -164,19 +194,21 @@ textarea{width:100%;resize:vertical}
   border-radius:9px;
   border:1px solid transparent;
   background:transparent;
-  color:#9599b3;
+  color:rgba(255,255,255,0.55);
   font-size:10.5px;
   font-weight:500;
   text-align:center;
   white-space:normal;
   line-height:1.15;
+  transition:all .15s ease;
 }
 .dockTab .dockIcon{font-size:18px;line-height:1}
-.dockTab:hover{background:#181b28;color:#e4e6f5;border-color:#2c3046}
+.dockTab:hover{background:rgba(255,255,255,0.06);color:#fff;border-color:rgba(255,255,255,0.1)}
 .dockTab.active{
-  background:#221c38;
-  color:#f0e9ff;
-  border-color:#7c52d6;
+  background:rgba(255,255,255,0.12);
+  color:#fff;
+  border-color:rgba(255,255,255,0.18);
+  box-shadow:0 1px 3px rgba(0,0,0,0.35);
   font-weight:600;
 }
 .dockDrawer{
@@ -194,10 +226,12 @@ textarea{width:100%;resize:vertical}
   border-bottom:1px solid #232637;
 }
 .subCard{
-  background:#161926;
-  border:1px solid #262a3d;
-  border-radius:10px;
-  padding:11px;
+  background:rgba(24,27,38,0.72);
+  backdrop-filter:blur(16px);
+  border:1px solid rgba(255,255,255,0.08);
+  border-radius:12px;
+  padding:12px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.05);
 }
 .stackForm{display:flex;flex-direction:column;gap:8px}
 .stackForm > label{justify-content:space-between}
@@ -272,7 +306,7 @@ textarea{width:100%;resize:vertical}
   align-items:center;
   justify-content:center;
   padding:10px 16px;
-  background:#090a0f;
+  background:#0c0d12;
   min-height:0;
   overflow:hidden;
 }
@@ -290,9 +324,9 @@ textarea{width:100%;resize:vertical}
   aspect-ratio:16/9;
   overflow:hidden;
   flex-shrink:0;
-  border:1px solid #232638;
-  border-radius:8px;
-  box-shadow:0 10px 30px rgba(0,0,0,.55);
+  border:1px solid rgba(255,255,255,0.1);
+  border-radius:14px;
+  box-shadow:0 20px 48px -10px rgba(0,0,0,0.7);
 }
 #video{width:100%;height:100%;display:block;object-fit:fill}
 #stageVisualizer,#stageVignette{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
@@ -340,8 +374,8 @@ textarea{width:100%;resize:vertical}
   grid-template-columns:repeat(3,1fr);
   gap:4px;
   padding:8px 10px;
-  background:#0d0f17;
-  border-bottom:1px solid #222536;
+  background:rgba(0,0,0,0.32);
+  border-bottom:1px solid rgba(255,255,255,0.07);
   flex-shrink:0;
 }
 .inspTab{
@@ -391,8 +425,8 @@ textarea{width:100%;resize:vertical}
 .capcutTimeline{
   height:215px;
   flex-shrink:0;
-  background:#0e1018;
-  border-top:1px solid #26293a;
+  background:rgba(13,15,22,0.96);
+  border-top:1px solid rgba(255,255,255,0.08);
   display:flex;
   flex-direction:column;
   padding:6px 12px 8px;
@@ -408,8 +442,8 @@ textarea{width:100%;resize:vertical}
   flex:1;
   display:grid;
   grid-template-columns:72px 1fr;
-  border:1px solid #2a2d40;
-  border-radius:8px;
+  border:1px solid rgba(255,255,255,0.09);
+  border-radius:10px;
   overflow:hidden;
   min-height:0;
 }
@@ -489,15 +523,18 @@ textarea{width:100%;resize:vertical}
 .edge{position:absolute;top:0;bottom:0;width:8px;background:#ffffff22;cursor:ew-resize}
 .edge.left{left:0}
 .edge.right{right:0}
-#playhead{position:absolute;top:0;bottom:0;width:2px;background:#ffd565;pointer-events:none;z-index:3}
+#playhead{position:absolute;top:0;bottom:0;width:2px;background:#ffd60a;box-shadow:0 0 8px rgba(255,214,10,0.55);pointer-events:none;z-index:3}
 
 dialog{
   width:min(680px,92vw);
-  border:1px solid #62537c;
-  border-radius:14px;
-  padding:20px;
-  background:#171924;
-  color:#ececf4;
+  border:1px solid rgba(255,255,255,0.12);
+  border-radius:18px;
+  padding:24px;
+  background:rgba(24,26,36,0.9);
+  backdrop-filter:blur(36px) saturate(190%);
+  -webkit-backdrop-filter:blur(36px) saturate(190%);
+  color:#f5f5f7;
+  box-shadow:0 24px 64px -12px rgba(0,0,0,0.75);
 }
 dialog::backdrop{background:#000b}
 #renderVideo{display:block;max-height:65vh;max-width:100%;margin:10px auto}

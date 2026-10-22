@@ -27,6 +27,10 @@ All notable changes to the AI Influencer Media Grabber project will be documente
   - `validate_edit` absorbs edge drift (tolerance 0.01s), ensuring lyrics and word timings remain resilient during alignment and auto-estimation while preserving validation integrity.
 - **Unified Preview & Export Geometry**:
   - Synchronized sticker coordinate math between the web stage preview and FFmpeg filtergraph using center-anchored bounding boxes.
+- **Apple macOS Modern Pro Visual Design**:
+  - Upgraded both the Main Dashboard and the Caption Studio to an Apple-inspired Pro design language.
+  - Native SF Pro typography stack (`-apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display"`), frosted glass acrylic materials (`backdrop-filter: blur(28px) saturate(190%)`), hairline border highlights, and Apple System Blue primary action buttons.
+  - Segmented control navigation pills with smooth active indicator physics, refined Apple custom range sliders, and macOS-style sheet dialogs.
 
 ## [v2.7.2] - 2026-10-21
 

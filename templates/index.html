@@ -14,7 +14,7 @@
             theme: {
                 extend: {
                     fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
+                        sans: ['-apple-system', 'BlinkMacSystemFont', '"SF Pro Text"', '"SF Pro Display"', '"SF Pro"', 'Inter', 'system-ui', 'sans-serif'],
                     },
                     colors: {
                         airi: {
@@ -30,33 +30,166 @@
         }
     </script>
     <style>
-
-        
-        body { font-family: 'Inter', sans-serif; background-color: #080809; color: #fff; }
-        
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 10px; }
-        ::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
-
-        .glass-panel {
-            background: rgba(18, 18, 20, 0.7);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border: 1px solid rgba(39, 39, 42, 0.6);
+        /* ─── Apple macOS Modern Pro Design Language ─── */
+        :root {
+            --apple-bg: #0c0d12;
+            --apple-surface: rgba(22, 24, 32, 0.75);
+            --apple-surface-card: rgba(26, 28, 38, 0.7);
+            --apple-border: rgba(255, 255, 255, 0.08);
+            --apple-blue: #0a84ff;
+            --apple-blue-hover: #0071e3;
+            --apple-text: #f5f5f7;
+            --apple-text-secondary: #98989f;
         }
 
-        .glow-pink { box-shadow: 0 0 25px rgba(244, 114, 182, 0.2); }
-        .glow-purple { box-shadow: 0 0 25px rgba(168, 85, 247, 0.2); }
-        .glow-emerald { box-shadow: 0 0 25px rgba(16, 185, 129, 0.2); }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "SF Pro", "Helvetica Neue", Inter, system-ui, sans-serif;
+            background: radial-gradient(circle at 50% -10%, #171a26 0%, #0c0d12 55%, #07080a 100%) fixed;
+            color: var(--apple-text);
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            text-rendering: optimizeLegibility;
+            letter-spacing: -0.011em;
+        }
+
+        /* macOS Ultra-Thin Minimal Scrollbar */
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.16);
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        /* macOS Frosted Glass Materials */
+        .glass-panel {
+            background: var(--apple-surface);
+            backdrop-filter: blur(28px) saturate(190%);
+            -webkit-backdrop-filter: blur(28px) saturate(190%);
+            border: 1px solid var(--apple-border);
+            box-shadow: 0 16px 40px -10px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+        }
+
+        .apple-card {
+            background: var(--apple-surface-card);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid var(--apple-border);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 8px 24px -4px rgba(0,0,0,0.3);
+            border-radius: 16px;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .apple-card:hover {
+            border-color: rgba(255, 255, 255, 0.16);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 12px 32px -4px rgba(0,0,0,0.45);
+        }
+
+        /* macOS Segmented Tab Navigation Control */
+        .apple-segmented-nav {
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
+            padding: 3px;
+            border-radius: 14px;
+        }
+
+        /* macOS Inputs, Selects & Sliders */
+        input[type="text"], input[type="url"], input[type="number"], input[type="password"], textarea, select {
+            font-family: inherit;
+            background: rgba(14, 16, 22, 0.72) !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            border-radius: 10px !important;
+            color: #f5f5f7 !important;
+            transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        }
+
+        input[type="text"]:focus, input[type="url"]:focus, input[type="number"]:focus, input[type="password"]:focus, textarea:focus, select:focus {
+            border-color: #0a84ff !important;
+            box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.28) !important;
+            background: rgba(18, 20, 28, 0.9) !important;
+            outline: none !important;
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            height: 4px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.16);
+            outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #ffffff;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+            cursor: pointer;
+            border: 0.5px solid rgba(0, 0, 0, 0.1);
+            transition: transform 0.1s ease, box-shadow 0.1s ease;
+        }
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.12);
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.55);
+        }
+        input[type="range"]::-webkit-slider-thumb:active {
+            transform: scale(0.95);
+            background: #e5e5ea;
+        }
+
+        /* macOS Action Buttons */
+        .apple-btn-primary {
+            background: linear-gradient(180deg, #0a84ff 0%, #0071e3 100%);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            box-shadow: 0 2px 6px rgba(10, 132, 255, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+            border-radius: 12px;
+            color: #ffffff;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+            transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .apple-btn-primary:hover {
+            background: linear-gradient(180deg, #2491ff 0%, #0a84ff 100%);
+            box-shadow: 0 4px 14px rgba(10, 132, 255, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+        }
+        .apple-btn-primary:active {
+            transform: scale(0.985);
+        }
+
+        .apple-btn-secondary {
+            background: rgba(255, 255, 255, 0.07);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            color: #f5f5f7;
+            font-weight: 500;
+            transition: all 0.15s ease;
+        }
+        .apple-btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.12);
+            border-color: rgba(255, 255, 255, 0.18);
+            color: #ffffff;
+        }
+        .apple-btn-secondary:active {
+            transform: scale(0.98);
+        }
+
+        .glow-pink { box-shadow: 0 0 20px rgba(244, 114, 182, 0.15); }
+        .glow-purple { box-shadow: 0 0 20px rgba(168, 85, 247, 0.15); }
+        .glow-emerald { box-shadow: 0 0 20px rgba(16, 185, 129, 0.15); }
     </style>
 </head>
 <body class="flex flex-col h-screen overflow-hidden bg-[#080809]">
 
     <!-- Top Navigation Header -->
-    <header class="w-full bg-[#0c0c0e] border-b border-zinc-800 px-8 py-3.5 flex flex-wrap gap-3 items-center justify-between z-20 shrink-0 shadow-lg">
+    <header class="w-full bg-[#10121a]/85 border-b border-white/10 px-8 py-3 flex flex-wrap gap-3 items-center justify-between z-20 shrink-0 shadow-lg backdrop-blur-2xl">
         <div class="flex items-center space-x-3">
-            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-pink-500 to-purple-600 flex items-center justify-center shadow-[0_0_15px_rgba(244,114,182,0.4)]">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-500 to-indigo-600 flex items-center justify-center shadow-[0_4px_16px_rgba(10,132,255,0.35),inset_0_1px_0_rgba(255,255,255,0.3)]">
                 <i class="fa-solid fa-play text-white text-base"></i>
             </div>
             <div>
@@ -69,24 +202,24 @@
         </div>
 
         <!-- Center Tab Navigation Pills -->
-        <div class="flex items-center space-x-2 bg-[#080809] p-1.5 rounded-2xl border border-zinc-800/80 shadow-inner">
-            <button id="tab-downloader" onclick="switchTab('downloader')" class="px-6 py-2 rounded-xl text-xs font-extrabold uppercase tracking-wider text-white bg-gradient-to-r from-pink-500 to-purple-600 shadow-[0_0_15px_rgba(244,114,182,0.3)] transition-all flex items-center">
-                <i class="fa-solid fa-cloud-arrow-down mr-2"></i> Studio
+        <div class="flex items-center space-x-1 apple-segmented-nav p-1 backdrop-blur-xl">
+            <button id="tab-downloader" onclick="switchTab('downloader')" class="px-4 py-1.5 rounded-lg text-xs font-semibold text-white bg-white/15 shadow-[0_1px_3px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.15)] transition-all flex items-center backdrop-blur-md">
+                <i class="fa-solid fa-cloud-arrow-down mr-1.5 text-blue-400"></i> Studio
             </button>
-            <button id="tab-converter" onclick="switchTab('converter')" class="px-6 py-2 rounded-xl text-xs font-bold uppercase tracking-wider text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 transition-all flex items-center">
-                <i class="fa-solid fa-wand-magic-sparkles mr-2"></i> Media Tools
+            <button id="tab-converter" onclick="switchTab('converter')" class="px-4 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-white hover:bg-white/5 transition-all flex items-center">
+                <i class="fa-solid fa-wand-magic-sparkles mr-1.5 text-cyan-400"></i> Media Tools
             </button>
-            <button id="tab-cleaner" onclick="switchTab('cleaner')" class="px-6 py-2 rounded-xl text-xs font-bold uppercase tracking-wider text-zinc-400 hover:text-pink-400 hover:bg-zinc-900 transition-all flex items-center">
-                <i class="fa-solid fa-shield-halved text-pink-500 mr-2 text-xs"></i> AI Cleaner
+            <button id="tab-cleaner" onclick="switchTab('cleaner')" class="px-4 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-white hover:bg-white/5 transition-all flex items-center">
+                <i class="fa-solid fa-shield-halved mr-1.5 text-emerald-400 text-xs"></i> AI Cleaner
             </button>
-            <button onclick="openReferencePrep()" class="px-4 py-2 rounded-xl text-xs font-bold text-purple-300 hover:bg-zinc-900 transition-all">Kling Prep</button>
-            <button onclick="openCarouselStudio()" class="px-4 py-2 rounded-xl text-xs font-bold text-pink-300 hover:bg-zinc-900 transition-all">Carousel Studio</button>
-            <a href="/captions" class="px-4 py-2 rounded-xl text-xs font-bold text-purple-300 hover:bg-zinc-900 transition-all">Captions &amp; Lyrics</a>
-            <button id="tab-gallery" onclick="switchTab('gallery')" class="px-6 py-2 rounded-xl text-xs font-bold uppercase tracking-wider text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 transition-all flex items-center">
-                <i class="fa-solid fa-images mr-2"></i> Gallery
+            <button onclick="openReferencePrep()" class="px-3.5 py-1.5 rounded-lg text-xs font-medium text-purple-300 hover:text-white hover:bg-white/5 transition-all">Kling Prep</button>
+            <button onclick="openCarouselStudio()" class="px-3.5 py-1.5 rounded-lg text-xs font-medium text-pink-300 hover:text-white hover:bg-white/5 transition-all">Carousel</button>
+            <a href="/captions" class="px-3.5 py-1.5 rounded-lg text-xs font-medium text-indigo-300 hover:text-white hover:bg-white/5 transition-all">Captions Studio</a>
+            <button id="tab-gallery" onclick="switchTab('gallery')" class="px-4 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-white hover:bg-white/5 transition-all flex items-center">
+                <i class="fa-solid fa-images mr-1.5 text-amber-400"></i> Gallery
             </button>
-            <button id="tab-history" onclick="switchTab('history')" class="px-6 py-2 rounded-xl text-xs font-bold uppercase tracking-wider text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 transition-all flex items-center">
-                <i class="fa-solid fa-clock-rotate-left mr-2"></i> History
+            <button id="tab-history" onclick="switchTab('history')" class="px-4 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-white hover:bg-white/5 transition-all flex items-center">
+                <i class="fa-solid fa-clock-rotate-left mr-1.5 text-zinc-400"></i> History
             </button>
         </div>
 
@@ -114,7 +247,7 @@
     <main class="flex-1 flex overflow-hidden p-6 gap-6 max-w-[1920px] mx-auto w-full">
 
         <!-- Primary Action Center (65% width) -->
-        <div class="flex-1 lg:max-w-[65%] flex flex-col h-full bg-[#0c0c0e]/90 border border-zinc-800/80 rounded-3xl p-6 shadow-2xl backdrop-blur-xl relative overflow-hidden">
+        <div class="flex-1 lg:max-w-[65%] flex flex-col h-full bg-[#10121a]/80 border border-white/10 rounded-3xl p-6 shadow-2xl backdrop-blur-2xl relative overflow-hidden">
             
             <!-- SECTION 1: STUDIO (DOWNLOADER) -->
             <div id="section-downloader" class="flex-1 overflow-y-auto pr-2 scroll-smooth">
@@ -659,17 +792,17 @@
 
             <!-- Action Buttons Footer -->
             <div class="pt-4 mt-auto border-t border-zinc-800/80">
-                <button type="submit" form="downloadForm" id="submitBtn" class="w-full py-4 bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-400 hover:to-purple-500 text-white font-black uppercase tracking-widest text-xs rounded-2xl shadow-[0_0_20px_rgba(244,114,182,0.3)] transition transform hover:scale-[1.01] flex items-center justify-center space-x-2">
+                <button type="submit" form="downloadForm" id="submitBtn" class="w-full py-3.5 apple-btn-primary text-xs rounded-xl flex items-center justify-center space-x-2 cursor-pointer">
                     <i class="fa-solid fa-cloud-arrow-down text-base"></i>
                     <span>Start Downloading Media</span>
                 </button>
                 
-                <button type="submit" form="converterForm" id="convSubmitBtn" class="w-full py-4 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-400 hover:to-indigo-500 text-white font-black uppercase tracking-widest text-xs rounded-2xl shadow-[0_0_20px_rgba(168,85,247,0.3)] transition transform hover:scale-[1.01] hidden items-center justify-center space-x-2">
+                <button type="submit" form="converterForm" id="convSubmitBtn" class="w-full py-3.5 apple-btn-primary text-xs rounded-xl hidden items-center justify-center space-x-2 cursor-pointer">
                     <i class="fa-solid fa-wand-magic-sparkles text-base"></i>
                     <span>Convert, Crop & Compress File</span>
                 </button>
 
-                <button type="submit" form="cleanerForm" id="cleanerSubmitBtn" class="w-full py-4 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-black uppercase tracking-widest text-xs rounded-2xl shadow-[0_0_20px_rgba(16,185,129,0.3)] transition transform hover:scale-[1.01] hidden items-center justify-center space-x-2">
+                <button type="submit" form="cleanerForm" id="cleanerSubmitBtn" class="w-full py-3.5 apple-btn-primary text-xs rounded-xl hidden items-center justify-center space-x-2 cursor-pointer">
                     <i class="fa-solid fa-broom text-base"></i>
                     <span>Run Anti-AI Metadata Cleaner</span>
                 </button>
@@ -677,11 +810,11 @@
         </div>
 
         <!-- Right Activity Hub & Task Queue (35% width) -->
-        <div class="hidden lg:flex lg:w-[35%] flex-col h-full bg-[#0c0c0e]/90 border border-zinc-800/80 rounded-3xl p-5 shadow-2xl backdrop-blur-xl relative overflow-hidden">
+        <div class="hidden lg:flex lg:w-[35%] flex-col h-full bg-[#10121a]/80 border border-white/10 rounded-3xl p-5 shadow-2xl backdrop-blur-2xl relative overflow-hidden">
             <!-- Header with Tab Switcher -->
             <div class="flex items-center justify-between pb-3 mb-3 border-b border-zinc-800/80">
-                <div class="flex items-center space-x-1.5 bg-[#080809] p-1 rounded-xl border border-zinc-800">
-                    <button id="rightTabQueue" onclick="switchRightTab('queue')" class="px-3 py-1.5 rounded-lg text-[10px] font-extrabold uppercase tracking-wider bg-gradient-to-r from-pink-500 to-purple-600 text-white transition flex items-center space-x-1.5 shadow-sm">
+                <div class="flex items-center space-x-1 apple-segmented-nav p-1">
+                    <button id="rightTabQueue" onclick="switchRightTab('queue')" class="px-3.5 py-1.5 rounded-lg text-[11px] font-semibold bg-white/15 text-white transition flex items-center space-x-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.3)] backdrop-blur-md">
                         <i class="fa-solid fa-list-check"></i>
                         <span>Tasks</span>
                     </button>
@@ -1042,9 +1175,9 @@
                 const tb = document.getElementById('tab-' + t);
                 if (tb) {
                     if (isTab) {
-                        tb.className = 'px-6 py-2 rounded-xl text-xs font-extrabold uppercase tracking-wider text-white bg-gradient-to-r from-pink-500 to-purple-600 shadow-[0_0_15px_rgba(244,114,182,0.3)] transition-all flex items-center';
+                        tb.className = 'px-5 py-2 rounded-xl text-xs font-semibold text-white bg-white/15 shadow-[0_1px_3px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.15)] transition-all flex items-center backdrop-blur-md';
                     } else {
-                        tb.className = 'px-6 py-2 rounded-xl text-xs font-bold uppercase tracking-wider text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 transition-all flex items-center';
+                        tb.className = 'px-5 py-2 rounded-xl text-xs font-medium text-zinc-400 hover:text-white hover:bg-white/5 transition-all flex items-center';
                     }
                 }
             });
@@ -2641,11 +2774,11 @@
             const tabConsole = document.getElementById('rightTabConsole');
             
             if (isQueue) {
-                tabQueue.className = 'px-3 py-1.5 rounded-lg text-[10px] font-extrabold uppercase tracking-wider bg-gradient-to-r from-pink-500 to-purple-600 text-white transition flex items-center space-x-1.5 shadow-sm';
-                tabConsole.className = 'px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition flex items-center space-x-1.5';
+                tabQueue.className = 'px-3.5 py-1.5 rounded-lg text-[11px] font-semibold bg-white/15 text-white transition flex items-center space-x-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.3)] backdrop-blur-md';
+                tabConsole.className = 'px-3.5 py-1.5 rounded-lg text-[11px] font-medium text-zinc-400 hover:text-white hover:bg-white/5 transition flex items-center space-x-1.5';
             } else {
-                tabConsole.className = 'px-3 py-1.5 rounded-lg text-[10px] font-extrabold uppercase tracking-wider bg-gradient-to-r from-pink-500 to-purple-600 text-white transition flex items-center space-x-1.5 shadow-sm';
-                tabQueue.className = 'px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition flex items-center space-x-1.5';
+                tabConsole.className = 'px-3.5 py-1.5 rounded-lg text-[11px] font-semibold bg-white/15 text-white transition flex items-center space-x-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.3)] backdrop-blur-md';
+                tabQueue.className = 'px-3.5 py-1.5 rounded-lg text-[11px] font-medium text-zinc-400 hover:text-white hover:bg-white/5 transition flex items-center space-x-1.5';
                 const consoleLogs = document.getElementById('liveConsoleLogs');
                 if (consoleLogs) consoleLogs.scrollTop = consoleLogs.scrollHeight;
             }
