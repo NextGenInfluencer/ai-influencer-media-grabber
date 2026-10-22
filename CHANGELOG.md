@@ -2,6 +2,15 @@
 
 All notable changes to the AI Influencer Media Grabber project will be documented in this file.
 
+## [v3.1.0] - 2026-10-22
+
+### Fixed & Improved
+- **Watchdog & Keepalive Resilience (No Unexpected Shutdowns)**:
+  - Fixed an issue where the background Python server terminated unexpectedly when minimized, backgrounded, or idle due to aggressive 18-second watchdog timeout and Chromium timer throttling.
+  - Increased watchdog idle tolerance to 300 seconds (5 minutes) and added `--no-watchdog` CLI / `MEDIA_GRABBER_NO_WATCHDOG=1` environment override support.
+  - Implemented reactive `visibilitychange` and `focus` keepalive event listeners across all pages (`index.html` and `captions.js`) to immediately reconnect sessions when refocusing the app.
+  - Removed fragile 4-second shutdown trigger on page navigation (`beforeunload` / `pagehide`), ensuring seamless transitions between Creator Studio and Downloader without connection drops.
+
 ## [v3.0.0] - 2026-10-22
 
 ### Added & Improved

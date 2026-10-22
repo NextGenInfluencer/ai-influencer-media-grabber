@@ -1,3 +1,31 @@
+# v3.1.0 — Watchdog Keepalive Fix & Production Stability Suite
+
+- **🛡️ Fixed Background Auto-Shutdown & Keepalive Resilience**:
+  - Eliminated the issue where the local app closed unexpectedly after being minimized, idle, or running in background tabs (`ERR_CONNECTION_REFUSED`).
+  - Increased backend watchdog timeout tolerance from 18 seconds to 300 seconds (5 minutes) and added `--no-watchdog` CLI override.
+  - Implemented instant reconnect triggers via `visibilitychange` and `focus` events across all UI pages.
+  - Removed fragile 4-second shutdown trigger on page navigation (`beforeunload` / `pagehide`), ensuring seamless transitions between Creator Studio, Downloader, and Media Tools.
+- **⚡ GPU Hardware Acceleration Engine (`NVENC` / `QSV` / `AMF` / `VideoToolbox`)**:
+  - Automatic hardware detection on startup with native GPU acceleration for NVIDIA, Intel, AMD, and Apple silicon.
+  - Seamless, zero-configuration software CPU fallback (`libx264` / `libx265`).
+  - Up to 4×–8× faster video exports across Media Tools, Creator Studio composition exports, face tracking, and subtitling.
+  - Live header telemetry badge (`⚡ NVIDIA NVENC`).
+- ** Apple macOS Pro Acrylic Sheet Dialogs**:
+  - Complete redesign of secondary dialogs (File & Folder Browser, Media Preview Lightbox, AI Pack Installer, and Software Update Modal).
+  - Modern frosted acrylic glass depth (`backdrop-blur-32px`), obsidian translucent surfaces, and Apple System Blue `#0071e3` tactile buttons.
+- **⚡ Activity Hub 1-Click Direct Actions**:
+  - Instant action pills on completed downloads: `📂 Folder` (reveal in Explorer), `▶ Play` (launch default player), and `📋 Copy Path` (copy path to clipboard).
+  - Instant `↻ Retry` action for failed tasks.
+- **🎬 Timeline Pro Precision Trimming & Storyboard Controls**:
+  - Drag-to-trim edge handles (`||`) on caption cue blocks with Apple Blue hover highlights and tactile cursor feedback.
+  - Storyboard clip sequence reordering with clean `◀` and `▶` pro arrow controls.
+- **✨ Streamlined Navigation**:
+  - Decluttered primary segmented navigation bar; secondary tools (Kling Prep, Carousel Studio) tucked into an elegant `⋯` overflow menu.
+
+### 📦 Download & Verification
+- **Installer**: `AI-Influencer-Media-Grabber-v3.1.0-Setup.exe`
+- **SHA-256**: `C69EF3663B71CE719C9B126A33D7DD524D6D93AD6A5EC44490A24A7D9A4D0A53`
+
 # v3.0.0 — GPU Hardware Acceleration Engine & Apple Pro Acrylic Studio Suite
 
 - **⚡ GPU Hardware Acceleration Engine (`NVENC` / `QSV` / `AMF` / `VideoToolbox`)**:
