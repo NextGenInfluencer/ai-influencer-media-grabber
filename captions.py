@@ -351,6 +351,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text'
                 hl = color(style['highlight']).replace('&H00', '&H')
                 parts = []
                 for i, w in enumerate(cue['words']):
+                    if anim == 'typewriter' and w['start'] > mid:
+                        continue
                     sep = escape(separators[i-1]) if i else ''
                     is_active = (i == active)
                     is_lit = (w['start'] <= mid) if style.get('cumulative') else (is_active and bool(style.get('karaoke')))
@@ -365,6 +367,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text'
                     else:
                         parts.append(sep + w_esc)
                 body = ''.join(parts)
+                if not body and anim == 'typewriter':
+                    continue
             cx, cy = width / 2, height * style['position'] / 100
             glow = float(style.get('glow') or 0)
             is_first = abs(start - cue['start']) < 0.005

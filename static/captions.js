@@ -135,6 +135,13 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
     let project = null, selected = -1, history = [], future = [], dirty = false;
     let compFilledSource = null;
     let saveTimer, pollTimer, saving = null, generation = 0, busy = false, dragging = false, pendingPreview = false;
+    const clockNow = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
+    let animPreviewStart = 0, animPreviewType = null;
+    function triggerAnimationPreview(type) {
+        animPreviewType = type || (project?.style?.animation) || 'none';
+        animPreviewStart = clockNow();
+        drawCaption();
+    }
     const say = (text, error = false) => {
         $('status').textContent = text; $('status').classList.toggle('error', error);
         document.querySelectorAll('dialog[open] .dialogStatus').forEach(node=>{node.textContent=error?text:'';});
@@ -285,8 +292,8 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         const box=$('caption');box.replaceChildren();
         if(!project) return;
         drawVisualizer();
-        const cue=project.cues.find(c=>c.start<=video.currentTime && c.end>video.currentTime);
-        const s=project.style, h=$('stage').clientHeight;
+        let cue=project.cues.find(c=>c.start<=video.currentTime && c.end>video.currentTime);
+        const s=project.style, h=$('stage').clientHeight||380;
         const baked=project.composition||{};
         const fxAlreadyBaked = baked.fx_baked !== false && (baked.video_filter !== undefined || baked.vignette !== undefined);
         const activeFilter = (!fxAlreadyBaked || (s.video_filter||'none')!==(baked.video_filter||'none')) ? (s.video_filter||'none') : 'none';
@@ -353,28 +360,87 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
                 st.hidden=true;
             }
         }
+
+        const now = clockNow();
+        let previewElapsed = animPreviewStart > 0 ? (now - animPreviewStart) / 1000 : null;
+        let isPreviewing = previewElapsed !== null && previewElapsed < 1.35;
+        if (!video.paused && isPreviewing) {
+            animPreviewStart = 0;
+            animPreviewType = null;
+            isPreviewing = false;
+            previewElapsed = null;
+        } else if (!isPreviewing && animPreviewStart > 0) {
+            animPreviewStart = 0;
+            animPreviewType = null;
+        }
+
+        const activeAnim = isPreviewing ? (animPreviewType || s.animation || 'none') : (s.animation || 'none');
+
+        if (isPreviewing && !cue) {
+            cue = current() || project.cues[0] || {
+                text: 'Preview Lyrics Animation',
+                start: 0,
+                end: 2.5,
+                words: [
+                    { start: 0.0, end: 0.6, text: 'Preview' },
+                    { start: 0.6, end: 1.4, text: 'Lyrics' },
+                    { start: 1.4, end: 2.3, text: 'Animation' }
+                ]
+            };
+        }
+
         const glowPx=Number(s.glow||0)*2.5;
         let animTransform='translateY(-100%)', animOpacity='1';
-        if(cue && s.animation && s.animation!=='none') {
-            const elapsed=Math.max(0,video.currentTime-cue.start), remain=Math.max(0,cue.end-video.currentTime);
-            if(s.animation==='fade') {
-                animOpacity=String(Math.min(1, elapsed/0.18, remain/0.18));
-            } else if(s.animation==='pop' && elapsed<0.16) {
-                const sc=0.85+0.15*(elapsed/0.16);
-                animTransform=`translateY(-100%) scale(${sc.toFixed(3)})`;
-            } else if(s.animation==='slide_up' && elapsed<0.18) {
-                const dy=(1-elapsed/0.18)*(h*0.035);
-                animTransform=`translateY(calc(-100% + ${dy.toFixed(1)}px))`;
-                animOpacity=String(Math.min(1, elapsed/0.15));
-            } else if(s.animation==='zoom_in' && elapsed<0.20) {
-                const sc=0.70+0.30*(elapsed/0.20);
-                animTransform=`translateY(-100%) scale(${sc.toFixed(3)})`;
+        if(cue && activeAnim && activeAnim!=='none') {
+            const animElapsed = isPreviewing ? previewElapsed : Math.max(0, video.currentTime - cue.start);
+            const animRemain = isPreviewing ? Math.max(0, 1.35 - previewElapsed) : Math.max(0, cue.end - video.currentTime);
+
+            if(activeAnim==='fade') {
+                if(isPreviewing) {
+                    animOpacity=String(Math.min(1, animElapsed/0.28));
+                } else {
+                    animOpacity=String(Math.min(1, animElapsed/0.25, animRemain/0.20));
+                }
+            } else if(activeAnim==='pop') {
+                const popDur = 0.32;
+                if(animElapsed < popDur) {
+                    const p = animElapsed / popDur;
+                    let sc;
+                    if(p < 0.6) {
+                        sc = 0.55 + 0.59 * Math.sin((p / 0.6) * (Math.PI / 2));
+                    } else {
+                        sc = 1.14 - 0.14 * Math.sin(((p - 0.6) / 0.4) * (Math.PI / 2));
+                    }
+                    animTransform=`translateY(-100%) scale(${sc.toFixed(3)})`;
+                }
+            } else if(activeAnim==='slide_up') {
+                const slideDur = 0.30;
+                if(animElapsed < slideDur) {
+                    const p = animElapsed / slideDur;
+                    const ease = 1 - Math.pow(1 - p, 3);
+                    const dy = (1 - ease) * Math.max(24, (h || 380) * 0.05);
+                    animTransform=`translateY(calc(-100% + ${dy.toFixed(1)}px))`;
+                    animOpacity=String(Math.min(1, p / 0.5));
+                }
+            } else if(activeAnim==='zoom_in') {
+                const zoomDur = 0.30;
+                if(animElapsed < zoomDur) {
+                    const p = animElapsed / zoomDur;
+                    const ease = 1 - Math.pow(1 - p, 3);
+                    const sc = 0.45 + 0.55 * ease;
+                    animTransform=`translateY(-100%) scale(${sc.toFixed(3)})`;
+                    animOpacity=String(Math.min(1, p / 0.35));
+                }
             }
         }
         Object.assign(box.style,{fontFamily:`"${s.font}",Roboto,"Noto Sans KR",sans-serif`,fontSize:h*s.size/100+'px',color:s.color,
             top:(showTitle&&!cue?28:s.position)+'%',webkitTextStroke:`${2*h*s.outline/360}px black`,
             transform:animTransform,opacity:animOpacity,textShadow:glowPx>0?`0 0 ${glowPx.toFixed(1)}px ${s.highlight}`:'none'});
-        $('playingCaption').textContent=cue ? 'Playing: '+cue.text+((s.karaoke||s.cumulative||s.word_pop)&&!cue.words?.length?' · No word timings — use Add karaoke timing.':'') : (showTitle ? 'Title card: '+compSet.title_text : '');
+        if(isPreviewing && cue) {
+            $('playingCaption').textContent = `Previewing animation: ${activeAnim} · ${cue.text}`;
+        } else {
+            $('playingCaption').textContent=cue ? 'Playing: '+cue.text+((s.karaoke||s.cumulative||s.word_pop)&&!cue.words?.length?' · No word timings — use Add karaoke timing.':'') : (showTitle ? 'Title card: '+compSet.title_text : '');
+        }
         if(!cue && !showTitle) return;
         const content=document.createElement('span');
         content.style.background=(s.background||showTitle)?'rgba(10,12,20,.78)':'transparent';
@@ -384,25 +450,87 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
             box.append(content);
             return;
         }
-        if((s.karaoke || s.cumulative || s.word_pop) && cue.words?.length) {
+
+        const isTypewriter = (activeAnim === 'typewriter');
+        let effectiveTime = video.currentTime;
+        if(isPreviewing && isTypewriter && cue) {
+            const cueSpan = Math.max(0.5, (cue.end || 2.5) - (cue.start || 0));
+            const frac = Math.min(1, Math.max(0, previewElapsed / 1.15));
+            effectiveTime = (cue.start || 0) + frac * cueSpan;
+        }
+
+        if(cue.words?.length) {
+            const separators = cue.text.match(/\s+/g) || [];
+            let isTypingActive = false;
+
             cue.words.forEach((w,i)=>{
-                if(i) content.append((cue.text.match(/\s+/g)||[])[i-1]||' ');
-                const span=document.createElement('span');span.textContent=w.text;
-                const active=w.start<=video.currentTime && video.currentTime<w.end;
-                const lit=s.cumulative ? video.currentTime>=w.start : (active && s.karaoke);
-                if(lit) span.style.color=s.highlight;
-                if(active && s.word_pop) Object.assign(span.style,{display:'inline-block',transform:'scale(1.15)',textShadow:`0 0 12px ${s.highlight}`});
+                if(isTypewriter && w.start > effectiveTime) {
+                    return;
+                }
+                if(i > 0) {
+                    const prevWord = cue.words[i - 1];
+                    if(!isTypewriter || prevWord.start <= effectiveTime) {
+                        content.append(separators[i - 1] || ' ');
+                    }
+                }
+                const span=document.createElement('span');
+                const isWordActive = w.start <= effectiveTime && effectiveTime < w.end;
+                const isWordLit = s.cumulative ? (effectiveTime >= w.start) : (isWordActive && s.karaoke);
+
+                let wordText = w.text;
+                if(isTypewriter && isWordActive) {
+                    isTypingActive = true;
+                    const wElapsed = Math.max(0, effectiveTime - w.start);
+                    const wDur = Math.max(0.08, w.end - w.start);
+                    const charProgress = Math.min(1, Math.max(0, wElapsed / (wDur * 0.85)));
+                    const charsToShow = Math.max(1, Math.min(w.text.length, Math.ceil(w.text.length * charProgress)));
+                    wordText = w.text.slice(0, charsToShow);
+                }
+
+                span.textContent=wordText;
+                span.style.transition = 'transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.1s ease';
+                if(isWordLit) span.style.color=s.highlight;
+                if(isWordActive && s.word_pop) {
+                    Object.assign(span.style,{
+                        display:'inline-block',
+                        transform:'scale(1.15)',
+                        textShadow:`0 0 12px ${s.highlight}`
+                    });
+                }
                 content.append(span);
             });
+
+            if(isTypewriter && (isTypingActive || (cue.words.length > 0 && effectiveTime < cue.words[0].start))) {
+                const cursor = document.createElement('span');
+                cursor.className = 'typewriterCursor';
+                cursor.textContent = '▎';
+                cursor.style.color = s.highlight || '#fff';
+                content.append(cursor);
+            }
         } else {
             let displayText = cue.text;
-            if(s.animation === 'typewriter') {
-                const elapsed = Math.max(0, video.currentTime - cue.start);
-                const typeDur = Math.min(cue.end - cue.start, Math.max(0.4, (cue.text||'').length * 0.045));
-                const visibleCount = Math.max(1, Math.min(cue.text.length, Math.floor((elapsed / typeDur) * cue.text.length)));
+            let showCursor = false;
+            if(isTypewriter) {
+                let frac;
+                if(isPreviewing) {
+                    frac = Math.min(1, previewElapsed / 1.15);
+                } else {
+                    const elapsed = Math.max(0, video.currentTime - cue.start);
+                    const typeDur = Math.min(cue.end - cue.start, Math.max(0.5, (cue.text || '').length * 0.05));
+                    frac = Math.min(1, elapsed / typeDur);
+                }
+                const visibleCount = Math.max(1, Math.min(cue.text.length, Math.ceil(frac * cue.text.length)));
                 displayText = cue.text.slice(0, visibleCount);
+                if(visibleCount < cue.text.length) showCursor = true;
             }
             content.textContent = displayText;
+            if(showCursor) {
+                const cursor = document.createElement('span');
+                cursor.className = 'typewriterCursor';
+                cursor.textContent = '▎';
+                cursor.style.color = s.highlight || '#fff';
+                content.append(cursor);
+            }
         }
         box.append(content);
     }
@@ -1261,8 +1389,13 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
             const compMirror=$('comp_'+key);
             if(compMirror) {if(styleChecks.includes(key))compMirror.checked=!!val;else compMirror.value=val;}
             if(key==='video_filter') document.querySelectorAll('[data-filter-pill]').forEach(b=>b.classList.toggle('active',b.dataset.filterPill===val));
+            if(key==='animation') triggerAnimationPreview(val);
         },false);
         $(key).oninput=updateStyle; $(key).onchange=updateStyle;
+    }
+    const prevAnimBtn = $('previewAnimBtn');
+    if(prevAnimBtn) {
+        prevAnimBtn.onclick = () => triggerAnimationPreview($('animation')?.value);
     }
     document.querySelectorAll('[data-filter-pill]').forEach(b=>{
         b.onclick=()=>{

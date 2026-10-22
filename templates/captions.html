@@ -796,16 +796,19 @@
             <label><input id="karaoke" type="checkbox"> Highlight current word</label>
             <label><input id="cumulative" type="checkbox"> Cumulative karaoke</label>
             <label><input id="word_pop" type="checkbox"> Active word pop (115%)</label>
-            <label>Animation
-              <select id="animation">
-                <option value="none">Instant (None)</option>
-                <option value="fade">Smooth Fade</option>
-                <option value="pop">Pop Entrance</option>
-                <option value="slide_up">Slide Up</option>
-                <option value="zoom_in">Zoom In</option>
-                <option value="typewriter">Typewriter</option>
-              </select>
-            </label>
+            <div class="row" style="align-items:flex-end;gap:8px;">
+              <label style="flex:1;">Animation
+                <select id="animation">
+                  <option value="none">Instant (None)</option>
+                  <option value="fade">Smooth Fade</option>
+                  <option value="pop">Pop Entrance</option>
+                  <option value="slide_up">Slide Up</option>
+                  <option value="zoom_in">Zoom In</option>
+                  <option value="typewriter">Typewriter</option>
+                </select>
+              </label>
+              <button id="previewAnimBtn" type="button" title="Preview animation on current caption" style="padding:6px 12px;font-size:0.8rem;white-space:nowrap;margin-bottom:2px;background:rgba(10,132,255,0.18);border-color:rgba(10,132,255,0.45);color:#64b5f6;">▶ Preview</button>
+            </div>
             <label>Neon glow <input id="glow" type="range" min="0" max="10" step="0.5" value="0"></label>
             <div class="row">
               <button id="saveStyle" type="button">Save style</button>

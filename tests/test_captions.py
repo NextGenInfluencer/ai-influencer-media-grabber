@@ -800,6 +800,23 @@ class CaptionWorkflowTests(unittest.TestCase):
         lines = [line for line in ass_typewriter.splitlines() if line.startswith('Dialogue: 0,')]
         self.assertGreater(len(lines), 3)
 
+        project_words = {
+            'cues': [dict(start=0.0, end=2.0, text='Singing a song', words=[
+                dict(start=0.0, end=0.6, text='Singing'),
+                dict(start=0.6, end=1.2, text='a'),
+                dict(start=1.2, end=2.0, text='song'),
+            ])],
+            'style': {**DEFAULT_STYLE, 'animation': 'typewriter', 'karaoke': True},
+            'width': 1080,
+            'height': 1920,
+        }
+        ass_words_tw = ass_text(project_words)
+        word_lines = [line for line in ass_words_tw.splitlines() if line.startswith('Dialogue: 0,')]
+        self.assertEqual(len(word_lines), 3)
+        self.assertIn('Singing', word_lines[0])
+        self.assertNotIn('song', word_lines[0])
+        self.assertIn('song', word_lines[-1])
+
     def test_custom_font_upload_validation_and_render_presets(self):
         from captions import CUSTOM_FONT_DIR, CUSTOM_FONTS, refresh_custom_fonts
         # 1. GET /api/captions/fonts

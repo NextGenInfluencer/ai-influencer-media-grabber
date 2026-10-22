@@ -711,3 +711,16 @@ kbd {
   letter-spacing: 0.3px;
   text-transform: uppercase;
 }
+
+/* Subtitle & Lyric Animations */
+.typewriterCursor {
+  display: inline-block;
+  opacity: 0.88;
+  margin-left: 2px;
+  animation: typewriterBlink 0.7s infinite;
+  vertical-align: baseline;
+}
+@keyframes typewriterBlink {
+  0%, 100% { opacity: 0.95; }
+  50% { opacity: 0; }
+}
