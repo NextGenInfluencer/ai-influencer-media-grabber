@@ -2,6 +2,17 @@
 
 All notable changes to the AI Influencer Media Grabber project will be documented in this file.
 
+## [v3.1.1] - 2026-10-22
+
+### Added & Fixed
+- **Dynamic Lyric Animations & Instant Live Preview**:
+  - Fixed an issue where changing subtitle animations (*Typewriter*, *Pop Entrance*, *Smooth Fade*, *Slide Up*, *Zoom In*) while paused showed no visual feedback because entrance timers only evaluated during playback.
+  - Selecting any animation now immediately triggers a fluid 60fps live preview on the active stage canvas, even when paused.
+  - Added a dedicated 1-click `▶ Preview` action button next to the Animation dropdown in Creator Studio to replay and preview animations on demand.
+  - Fixed `Typewriter` animation bypass when word timings (*Karaoke*, *Cumulative*, *Word Pop*) were active: future words are hidden until reached, the active word types character-by-character with an authentic blinking cursor (`▎`), and karaoke highlights/pops trigger dynamically.
+  - Upgraded entrance motions to natural Apple macOS Pro spring easing curves with satisfying scale overshoot.
+  - Updated ASS video subtitle export engine in `captions.py` so rendered MP4s display the exact progressive typewriter motions.
+
 ## [v3.1.0] - 2026-10-22
 
 ### Fixed & Improved

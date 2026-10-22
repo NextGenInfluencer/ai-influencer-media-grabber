@@ -18,3 +18,9 @@
   - **High-Polished Empty States**: Never leave raw or plain-text empty states. Every view (gallery, history, queue) must feature an elegant card with icon, friendly guidance, and 1-click call-to-action buttons.
   - **Keyboard Accessibility**: Support pro-level keyboard shortcuts (`Space` to play/pause, `Ctrl+B` to split, `Ctrl+Z` to undo, `←/→` to frame step, `Delete` to remove) and expose an intuitive shortcuts reference modal.
   - **Clutter-Free Controls**: Clean controls with precise range sliders, segmented tab switchers, and zoom presets.
+
+## 3. Version Bump & Auto-Updater Protocol
+- **Always Bump Version on Changes**: Whenever changes, bug fixes, or enhancements are made, ALWAYS bump the SemVer version in `app_local.py` (`APP_VERSION`), `installer.iss` (`MyAppVersion` and `OutputBaseFilename`), and `build_staging.py`.
+- **Auto-Updater Detection**: The in-app OTA updater compares the client `APP_VERSION` against GitHub's latest release tag. Bumping the version ensures the app immediately detects the new release, notifies users, and allows 1-click download & update.
+- **Git Tags**: Always create and push the corresponding git tag (e.g., `v3.1.1`) alongside the commit.
+

@@ -66,6 +66,14 @@ The alignment-language selector supports English, French, Korean, Greek, Spanish
 
 Failed lines retain their earlier words/timings. **Estimate missing timings** is an explicit approximate fallback, labelled for review. A cancelled operation preserves saved captions; **Restore previous karaoke version** restores the captions from before the last completed karaoke operation, including after reopening the project. Undo also works in the editing session. Long individual lines over 60 seconds need splitting before alignment.
 
+### New in v3.1.1 (Dynamic Lyric Animations & Instant Live Preview)
+
+- **Live Animation Preview on Selection**: Selecting any animation style (*Typewriter*, *Pop Entrance*, *Smooth Fade*, *Slide Up*, *Zoom In*) plays an instant 60fps preview directly on the canvas, even while the video is paused.
+- **1-Click Preview Control**: Dedicated `▶ Preview` action button next to the Animation dropdown for instant replaying.
+- **Typewriter + Karaoke Word Timing Integration**: Full progressive character typing and word revelation synchronized with karaoke highlights and active word popping.
+- **Pro Spring Easing**: Enhanced entrance curves with natural overshoot and fluid acceleration.
+- **Exported Subtitle Parity**: Full ASS export synchronization so rendered MP4s display the exact typewriter motion.
+
 ### New in v3.1.0 (Watchdog Keepalive Fix + Production Stability Suite)
 
 - **Rock-Solid Background Watchdog & Multitasking Keepalive**: Eliminated unexpected app shutdown caused by Chromium background tab timer throttling. The idle tolerance is increased to 300 seconds (5 minutes), combined with reactive `visibilitychange` and `focus` event listeners for instant session keepalive whenever the user switches back. Removed the aggressive 4-second shutdown on page navigation.
@@ -176,6 +184,7 @@ The in-app GitHub updater checks published releases and validates staged changes
 
 | Version | Highlights |
 | --- | --- |
+| v3.1.1 | Dynamic lyric animations, instant 60fps live animation preview, typewriter + karaoke sync, pro spring easing |
 | v3.1.0 | Background watchdog keepalive fix (no unexpected closing), GPU Hardware Acceleration (NVENC/QSV/AMF), macOS acrylic sheet modals, Activity Hub direct actions |
 | v3.0.0 | GPU Hardware Acceleration (NVENC/QSV/AMF), macOS acrylic sheet modals, Activity Hub direct actions (Play/Folder/Copy/Retry), Timeline Pro edge trimming handles |
 | v2.8.1 | Apple macOS Pro UI/UX overhaul, 1-click paste & open, shortcuts modal, timeline zoom, TikTok & Snapchat filters |
