@@ -66,6 +66,13 @@ The alignment-language selector supports English, French, Korean, Greek, Spanish
 
 Failed lines retain their earlier words/timings. **Estimate missing timings** is an explicit approximate fallback, labelled for review. A cancelled operation preserves saved captions; **Restore previous karaoke version** restores the captions from before the last completed karaoke operation, including after reopening the project. Undo also works in the editing session. Long individual lines over 60 seconds need splitting before alignment.
 
+### New in v3.1.3 (Creator Video Studio Responsive Scaling & macOS Aero Suite)
+
+- **Dynamic Responsive Stage Scaling**: The video canvas dynamically fills the viewport in both fullscreen and windowed modes while strictly preserving the video's aspect ratio (16:9 widescreen, 9:16 vertical TikTok/Reels, 1:1 square), eliminating tiny letterboxed previews.
+- **Overhauled Multi-Clip Sequence Drawer (Zero Overflow)**: Structured 2-row cards with index badges, truncated clip names, quick reorder buttons (`◀` `▶`), and an always-visible delete button (`✕`), eliminating horizontal scrolling completely.
+- **4 New Viral 1-Click Caption Presets**: Added *⚡ Beast Pop*, *🌆 Cyberpunk*, *☕ Frosted Vlog*, and *🌅 Sunset Glow* in a clean 2-column macOS action grid.
+- **Apple macOS Aero Refinements**: Frosted acrylic translucent glass surfaces, elevated drop shadows, and structured action button grids.
+
 ### New in v3.1.2 (Permanent Fix for Desktop Spontaneous Closing)
 
 - **Eliminated Spontaneous Desktop Shutdowns**: The background heartbeat watchdog thread has been completely disabled by default. The local Python server now runs continuously, eliminating unexpected closures when the window is minimized, when Windows is locked, or during Chromium background timer suspension.
@@ -189,6 +196,7 @@ The in-app GitHub updater checks published releases and validates staged changes
 
 | Version | Highlights |
 | --- | --- |
+| v3.1.3 | Creator Studio responsive preview scaling (no fullscreen letterbox), 2-row clip cards (zero overflow), macOS Aero UI, 4 viral caption presets |
 | v3.1.2 | Permanent fix for auto-shutdown / crash: disabled spontaneous watchdog timeout, rock-solid desktop session persistence |
 | v3.1.1 | Dynamic lyric animations, instant 60fps live animation preview, typewriter + karaoke sync, pro spring easing |
 | v3.1.0 | Background watchdog keepalive fix (no unexpected closing), GPU Hardware Acceleration (NVENC/QSV/AMF), macOS acrylic sheet modals, Activity Hub direct actions |

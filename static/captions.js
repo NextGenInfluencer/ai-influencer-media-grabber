@@ -227,11 +227,37 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         fitVideo();
     }
     function fitVideo() {
-        if(!project?.width) return;
-        const ratio=project.width/project.height;
-        const maxWidth=$('stage').parentElement.clientWidth-32;
-        const h=Math.min(window.innerWidth<500?250:380,maxWidth/ratio);
-        $('stage').style.height=h+'px'; $('stage').style.width=h*ratio+'px';
+        const stage = $('stage');
+        if (!stage) return;
+        const parent = stage.parentElement;
+        const parentW = (parent && parent.clientWidth) ? parent.clientWidth : (window.innerWidth || 1200);
+        const parentH = (parent && parent.clientHeight) ? parent.clientHeight : 600;
+
+        const statusRow = parent?.querySelector ? parent.querySelector('.centerStatusRow') : null;
+        const transport = parent?.querySelector ? parent.querySelector('.transport') : null;
+        const playingHint = $('playingCaption');
+
+        const statusH = (statusRow?.offsetHeight || 26);
+        const transportH = (transport?.offsetHeight || 44);
+        const hintH = (playingHint && playingHint.offsetHeight && playingHint.textContent ? playingHint.offsetHeight : 0);
+        const pad = 24;
+
+        const availH = Math.max(180, parentH - statusH - transportH - hintH - pad);
+        const availW = Math.max(200, parentW - 32);
+
+        const ratio = (project && project.width && project.height) ? (project.width / project.height) : (16 / 9);
+
+        let h, w;
+        if (availW / availH > ratio) {
+            h = Math.round(availH);
+            w = Math.round(h * ratio);
+        } else {
+            w = Math.round(availW);
+            h = Math.round(w / ratio);
+        }
+
+        stage.style.height = h + 'px';
+        stage.style.width = w + 'px';
         drawCaption();
     }
     function refresh() {
@@ -733,12 +759,37 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         }
         clipSequence.forEach((item,idx)=>{
             const pill=document.createElement('div');pill.className='seqItem';
-            const num=document.createElement('strong');num.textContent=`#${idx+1}`;
+
+            // Row 1: Header (Badge, Title, Reorder Controls, Delete Button)
+            const row1=document.createElement('div');row1.className='seqHeader';
+            const num=document.createElement('span');num.className='seqBadge';num.textContent=`#${idx+1}`;
             const name=document.createElement('span');name.className='seqName';name.textContent=item.name||`Clip ${idx+1}`;name.title=item.name||'';
+
+            const actions=document.createElement('div');actions.className='seqActions';
+            const leftBtn=document.createElement('button');leftBtn.type='button';leftBtn.className='seqIconBtn';leftBtn.textContent='◀';leftBtn.title='Move clip earlier';leftBtn.disabled=busy||idx===0;
+            leftBtn.onclick=()=>{const tmp=clipSequence[idx-1];clipSequence[idx-1]=clipSequence[idx];clipSequence[idx]=tmp;drawSequenceLists();};
+            const rightBtn=document.createElement('button');rightBtn.type='button';rightBtn.className='seqIconBtn';rightBtn.textContent='▶';rightBtn.title='Move clip later';rightBtn.disabled=busy||idx===clipSequence.length-1;
+            rightBtn.onclick=()=>{const tmp=clipSequence[idx+1];clipSequence[idx+1]=clipSequence[idx];clipSequence[idx]=tmp;drawSequenceLists();};
+
+            const delBtn=document.createElement('button');delBtn.type='button';delBtn.className='seqDelBtn';delBtn.textContent='✕';delBtn.title='Remove clip from sequence';delBtn.disabled=busy;
+            delBtn.onclick=()=>{clipSequence.splice(idx,1);drawSequenceLists();};
+
+            actions.append(leftBtn,rightBtn,delBtn);
+            row1.append(num,name,actions);
+
+            // Row 2: Duration & Playback Speed
+            const row2=document.createElement('div');row2.className='seqControls';
+
+            const durWrap=document.createElement('div');durWrap.className='seqField';
+            const durIcon=document.createElement('span');durIcon.className='seqFieldIcon';durIcon.textContent='⏱';
             const durInput=document.createElement('input');durInput.type='number';durInput.min='0';durInput.max='1200';durInput.step='0.5';
             durInput.value=String(item.duration||0);durInput.title='Clip duration in seconds (0 = Auto split song evenly)';durInput.disabled=busy;
             durInput.onchange=()=>{item.duration=Math.max(0,Number(durInput.value)||0);drawSequenceLists();};
-            const durUnit=document.createElement('small');durUnit.textContent=(Number(item.duration)>0?'s':'s (Auto)');
+            const durUnit=document.createElement('span');durUnit.className='seqFieldUnit';durUnit.textContent=(Number(item.duration)>0?'s':'s (Auto)');
+            durWrap.append(durIcon,durInput,durUnit);
+
+            const spdWrap=document.createElement('div');spdWrap.className='seqField';
+            const spdIcon=document.createElement('span');spdIcon.className='seqFieldIcon';spdIcon.textContent='⚡';
             const spdSel=document.createElement('select');spdSel.className='seqSpeed';spdSel.title='Clip playback speed';spdSel.disabled=busy;
             [{l:'0.25× Slow',v:0.25},{l:'0.5× Slow',v:0.5},{l:'0.75×',v:0.75},{l:'1× Normal',v:1},{l:'1.25×',v:1.25},{l:'1.5×',v:1.5},{l:'2× Fast',v:2},{l:'4× Hyper',v:4}].forEach(o=>{
                 const opt=new Option(o.l,String(o.v));
@@ -746,13 +797,10 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
                 spdSel.add(opt);
             });
             spdSel.onchange=()=>{item.speed=Number(spdSel.value)||1;drawSequenceLists();};
-            const leftBtn=document.createElement('button');leftBtn.type='button';leftBtn.textContent='◀';leftBtn.title='Move clip earlier';leftBtn.disabled=busy||idx===0;
-            leftBtn.onclick=()=>{const tmp=clipSequence[idx-1];clipSequence[idx-1]=clipSequence[idx];clipSequence[idx]=tmp;drawSequenceLists();};
-            const rightBtn=document.createElement('button');rightBtn.type='button';rightBtn.textContent='▶';rightBtn.title='Move clip later';rightBtn.disabled=busy||idx===clipSequence.length-1;
-            rightBtn.onclick=()=>{const tmp=clipSequence[idx+1];clipSequence[idx+1]=clipSequence[idx];clipSequence[idx]=tmp;drawSequenceLists();};
-            const delBtn=document.createElement('button');delBtn.type='button';delBtn.textContent='✕';delBtn.title='Remove clip from sequence';delBtn.disabled=busy;
-            delBtn.onclick=()=>{clipSequence.splice(idx,1);drawSequenceLists();};
-            pill.append(num,name,durInput,durUnit,spdSel,leftBtn,rightBtn,delBtn);
+            spdWrap.append(spdIcon,spdSel);
+
+            row2.append(durWrap,spdWrap);
+            pill.append(row1,row2);
             container.append(pill);
         });
     }
@@ -835,6 +883,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
                 runStockSearch().catch(()=>{});
             }
         }
+        setTimeout(fitVideo, 30);
     }
     document.querySelectorAll('[data-dock]').forEach(b=>{b.onclick=()=>switchDock(b.dataset.dock);});
     document.querySelectorAll('[data-insp]').forEach(b=>{
@@ -842,6 +891,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
             const mode=b.dataset.insp;
             document.querySelectorAll('[data-insp]').forEach(t=>t.classList.toggle('active',t.dataset.insp===mode));
             document.querySelectorAll('[data-insp-pane]').forEach(p=>{p.hidden=(mode!=='both' && p.dataset.inspPane!==mode);});
+            setTimeout(fitVideo, 30);
         };
     });
     for(const [id,dock] of [['songDialog','media'],['compositionDialog','canvas'],['stockDialog','stock'],['lyricsDialog','lyrics']]) {
@@ -1405,6 +1455,10 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         };
     });
     const presets={
+        mrbeast_bold:{font:'Montserrat',size:6.8,outline:3.8,position:78,background:false,karaoke:true,cumulative:false,word_pop:true,animation:'pop_in',color:'#ffe600',highlight:'#ffffff',visualizer:false},
+        cyberpunk_neon:{font:'Montserrat',size:5.5,outline:2.8,position:82,background:false,karaoke:true,cumulative:true,word_pop:true,animation:'typewriter',glow:8,color:'#00f0ff',highlight:'#ff0055',visualizer:true,visualizer_style:'spectrum',visualizer_position:'bottom',visualizer_height:20,visualizer_sensitivity:1.4,visualizer_color:'#00f0ff'},
+        frosted_vlog:{font:'Roboto',size:4.6,outline:0,position:86,background:true,karaoke:true,cumulative:false,word_pop:false,animation:'fade',color:'#f8f9fa',highlight:'#a5f3fc',visualizer:false},
+        sunset_glow:{font:'Montserrat',size:5.4,outline:2.2,position:80,background:false,karaoke:true,cumulative:true,word_pop:true,animation:'slide_up',glow:6,color:'#ffffff',highlight:'#ff7b54',visualizer:true,visualizer_style:'waveform',visualizer_position:'bottom',visualizer_height:16,visualizer_sensitivity:1.1,visualizer_color:'#ff7b54'},
         neon_karaoke:{font:'Montserrat',size:5.5,outline:2.5,position:82,background:false,karaoke:true,cumulative:true,word_pop:true,color:'#ffffff',highlight:'#00f5d4',visualizer:true,visualizer_style:'spectrum',visualizer_position:'bottom',visualizer_height:18,visualizer_sensitivity:1.2,visualizer_color:'#00f5d4'},
         cinematic_clean:{font:'Roboto',size:4.5,outline:1.5,position:88,background:true,karaoke:true,cumulative:false,word_pop:false,color:'#f8f9fa',highlight:'#ffd166',visualizer:false},
         bold_pop:{font:'Montserrat',size:6.5,outline:3.5,position:78,background:false,karaoke:true,cumulative:false,word_pop:true,color:'#ffffff',highlight:'#ffdc55',visualizer:true,visualizer_style:'spectrum',visualizer_position:'bottom',visualizer_height:20,visualizer_sensitivity:1.3,visualizer_color:'#ffdc55'},
@@ -1594,6 +1648,12 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
     $('stop').onclick=act(async()=>{if(confirm('Stop active app jobs, including downloads and caption processing?')){const d=await api('/api/cancel_all','POST',{});say(d.status||'Stopping…');}});
     $('closeRender').onclick=()=>{$('renderVideo').pause();$('renderDialog').close();};
     window.addEventListener('resize',()=>{fitVideo();drawTimeline();});
+    if(typeof ResizeObserver !== 'undefined') {
+        const centerEl = document.querySelector('.capcutCenter');
+        if(centerEl) {
+            new ResizeObserver(()=>{fitVideo();drawTimeline();}).observe(centerEl);
+        }
+    }
     window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue='';}});
     document.addEventListener('keydown',e=>{
         if(document.querySelector('dialog[open]')) {

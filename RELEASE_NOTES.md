@@ -1,3 +1,27 @@
+# v3.1.3 — Creator Video Studio Responsive Scaling & macOS Aero Suite
+
+- **🖥️ Dynamic Responsive Stage Scaling**:
+  - Completely eliminated tiny preview letterboxing when using Creator Video Studio in full screen.
+  - Interactive canvas now dynamically expands to fill available height and width while strictly maintaining aspect ratio across horizontal (16:9), vertical TikTok/Reels (9:16), and square formats.
+- **🎬 Overhauled Multi-Clip Sequence Drawer (Zero Overflow)**:
+  - Redesigned clip cards into an ergonomic 2-row layout:
+    - Clip index badge, truncated filename, reorder buttons (`◀` `▶`), and an always-visible quick delete button (`✕`) without requiring horizontal scrolling.
+    - Duration (`⏱ [0] s`) and speed selection (`⚡ 1× Normal`) grouped neatly in row 2.
+  - Reorganized storyboard buttons into crisp 2-column macOS action grids.
+- **✨ 4 New Viral 1-Click Caption Presets**:
+  - **⚡ Beast Pop**: High-impact bold yellow text with thick outline and dynamic spring pop entrance.
+  - **🌆 Cyberpunk**: Neon cyan & magenta styling with glowing outline and progressive typewriter animation.
+  - **☕ Frosted Vlog**: Clean modern vlog aesthetic with soft frosted translucent pill backdrop.
+  - **🌅 Sunset Glow**: Warm coral-to-golden karaoke highlight with smooth slide-up motion.
+- ** Apple macOS Aero UI/UX Refinement**:
+  - Polished Creator Studio interface with frosted glass materials (`backdrop-filter: blur`), subtle translucent borders, and Apple System Blue accents.
+- **🛡️ 100% Test Integrity**:
+  - All 110 unit tests and frontend regression suites pass with 100% test integrity.
+
+### 📦 Download & Verification
+- **Installer**: `AI-Influencer-Media-Grabber-v3.1.3-Setup.exe`
+- **SHA-256**: `525C5EF50E3CFC84638067FB7CD69F65C29B292E6B629E85079F034268FEC5E5`
+
 # v3.1.2 — Rock-Solid Session Persistence & Auto-Shutdown Fix
 
 - **🛡️ Permanent Fix for Spontaneous App Shutdown / Closing**:

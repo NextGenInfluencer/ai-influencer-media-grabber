@@ -116,22 +116,26 @@
 
             <div id="sequenceBar" class="sequenceSection">
               <div class="row" style="margin-bottom:8px;">
-                <input id="grabClipUrl" type="text" maxlength="500" placeholder="Paste TikTok / Reel / YouTube dance video URL…" aria-label="TikTok or social video URL" style="flex:1;">
-                <button id="grabClipBtn" class="primary" type="button" title="Download TikTok/Reel without watermark and add to your video clips">⬇️ Grab Clip</button>
+                <input id="grabClipUrl" type="text" maxlength="500" placeholder="Paste TikTok / Reel / YouTube URL…" aria-label="TikTok or social video URL" style="flex:1;">
+                <button id="grabClipBtn" class="primary" type="button" title="Download video without watermark and add to your video clips">⬇️ Grab</button>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">
+                <button id="seqBrowseStock" class="primary" type="button" style="padding:6px 8px;font-size:11px;justify-content:center;">🌐 Free Stock</button>
+                <label class="upload" style="padding:6px 8px;font-size:11px;justify-content:center;">➕ Upload Clips<input id="seqUploadInput" type="file" multiple accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,.mkv,.webm"></label>
+              </div>
+              <div style="margin-bottom:8px;">
+                <select id="seqLibrarySelect" aria-label="Add clip from library" style="width:100%;"><option value="">+ Add clip from library…</option></select>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">
+                <button id="seqSplitAtPlayhead" type="button" title="Split active clip into two at the current video playhead (Ctrl+B)" style="padding:5px 8px;font-size:11px;justify-content:center;">✂️ Split Playhead</button>
+                <button id="seqSyncBeats" type="button" title="Align clip cut points so transitions drop exactly on musical beats" style="padding:5px 8px;font-size:11px;justify-content:center;">⚡ Cut to Beat</button>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">
+                <button id="seqEvenSplit" type="button" title="Set all clip durations to 0 (split song evenly)" style="padding:4px 8px;font-size:10.5px;justify-content:center;">Split evenly</button>
+                <button id="seqCycle10" type="button" title="Set each clip to 10s so clips cycle across the song" style="padding:4px 8px;font-size:10.5px;justify-content:center;">10s each</button>
               </div>
               <div class="row" style="margin-bottom:8px;">
-                <button id="seqBrowseStock" class="primary" type="button">🌐 + Browse Free Videos (Mixkit / Shorts / Pixabay)</button>
-                <label class="upload">➕ Upload Clips<input id="seqUploadInput" type="file" multiple accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,.mkv,.webm"></label>
-              </div>
-              <div class="row" style="margin-bottom:8px;">
-                <select id="seqLibrarySelect" aria-label="Add clip from library" style="flex:1;"><option value="">+ Add clip from library…</option></select>
-                <button id="seqSplitAtPlayhead" type="button" title="Split active clip into two at the current video playhead (Ctrl+B)">✂️ Split at Playhead</button>
-                <button id="seqSyncBeats" type="button" title="Align clip cut points so transitions drop exactly on musical beats">⚡ Cut to Beat</button>
-                <button id="seqEvenSplit" type="button" title="Set all clip durations to 0 (split song evenly)">Split evenly</button>
-                <button id="seqCycle10" type="button" title="Set each clip to 10s so clips cycle across the song">10s each</button>
-              </div>
-              <div class="row" style="margin-bottom:8px;">
-                <label style="flex:1;">Clip Transition
+                <label style="flex:1;">Transition
                   <select id="comp_sequence_transition">
                     <option value="none">Cut (Instant)</option>
                     <option value="fade">Dissolve / Crossfade</option>
@@ -144,7 +148,7 @@
                     <option value="wiperight">Wipe Right</option>
                   </select>
                 </label>
-                <label style="width:110px;">Duration (s)
+                <label style="width:100px;">Duration (s)
                   <input id="comp_sequence_transition_duration" type="number" min="0.1" max="2.0" step="0.1" value="0.5">
                 </label>
               </div>
@@ -152,7 +156,7 @@
               <div class="row" style="margin-top:10px;">
                 <button id="applySequenceNow" class="primary" type="button" style="width:100%;">✨ Apply Clip Sequence to Video</button>
               </div>
-              <p class="hint">Add as many clips as you want so your video changes scenes instead of looping one clip. Duration <strong>0s</strong> splits the song evenly; <strong>10s</strong> cycles clips every 10s.</p>
+              <p class="hint">Duration <strong>0s</strong> splits song evenly; <strong>10s</strong> cycles clips every 10s.</p>
             </div>
             <div class="row" style="margin-top:8px;">
               <button id="editComposition" type="button">🎞️ Canvas &amp; B-Roll Settings</button>
@@ -755,6 +759,10 @@
           <div class="subCard stackForm">
             <h3>1-Click Caption Presets</h3>
             <div class="presets">
+              <button type="button" data-preset="mrbeast_bold" title="High-impact bold yellow font with thick outline and dynamic pop entrance">⚡ Beast Pop</button>
+              <button type="button" data-preset="cyberpunk_neon" title="Vibrant cyan & magenta neon with glowing outline & typewriter animation">🌆 Cyberpunk</button>
+              <button type="button" data-preset="frosted_vlog" title="Clean modern vlog subtitle with soft frosted dark pill background">☕ Frosted Vlog</button>
+              <button type="button" data-preset="sunset_glow" title="Warm coral-to-gold karaoke highlight with smooth slide-up motion">🌅 Sunset Glow</button>
               <button type="button" data-preset="neon_karaoke">Neon Karaoke</button>
               <button type="button" data-preset="cinematic_clean">Cinematic Clean</button>
               <button type="button" data-preset="bold_pop">Bold Pop</button>

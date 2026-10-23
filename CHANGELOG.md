@@ -2,6 +2,25 @@
 
 All notable changes to the AI Influencer Media Grabber project will be documented in this file.
 
+## [v3.1.3] - 2026-10-23
+
+### Added & Improved
+- **Creator Video Studio Responsive Stage Scaling**:
+  - Replaced legacy fixed height constraints with dynamic viewport sizing that monitors `.capcutCenter` via `ResizeObserver`.
+  - Preview stage now automatically scales up to 100% of available screen space in fullscreen and windowed modes while strictly preserving the video's aspect ratio (16:9 horizontal, 9:16 vertical reels/TikTok, 1:1 square).
+- **Overhauled Clip Sequence Cards (Zero Horizontal Overflow)**:
+  - Redesigned sequence list items into structured 2-row cards eliminating horizontal scrollbars:
+    - Row 1: Clip index badge (`#1`), truncated file name, reorder buttons (`◀` `▶`), and an always-visible red-accented delete button (`✕`).
+    - Row 2: Duration input with unit label (`⏱ [0] s`) and speed selection dropdown (`⚡ [1× Normal ▼]`).
+  - Organized drawer action buttons into clean 2-column macOS grids (`🌐 Free Stock` / `➕ Upload Clips`, `✂️ Split Playhead` / `⚡ Cut to Beat`, `Split evenly` / `10s each`).
+- **4 New Viral 1-Click Caption Presets**:
+  - **⚡ Beast Pop**: High-contrast bold yellow font (`#ffe600`), thick black outline, and dynamic spring pop entrance.
+  - **🌆 Cyberpunk**: Vibrant neon cyan (`#00f0ff`) with magenta highlight (`#ff0055`), glowing aura, and typewriter reveal.
+  - **☕ Frosted Vlog**: Elegant modern vlog subtitle featuring ivory typography over a soft frosted translucent pill backdrop.
+  - **🌅 Sunset Glow**: Warm coral (`#ff7b54`) to golden karaoke highlight with smooth spring slide-up animation.
+- **Apple macOS Aero Design Refinement**:
+  - Upgraded Creator Studio controls, dropdowns, and buttons to Apple macOS Pro standards with frosted acrylic glass surfaces, SF Pro typography, and crisp border highlights.
+
 ## [v3.1.2] - 2026-10-22
 
 ### Fixed
