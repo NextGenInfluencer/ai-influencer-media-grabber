@@ -2,6 +2,36 @@
 
 All notable changes to the AI Influencer Media Grabber project will be documented in this file.
 
+## [v3.1.4] - 2026-10-27
+
+### Reliability and project safety
+- Isolate application storage before test discovery; tests no longer initialize against real history or projects.
+- Share the installer/OTA payload list, include the encoder dependency, and support the older updater's asset allowlist.
+- Back up project metadata before its first save in this version. Keep original media unchanged.
+- Store custom fonts in user data, preserve legacy uploads, prevent filename/family replacement, and exclude uploads from release packages.
+
+### Editor and rendering
+- Preserve source positions when splitting clips, including repeated sequences; apply speed to single-clip sequences.
+- Add source-start editing, sequence Undo/Redo, and a notice that prevents exporting unapplied sequence edits.
+- Detect audio per source and pad silent/short segments independently.
+- Normalize transition inputs and preserve timeline duration; exercise every supported transition with real renders.
+- Compose final song-video exports from original assets in one pass, including the selected output frame rate and canvas size.
+- Separate live stickers from prepared previews; export pop, fade, slide, and static stickers consistently.
+- Reveal individual characters in karaoke typewriter exports.
+- Add a CPU export override and one CPU retry for recognized hardware-encoder failures.
+- Replace misleading quality labels with explicit output/upscaling descriptions.
+
+### Lyrics
+- Resume interrupted per-line karaoke timing from a separate checkpoint, without applying partial changes to saved captions. Retry only uncertain lines.
+- Preserve alignment confidence flags and actual word boundaries instead of stretching words to caption edges.
+- Preserve existing word timings when a supplied line is unchanged.
+- Correct or align a selected range without deleting captions outside it; reject boundaries that split existing lines.
+- Clarify the difference between correcting text with existing timing and aligning lyrics to audio.
+
+### Verification
+- Added real render, updater compatibility, font safety, lyric preservation, and GPU fallback regression coverage.
+- Full language/audio accuracy and broader editing improvements remain separate verification work; see docs/stability-roadmap.md.
+
 ## [v3.1.3] - 2026-10-23
 
 ### Added & Improved

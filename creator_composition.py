@@ -177,7 +177,8 @@ def validate_sequence(seq) -> list[dict]:
         dur = finite(item.get('duration', 0), 0, 1200)
         speed = finite(item.get('speed', 1.0), 0.25, 4.0)
         name = re.sub(r'[\r\n\t]+', ' ', str(item.get('name') or asset)).strip()[:120]
-        cleaned.append(dict(asset=asset, name=name, duration=dur, speed=speed))
+        source_start = finite(item.get('source_start', 0), 0, 7200)
+        cleaned.append(dict(asset=asset, name=name, duration=dur, speed=speed, source_start=source_start))
     return cleaned
 
 
@@ -187,7 +188,7 @@ def schedule_sequence(seq: list, assets: dict, total_duration: float, loop: bool
         if len(valid) == 1:
             a_key = valid[0]['asset']
             spd = finite(valid[0].get('speed', 1.0), 0.25, 4.0)
-            return [dict(asset=a_key, name=str(valid[0].get('name') or assets[a_key]['file'])[:120], start=0.0, duration=round(total_duration, 3), speed=spd)]
+            return [dict(asset=a_key, name=str(valid[0].get('name') or assets[a_key]['file'])[:120], start=0.0, duration=round(total_duration, 3), speed=spd, source_start=finite(valid[0].get('source_start', 0), 0, 7200))]
         return []
     fixed_sum = sum(float(item['duration']) for item in valid if float(item.get('duration') or 0) > 0)
     auto_count = sum(1 for item in valid if float(item.get('duration') or 0) <= 0)
@@ -216,7 +217,8 @@ def schedule_sequence(seq: list, assets: dict, total_duration: float, loop: bool
                 name=str(item.get('name') or assets[a_key].get('name') or assets[a_key]['file'])[:120],
                 start=round(t, 3),
                 duration=round(seg_d, 3),
-                speed=spd
+                speed=spd,
+                source_start=finite(item.get('source_start', 0), 0, 7200)
             ))
             t += seg_d
         if not loop or auto_count > 0:
@@ -242,9 +244,9 @@ def schema(assets, settings, style):
                             'brightness','contrast','saturation','transition_in','transition_out',
                             'keyframe_end_x','keyframe_end_y')}
     seq_segments = schedule_sequence(s.get('sequence') or [], assets, length, loop=s['loop'])
-    if len(seq_segments) >= 2:
+    if seq_segments:
         bg_clips = [dict(asset=seg['asset'], name=seg['name'], start=seg['start'], duration=seg['duration'],
-                         source_offset=0, speed=seg.get('speed', s['background_speed']), transform=tf) for seg in seq_segments]
+                         source_offset=seg.get('source_start', 0), speed=seg.get('speed', s['background_speed']), transform=tf) for seg in seq_segments]
     else:
         bg_clips = [dict(asset='background', start=0, duration=length,
                          source_offset=s['background_start'], speed=s['background_speed'], transform=tf)]
@@ -326,23 +328,23 @@ def shift_cues(cues, delta, duration, speed=1.0):
     return result
 
 
-def render_args(studio, folder, output, background_has_audio=False, bake_fx=True):
+def render_args(studio, folder, output, background_has_audio=False, bake_fx=True, include_sticker=True, fps=30, output_size=None):
     s = {**DEFAULTS, **studio['settings']}
     assets = studio['assets']
-    w,h = SHAPES[s['shape']]
+    w,h = output_size or SHAPES[s['shape']]
     duration = s['end']-s['start']+s['offset']
     args = ['-i',local_asset(folder,assets['audio']).name]
     seq_segments = schedule_sequence(s.get('sequence') or [], assets, duration, loop=s['loop'])
-    multi_clip = len(seq_segments) >= 2
+    multi_clip = bool(seq_segments)
     sequence_assets = list(dict.fromkeys(seg['asset'] for seg in seq_segments))
     if multi_clip:
         for key in sequence_assets:
             c_asset = assets[key]
             c_path = local_asset(folder, c_asset)
-            longest = max(seg['duration'] * max(1.0, float(seg.get('speed', 1.0) or s['background_speed'])) for seg in seq_segments if seg['asset'] == key)
+            longest = max(seg.get('source_start', 0) + (seg['duration'] + 2) * max(1.0, float(seg.get('speed', 1.0) or s['background_speed'])) for seg in seq_segments if seg['asset'] == key)
             in_dur = round(longest + 0.5, 3)
             if c_asset['kind'] == 'image':
-                args += ['-loop', '1', '-framerate', '30', '-t', str(in_dur), '-i', c_path.name]
+                args += ['-loop', '1', '-framerate', str(fps), '-t', str(in_dur), '-i', c_path.name]
             else:
                 args += (['-stream_loop', '-1'] if s['loop'] else []) + ['-t', str(in_dur), '-i', c_path.name]
     else:
@@ -350,16 +352,16 @@ def render_args(studio, folder, output, background_has_audio=False, bake_fx=True
         bg = assets.get(bg_key) or assets.get('background')
         if bg:
             path = local_asset(folder,bg)
-            if bg['kind']=='image': args += ['-loop','1','-framerate','30']
+            if bg['kind']=='image': args += ['-loop','1','-framerate',str(fps)]
             elif s['loop']: args += ['-stream_loop','-1']
             args += ['-ss',str(s['background_start'])] if bg['kind']=='video' else []
             args += ['-i',path.name]
         else:
-            args += ['-f','lavfi','-i',f"color=c={s['color']}:s={w}x{h}:r=30"]
+            args += ['-f','lavfi','-i',f"color=c={s['color']}:s={w}x{h}:r={fps}"]
     broll = assets.get('broll')
     has_broll = bool(broll and s['broll_duration'] > 0)
     sticker = assets.get('sticker')
-    has_sticker = bool(sticker and s.get('sticker_duration', 0) > 0)
+    has_sticker = bool(include_sticker and sticker and s.get('sticker_duration', 0) > 0)
 
     next_in_idx = (1 + len(sequence_assets)) if multi_clip else 2
     if has_broll and broll is not None:
@@ -367,7 +369,7 @@ def render_args(studio, folder, output, background_has_audio=False, bake_fx=True
         next_in_idx += 1
         bpath = local_asset(folder, broll)
         if broll['kind'] == 'image':
-            args += ['-loop', '1', '-framerate', '30', '-i', bpath.name]
+            args += ['-loop', '1', '-framerate', str(fps), '-i', bpath.name]
         else:
             args += ['-stream_loop', '-1', '-i', bpath.name]
 
@@ -376,7 +378,7 @@ def render_args(studio, folder, output, background_has_audio=False, bake_fx=True
         next_in_idx += 1
         spath = local_asset(folder, sticker)
         if sticker.get('kind') == 'image' or spath.suffix.lower() in ('.png', '.jpg', '.jpeg', '.webp'):
-            args += ['-loop', '1', '-framerate', '30', '-i', spath.name]
+            args += ['-loop', '1', '-framerate', str(fps), '-i', spath.name]
         else:
             args += ['-stream_loop', '-1', '-i', spath.name]
     graph=[]
@@ -391,13 +393,13 @@ def render_args(studio, folder, output, background_has_audio=False, bake_fx=True
     graph.append(af)
     pts_expr = f"{1.0/s['background_speed']:.4f}*(PTS-STARTPTS)" if abs(s['background_speed'] - 1.0) > 1e-4 else 'PTS-STARTPTS'
     atempo_filter = f"atempo={s['background_speed']:.4f}," if abs(s['background_speed'] - 1.0) > 1e-4 else ""
-    if background_has_audio and s['background_volume']:
+    if background_has_audio and s['background_volume'] and (multi_clip or bool(bg and bg.get('has_audio', background_has_audio))):
         bg_vol = f"volume='if(between(t,{s['offset']},{duration}),{round(s['background_volume']*0.3,4)},{s['background_volume']})':eval=frame" if s['ducking'] else f"volume={s['background_volume']}"
         if multi_clip:
             for k, seg in enumerate(seq_segments):
                 c_asset = assets[seg['asset']]
                 idx = sequence_assets.index(seg['asset']) + 1
-                if c_asset['kind'] == 'video' and c_asset.get('has_audio', True):
+                if c_asset['kind'] == 'video' and c_asset.get('has_audio', False):
                     seg_spd = float(seg.get('speed', 1.0) or s.get('background_speed', 1.0))
                     seg_atempo = ""
                     if abs(seg_spd - 1.0) > 1e-4:
@@ -405,7 +407,7 @@ def render_args(studio, folder, output, background_has_audio=False, bake_fx=True
                             seg_atempo = f"atempo={seg_spd:.4f},"
                         elif seg_spd >= 0.25:
                             seg_atempo = f"atempo=0.5,atempo={seg_spd/0.5:.4f},"
-                    graph.append(f"[{idx}:a]{seg_atempo}asetpts=PTS-STARTPTS,atrim=duration={seg['duration']},asetpts=PTS-STARTPTS,aformat=sample_rates=44100:channel_layouts=stereo[aseg{k}]")
+                    graph.append(f"[{idx}:a]atrim=start={seg.get('source_start', 0)},asetpts=PTS-STARTPTS,{seg_atempo}apad,atrim=duration={seg['duration']},asetpts=PTS-STARTPTS,aformat=sample_rates=44100:channel_layouts=stereo[aseg{k}]")
                 else:
                     graph.append(f"anullsrc=r=44100:cl=stereo,atrim=duration={seg['duration']}[aseg{k}]")
             a_concat_in = ''.join(f'[aseg{k}]' for k in range(len(seq_segments)))
@@ -434,10 +436,10 @@ def render_args(studio, folder, output, background_has_audio=False, bake_fx=True
         xfade_active = trans in {'fade', 'dissolve', 'wipeleft', 'wiperight', 'slideleft', 'slideright', 'circlecrop', 'smoothleft', 'smoothright'} and td >= 0.05
 
         for k, seg in enumerate(seq_segments):
-            seg_trim_dur = round(seq_segments[0]['duration'] if (xfade_active and k == 0) else (seg['duration'] + (td if xfade_active else 0.0)), 3)
+            seg_trim_dur = round(seg['duration'] + (td if xfade_active and k < len(seq_segments)-1 else 0.0), 3)
             seg_spd = float(seg.get('speed', 1.0) or s.get('background_speed', 1.0))
             seg_pts = f"{1.0/seg_spd:.4f}*(PTS-STARTPTS)" if abs(seg_spd - 1.0) > 1e-4 else 'PTS-STARTPTS'
-            seg_vf = f"[seqinput{k}]setpts={seg_pts},fps=30,tpad=stop_mode=clone:stop_duration={seg_trim_dur},trim=duration={seg_trim_dur},setpts=PTS-STARTPTS,{scale_crop},setsar=1,format=yuv420p"
+            seg_vf = f"[seqinput{k}]trim=start={seg.get('source_start', 0)},setpts={seg_pts},fps={fps},tpad=stop_mode=clone:stop_duration={seg_trim_dur},trim=duration={seg_trim_dur},setpts=PTS-STARTPTS,{scale_crop},setsar=1,format=yuv420p,fps={fps},settb=1/{fps}"
             if trans in ('fadeblack', 'fadewhite') and td >= 0.05:
                 fcol = 'black' if trans == 'fadeblack' else 'white'
                 seg_vf += f",fade=t=in:st=0:d={td:.2f}:color={fcol},fade=t=out:st={round(seg['duration']-td, 3):.2f}:d={td:.2f}:color={fcol}"
@@ -446,7 +448,7 @@ def render_args(studio, folder, output, background_has_audio=False, bake_fx=True
 
         if xfade_active:
             cur_out = 'vseg0'
-            accum_offset = max(0.01, round(seq_segments[0]['duration'] - td, 3))
+            accum_offset = max(0.01, round(seq_segments[0]['duration'], 3))
             for k in range(1, len(seq_segments)):
                 next_out = f'xf{k}'
                 graph.append(f"[{cur_out}][vseg{k}]xfade=transition={trans}:duration={td:.2f}:offset={accum_offset}[{next_out}]")
@@ -457,15 +459,15 @@ def render_args(studio, folder, output, background_has_audio=False, bake_fx=True
             concat_in = ''.join(f'[vseg{k}]' for k in range(len(seq_segments)))
             vf = f"{concat_in}concat=n={len(seq_segments)}:v=1:a=0,setsar=1"
     else:
-        vf=f'[1:v]setpts={pts_expr},fps=30'
+        vf=f'[1:v]setpts={pts_expr},fps={fps}'
         if s['background_duration']: vf+=f",trim=duration={s['background_duration']}"
         vf+=f",tpad=stop_mode=clone:stop_duration={duration},trim=duration={duration},{scale_crop},setsar=1"
     if s['zoom'] or s['keyframe_end_x'] != s['x'] or s['keyframe_end_y'] != s['y']:
-        frames = max(1, round(duration * 30) - 1)
+        frames = max(1, round(duration * fps) - 1)
         z_amt = max(s['zoom'], 0.04 if (s['keyframe_end_x'] != s['x'] or s['keyframe_end_y'] != s['y']) else 0)
         px = f"({s['x']/100}+({(s['keyframe_end_x']-s['x'])/100})*on/{frames})"
         py = f"({s['y']/100}+({(s['keyframe_end_y']-s['y'])/100})*on/{frames})"
-        vf+=f",zoompan=z='1+{z_amt}*on/{frames}':x='(iw-iw/zoom)*{px}':y='(ih-ih/zoom)*{py}':d=1:s={w}x{h}:fps=30"
+        vf+=f",zoompan=z='1+{z_amt}*on/{frames}':x='(iw-iw/zoom)*{px}':y='(ih-ih/zoom)*{py}':d=1:s={w}x{h}:fps={fps}"
     if s['brightness'] != 0 or s['contrast'] != 1 or s['saturation'] != 1:
         vf+=f",eq=brightness={s['brightness']}:contrast={s['contrast']}:saturation={s['saturation']}"
     if bake_fx:
@@ -483,7 +485,7 @@ def render_args(studio, folder, output, background_has_audio=False, bake_fx=True
     if has_broll:
         bw = max(2, round(w * (s['broll_scale'] / 100) / 2) * 2)
         bh = max(2, round(h * (s['broll_scale'] / 100) / 2) * 2)
-        bvf = f"[{broll_idx}:v]setpts=PTS-STARTPTS,fps=30,scale={bw}:{bh}:force_original_aspect_ratio=increase,crop={bw}:{bh},setsar=1,format=rgba"
+        bvf = f"[{broll_idx}:v]setpts=PTS-STARTPTS,fps={fps},scale={bw}:{bh}:force_original_aspect_ratio=increase,crop={bw}:{bh},setsar=1,format=rgba"
         if s['broll_opacity'] < 1:
             bvf += f",colorchannelmixer=aa={s['broll_opacity']}"
         if s['broll_fade'] > 0:
@@ -498,16 +500,21 @@ def render_args(studio, folder, output, background_has_audio=False, bake_fx=True
         cur_bg = next_bg
     if has_sticker:
         sw = max(2, round(w * (s['sticker_scale'] / 100) / 2) * 2)
-        svf = f"[{sticker_idx}:v]setpts=PTS-STARTPTS,fps=30,scale={sw}:-2,setsar=1,format=rgba"
+        svf = f"[{sticker_idx}:v]setpts=PTS-STARTPTS,fps={fps},scale={sw}:-2,setsar=1,format=rgba"
+        if s['sticker_anim'] == 'pop':
+            svf += f",scale=w='max(2,trunc({sw}*(0.5+0.5*min(t/0.22,1))/2)*2)':h=-2:eval=frame"
         if s['sticker_opacity'] < 1:
             svf += f",colorchannelmixer=aa={s['sticker_opacity']}"
-        if s['sticker_fade'] > 0:
-            sf = min(s['sticker_duration'] / 2, s['sticker_fade'])
+        fade = s['sticker_fade'] if s['sticker_anim'] == 'fade' else 0
+        if fade > 0:
+            sf = min(s['sticker_duration'] / 2, fade)
             svf += f",fade=t=in:st=0:d={sf}:alpha=1,fade=t=out:st={max(0, s['sticker_duration'] - sf)}:alpha=1:d={sf}"
         svf += f",trim=duration={s['sticker_duration']},setpts=PTS+{s['sticker_start']}/TB[sticker]"
         # Centre-anchored like the live preview (and face-snap coordinates), clamped inside the frame.
         sox = f"clip(W*{s['sticker_x']/100}-w/2,0,W-w)"
         soy = f"clip(H*{s['sticker_y']/100}-h/2,0,H-h)"
+        if s['sticker_anim'] == 'slide':
+            soy += f"-H*0.04*max(0,1-(t-{s['sticker_start']})/0.22)"
         s_end = round(s['sticker_start'] + s['sticker_duration'], 3)
         graph += [svf, f"[{cur_bg}][sticker]overlay=x='{sox}':y='{soy}':enable='between(t,{s['sticker_start']},{s_end})':eof_action=pass[bg]"]
     if s['visualizer']:
@@ -516,13 +523,13 @@ def render_args(studio, folder, output, background_has_audio=False, bake_fx=True
         vcol = '0x' + str(s['visualizer_color'])[1:]
         sens = s['visualizer_sensitivity']
         if s['visualizer_style'] == 'spectrum':
-            vfilter = f"[vis]volume={sens},showfreqs=s={w}x{vh}:mode=bar:ascale=sqrt:fscale=log:win_size=2048:rate=30:colors={vcol}[wave]"
+            vfilter = f"[vis]volume={sens},showfreqs=s={w}x{vh}:mode=bar:ascale=sqrt:fscale=log:win_size=2048:rate={fps}:colors={vcol}[wave]"
         else:
-            vfilter = f"[vis]volume={sens},showwaves=s={w}x{vh}:mode=cline:rate=30:colors={vcol}:scale=sqrt[wave]"
+            vfilter = f"[vis]volume={sens},showwaves=s={w}x{vh}:mode=cline:rate={fps}:colors={vcol}:scale=sqrt[wave]"
         graph += ['[mix]asplit=2[aout][vis]', vfilter, f'[bg][wave]overlay=0:{vy}:shortest=1[out]']
     else: graph += ['[mix]anull[aout]','[bg]null[out]']
     try:
-        import hwaccel
+        from assets import hwaccel
         enc_args = hwaccel.get_video_encoder_args(codec='h264', quality='high')
     except Exception:
         enc_args = ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18']
@@ -543,8 +550,8 @@ STOCK_HOSTS = {
 STOCK_LICENSES = {
     'pexels': 'Pexels License',
     'pixabay': 'Pixabay Content License',
-    'mixkit': 'Mixkit Stock Video Free License',
-    'youtube': 'YouTube / Google Video',
+    'mixkit': 'Check this item’s license on Mixkit',
+    'youtube': 'Check permission with the source creator',
 }
 MAX_STOCK_BYTES = 80 * 1024 * 1024
 _STOCK_CACHE: dict[tuple, tuple[float, list[dict]]] = {}
@@ -648,7 +655,7 @@ def _search_mixkit(query: str, orientation: str, opener=None) -> list[dict]:
                 download_url=dl_url,
                 creator='Mixkit Studio',
                 source_url='https://mixkit.co/free-stock-video/',
-                license='Mixkit Stock Video Free License',
+                license='Check this item’s license on Mixkit',
                 attribution='Free HD Stock Video on Mixkit'
             ))
     if orientation == 'portrait':
@@ -703,7 +710,7 @@ def _search_youtube(query: str, orientation: str, max_duration: float) -> list[d
             download_url=dl_url,
             creator=creator,
             source_url=dl_url,
-            license='YouTube / Google Video',
+            license='Check permission with the source creator',
             attribution=f'Video by {creator} on YouTube'
         ))
         if len(results) >= 24:

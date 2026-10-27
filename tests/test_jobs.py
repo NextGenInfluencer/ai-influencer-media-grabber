@@ -1,3 +1,4 @@
+import tests._isolation  # Must precede application imports.
 import sys
 import threading
 import time

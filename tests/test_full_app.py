@@ -1,4 +1,5 @@
 """Exercise the real Flask app with isolated data and deterministic downloader results."""
+import tests._isolation  # Must precede application imports.
 import importlib
 import json
 import os
@@ -12,10 +13,11 @@ class FullAppTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         (Path(__file__).resolve().parents[1] / 'audit_artifacts').mkdir(exist_ok=True)
-        cls.temp = tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parents[1] / 'audit_artifacts')
+        cls.temp = tempfile.TemporaryDirectory(dir=tests._isolation.DATA_ROOT)
         cls.root = Path(cls.temp.name)
         with patch.dict(os.environ, MEDIA_GRABBER_DATA_DIR=str(cls.root)):
             cls.module = importlib.import_module('app_local')
+        tests._isolation.assert_isolated(cls.module.DEFAULT_SAVE_DIR)
         cls.client = cls.module.app.test_client()
         cls.client.get('/')
         with cls.client.session_transaction() as session:

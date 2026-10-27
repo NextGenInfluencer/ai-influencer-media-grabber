@@ -1,4 +1,5 @@
 """Caption validation and complete media workflow with real FFmpeg rendering."""
+import tests._isolation  # Must precede application imports.
 import copy
 import io
 import json
@@ -332,7 +333,7 @@ class CaptionWorkflowTests(unittest.TestCase):
         response=self.client.post('/api/captions',data={'video':(io.BytesIO(self.source.read_bytes()),'sample.mp4')})
         pid = self.j(response)['id']
         data = self.wait(pid)
-        data['cues']=[dict(start=0,end=1,text='Keep me',words=[])]
+        data['cues']=[dict(start=.2,end=1,text='Keep me',words=[])]
         self.client.put('/api/captions/'+pid,json=data)
         options=dict(text='Hello world',language='en',start=.2,end=1.8)
         self.assertEqual(self.client.post(f'/api/captions/{pid}/align',json={**options,'language':''}).status_code,400)
@@ -402,6 +403,60 @@ class CaptionWorkflowTests(unittest.TestCase):
             self.wait(pid)
             self.assertEqual(languages[-1],'ko')
         self.assertEqual([c['text'] for c in after['cues']],[c['text'] for c in data['cues']])
+
+    def test_lyric_range_preserves_other_captions_and_rejects_partial_lines(self):
+        pid,data=self.karaoke_project()
+        data['cues']=[dict(start=.1,end=.8,text='Hello there',words=[]),
+                      dict(start=1,end=1.9,text='Keep this line',words=[])]
+        data=self.j(self.client.put('/api/captions/'+pid,json=data))
+        invalid=self.client.post(f'/api/captions/{pid}/correct-lyrics',json=dict(text='Hello world',start=.3,end=.9))
+        self.assertEqual(invalid.status_code,400)
+        self.assertEqual(self.client.get('/api/captions/'+pid).json['cues'],data['cues'])
+        self.client.post(f'/api/captions/{pid}/correct-lyrics',json=dict(text='Hello world',start=0,end=.9))
+        after=self.wait(pid)
+        self.assertEqual(after['cues'][0]['text'],'Hello world')
+        self.assertEqual(after['cues'][1],data['cues'][1])
+        aligned={'segments':[{'words':[dict(word='Bonjour',start=.1,end=.7)]}]}
+        with patch('captions.align_lyrics',return_value=aligned):
+            self.client.post(f'/api/captions/{pid}/align',json=dict(text='Bonjour',language='fr',start=0,end=.9))
+            after=self.wait(pid)
+        self.assertEqual(after['cues'][0]['text'],'Bonjour')
+        self.assertEqual(after['cues'][1],data['cues'][1])
+
+    def test_interrupted_karaoke_resumes_completed_lines_without_replacing_edits(self):
+        pid,before=self.karaoke_project()
+        entered,release=threading.Event(),threading.Event()
+        calls=[]
+        def result(text):
+            return {'segments':[{'words':[dict(word=w,start=.05+i*.25,end=.2+i*.25) for i,w in enumerate(text.split())]}]}
+        def align(model,audio,text,language):
+            calls.append(text)
+            if len(calls)==2:
+                entered.set();release.wait(5)
+            return result(text)
+        with patch('captions.align_caption_words',side_effect=align):
+            self.client.post(f'/api/captions/{pid}/karaoke',json=dict(revision=before['revision'],language='auto'))
+            try:
+                self.assertTrue(entered.wait(5));job_process.cancel_all()
+            finally:
+                release.set()
+            cancelled=self.wait(pid,'error')
+        self.assertEqual(cancelled['cues'],before['cues'])
+        progress_path=self.root/'library'/'Caption Projects'/pid/'karaoke-progress.json'
+        interrupted_progress=progress_path.read_bytes()
+        with patch('captions.align_caption_words',side_effect=lambda m,a,t,l:result(t)) as resumed:
+            self.client.post(f'/api/captions/{pid}/karaoke',json=dict(revision=cancelled['revision'],language='auto',resume=True))
+            after=self.wait(pid)
+        self.assertEqual(resumed.call_count,1)
+        self.assertAlmostEqual(after['cues'][0]['words'][0]['start'],.15)
+        self.assertEqual([c['text'] for c in after['cues']],[c['text'] for c in before['cues']])
+        progress_path.write_bytes(interrupted_progress)
+        after['cues'][0].update(text='Edited words',words=[])
+        edited=self.j(self.client.put('/api/captions/'+pid,json=after))
+        self.client.post(f'/api/captions/{pid}/karaoke',json=dict(revision=edited['revision'],language='auto',resume=True))
+        rejected=self.wait(pid,'error')
+        self.assertEqual(rejected['cues'],edited['cues'])
+        self.assertIn('changed',rejected['status'])
 
     def test_composition_edit_trim_restore_duplicate_and_originals(self):
         import creator_composition as comp
@@ -490,8 +545,8 @@ class CaptionWorkflowTests(unittest.TestCase):
         pid,before=self.karaoke_project()
         entered,release=threading.Event(),threading.Event()
         from creator_composition import render_args
-        def delayed(*args):
-            entered.set();release.wait(5);job_process.check_cancelled();return render_args(*args)
+        def delayed(*args, **kwargs):
+            entered.set();release.wait(5);job_process.check_cancelled();return render_args(*args, **kwargs)
         with patch('captions.composition_model.render_args',side_effect=delayed):
             self.client.post(f'/api/captions/{pid}/composition',data=dict(revision=before['revision'],settings=json.dumps(before['studio']['settings'])))
             try:
@@ -812,8 +867,9 @@ class CaptionWorkflowTests(unittest.TestCase):
         }
         ass_words_tw = ass_text(project_words)
         word_lines = [line for line in ass_words_tw.splitlines() if line.startswith('Dialogue: 0,')]
-        self.assertEqual(len(word_lines), 3)
-        self.assertIn('Singing', word_lines[0])
+        self.assertGreater(len(word_lines), 3)
+        self.assertNotIn('Singing', word_lines[0])
+        self.assertIn('Singing', '\n'.join(word_lines))
         self.assertNotIn('song', word_lines[0])
         self.assertIn('song', word_lines[-1])
 
@@ -860,6 +916,14 @@ class CaptionWorkflowTests(unittest.TestCase):
         try:
             self.assertTrue(custom_file.is_file())
             self.assertIn(family, CUSTOM_FONTS)
+            conflict=self.client.post('/api/captions/fonts/upload',data={
+                'font_file':(io.BytesIO(raw_bytes+b'\0'),'same-family.ttf')})
+            self.assertEqual(conflict.status_code,400)
+            self.assertEqual(custom_file.read_bytes(),raw_bytes)
+            served=self.client.get(up_data['url'])
+            self.assertEqual(served.status_code,200)
+            self.assertEqual(served.data,raw_bytes)
+            served.close()
 
             # 6. Verify font is returned in font list
             list_res = self.client.get('/api/captions/fonts')

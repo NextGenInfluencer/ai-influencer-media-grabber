@@ -1,5 +1,6 @@
 """Local caption projects, validated subtitle data and non-destructive rendering."""
 import io
+import hashlib
 import copy
 import json
 import math
@@ -47,12 +48,20 @@ BUNDLED_FONTS = {
 }
 FONTS.update(BUNDLED_FONTS)
 FONT_DIR = Path(__file__).resolve().parent / 'static' / 'fonts'
-CUSTOM_FONT_DIR = FONT_DIR / 'custom'
+CUSTOM_FONT_DIR = Path(os.environ.get('MEDIA_GRABBER_DATA_DIR') or Path.home() / 'Documents' / 'Media Grabber') / 'Fonts'
 CUSTOM_FONTS = {}
 
 
 def refresh_custom_fonts():
     CUSTOM_FONTS.clear()
+    legacy = FONT_DIR / 'custom'
+    if legacy.is_dir():
+        for old in legacy.glob('*.*'):
+            if old.suffix.lower() in ('.ttf', '.otf'):
+                CUSTOM_FONT_DIR.mkdir(parents=True, exist_ok=True)
+                target = CUSTOM_FONT_DIR / old.name
+                if not target.exists():
+                    shutil.copy2(old, target)
     if CUSTOM_FONT_DIR.is_dir():
         for font_file in CUSTOM_FONT_DIR.glob('*.*'):
             if font_file.suffix.lower() in ('.ttf', '.otf'):
@@ -340,6 +349,15 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text'
         pieces = [(cue['start'], cue['end'], None)]
         if use_words:
             boundaries = sorted({cue['start'], cue['end'], *(w[k] for w in cue['words'] for k in ('start', 'end'))})
+            if anim == 'typewriter':
+                character_times = set(boundaries)
+                for word in cue['words']:
+                    reveal_duration = max(.08, word['end']-word['start']) * .85
+                    for index in range(1, len(word['text'])):
+                        instant = word['start'] + reveal_duration * index / len(word['text'])
+                        if instant < word['end']:
+                            character_times.add(instant)
+                boundaries = sorted(character_times)
             pieces = [(a, b, next((i for i, w in enumerate(cue['words']) if w['start'] <= (a+b)/2 < w['end']), None)) for a, b in zip(boundaries, boundaries[1:])]
         for start, end, active in pieces:
             if round(start*100) >= round(end*100):
@@ -357,7 +375,11 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text'
                     is_active = (i == active)
                     is_lit = (w['start'] <= mid) if style.get('cumulative') else (is_active and bool(style.get('karaoke')))
                     is_pop = is_active and bool(style.get('word_pop'))
-                    w_esc = escape(w['text'])
+                    text = w['text']
+                    if anim == 'typewriter' and is_active:
+                        count = max(1, min(len(text), math.ceil(len(text)*(mid-w['start'])/(max(.08,w['end']-w['start'])*.85))))
+                        text = text[:count]
+                    w_esc = escape(text)
                     if is_lit and is_pop:
                         parts.append(sep + r'{\c' + hl + r'&\fscx115\fscy115}' + w_esc + r'{\r}')
                     elif is_lit:
@@ -618,6 +640,8 @@ def match_lyrics_to_transcription(cues, lyrics, duration, language=None, model=N
 
     N = len(lyrics)
     M = len(cues)
+    if N * M > 1_000_000:
+        raise ValueError('Choose a shorter caption range to correct; this selection is too large to match safely.')
 
     # Compute similarity matrix between supplied lyrics and transcribed cues
     sim = [[0.0] * M for _ in range(N)]
@@ -694,7 +718,8 @@ def match_lyrics_to_transcription(cues, lyrics, duration, language=None, model=N
                 'start': c['start'],
                 'end': c['end'],
                 'score': score,
-                'matched': True
+                'matched': True,
+                'original': c
             })
         elif l_idx is not None:
             items.append({
@@ -804,6 +829,11 @@ def match_lyrics_to_transcription(cues, lyrics, duration, language=None, model=N
             karaoke = dict(state='review', note=f'Low confidence match ({int(it["score"]*100)}%). Verify line timing.')
         else:
             karaoke = dict(state='review', note='Lyrics matched to transcription. Listen and adjust word timings if needed.')
+
+        original = it.get('original')
+        if original and original['text'] == it['text'] and original['start'] == it['start'] and original['end'] == it['end'] and original.get('words'):
+            words = copy.deepcopy(original['words'])
+            karaoke = copy.deepcopy(original.get('karaoke', dict(state='aligned', note='Existing word timings retained.')))
 
         final_cues.append(dict(
             start=it['start'],
@@ -977,6 +1007,8 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
     def write(data):
         with lock:
             destination = folder(data['id']) / 'project.json'
+            if destination.exists() and not (destination.parent / 'pre-v3.1.4-project.json').exists():
+                shutil.copy2(destination, destination.parent / 'pre-v3.1.4-project.json')
             if destination.exists() and data.get('studio') and not (destination.parent / 'pre-studio-project.json').exists():
                 old = json.loads(destination.read_text(encoding='utf-8'))
                 if old.get('duration') and not old.get('studio'):
@@ -994,9 +1026,11 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                     time.sleep(.05 * (attempt + 1))
 
     def ffmpeg(args, cwd):
-        result = process.run([imageio_ffmpeg.get_ffmpeg_exe(), '-nostdin', '-y', *args], cwd=cwd, capture_output=True)
+        from assets import hwaccel
+        result = hwaccel.run_render([imageio_ffmpeg.get_ffmpeg_exe(), '-nostdin', '-y', *args], cwd=cwd, runner=process.run)
         if result.returncode:
             raise ValueError('Video processing failed: ' + result.stderr.decode('utf-8', errors='replace')[-700:])
+        return getattr(result, 'video_encoder', '')
 
     def launch(data, action, work):
         with lock:
@@ -1229,12 +1263,13 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                         raise ValueError('Invalid clip sequence entry.')
                     dur = composition_model.finite(item.get('duration', 0), 0, 1200)
                     spd = composition_model.finite(item.get('speed', 1.0), 0.25, 4.0)
+                    source_start = composition_model.finite(item.get('source_start', 0), 0, 7200)
                     if item.get('asset'):
                         a_key = str(item['asset']).strip()
                         if a_key not in assets:
                             raise ValueError(f'Missing clip asset: {a_key}')
                         c_name = str(item.get('name') or assets[a_key].get('name') or assets[a_key]['file'])[:120]
-                        resolved_seq.append(dict(asset=a_key, name=c_name, duration=dur, speed=spd))
+                        resolved_seq.append(dict(asset=a_key, name=c_name, duration=dur, speed=spd, source_start=source_start))
                     elif item.get('upload_index') is not None:
                         idx = int(item['upload_index'])
                         if idx < 0 or idx >= len(clip_uploads) or not clip_uploads[idx] or not clip_uploads[idx].filename:
@@ -1251,7 +1286,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                         c_key = 'clip_'+uuid.uuid4().hex[:8]
                         c_name = str(item.get('name') or Path(up_name).name)[:120]
                         assets[c_key] = dict(file=fname, kind='image' if ext in composition_model.IMAGES else 'video', name=c_name)
-                        resolved_seq.append(dict(asset=c_key, name=c_name, duration=dur, speed=spd))
+                        resolved_seq.append(dict(asset=c_key, name=c_name, duration=dur, speed=spd, source_start=source_start))
                     elif item.get('path'):
                         lib_path = str(item['path'])
                         if not is_allowed_media(lib_path) or not Path(lib_path).is_file():
@@ -1269,7 +1304,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                         if isinstance(item.get('provenance'), dict):
                             c_entry['provenance'] = composition_model.validate_provenance(item['provenance'])
                         assets[c_key] = c_entry
-                        resolved_seq.append(dict(asset=c_key, name=c_name, duration=dur, speed=spd))
+                        resolved_seq.append(dict(asset=c_key, name=c_name, duration=dur, speed=spd, source_start=source_start))
                     else:
                         raise ValueError('Clip entry must reference an asset, library path, or upload.')
                 if request.form.get('clear_background') == 'true':
@@ -1305,7 +1340,6 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                         settings['end'] = source_duration  # Legacy video frame rounding.
                     clean = composition_model.validate(settings,source_duration)
                     assets['audio']['duration'] = source_duration
-                    studio = composition_model.schema(assets,clean,d['style'])
                     bg = assets.get('background')
                     has_audio = False
                     if clean['background_volume']:
@@ -1314,13 +1348,12 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                             v_file = f / va['file']
                             if v_file.is_file():
                                 probe = process.run([imageio_ffmpeg.get_ffmpeg_exe(), '-i', str(v_file)], capture_output=True)
-                                if b'Audio:' in probe.stderr:
-                                    has_audio = True
-                                    va['has_audio'] = True
-                                    break
+                                va['has_audio'] = b'Audio:' in probe.stderr
+                                has_audio = has_audio or va['has_audio']
+                    studio = composition_model.schema(assets,clean,d['style'])
                     d['status'] = 'Applying background and audio settings…'
                     write(d)
-                    ffmpeg(composition_model.render_args(studio,f,output,has_audio,False),f)
+                    ffmpeg(composition_model.render_args(studio,f,output,has_audio,False,include_sticker=False),f)
                     preview_and_peaks(d,f,output,preview)
                     process.check_cancelled()
                     old_settings = d['studio']['settings']
@@ -1335,7 +1368,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                     backup = composition_snapshot(read(pid))
                     d.update(studio=studio,source=output,preview=preview,duration=duration,
                              width=composition_model.SHAPES[clean['shape']][0],height=composition_model.SHAPES[clean['shape']][1],
-                             cues=cues,composition={**clean, 'fx_baked': False},composition_backup=backup,missing_assets=[])
+                             cues=cues,composition={**clean, 'fx_baked': False, 'sticker_baked': False},composition_backup=backup,missing_assets=[])
                     if delta or duration != backup['duration']:
                         d.pop('karaoke_backup',None)
                     if any(p.name == assets['audio']['file'] for p in added):
@@ -1499,6 +1532,10 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             if index is not None and (type(index) is not int or not 0 <= index < len(data['cues'])):
                 raise ValueError('Select a valid caption line.')
             indices = list(range(len(data['cues']))) if index is None else [index]
+            if options.get('only_review'):
+                indices = [i for i in indices if not data['cues'][i].get('words') or data['cues'][i].get('karaoke',{}).get('state') in {'review','estimated','edited'}]
+            if not indices:
+                raise ValueError('No lines need another timing pass.')
             def work(d, f):
                 model = get_whisper()
                 if model is None:
@@ -1506,12 +1543,27 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                 # Decode once, then read bounded cue slices rather than loading a full song into RAM.
                 audio_file = f / 'karaoke.wav'
                 pending = copy.deepcopy(d['cues'])
+                progress_file = f / 'karaoke-progress.json'
+                signature = hashlib.sha256(json.dumps([d['source'], language, pending],ensure_ascii=False).encode()).hexdigest()
+                completed = set()
+                if options.get('resume'):
+                    if not progress_file.exists():
+                        raise ValueError('No interrupted karaoke job to resume. Use Add Karaoke or Retry uncertain lines.')
+                    progress = json.loads(progress_file.read_text(encoding='utf-8'))
+                    if progress.get('signature') != signature:
+                        raise ValueError('Lyrics, timing, audio or language changed. Start a new karaoke pass.')
+                    recovered = validate_edit(dict(cues=progress['cues']),d['duration'])['cues']
+                    completed = {i for i in progress['completed'] if type(i) is int and 0 <= i < len(pending)}
+                    for i in completed:
+                        pending[i] = recovered[i]
                 try:
                     ffmpeg(['-i', d['source'], '-t', str(d['duration']), '-vn', '-ac', '1',
                             '-ar', '16000', '-c:a', 'pcm_s16le', audio_file.name], f)
                     with wave.open(str(audio_file), 'rb') as audio:
                         for count, i in enumerate(indices):
                             process.check_cancelled()
+                            if i in completed:
+                                continue
                             cue = pending[i]
                             greek = bool(re.search(r'[\u0370-\u03ff\u1f00-\u1fff]', cue['text']))
                             latin = bool(re.search(r'[a-zA-Z]', cue['text']))
@@ -1529,8 +1581,10 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                                     if not greek and not korean:
                                         chosen = detect_caption_language(model, samples, candidates)
                                 result = align_caption_words(model, samples, cue['text'], chosen)
-                                words = aligned_cues(result, [cue['text']], cue['start'], d['duration'], cue['end']-cue['start'], recover=True)[0]['words']
-                                notes = []
+                                process.check_cancelled()
+                                aligned = aligned_cues(result, [cue['text']], cue['start'], d['duration'], cue['end']-cue['start'], recover=True)[0]
+                                words = aligned['words']
+                                notes = [aligned['karaoke']['note']] if aligned.get('karaoke',{}).get('state') == 'review' else []
                                 if any(w['end']-w['start'] < .06 for w in words):
                                     notes.append('Very short word timings; check against the vocals.')
                                 if (greek or korean) and latin or language in composition_model.MIXED:
@@ -1543,20 +1597,23 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                                         w['start'] = max(prev_w, min(c_e - 0.001 * (n_w - idx), float(w['start'])))
                                         w['end'] = max(w['start'] + 0.001, min(c_e - 0.001 * (n_w - 1 - idx), float(w['end'])))
                                         prev_w = w['end']
-                                    words[0]['start'] = c_s
-                                    words[-1]['end'] = c_e
                                 cue['words'] = words
                                 cue['karaoke'] = dict(state='review' if notes else 'aligned', note=' '.join(notes), language=chosen)
                             except (ValueError, KeyError, TypeError) as exc:
                                 process.check_cancelled()
                                 note = str(exc)[:220] + (' Existing word timings were kept.' if cue['words'] else ' No word timings were added.')
                                 cue['karaoke'] = dict(state='review', note=note, language=chosen)
+                            completed.add(i)
+                            progress_temp = progress_file.with_suffix('.tmp')
+                            progress_temp.write_text(json.dumps(dict(signature=signature,cues=pending,completed=sorted(completed)),ensure_ascii=False),encoding='utf-8')
+                            os.replace(progress_temp,progress_file)
                             d['status'] = f'Adding karaoke timing: {count+1}/{len(indices)} lines. Changes apply when the job finishes.'
                             write(d)
                     pending = validate_edit(dict(cues=pending, style=d['style']), d['duration'])['cues']
                     process.check_cancelled()
                     d['karaoke_backup'] = dict(cues=copy.deepcopy(d['cues']), timing=d['timing'])
                     d['cues'] = pending
+                    progress_file.unlink(missing_ok=True)
                 finally:
                     audio_file.unlink(missing_ok=True)
             return launch(data, 'Adding karaoke timing while preserving subtitle lines…', work)
@@ -1592,6 +1649,8 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             end = number(options.get('end', data['duration']), 0, data['duration'])
             if end - start < .1 or end - start > 1200:
                 raise ValueError('Select an audio range between 0.1 seconds and 20 minutes.')
+            if any(c['start'] < start < c['end'] or c['start'] < end < c['end'] for c in data['cues']):
+                raise ValueError('Choose range boundaries between caption lines so existing captions can be preserved.')
             def work(d, f):
                 audio_file = f / 'alignment.wav'
                 try:
@@ -1608,7 +1667,10 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                     cues = aligned_cues(result, lines, start, d['duration'], end-start, recover=True)
                     process.check_cancelled()
                     d['karaoke_backup'] = dict(cues=copy.deepcopy(d['cues']), timing=d['timing'])
-                    d.update(cues=cues, timing='aligned')
+                    outside = [c for c in d['cues'] if c['end'] <= start or c['start'] >= end]
+                    combined = sorted(outside + cues, key=lambda c:c['start'])
+                    validate_edit(dict(cues=combined), d['duration'])
+                    d.update(cues=combined, timing='aligned')
                     flagged = sum(c.get('karaoke',{}).get('state') == 'review' for c in cues)
                     if flagged:
                         d['_completion_notice'] = f'Lyrics updated. {flagged} lines contain estimated word timings — use Next line to review.'
@@ -1627,11 +1689,21 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             options = request.get_json() or {}
             lines = lyric_lines(options.get('text', ''))
             language = options.get('language', '')
+            start = number(options.get('start', 0), 0, data['duration'])
+            end = number(options.get('end', data['duration']), start, data['duration'])
+            selected_cues = [c for c in data['cues'] if c['start'] >= start and c['end'] <= end]
+            if not selected_cues:
+                raise ValueError('Choose a range containing complete caption lines.')
+            if any(c['start'] < start < c['end'] or c['start'] < end < c['end'] for c in data['cues']):
+                raise ValueError('Choose range boundaries between caption lines.')
             def work(d, f):
                 process.check_cancelled()
-                matched = match_lyrics_to_transcription(
-                    d['cues'], lines, d['duration'], language=language
-                )
+                shifted = composition_model.shift_cues(selected_cues, -start, end-start)
+                matched = match_lyrics_to_transcription(shifted, lines, end-start, language=language)
+                matched = composition_model.shift_cues(matched, start, d['duration'])
+                outside = [c for c in d['cues'] if c['end'] <= start or c['start'] >= end]
+                matched = sorted(outside + matched,key=lambda c:c['start'])
+                validate_edit(dict(cues=matched),d['duration'])
                 process.check_cancelled()
                 d['karaoke_backup'] = dict(cues=copy.deepcopy(d['cues']), timing=d['timing'])
                 d.update(cues=matched, timing='aligned')
@@ -1683,7 +1755,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                     if q_spec.get('max_side') == 720:
                         scale_vf = "scale=w='min(720,iw)':h='min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2"
                     elif q_spec.get('max_side') == 2160:
-                        scale_vf = "scale=w='if(gt(iw,ih),3840,2160)':h='if(gt(iw,ih),2160,3840)':force_original_aspect_ratio=increase:force_divisible_by=2"
+                        scale_vf = "scale=w='if(gt(iw,ih),3840,2160)':h='if(gte(iw,ih),2160,3840)':force_original_aspect_ratio=increase:force_divisible_by=2"
                     else:
                         scale_vf = 'scale=trunc(iw/2)*2:trunc(ih/2)*2'
                     if q_spec.get('fps'):
@@ -1693,17 +1765,42 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                     args = ['-i', d['source'], '-map', '0:v:0', '-map', '0:a:0?', '-vf', ','.join(vf_chain)]
                     if af_chain:
                         args += ['-af', ','.join(af_chain)]
+                    if d.get('composition') and d.get('studio'):
+                        # Render original assets in one pass, avoiding another encode of the preview.
+                        studio = copy.deepcopy(d['studio'])
+                        for key in ('video_filter', 'vignette', 'film_grain', 'sharpen', 'chromatic',
+                                    'noise_cancel', 'voice_isolation', 'audio_effect'):
+                            studio['settings'][key] = style_cfg[key]
+                        has_audio = False
+                        for asset in studio['assets'].values():
+                            if asset.get('kind') == 'video' and 'has_audio' not in asset:
+                                probe = process.run([imageio_ffmpeg.get_ffmpeg_exe(), '-i', str(composition_model.local_asset(f,asset))],capture_output=True)
+                                asset['has_audio'] = b'Audio:' in probe.stderr
+                            has_audio = has_audio or bool(asset.get('has_audio'))
+                        size = composition_model.SHAPES[studio['settings']['shape']]
+                        if quality == '4k':
+                            size = tuple(x*2 for x in size)
+                        fps = 60 if quality == '60fps' else 30
+                        composed = composition_model.render_args(studio,f,temporary.name,has_audio,True,fps=fps,output_size=size)
+                        # Keep inputs, graph and maps; apply the chosen encoder below.
+                        args = composed[:composed.index('-c:v')]
+                        gi = args.index('-filter_complex')+1
+                        args[gi] = args[gi].replace('[out]', '[composed]') + f';[composed]ass={ass.name}:fontsdir=caption_fonts,{scale_vf}[out]'
+                        if preview:
+                            ti = args.index('-t', args.index('-filter_complex'))
+                            args[ti+1] = str(min(5,d['duration']-start))
                     if preview:
                         args += ['-ss', str(start), '-t', str(min(5, d['duration']-start))]
                     try:
-                        import hwaccel
-                        enc_args = hwaccel.get_video_encoder_args(codec='h264', quality=quality)
+                        from assets import hwaccel
+                        enc_args = hwaccel.get_video_encoder_args(codec='h264', quality=quality, force_cpu=bool(options.get('force_cpu')))
                     except Exception:
                         enc_args = ['-c:v', 'libx264', '-preset', q_spec['preset'], '-crf', q_spec['crf']]
-                    ffmpeg([*args, *enc_args, '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', q_spec['audio_bitrate'], '-movflags', '+faststart', temporary.name], f)
+                    completed_encoder = ffmpeg([*args, *enc_args, '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', q_spec['audio_bitrate'], '-movflags', '+faststart', temporary.name], f)
                     os.replace(temporary, f / output)
                     d['exports'].append(output)
                     d['last_render'] = output
+                    d['_completion_notice'] = f'Export ready ({completed_encoder or "CPU"}).'
                 finally:
                     ass.unlink(missing_ok=True)
                     temporary.unlink(missing_ok=True)
@@ -1871,9 +1968,15 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
         refresh_custom_fonts()
         return jsonify(
             bundled=list(BUNDLED_FONTS.keys()),
-            custom=[{'family': k, 'filename': v, 'url': f'/static/fonts/custom/{v}'} for k, v in CUSTOM_FONTS.items()],
+            custom=[{'family': k, 'filename': v, 'url': f'/api/captions/fonts/file/{v}'} for k, v in CUSTOM_FONTS.items()],
             all=sorted(FONTS)
         )
+
+    @bp.get('/api/captions/fonts/file/<name>')
+    def custom_font_file(name):
+        if name not in CUSTOM_FONTS.values() or Path(name).name != name:
+            return jsonify(error='Font not found.'), 404
+        return send_file(CUSTOM_FONT_DIR / name)
 
     @bp.post('/api/captions/fonts/upload')
     def upload_custom_font():
@@ -1910,7 +2013,14 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             raise ValueError(f'Could not parse font: {e}')
 
         CUSTOM_FONT_DIR.mkdir(parents=True, exist_ok=True)
-        safe_filename = f"{re.sub(r'[^a-zA-Z0-9_]', '_', safe_stem)}{ext}"
+        if family_name in BUNDLED_FONTS and (FONT_DIR / BUNDLED_FONTS[family_name]).read_bytes() != raw_bytes:
+            raise ValueError('This family is bundled with the app. Choose a different family to preserve existing projects.')
+        if family_name in {'Arial', 'Verdana', 'Georgia', 'Impact', 'Trebuchet MS'}:
+            raise ValueError('This family is a system font used by existing projects. Choose a different family.')
+        safe_filename = hashlib.sha256(raw_bytes).hexdigest() + ext
+        existing = CUSTOM_FONTS.get(family_name)
+        if existing and (CUSTOM_FONT_DIR / existing).read_bytes() != raw_bytes:
+            raise ValueError("A different font with this family name is already installed. Existing projects have been preserved.")
         dest_path = CUSTOM_FONT_DIR / safe_filename
         dest_path.write_bytes(raw_bytes)
 
@@ -1920,7 +2030,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             success=True,
             family=family_name,
             filename=safe_filename,
-            url=f'/static/fonts/custom/{safe_filename}'
+            url=f'/api/captions/fonts/file/{safe_filename}'
         )
 
     # A stopped process cannot resume its background thread after app restart.

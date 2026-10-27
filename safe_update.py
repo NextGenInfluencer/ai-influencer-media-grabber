@@ -12,9 +12,9 @@ import zipfile
 
 MAX_BYTES = 100 * 1024 * 1024
 FILES = {'app_local.py', 'ai_prompter.py', 'cleaner.py', 'media_safety.py', 'captions.py', 'creator_composition.py', 'social_worker.py',
-         'reference_prep.py', 'carousel_studio.py', 'safe_update.py', 'ai_runtime.py', 'job_process.py', 'download_support.py', 'requirements.txt', 'requirements-ai.txt',
+         'reference_prep.py', 'carousel_studio.py', 'safe_update.py', 'ai_runtime.py', 'job_process.py', 'download_support.py', 'hwaccel.py', 'requirements.txt', 'requirements-ai.txt',
          'README.md', 'CHANGELOG.md'}
-DIRECTORIES = {'templates', 'static', 'assets', 'caption_fonts'}
+DIRECTORIES = {'templates', 'static', 'assets', 'caption_fonts', 'docs'}
 
 def atomic_json(path, value):
     path = Path(path)
@@ -57,6 +57,8 @@ def stage_archive(root, archive, version):
                 if not relative or member.is_dir():
                     continue
                 first = relative.split('/')[0]
+                if relative.startswith('static/fonts/custom/'):
+                    continue  # User uploads are never part of an application update.
                 if relative not in FILES and first not in DIRECTORIES:
                     continue
                 if relative.lower() in seen:

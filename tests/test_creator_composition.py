@@ -1,3 +1,4 @@
+import tests._isolation  # Must precede application imports.
 import copy
 import io
 import json
@@ -359,7 +360,7 @@ class CompositionDataTests(unittest.TestCase):
         self.assertEqual(results[0]['download_url'], 'https://assets.mixkit.co/videos/51275/51275-720.mp4')
         self.assertEqual(results[0]['height'], 1920)
         prov = comp.validate_provenance(results[0])
-        self.assertEqual(prov['license'], 'Mixkit Stock Video Free License')
+        self.assertEqual(prov['license'], 'Check this item’s license on Mixkit')
 
         yt_prov = comp.validate_provenance(dict(
             provider='youtube',
@@ -367,7 +368,7 @@ class CompositionDataTests(unittest.TestCase):
             source_url='https://www.youtube.com/watch?v=abc123XYZ',
             attribution='Video by Dance Channel on YouTube'
         ))
-        self.assertEqual(yt_prov['license'], 'YouTube / Google Video')
+        self.assertEqual(yt_prov['license'], 'Check permission with the source creator')
 
     def test_multi_clip_transitions_xfade_and_fadeblack(self):
         artifacts = Path(__file__).resolve().parents[1] / 'audit_artifacts'
@@ -407,8 +408,8 @@ class CompositionDataTests(unittest.TestCase):
             args = comp.render_args(studio, folder, 'test_trans.mp4', background_has_audio=False)
             fg = next(args[i+1] for i, a in enumerate(args) if a == '-filter_complex')
             self.assertIn('xfade=transition=fade', fg)
-            self.assertIn('offset=2.5', fg)
-            self.assertIn('offset=5.5', fg)
+            self.assertIn('offset=3.0', fg)
+            self.assertIn('offset=6.0', fg)
 
             # Test fade to black transition
             settings['sequence_transition'] = 'fadeblack'

@@ -1,4 +1,5 @@
 """Regression checks for the Creator Studio audit fixes; isolated data only."""
+import tests._isolation  # Must precede application imports.
 import subprocess
 import tempfile
 import unittest

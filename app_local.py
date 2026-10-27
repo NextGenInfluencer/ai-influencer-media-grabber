@@ -32,7 +32,7 @@ import math
 from media_safety import contained_path, safe_media_name, crop_filter, MEDIA_EXTENSIONS
 from ai_runtime import serialized, transcribe, translate_srt
 import creator_composition
-import hwaccel
+from assets import hwaccel
 from typing import Any, Optional, cast
 
 # --- Constants ---
@@ -780,7 +780,7 @@ def shazam_file(audio_path):
         print("Shazam error:", e)
         return None
 
-APP_VERSION = "3.1.3"
+APP_VERSION = "3.1.4"
 SERVER_START_TIME = time.time()
 
 # --- Active Job & Auto-Shutdown Watchdog State ---

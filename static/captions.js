@@ -101,7 +101,37 @@ const CaptionTiming = (() => {
         }
         return beats;
     }
-    return {validate, visualizerBars, detectBeats};
+    function splitSequence(sequence, total, time, loop=true) {
+        const fixed=sequence.reduce((sum,c)=>sum+Math.max(0,Number(c.duration)||0),0);
+        const autos=sequence.filter(c=>!(Number(c.duration)>0)).length;
+        const auto=autos?Math.max(.2,total>fixed?(total-fixed)/autos:total/sequence.length):5;
+        const clips=[];let t=0;
+        while(t<total-.05) {
+            for(const c of sequence) {
+                if(t>=total-.05)break;
+                const duration=Math.min(Number(c.duration)>0?Number(c.duration):auto,total-t);
+                if(duration<.05)throw Error('Clip duration is too short.');
+                clips.push({...c,duration});t+=duration;
+                if(clips.length>30)throw Error('Splitting this repeated sequence would exceed 30 clips. Increase clip durations first.');
+            }
+            if(!loop||autos||!sequence.length)break;
+        }
+        if(clips.length && t<total-.05)clips[clips.length-1].duration+=total-t;
+        t=0;
+        for(let i=0;i<clips.length;i++) {
+            const c=clips[i],end=t+c.duration;
+            if(time>=t&&time<end) {
+                const left=Number((time-t).toFixed(3)),right=Number((end-time).toFixed(3));
+                if(left<.1||right<.1)throw Error('Split point must be at least 0.1 seconds from a clip boundary.');
+                if(clips.length>=30)throw Error('A sequence can contain at most 30 clips.');
+                clips.splice(i,1,{...c,duration:left},{...c,duration:right,source_start:(Number(c.source_start)||0)+left*(Number(c.speed)||1)});
+                return clips;
+            }
+            t=end;
+        }
+        throw Error('Place the playhead inside a clip.');
+    }
+    return {validate, visualizerBars, detectBeats, splitSequence};
 })();
 if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
 /* Local caption editor. All imported text is rendered through textContent. */
@@ -204,6 +234,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
     function setBusy(value) {
         busy=value;
         for(const node of document.querySelectorAll('.style input,.style select,.style button,#selection input,#selection textarea,#selection button,.toolbar button,.toolbar select,#export,#renderCheck,#srt,#save,#paste,#subtitleFile,#videoFile,#openLibrary,#projects,#reload,#undo,#redo')) node.disabled=value || !project;
+        for(const node of document.querySelectorAll('#sequenceList input,#sequenceList select,#sequenceList button,#compSequenceList input,#compSequenceList select,#compSequenceList button'))node.disabled=value||!project;
         $('videoFile').disabled=value; $('projects').disabled=value; $('openLibrary').disabled=value;$('newSong').disabled=value;
         for(const id of ['editComposition','restoreComposition','duplicateProject','recoverEdits']) $(id).disabled=value||!project;
     }
@@ -336,7 +367,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
             // Use live form values so placement/face-snap changes show before Apply; fall back to saved settings.
             const stk={...compSet, ...liveStickerSettings()};
             const stickerAsset=project.studio?.assets?.sticker;
-            const hasStk=(stickerAsset || selectedEmoji) && (Number(stk.sticker_duration)>0);
+            const hasStk=(stickerAsset || selectedEmoji) && (Number(stk.sticker_duration)>0) && project.composition?.sticker_baked===false;
             const stkStart=Number(stk.sticker_start)||0;
             const stkDur=Number(stk.sticker_duration)||0;
             const inRange=hasStk && video.currentTime>=stkStart && video.currentTime<=(stkStart+stkDur);
@@ -361,7 +392,10 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
                 if(stk.sticker_anim==='pop' && elapsed<0.22) {
                     stTransform=`scale(${(0.5+0.5*(elapsed/0.22)).toFixed(2)})`;
                 } else if(stk.sticker_anim==='fade') {
-                    st.style.opacity=String(Math.max(0,Math.min(op, op*elapsed/0.2, op*remain/0.2)));
+                    const fade=Math.min(stk.sticker_duration/2,Number(stk.sticker_fade)||0);
+                    if(fade>0)st.style.opacity=String(Math.max(0,Math.min(op, op*elapsed/fade, op*remain/fade)));
+                } else if(stk.sticker_anim==='slide' && elapsed<0.22) {
+                    stTransform=`translateY(${-stageH*0.04*(1-elapsed/0.22)}px)`;
                 }
                 st.style.transform=stTransform;
                 if(selectedEmoji) {
@@ -509,8 +543,9 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
                     const wElapsed = Math.max(0, effectiveTime - w.start);
                     const wDur = Math.max(0.08, w.end - w.start);
                     const charProgress = Math.min(1, Math.max(0, wElapsed / (wDur * 0.85)));
-                    const charsToShow = Math.max(1, Math.min(w.text.length, Math.ceil(w.text.length * charProgress)));
-                    wordText = w.text.slice(0, charsToShow);
+                    const letters = Array.from(w.text);
+                    const charsToShow = Math.max(1, Math.min(letters.length, Math.ceil(letters.length * charProgress)));
+                    wordText = letters.slice(0, charsToShow).join('');
                 }
 
                 span.textContent=wordText;
@@ -721,6 +756,8 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
     const selectedStock={song:null,composition:null};
     let stockTarget='composition';
     let clipSequence=[];
+    let appliedSequence='[]';
+    const sequenceHasChanges=()=>JSON.stringify(clipSequence)!==appliedSequence;
     let clipSequenceSource=null;
     let reopenCompAfterStock=false;
     function syncSequenceFromProject(force=false) {
@@ -734,7 +771,8 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
                 asset:item.asset,
                 name:item.name||project.studio.assets?.[item.asset]?.name||project.studio.assets?.[item.asset]?.file||item.asset,
                 duration:Number(item.duration)||0,
-                speed:Number(item.speed)||1
+                speed:Number(item.speed)||1,
+                source_start:Number(item.source_start)||0
             }));
         } else if(project.studio.assets?.background) {
             const bg=project.studio.assets.background;
@@ -747,6 +785,13 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         } else {
             clipSequence=[];
         }
+        appliedSequence=JSON.stringify(clipSequence);
+        const draft=readDraft('sequence');
+        if(!force && draft?.source===project.source && Array.isArray(draft.clips))clipSequence=draft.clips;
+    }
+    function checkpointSequence() {
+        history.push({_sequence:clipSequence.map(c=>({...c}))});
+        if(history.length>80)history.shift();future=[];
     }
     function renderSequenceBox(container) {
         if(!container) return;
@@ -767,12 +812,12 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
 
             const actions=document.createElement('div');actions.className='seqActions';
             const leftBtn=document.createElement('button');leftBtn.type='button';leftBtn.className='seqIconBtn';leftBtn.textContent='◀';leftBtn.title='Move clip earlier';leftBtn.disabled=busy||idx===0;
-            leftBtn.onclick=()=>{const tmp=clipSequence[idx-1];clipSequence[idx-1]=clipSequence[idx];clipSequence[idx]=tmp;drawSequenceLists();};
+            leftBtn.onclick=()=>{checkpointSequence();const tmp=clipSequence[idx-1];clipSequence[idx-1]=clipSequence[idx];clipSequence[idx]=tmp;drawSequenceLists();};
             const rightBtn=document.createElement('button');rightBtn.type='button';rightBtn.className='seqIconBtn';rightBtn.textContent='▶';rightBtn.title='Move clip later';rightBtn.disabled=busy||idx===clipSequence.length-1;
-            rightBtn.onclick=()=>{const tmp=clipSequence[idx+1];clipSequence[idx+1]=clipSequence[idx];clipSequence[idx]=tmp;drawSequenceLists();};
+            rightBtn.onclick=()=>{checkpointSequence();const tmp=clipSequence[idx+1];clipSequence[idx+1]=clipSequence[idx];clipSequence[idx]=tmp;drawSequenceLists();};
 
             const delBtn=document.createElement('button');delBtn.type='button';delBtn.className='seqDelBtn';delBtn.textContent='✕';delBtn.title='Remove clip from sequence';delBtn.disabled=busy;
-            delBtn.onclick=()=>{clipSequence.splice(idx,1);drawSequenceLists();};
+            delBtn.onclick=()=>{checkpointSequence();clipSequence.splice(idx,1);drawSequenceLists();};
 
             actions.append(leftBtn,rightBtn,delBtn);
             row1.append(num,name,actions);
@@ -784,7 +829,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
             const durIcon=document.createElement('span');durIcon.className='seqFieldIcon';durIcon.textContent='⏱';
             const durInput=document.createElement('input');durInput.type='number';durInput.min='0';durInput.max='1200';durInput.step='0.5';
             durInput.value=String(item.duration||0);durInput.title='Clip duration in seconds (0 = Auto split song evenly)';durInput.disabled=busy;
-            durInput.onchange=()=>{item.duration=Math.max(0,Number(durInput.value)||0);drawSequenceLists();};
+            durInput.onchange=()=>{checkpointSequence();item.duration=Math.max(0,Number(durInput.value)||0);drawSequenceLists();};
             const durUnit=document.createElement('span');durUnit.className='seqFieldUnit';durUnit.textContent=(Number(item.duration)>0?'s':'s (Auto)');
             durWrap.append(durIcon,durInput,durUnit);
 
@@ -796,15 +841,27 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
                 if(Math.abs((Number(item.speed)||1)-o.v)<0.05) opt.selected=true;
                 spdSel.add(opt);
             });
-            spdSel.onchange=()=>{item.speed=Number(spdSel.value)||1;drawSequenceLists();};
+            spdSel.onchange=()=>{checkpointSequence();item.speed=Number(spdSel.value)||1;drawSequenceLists();};
             spdWrap.append(spdIcon,spdSel);
 
+            const source=document.createElement('input');source.type='number';source.min='0';source.max='7200';source.step='.01';
+            source.value=String(item.source_start||0);source.title='Source start (seconds)';source.setAttribute('aria-label','Source start (seconds)');source.disabled=busy;
+            source.onchange=()=>{checkpointSequence();item.source_start=Math.max(0,Number(source.value)||0);drawSequenceLists();};
+            const sourceRow=document.createElement('label');sourceRow.className='seqControls';sourceRow.textContent='Source start (s)';source.style.width='80px';sourceRow.append(source);
             row2.append(durWrap,spdWrap);
-            pill.append(row1,row2);
+            pill.append(row1,row2,sourceRow);
             container.append(pill);
         });
     }
     function drawSequenceLists() {
+        if(project) {
+            const saved=project.studio?.settings?.sequence||[];
+            const pending=sequenceHasChanges();
+            let notice=$('sequenceNotice');
+            if(!notice){notice=document.createElement('p');notice.id='sequenceNotice';notice.className='hint';$('sequenceList')?.after(notice);}
+            notice.textContent=pending?'Sequence edits are not applied. Apply the sequence before export.':'';
+            if(!clipSequence.some(c=>c.file))storeDraft('sequence',{source:project.source,clips:clipSequence});
+        }
         renderSequenceBox($('sequenceList'));
         renderSequenceBox($('compSequenceList'));
         if($('applyStockSequence')) {
@@ -973,12 +1030,12 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
                 if(item.file) {
                     const idx=uploadFiles.length;
                     uploadFiles.push(item.file);
-                    return {upload_index:idx,name:item.name,duration:dur,speed:spd};
+                    return {upload_index:idx,name:item.name,duration:dur,speed:spd,source_start:Number(item.source_start)||0};
                 }
                 if(item.path) {
-                    return {path:item.path,name:item.name,duration:dur,speed:spd,...(item.provenance?{provenance:item.provenance}:{})};
+                    return {path:item.path,name:item.name,duration:dur,speed:spd,source_start:Number(item.source_start)||0,...(item.provenance?{provenance:item.provenance}:{})};
                 }
-                return {asset:item.asset,name:item.name,duration:dur,speed:spd};
+                return {asset:item.asset,name:item.name,duration:dur,speed:spd,source_start:Number(item.source_start)||0};
             });
         }
         settings.sequence=seqPayload;
@@ -1023,6 +1080,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
     if($('seqBrowseStock')) $('seqBrowseStock').onclick=()=>openStockDialog('composition');
     function handleClipUpload(input) {
         if(!input?.files?.length) return;
+        checkpointSequence();
         Array.from(input.files).forEach(f=>clipSequence.push({file:f,name:f.name,duration:0}));
         const count=input.files.length;
         input.value='';
@@ -1035,17 +1093,20 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         const sel=$('seqLibrarySelect');
         if(!sel.value) return;
         const opt=sel.selectedOptions[0];
+        checkpointSequence();
         clipSequence.push({path:sel.value,name:opt?.textContent||sel.value,duration:0});
         sel.value='';
         drawSequenceLists();
         say(`Added "${opt?.textContent||'library clip'}" to sequence (${clipSequence.length} total). Click "Apply clip sequence" to render.`);
     };
     if($('seqEvenSplit')) $('seqEvenSplit').onclick=()=>{
+        checkpointSequence();
         clipSequence.forEach(c=>{c.duration=0;});
         drawSequenceLists();
         say('All clips set to 0s (Auto — song duration split evenly across all clips).');
     };
     if($('seqCycle10')) $('seqCycle10').onclick=()=>{
+        checkpointSequence();
         clipSequence.forEach(c=>{c.duration=10;});
         drawSequenceLists();
         say('All clips set to 10s each (clips will cycle every 10 seconds across the song).');
@@ -1069,70 +1130,12 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
             return;
         }
 
-        const fixedSum = clipSequence.reduce((sum, c) => sum + (Number(c.duration) > 0 ? Number(c.duration) : 0), 0);
-        const autoCount = clipSequence.filter(c => !(Number(c.duration) > 0)).length;
-        const autoDur = autoCount > 0 ? Math.max(0.1, (totalDuration > fixedSum ? (totalDuration - fixedSum) / autoCount : totalDuration / clipSequence.length)) : 5.0;
+        try {
+            const split=CaptionTiming.splitSequence(clipSequence,totalDuration,currTime,project.studio.settings.loop);
+            checkpointSequence();clipSequence=split;drawSequenceLists();switchDock('media');
+            say('Clip split. Apply the sequence to update the preview and export.');
+        } catch(error) { say(error.message,true); }
 
-        let t = 0;
-        let splitIdx = -1;
-        let clipStart = 0;
-        let clipDur = 0;
-
-        for (let i = 0; i < clipSequence.length; i++) {
-            const c = clipSequence[i];
-            const d = (Number(c.duration) > 0) ? Number(c.duration) : autoDur;
-            const segD = Math.min(d, Math.max(0, totalDuration - t));
-            if (currTime >= t && currTime < t + segD) {
-                splitIdx = i;
-                clipStart = t;
-                clipDur = segD;
-                break;
-            }
-            t += segD;
-            if (t >= totalDuration - 0.01) break;
-        }
-
-        if (splitIdx === -1) {
-            splitIdx = clipSequence.length - 1;
-            const lastC = clipSequence[splitIdx];
-            clipDur = (Number(lastC.duration) > 0) ? Number(lastC.duration) : autoDur;
-            clipStart = Math.max(0, totalDuration - clipDur);
-        }
-
-        const leftDur = Math.round((currTime - clipStart) * 100) / 100;
-        const rightDur = Math.round((clipDur - leftDur) * 100) / 100;
-
-        if (leftDur < 0.1 || rightDur < 0.1) {
-            say('Split point is too close to clip boundary (minimum 0.1s).', true);
-            return;
-        }
-
-        clipSequence.forEach((c, idx) => {
-            if (idx !== splitIdx && !(Number(c.duration) > 0)) {
-                c.duration = Math.round(autoDur * 100) / 100;
-            }
-        });
-
-        const orig = clipSequence[splitIdx];
-        const baseName = orig.name || `Clip ${splitIdx + 1}`;
-        const cleanName = baseName.replace(/\s*\(Part\s*\d+[a-z]?\)$/i, '');
-        const leftClip = {
-            ...orig,
-            name: `${cleanName} (Part 1)`,
-            duration: leftDur,
-            speed: orig.speed || 1
-        };
-        const rightClip = {
-            ...orig,
-            name: `${cleanName} (Part 2)`,
-            duration: rightDur,
-            speed: orig.speed || 1
-        };
-
-        clipSequence.splice(splitIdx, 1, leftClip, rightClip);
-        drawSequenceLists();
-        switchDock('media');
-        say(`✂️ Split clip into two parts at ${fmt(currTime)} (${leftDur}s and ${rightDur}s). Click "Apply clip sequence" to bake!`);
     }
     if($('seqSplitAtPlayhead')) $('seqSplitAtPlayhead').onclick=()=>splitClipAtPlayhead();
     if($('splitClip')) $('splitClip').onclick=()=>splitClipAtPlayhead();
@@ -1339,7 +1342,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
                             if(!$('songDialog').open) $('songDialog').showModal();
                         } else {
                             selectedStock.composition=saved;
-                            clipSequence.push({path:saved.path,name:saved.name,duration:0,provenance:saved.provenance});
+                            checkpointSequence();clipSequence.push({path:saved.path,name:saved.name,duration:0,provenance:saved.provenance});
                             addedCount++;
                             drawSequenceLists();
                             if(![...$('compLibrary').options].some(o=>o.value===saved.path)) $('compLibrary').append(new Option(saved.name,saved.path));
@@ -1384,7 +1387,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
             inputEl.value='';
             await refreshLibraries();
             if(project?.studio) {
-                clipSequence.push({path:saved.path,name:saved.title||saved.name,duration:0});
+                checkpointSequence();clipSequence.push({path:saved.path,name:saved.title||saved.name,duration:0});
                 drawSequenceLists();
                 if($('stockStatus')) $('stockStatus').textContent=`Grabbed "${saved.title||saved.name}" and added to your clip sequence (${clipSequence.length} clips total)! Click "✨ Apply" to render.`;
                 say(`Grabbed "${saved.title||saved.name}" and added to your video sequence (${clipSequence.length} clips). Click "✨ Apply Clip Sequence to Video" to render!`);
@@ -1478,7 +1481,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
             tag.id = 'dynamicCustomFonts';
             document.head.appendChild(tag);
         }
-        const rule = `@font-face { font-family: "${family}"; src: url("${url}"); font-display: swap; }`;
+        const rule = `@font-face { font-family: ${JSON.stringify(family)}; src: url(${JSON.stringify(url)}); font-display: swap; }`;
         if (!tag.textContent.includes(`"${family}"`)) {
             tag.textContent += '\n' + rule;
         }
@@ -1554,7 +1557,9 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
     });
     function undo(redo=false) {
         if(!project||busy)return;const source=redo?future:history,dest=redo?history:future;if(!source.length)return;
-        dest.push(snapshot());Object.assign(project,source.pop());selected=Math.min(selected,project.cues.length-1);changed();refresh();
+        const state=source.pop();
+        if(state._sequence){dest.push({_sequence:clipSequence.map(c=>({...c}))});clipSequence=state._sequence;drawSequenceLists();return;}
+        dest.push(snapshot());Object.assign(project,state);selected=Math.min(selected,project.cues.length-1);changed();refresh();
     }
     $('undo').onclick=()=>undo();$('redo').onclick=()=>undo(true);
     function saveLyricsDraft() {
@@ -1586,8 +1591,8 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
     $('correctLyrics').onclick=act(async()=>{
         if(!$('lyrics').value.trim())throw Error('Paste your correct lyrics first.');
         if(!project.cues?.length)throw Error('Transcribe the audio or import subtitles first so we have line timings to match.');
-        if(!confirm('Replace current caption text with your lyrics? Line timings will be preserved; you can restore the previous version if needed.'))return;
-        const options={text:$('lyrics').value,language:$('alignLanguage').value};
+        if(!confirm('Replace current caption text with your lyrics? Matched lines keep their timing; unmatched lines are estimated and flagged for review. You can restore the previous version.'))return;
+        const options={text:$('lyrics').value,language:$('alignLanguage').value,start:Number($('alignStart').value),end:Number($('alignEnd').value)};
         $('correctLyrics').disabled=true;
         try {checkpoint();await job('correct-lyrics',options);$('lyricsDialog').close();}
         finally {$('correctLyrics').disabled=false;}
@@ -1628,12 +1633,14 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         $('karaokeSummary').textContent=`${total-missing}/${total} lines have word timings · ${review} to review · ${missing} missing timings`+(project.style.karaoke?'':' · Enable Highlight the current word to preview karaoke.');
         $('restoreKaraoke').disabled=busy||!project.karaoke_backup;
     }
-    async function addKaraoke(index) {
+    async function addKaraoke(index, extra={}) {
         if(!project?.cues.length)throw Error('Import subtitles or add lines first.');
-        video.pause();checkpoint();await job('karaoke',{language:$('karaokeLanguage').value,index});
+        video.pause();checkpoint();await job('karaoke',{language:$('karaokeLanguage').value,index,...extra});
     }
     $('estimateMissing').onclick=act(()=>{if(!project||!confirm('Use evenly spaced estimates for all lines still missing word timings? These are not matched to the audio.'))return;timingEdit(()=>project.cues.filter(c=>!c.words?.length).forEach(c=>{const words=c.text.trim().split(/\s+/);c.words=words.map((text,i)=>({text,start:i===0?c.start:c.start+(c.end-c.start)*i/words.length,end:i===words.length-1?c.end:c.start+(c.end-c.start)*(i+1)/words.length}));c.karaoke={state:'estimated',note:'Evenly spaced estimates, not audio alignment'};}));});
     $('karaokeAll').onclick=act(()=>addKaraoke());
+    $('karaokeReview').onclick=act(()=>addKaraoke(undefined,{only_review:true}));
+    $('karaokeResume').onclick=act(()=>addKaraoke(undefined,{resume:true}));
     $('karaokeLine').onclick=act(()=>{if(current())return addKaraoke(selected);});
     $('nextReview').onclick=()=>{if(!project)return;for(let n=1;n<=project.cues.length;n++){const i=(Math.max(-1,selected)+n)%project.cues.length;if(needsReview(project.cues[i])){select(i);return;}}say('No lines are flagged. You can still review any line while listening.');};
     $('markReviewed').onclick=act(()=>{if(!current()?.words?.length)throw Error('Add word timings before marking this line reviewed.');edit(()=>{current().karaoke={...current().karaoke,state:'checked',note:'Reviewed manually'};});});
@@ -1642,8 +1649,8 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         if(project?.cues.length&&!confirm('Replace existing captions with automatic transcription? The current version stays saved if transcription fails.'))return;
         checkpoint();await job('transcribe',{language:$('language').value});
     });
-    $('renderCheck').onclick=act(()=>job('render',{preview:true,quality:$('renderQuality').value||'standard',start:Math.min(video.currentTime,Math.max(0,project.duration-.1))}));
-    $('export').onclick=act(()=>job('render',{preview:false,quality:$('renderQuality').value||'standard'}));
+    $('renderCheck').onclick=act(()=>{if(sequenceHasChanges())throw Error('Apply your clip sequence changes before rendering.');return job('render',{preview:true,quality:$('renderQuality').value||'standard',force_cpu:$('renderCpu').checked,start:Math.min(video.currentTime,Math.max(0,project.duration-.1))});});
+    $('export').onclick=act(()=>{if(sequenceHasChanges())throw Error('Apply your clip sequence changes before exporting.');return job('render',{preview:false,quality:$('renderQuality').value||'standard',force_cpu:$('renderCpu').checked});});
     $('srt').onclick=act(async()=>{await save();const a=document.createElement('a');a.href=`/api/captions/${project.id}/srt`;a.click();});
     $('stop').onclick=act(async()=>{if(confirm('Stop active app jobs, including downloads and caption processing?')){const d=await api('/api/cancel_all','POST',{});say(d.status||'Stopping…');}});
     $('closeRender').onclick=()=>{$('renderVideo').pause();$('renderDialog').close();};

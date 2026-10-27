@@ -32,13 +32,14 @@
     <h2 class="srOnly">Finish your video</h2>
     <label>Quality
       <select id="renderQuality">
-        <option value="standard">1080p HD (30fps)</option>
-        <option value="high">Studio HQ (CRF 15)</option>
-        <option value="60fps">Smooth 1080p (60fps)</option>
-        <option value="4k">4K Ultra HD (2160p)</option>
+        <option value="standard">Standard quality</option>
+        <option value="high">High quality</option>
+        <option value="60fps">60 fps output (frames may repeat)</option>
+        <option value="4k">4K output (upscales smaller sources)</option>
         <option value="draft">Fast 720p Draft</option>
       </select>
     </label>
+    <label><input type="checkbox" id="renderCpu"> Use CPU</label>
     <button id="renderCheck" title="Render a 5-second MP4 check at the playhead">5s Check</button>
     <button id="srt" title="Download SRT subtitles">SRT</button>
     <button id="stop" title="Stop active processing job">Stop</button>
@@ -128,7 +129,7 @@
               </div>
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">
                 <button id="seqSplitAtPlayhead" type="button" title="Split active clip into two at the current video playhead (Ctrl+B)" style="padding:5px 8px;font-size:11px;justify-content:center;">✂️ Split Playhead</button>
-                <button id="seqSyncBeats" type="button" title="Align clip cut points so transitions drop exactly on musical beats" style="padding:5px 8px;font-size:11px;justify-content:center;">⚡ Cut to Beat</button>
+                <button id="seqSyncBeats" type="button" title="Suggest clip cuts from audio peaks; review against the music" style="padding:5px 8px;font-size:11px;justify-content:center;">⚡ Suggest Beat Cuts</button>
               </div>
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">
                 <button id="seqEvenSplit" type="button" title="Set all clip durations to 0 (split song evenly)" style="padding:4px 8px;font-size:10.5px;justify-content:center;">Split evenly</button>
@@ -312,12 +313,12 @@
               <label>To (s)<input id="alignEnd" type="number" min="0" step=".01" style="width:70px;"></label>
             </div>
             <div class="row">
-              <button id="correctLyrics" class="primary" type="button" title="Keep current line timings and replace words with your exact lyrics">✨ Correct Transcription</button>
-              <button id="alignLyrics" class="primary" type="button" title="Run AI audio alignment to match lyrics to vocals">🎯 AI Sync to Audio</button>
+              <button id="correctLyrics" class="primary" type="button" title="Keep current line timings and replace words with your exact lyrics">Correct lyrics, keep timing</button>
+              <button id="alignLyrics" class="primary" type="button" title="Run AI audio alignment to match lyrics to vocals">Sync lyrics to audio</button>
               <button id="applyLyrics" type="button" title="Divide pasted lines evenly across the song">Even Split</button>
               <button id="cancelLyrics" type="button" hidden>Cancel</button>
             </div>
-            <p class="hint"><strong>Correct Transcription</strong> replaces misheard Whisper words with your exact lyrics while keeping line timings. <strong>AI Sync to Audio</strong> aligns pasted lyrics directly to the audio.</p>
+            <p class="hint"><strong>Correct lyrics</strong> keeps matched line timings and flags uncertain matches. Unchanged words retain their timing; changed words initially use estimates. <strong>Sync lyrics to audio</strong> calculates new timing. Both use the selected range and preserve captions outside it. Use karaoke timing next to align corrected words.</p>
           </div>
 
           <div class="subCard stackForm">
@@ -335,6 +336,8 @@
             </div>
             <div class="row">
               <button id="karaokeAll" class="primary" type="button">🎤 Add Karaoke Timing to All Lines</button>
+              <button id="karaokeReview" type="button">Retry uncertain lines</button>
+              <button id="karaokeResume" type="button">Resume interrupted timing</button>
               <button id="estimateMissing" type="button">Estimate Missing</button>
               <button id="restoreKaraoke" type="button">↶ Undo Karaoke</button>
             </div>

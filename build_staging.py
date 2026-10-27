@@ -76,7 +76,7 @@ def clean_directory(dir_path):
 
 def main():
     print("\n=======================================================")
-    print(" AI Influencer Media Grabber - Staging Builder v3.1.3")
+    print(" AI Influencer Media Grabber - Staging Builder v3.1.4")
     print("=======================================================\n")
 
     os.makedirs(CACHE_DIR, exist_ok=True)
@@ -138,39 +138,22 @@ def main():
 
     # 7. Copy Application Code & Assets
     print("Copying application files...")
-    files_to_copy = [
-        "app_local.py",
-        "ai_prompter.py",
-        "cleaner.py",
-        "media_safety.py",
-        "safe_update.py",
-        "ai_runtime.py",
-        "job_process.py",
-        "download_support.py",
-        "reference_prep.py",
-        "hwaccel.py",
-        "captions.py",
-        "creator_composition.py", "carousel_studio.py", "social_worker.py",
-        "launch-silent.vbs",
-        "run.bat",
-        "install_ai.bat",
-        "requirements.txt",
-        "requirements-ai.txt",
-        "README.md",
-        "CHANGELOG.md",
-        "RELEASE_NOTES.md"
-    ]
+    # The updater and installer share the application payload manifest.
+    from safe_update import FILES, DIRECTORIES
+    files_to_copy = sorted(FILES | {
+        'launch-silent.vbs', 'run.bat', 'install_ai.bat', 'RELEASE_NOTES.md'
+    })
     for fn in files_to_copy:
         src = os.path.join(ROOT_DIR, fn)
         if os.path.exists(src):
             shutil.copy2(src, os.path.join(STAGING_DIR, fn))
 
-    dirs_to_copy = ["templates", "assets", "static", "caption_fonts"]
+    dirs_to_copy = sorted(DIRECTORIES)
     for dn in dirs_to_copy:
         src = os.path.join(ROOT_DIR, dn)
         dst = os.path.join(STAGING_DIR, dn)
         if os.path.exists(src):
-            shutil.copytree(src, dst, dirs_exist_ok=True)
+            shutil.copytree(src, dst, dirs_exist_ok=True, ignore=lambda path, names: ['custom'] if os.path.normpath(path) == os.path.normpath(os.path.join(ROOT_DIR, 'static', 'fonts')) else [])
 
     # 8. Clean temporary caches from staging
     print("Purging bytecode caches from staging...")
@@ -224,13 +207,13 @@ def compile_installer():
 
     iss_file = os.path.join(ROOT_DIR, "installer.iss")
     print(f"Compiler: {iscc}")
-    print("Building dist\\AI-Influencer-Media-Grabber-v3.1.3-Setup.exe ...")
+    print("Building dist\\AI-Influencer-Media-Grabber-v3.1.4-Setup.exe ...")
     res = subprocess.run([iscc, "/Q", iss_file], cwd=ROOT_DIR)
     if res.returncode != 0:
         print("[ERROR] Inno Setup compilation failed!")
         return False
 
-    output_exe = os.path.join(DIST_DIR, "AI-Influencer-Media-Grabber-v3.1.3-Setup.exe")
+    output_exe = os.path.join(DIST_DIR, "AI-Influencer-Media-Grabber-v3.1.4-Setup.exe")
     if os.path.exists(output_exe):
         size_mb = os.path.getsize(output_exe) / (1024 * 1024)
         print("\n=======================================================")

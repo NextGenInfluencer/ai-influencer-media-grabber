@@ -192,10 +192,11 @@ For AI features, install `requirements-ai.txt` into the **same environment** use
 
 ## Updates
 
-The in-app GitHub updater checks published releases and validates staged changes before applying them. Updates that change dependencies require the release installer. In particular, use the v2.5.0 installer when upgrading an older installed copy to the first Captions & Lyrics release. New source features listed above are not available through the published v2.5.0 installer yet.
+The in-app GitHub updater checks published releases and validates staged changes before applying them. Updates that change dependencies require the release installer. If an older installation cannot stage an update, use the latest release installer. Keep the same user-data folder to retain projects and downloads.
 
 | Version | Highlights |
 | --- | --- |
+| v3.1.4 | Reliable clip splitting, transitions and mixed audio; original-asset exports; CPU fallback; safer fonts and updater; resumable karaoke timing |
 | v3.1.3 | Creator Studio responsive preview scaling (no fullscreen letterbox), 2-row clip cards (zero overflow), macOS Aero UI, 4 viral caption presets |
 | v3.1.2 | Permanent fix for auto-shutdown / crash: disabled spontaneous watchdog timeout, rock-solid desktop session persistence |
 | v3.1.1 | Dynamic lyric animations, instant 60fps live animation preview, typewriter + karaoke sync, pro spring easing |
@@ -225,3 +226,16 @@ Run `python -m unittest discover -s tests -v`, `node tests/test_stream.js` and `
 See [caption implementation and next steps](CAPTIONS_PLAN.md). This is a focused creator toolkit: a full multitrack editor, integrated stock search, editable motion templates and advanced text animation remain future work.
 
 Media processing runs locally. Downloads, model acquisition, release checks and music recognition use online services. Use media you own or have permission to reuse and check stock-asset licensing before publishing.
+
+
+## v3.1.4 reliability update
+
+Clip splitting retains the correct source position. Clip cards now expose **Source start (s)**, and sequence changes can be undone before applying. Apply your sequence to refresh the preview before exporting.
+
+Song-video exports use original assets rather than re-encoding the prepared preview. **Use CPU** is available when troubleshooting GPU exports; recognized hardware encoder failures retry once on CPU. 4K can upscale smaller sources, and 60 fps does not invent missing motion detail.
+
+For lyrics, choose **Correct lyrics, keep timing** to fix transcription words, or **Sync lyrics to audio** to calculate new timings. Both operate on the selected range. Unchanged lines retain their word timings; changed or uncertain lines need karaoke alignment or listening review. Use **Retry uncertain lines** to keep good timings, or **Resume interrupted timing** after a cancelled karaoke pass. Use the five-second rendered check to inspect the exact export appearance.
+
+Custom font uploads are stored in your Media Grabber user-data folder and are preserved through updates. A different font cannot silently replace an installed family. The app backs up project metadata before its first save in this version.
+
+See [release history](CHANGELOG.md) and [remaining reliability work](docs/stability-roadmap.md). Existing screenshots above are retained to explain the application; their controls may differ from the current version.

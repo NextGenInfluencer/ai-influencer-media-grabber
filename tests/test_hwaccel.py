@@ -1,3 +1,4 @@
+import tests._isolation  # Must precede application imports.
 import unittest
 from unittest.mock import patch
 import hwaccel

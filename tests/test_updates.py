@@ -1,3 +1,4 @@
+import tests._isolation  # Must precede application imports.
 import io
 import json
 from pathlib import Path

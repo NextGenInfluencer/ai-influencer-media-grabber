@@ -1,3 +1,15 @@
+# v3.1.4 — Creator Studio reliability
+
+Fixes clip splitting/source positions, single-clip speed, mixed silent/audio sequences, and transition rendering. Adds source-start controls and sequence undo, prevents silent exports of unapplied clip edits, and renders song compositions from original assets.
+
+Includes CPU export selection and hardware failure recovery, karaoke typewriter character reveal, sticker preview/export fixes, safer custom-font storage, and lyric-range preservation. The updater now supports the new encoder dependency, including migration through older updater manifests.
+
+Original media is preserved. Project metadata gets a pre-v3.1.4 backup on first save. Restart an existing local app process to load the update.
+
+This is the stability milestone, not a claim of complete CapCut parity. Review the README and docs/stability-roadmap.md for limits and remaining work.
+
+## Previous release notes
+
 # v3.1.3 — Creator Video Studio Responsive Scaling & macOS Aero Suite
 
 - **🖥️ Dynamic Responsive Stage Scaling**:

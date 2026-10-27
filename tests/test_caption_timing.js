@@ -61,3 +61,9 @@ vm.createContext(ctx);vm.runInContext(fs.readFileSync(require.resolve('../static
     assert(request);const sent=JSON.parse(request.options.body);assert.equal(sent.language,'auto');assert.equal(sent.revision,1);assert.equal(sent.index,undefined);
     console.log('Actual Estimate button and moving karaoke highlight passed without an external helper.');
 })().catch(e=>{console.error(e);process.exitCode=1;});
+
+const {splitSequence}=require('../static/captions.js');
+const split=splitSequence([{asset:'background',duration:2,speed:2,source_start:1}],6,3,true);
+assert.equal(split.length,4);assert.equal(split[1].duration,1);assert.equal(split[2].source_start,3);
+assert.equal(split.reduce((n,c)=>n+c.duration,0),6);
+assert.throws(()=>splitSequence([{asset:'background',duration:1}],100,50.5,true),/30 clips/);

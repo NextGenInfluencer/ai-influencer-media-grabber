@@ -1,4 +1,5 @@
 """Regression tests using temporary generated media, without app startup side effects."""
+import tests._isolation  # Must precede application imports.
 import ast
 import io
 import json
