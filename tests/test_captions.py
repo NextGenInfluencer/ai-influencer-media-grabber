@@ -358,6 +358,80 @@ class CaptionWorkflowTests(unittest.TestCase):
             self.assertEqual(self.wait(pid,'error')['cues'],data['cues'])
         self.assertFalse((self.root/'library'/'Caption Projects'/pid/'alignment.wav').exists())
 
+    def test_lyric_proposal_review_apply_discard_and_stale_guard(self):
+        pid, before = self.karaoke_project()
+        options = dict(text='Hello world\nΓεια σου', language='en', review=True,
+                       revision=before['revision'])
+        self.assertEqual(self.client.post(f'/api/captions/{pid}/correct-lyrics', json=options).status_code, 202)
+        proposed = self.wait(pid)
+        self.assertEqual(proposed['cues'], before['cues'])
+        proposal = proposed['lyric_proposal']
+        endpoint = f'/api/captions/{pid}/lyric-proposal'
+        self.assertEqual(self.client.post(endpoint, json=dict(id=proposal['id'], revision=-1, action='apply')).status_code, 409)
+        applied = self.client.post(endpoint, json=dict(id=proposal['id'], revision=proposed['revision'], action='apply'))
+        self.assertEqual(applied.status_code, 200)
+        self.assertNotIn('lyric_proposal', applied.json)
+        self.assertEqual(applied.json['karaoke_backup']['cues'], before['cues'])
+        self.assertEqual(applied.json['cues'], proposal['cues'])
+        options['revision'] = applied.json['revision']
+        self.client.post(f'/api/captions/{pid}/correct-lyrics', json=options)
+        proposed = self.wait(pid)
+        proposed['cues'][0]['text'] = 'Edited after proposal'
+        proposed['cues'][0]['words'] = []
+        updated = self.client.put(f'/api/captions/{pid}', json=proposed).json
+        payload = dict(id=proposed['lyric_proposal']['id'], revision=updated['revision'], action='apply')
+        self.assertEqual(self.client.post(endpoint, json=payload).status_code, 409)
+        discarded = self.client.post(endpoint, json={**payload, 'action':'discard'})
+        self.assertEqual(discarded.status_code, 200)
+        self.assertEqual(discarded.json['cues'][0]['text'], 'Edited after proposal')
+
+    def test_sectioned_lyric_sync_resume_keeps_completed_sections_and_saved_captions(self):
+        pid, before = self.karaoke_project()
+        options = dict(text='Hello\nworld', language='en', start=0, end=2,
+                       review=True, sections=True, revision=before['revision'])
+        coarse = {'segments':[{'words':[dict(word='Hello',start=.1,end=.8),dict(word='world',start=1,end=1.8)]}]}
+        entered, release = threading.Event(), threading.Event()
+        calls = []
+        def refine(model, samples, text, language):
+            calls.append(text)
+            if text == 'world':
+                entered.set(); release.wait(5)
+            return {'segments':[{'words':[dict(word=text,start=.05,end=.5)]}]}
+        with patch('captions.align_lyrics', return_value=coarse), patch('captions.align_caption_words', side_effect=refine):
+            self.client.post(f'/api/captions/{pid}/align', json=options)
+            try:
+                self.assertTrue(entered.wait(5)); job_process.cancel_all()
+            finally:
+                release.set()
+            failed = self.wait(pid, 'error')
+        self.assertEqual(failed['cues'], before['cues'])
+        progress = self.root/'library'/'Caption Projects'/pid/'lyric-sync-progress.json'
+        self.assertEqual(json.loads(progress.read_text())['completed'], 1)
+        with patch('captions.align_lyrics') as first_pass, patch('captions.align_caption_words', side_effect=refine) as refined:
+            self.client.post(f'/api/captions/{pid}/align', json={**options, 'resume':True})
+            proposed = self.wait(pid)
+            first_pass.assert_not_called()
+            self.assertEqual(refined.call_count, 1)
+            self.assertEqual(refined.call_args.args[2], 'world')
+        self.assertEqual(proposed['cues'], before['cues'])
+        self.assertEqual([c['text'] for c in proposed['lyric_proposal']['cues']], ['Hello','world'])
+        self.client.post(f'/api/captions/{pid}/align', json={**options, 'revision':proposed['revision'], 'resume':True, 'text':'Different'})
+        stale = self.wait(pid, 'error')
+        self.assertIn('changed', stale['status'])
+        self.assertEqual(stale['cues'], before['cues'])
+
+    def test_section_refinement_failure_retains_first_pass_for_review(self):
+        pid, before = self.karaoke_project()
+        coarse = {'segments':[{'words':[dict(word='Bonjour',start=.2,end=.8)]}]}
+        with patch('captions.align_lyrics', return_value=coarse), patch('captions.align_caption_words', side_effect=ValueError('No anchors')):
+            self.client.post(f'/api/captions/{pid}/align', json=dict(text='Bonjour', language='fr', start=0, end=2, sections=True, review=True))
+            result = self.wait(pid)
+        self.assertEqual(result['cues'], before['cues'])
+        cue = result['lyric_proposal']['cues'][0]
+        self.assertEqual(cue['start'], .2)
+        self.assertEqual(cue['karaoke']['state'], 'review')
+        self.assertIn('First-pass timing retained', cue['karaoke']['note'])
+
     def test_correct_lyrics_endpoint_and_backup(self):
         pid, data = self.karaoke_project()
         data['cues'] = [

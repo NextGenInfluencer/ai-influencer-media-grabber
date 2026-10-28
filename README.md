@@ -239,3 +239,8 @@ For lyrics, choose **Correct lyrics, keep timing** to fix transcription words, o
 Custom font uploads are stored in your Media Grabber user-data folder and are preserved through updates. A different font cannot silently replace an installed family. The app backs up project metadata before its first save in this version.
 
 See [release history](CHANGELOG.md) and [remaining reliability work](docs/stability-roadmap.md). Existing screenshots above are retained to explain the application; their controls may differ from the current version.
+
+
+### v3.1.5: review and resume lyric syncing
+
+Pasted lyric corrections and audio syncing now open a review with current/proposed text, timing warnings and per-line listening. Apply only when ready; saved captions remain unchanged until then. After a successful first alignment pass, short sections refine independently and interrupted jobs can resume. Use the same lyrics, language and audio range when resuming. Timing accuracy still needs listening review, particularly with singing and mixed languages.

@@ -468,6 +468,19 @@ def lyric_lines(text):
     return lines
 
 
+def lyric_signature(data):
+    """Invalidate proposals/checkpoints when caption content or source timing changes."""
+    payload = [data['source'], data['duration'], data['cues']]
+    return hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
+
+
+def save_lyric_progress(path, signature, cues, completed):
+    temporary = path.with_suffix('.tmp')
+    temporary.write_text(json.dumps(dict(signature=signature, cues=cues, completed=completed),
+                                    ensure_ascii=False), encoding='utf-8')
+    os.replace(temporary, path)
+
+
 def aligned_cues(result, lines, offset, duration, limit, recover=False):
     """Rejoin token fragments while preserving supplied spelling and line breaks."""
     pieces = [w for s in result.get('segments', []) for w in s.get('words', [])
@@ -1634,6 +1647,42 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             write(d)
             return jsonify(d)
 
+    def propose_lyrics(data, cues, options):
+        validate_edit(dict(cues=cues), data['duration'])
+        if options.get('review'):
+            data['lyric_proposal'] = dict(id=uuid.uuid4().hex, signature=lyric_signature(data),
+                                         cues=cues, start=options.get('start', 0),
+                                         end=options.get('end', data['duration']))
+            data['_completion_notice'] = 'Lyrics are ready to review. Saved captions have not changed.'
+        else:
+            data['karaoke_backup'] = dict(cues=copy.deepcopy(data['cues']), timing=data['timing'])
+            data.update(cues=cues, timing='aligned')
+            data.pop('lyric_proposal', None)
+
+    @bp.post('/api/captions/<pid>/lyric-proposal')
+    def accept_lyrics(pid):
+        with lock:
+            data = read(pid)
+            options = request.get_json() or {}
+            proposal = data.get('lyric_proposal')
+            if data['state'] == 'busy' or options.get('revision') != data['revision']:
+                return jsonify(error='Project changed. Reload before reviewing lyrics.'), 409
+            if not proposal or options.get('id') != proposal['id']:
+                return jsonify(error='This lyric proposal is no longer available.'), 409
+            if options.get('action') not in {'apply', 'discard'}:
+                raise ValueError('Choose Apply or Discard.')
+            if options['action'] == 'apply':
+                if proposal['signature'] != lyric_signature(data):
+                    return jsonify(error='Captions or audio changed. Discard this proposal and sync again.'), 409
+                cues = validate_edit(dict(cues=proposal['cues']), data['duration'])['cues']
+                data['karaoke_backup'] = dict(cues=copy.deepcopy(data['cues']), timing=data['timing'])
+                data.update(cues=cues, timing='aligned')
+            data.pop('lyric_proposal')
+            data.update(revision=data['revision'] + 1, state='ready',
+                        status='Lyrics applied' if options['action'] == 'apply' else 'Proposal discarded; saved captions kept')
+            write(data)
+            return jsonify(data)
+
     @bp.post('/api/captions/<pid>/align')
     def align(pid):
         with lock:
@@ -1641,6 +1690,8 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             if data['state'] == 'busy':
                 return jsonify(error='Wait for the current task.'), 409
             options = request.get_json()
+            if 'revision' in options and options['revision'] != data['revision']:
+                return jsonify(error='Project changed. Reload before syncing lyrics.'), 409
             lines = lyric_lines(options.get('text', ''))
             language = options.get('language', '')
             if language not in composition_model.LANGUAGES:
@@ -1663,17 +1714,64 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                         samples = np.frombuffer(audio.readframes(audio.getnframes()), dtype='<i2').astype(np.float32) / 32768
                     if not samples.size or np.max(np.abs(samples)) < .0001:
                         raise ValueError('The selected audio range is silent. Choose a range with vocals.')
-                    result = align_lyrics(model, samples, '\n'.join(lines), language)
-                    cues = aligned_cues(result, lines, start, d['duration'], end-start, recover=True)
+                    progress_file = f / 'lyric-sync-progress.json'
+                    signature = hashlib.sha256(json.dumps([lyric_signature(d), lines, language, start, end]).encode()).hexdigest()
+                    completed = 0
+                    if options.get('resume'):
+                        if not progress_file.exists():
+                            raise ValueError('No interrupted lyric sync is available. Start a new sync.')
+                        saved = json.loads(progress_file.read_text(encoding='utf-8'))
+                        if saved.get('signature') != signature:
+                            raise ValueError('Lyrics, language, range or project changed. Start a new sync.')
+                        cues = validate_edit(dict(cues=saved['cues']), d['duration'])['cues']
+                        if [c['text'] for c in cues] != lines:
+                            raise ValueError('Lyric checkpoint text differs. Start a new sync.')
+                        completed = saved['completed']
+                        if type(completed) is not int or not 0 <= completed <= len(cues):
+                            raise ValueError('Invalid lyric checkpoint. Start a new sync.')
+                    else:
+                        result = align_lyrics(model, samples, '\n'.join(lines), language)
+                        cues = aligned_cues(result, lines, start, d['duration'], end-start, recover=True)
+                        process.check_cancelled()
+                        if options.get('sections'):
+                            save_lyric_progress(progress_file, signature, cues, 0)
+                    if options.get('sections'):
+                        for i in range(completed, len(cues)):
+                            process.check_cancelled()
+                            cue = cues[i]
+                            # The first pass supplies audio anchors; never divide a song evenly.
+                            length = cue['end'] - cue['start']
+                            try:
+                                if length > 60:
+                                    raise ValueError('Long section: split this line before retrying karaoke timing.')
+                                chunk = samples[max(0, round((cue['start']-start)*16000)):
+                                                min(len(samples), round((cue['end']-start)*16000))]
+                                if not chunk.size or np.max(np.abs(chunk)) < .0001:
+                                    raise ValueError('No audible audio inside this section.')
+                                result = align_caption_words(model, chunk, cue['text'], language)
+                                process.check_cancelled()
+                                refined = aligned_cues(result, [cue['text']], cue['start'], d['duration'], length, recover=True)[0]
+                                validate_edit(dict(cues=[refined]), d['duration'])
+                                # Refining uncertain anchors cannot certify the original placement.
+                                if any(w['end']-w['start'] < .06 for w in refined['words']):
+                                    refined['karaoke'] = dict(state='review', note='Very short word timings; check against the vocals.')
+                                if cue.get('karaoke', {}).get('state') == 'review':
+                                    refined['karaoke'] = dict(state='review', note='First-pass placement was uncertain; listen and check this line.')
+                                cues[i] = refined
+                            except (ValueError, KeyError, TypeError) as exc:
+                                process.check_cancelled()
+                                cue['karaoke'] = dict(state='review', note='First-pass timing retained. ' + str(exc)[:180])
+                            process.check_cancelled()
+                            save_lyric_progress(progress_file, signature, cues, i+1)
+                            d['status'] = f'Refining lyric sections: {i+1}/{len(cues)}. Saved captions are kept until review.'
+                            write(d)
                     process.check_cancelled()
-                    d['karaoke_backup'] = dict(cues=copy.deepcopy(d['cues']), timing=d['timing'])
                     outside = [c for c in d['cues'] if c['end'] <= start or c['start'] >= end]
                     combined = sorted(outside + cues, key=lambda c:c['start'])
-                    validate_edit(dict(cues=combined), d['duration'])
-                    d.update(cues=combined, timing='aligned')
-                    flagged = sum(c.get('karaoke',{}).get('state') == 'review' for c in cues)
-                    if flagged:
-                        d['_completion_notice'] = f'Lyrics updated. {flagged} lines contain estimated word timings — use Next line to review.'
+                    propose_lyrics(d, combined, options)
+                    if not options.get('review'):
+                        flagged = sum(c.get('karaoke',{}).get('state') == 'review' for c in cues)
+                        d['_completion_notice'] = f'Lyrics updated. {flagged} lines need timing review.'
                 finally:
                     audio_file.unlink(missing_ok=True)
             return launch(data, 'Matching your lyrics to the audio (existing captions are kept if this fails)…', work)
@@ -1687,6 +1785,8 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             if not data.get('cues'):
                 raise ValueError('Auto-transcribe the audio or import subtitles first so we have line timings to match.')
             options = request.get_json() or {}
+            if 'revision' in options and options['revision'] != data['revision']:
+                return jsonify(error='Project changed. Reload before syncing lyrics.'), 409
             lines = lyric_lines(options.get('text', ''))
             language = options.get('language', '')
             start = number(options.get('start', 0), 0, data['duration'])
@@ -1705,10 +1805,10 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                 matched = sorted(outside + matched,key=lambda c:c['start'])
                 validate_edit(dict(cues=matched),d['duration'])
                 process.check_cancelled()
-                d['karaoke_backup'] = dict(cues=copy.deepcopy(d['cues']), timing=d['timing'])
-                d.update(cues=matched, timing='aligned')
-                flagged = sum(c.get('karaoke', {}).get('state') == 'review' for c in matched)
-                d['_completion_notice'] = f'Transcription updated with your lyrics ({len(matched)} lines). {flagged} lines contain estimated word timings — use Next line to review.'
+                propose_lyrics(d, matched, options)
+                if not options.get('review'):
+                    flagged = sum(c.get('karaoke', {}).get('state') == 'review' for c in matched)
+                    d['_completion_notice'] = f'Transcription updated with your lyrics ({len(matched)} lines). {flagged} lines need timing review.'
             return launch(data, 'Matching your lyrics to the existing transcription timings…', work)
 
     @bp.post('/api/captions/<pid>/render')

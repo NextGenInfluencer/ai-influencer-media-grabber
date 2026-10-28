@@ -313,6 +313,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         })[project.timing] || 'Review timing while listening.';
         say(project.status,project.state==='error');
         drawTimeline();drawList();fillSelection();drawDownloads();drawCaption();drawKaraokeSummary();drawComposition();
+        $('reviewLyrics').hidden=!project.lyric_proposal;
     }
     function poll() {
         clearTimeout(pollTimer);
@@ -326,6 +327,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
                     $('renderVideo').src=media(project.last_render); $('renderDialog').showModal();
                 }
                 pendingPreview=false;
+                if(project.state==='ready' && project.lyric_proposal) showLyricReview();
                 await listProjects();
             } catch(e) {say(e.message,true);setBusy(false);}
         },1000);
@@ -1591,19 +1593,61 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
     $('correctLyrics').onclick=act(async()=>{
         if(!$('lyrics').value.trim())throw Error('Paste your correct lyrics first.');
         if(!project.cues?.length)throw Error('Transcribe the audio or import subtitles first so we have line timings to match.');
-        if(!confirm('Replace current caption text with your lyrics? Matched lines keep their timing; unmatched lines are estimated and flagged for review. You can restore the previous version.'))return;
-        const options={text:$('lyrics').value,language:$('alignLanguage').value,start:Number($('alignStart').value),end:Number($('alignEnd').value)};
+        const options={text:$('lyrics').value,language:$('alignLanguage').value,start:Number($('alignStart').value),end:Number($('alignEnd').value),review:true};
         $('correctLyrics').disabled=true;
         try {checkpoint();await job('correct-lyrics',options);$('lyricsDialog').close();}
         finally {$('correctLyrics').disabled=false;}
     });
     $('alignLyrics').onclick=act(async()=>{
         if(!$('lyrics').value.trim())throw Error('Paste the lyrics sung in this video first.');
-        if(project.cues.length&&!confirm('Replace the current captions with aligned lyrics? You can undo this after alignment.'))return;
-        const options={text:$('lyrics').value,language:$('alignLanguage').value,start:Number($('alignStart').value),end:Number($('alignEnd').value)};
+        const options={text:$('lyrics').value,language:$('alignLanguage').value,start:Number($('alignStart').value),end:Number($('alignEnd').value),review:true};
         $('alignLyrics').disabled=true;
-        try {checkpoint();await job('align',options);$('lyricsDialog').close();} finally {$('alignLyrics').disabled=false;}
+        try {checkpoint();await job('align',{...options,sections:true});$('lyricsDialog').close();} finally {$('alignLyrics').disabled=false;}
     });
+    $('resumeLyrics').onclick=act(async()=>{
+        if(!$('lyrics').value.trim())throw Error('Restore the same pasted lyrics, language and range before resuming.');
+        await job('align',{text:$('lyrics').value,language:$('alignLanguage').value,
+            start:Number($('alignStart').value),end:Number($('alignEnd').value),review:true,sections:true,resume:true});
+        $('lyricsDialog').close();
+    });
+    let lyricListenEnd=null;
+    video.addEventListener('timeupdate',()=>{
+        if(lyricListenEnd!==null && video.currentTime>=lyricListenEnd){video.pause();lyricListenEnd=null;}
+    });
+    $('lyricReviewDialog').addEventListener('close',()=>{video.pause();lyricListenEnd=null;});
+    function showLyricReview() {
+        const proposal=project?.lyric_proposal;
+        if(!proposal)return;
+        const rows=$('lyricReviewRows');rows.replaceChildren();
+        const cues=proposal.cues.filter(c=>c.start>=proposal.start && c.end<=proposal.end);
+        const flagged=cues.filter(needsReview).length;
+        $('lyricReviewSummary').textContent=`${cues.length} proposed lines · ${flagged} need timing review. Your saved captions are unchanged. Listen to the song and compare the text below. Timing labels are checks, not accuracy scores.`;
+        for(const cue of cues) {
+            const card=document.createElement('article');card.className='lyricReviewRow';
+            const timing=document.createElement('button');timing.type='button';
+            timing.textContent=`Listen ${cue.start.toFixed(2)}–${cue.end.toFixed(2)} s`;
+            timing.onclick=act(async()=>{$('loop').checked=false;lyricListenEnd=cue.end;video.currentTime=cue.start;await video.play();});
+            const label=document.createElement('strong');label.textContent=needsReview(cue)?'Check timing':'Word timings available';
+            const old=document.createElement('p');
+            old.textContent='Current: '+(project.cues.filter(c=>c.start<cue.end && c.end>cue.start).map(c=>c.text).join(' / ')||'(No caption here)');
+            const next=document.createElement('p');next.textContent='Proposed: '+cue.text;
+            const note=document.createElement('small');note.textContent=cue.karaoke?.note||'Review while listening, especially sustained notes and repeated choruses.';
+            card.append(timing,label,old,next,note);rows.append(card);
+        }
+        $('lyricReviewDialog').showModal();
+    }
+    $('reviewLyrics').onclick=showLyricReview;
+    $('closeLyricReview').onclick=()=>{video.pause();$('lyricReviewDialog').close();};
+    async function finishLyricReview(action) {
+        video.pause();await save();
+        const proposal=project.lyric_proposal;if(!proposal)return;
+        if(action==='apply')checkpoint();
+        project=await api(`/api/captions/${project.id}/lyric-proposal`,'POST',
+            {revision:project.revision,id:proposal.id,action});
+        $('lyricReviewDialog').close();selected=0;refresh();
+    }
+    $('applyLyricReview').onclick=act(()=>finishLyricReview('apply'));
+    $('discardLyricReview').onclick=act(()=>finishLyricReview('discard'));
     $('cancelLyrics').onclick=()=>$('lyricsDialog').close();
     $('applyLyrics').onclick=act(()=>{
         const lines=$('lyrics').value.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);

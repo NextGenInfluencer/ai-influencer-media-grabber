@@ -1,3 +1,15 @@
+# v3.1.5 — Review lyrics before applying
+
+Paste your correct lyrics, then choose **Correct lyrics, keep timing** or **Sync lyrics to audio**. The editor shows current and proposed text before changing saved captions. Listen to each line, then apply the proposal or keep your current captions. You can also review later.
+
+Sync now saves its first successful pass and refines short lyric sections. **Resume lyric sync** continues completed work with the same lyrics, language and range. Failed refinements retain the first pass and flag the line for review.
+
+The first whole-range pass must finish before recovery is available. Song timing still needs listening review, and mixed-language songs should use matching language sections. No claim of universally accurate singing alignment is made.
+
+Save your work and restart the app through your normal shortcut after updating.
+
+## Previous release notes
+
 # v3.1.4 — Creator Studio reliability
 
 Fixes clip splitting/source positions, single-clip speed, mixed silent/audio sequences, and transition rendering. Adds source-start controls and sequence undo, prevents silent exports of unapplied clip edits, and renders song compositions from original assets.

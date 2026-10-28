@@ -315,10 +315,12 @@
             <div class="row">
               <button id="correctLyrics" class="primary" type="button" title="Keep current line timings and replace words with your exact lyrics">Correct lyrics, keep timing</button>
               <button id="alignLyrics" class="primary" type="button" title="Run AI audio alignment to match lyrics to vocals">Sync lyrics to audio</button>
+              <button id="resumeLyrics" type="button" title="Resume the same lyrics, language and range after an interruption">Resume lyric sync</button>
+              <button id="reviewLyrics" type="button" hidden>Review proposed lyrics</button>
               <button id="applyLyrics" type="button" title="Divide pasted lines evenly across the song">Even Split</button>
               <button id="cancelLyrics" type="button" hidden>Cancel</button>
             </div>
-            <p class="hint"><strong>Correct lyrics</strong> keeps matched line timings and flags uncertain matches. Unchanged words retain their timing; changed words initially use estimates. <strong>Sync lyrics to audio</strong> calculates new timing. Both use the selected range and preserve captions outside it. Use karaoke timing next to align corrected words.</p>
+            <p class="hint"><strong>Correct lyrics</strong> keeps matched line timings and flags uncertain matches. Unchanged words retain their timing; changed words initially use estimates. <strong>Sync lyrics to audio</strong> calculates new timing. Both prepare a proposal for review before replacing captions, and preserve captions outside the selected range. Sync saves its first pass, then refines short sections; resume keeps completed work. If the first pass cannot find reliable anchors, use a shorter matching range. Use karaoke timing next to align corrected words.</p>
           </div>
 
           <div class="subCard stackForm">
@@ -888,6 +890,17 @@
   </div>
   <div style="margin-top:16px;text-align:right;">
     <button type="button" onclick="document.getElementById('shortcutsDialog').close()" class="primary" style="padding:6px 16px;border-radius:10px;">Got it</button>
+  </div>
+</dialog>
+<dialog id="lyricReviewDialog" aria-labelledby="lyricReviewTitle" class="lyricReviewDialog">
+  <h2 id="lyricReviewTitle">Review your lyrics</h2>
+  <p id="lyricReviewSummary"></p>
+  <div id="lyricReviewRows"></div>
+  <p class="dialogStatus" role="status"></p>
+  <div class="row lyricReviewActions">
+    <button id="closeLyricReview" type="button">Review later</button>
+    <button id="discardLyricReview" type="button">Keep current captions</button>
+    <button id="applyLyricReview" type="button" class="primary">Apply proposed lyrics</button>
   </div>
 </dialog>
 </body>

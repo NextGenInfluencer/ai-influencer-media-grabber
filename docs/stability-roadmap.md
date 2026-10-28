@@ -24,7 +24,13 @@ Live browser preview remains an approximation for some filter effects, font rast
 
 Measured coverage is not 100%; the audit exposed a previously unmeasured baseline. Coverage reports distinguish tested caption/composition behavior from less-covered application/download integrations.
 
-## Next workflow milestone
+## v3.1.5: lyric review and anchored section recovery
+
+Implemented: editor proposals for correction/alignment, before/after text, per-line listening, Apply/Discard/Review later, stale-project protection, and restore points. Alignment checkpoints a successful initial pass, refines short sections from those anchors, keeps successful sections, and resumes after interruption. Failed refinements retain and flag first-pass timing.
+
+Limits: the first whole-range pass still needs reliable anchors and must finish before recovery. It cannot automatically recover an entirely unalignable song. The first pass uses one selected language; mixed-language material still needs matching sections. No representative real-song accuracy benchmark has been completed. Confidence labels are review flags, not calibrated probabilities.
+
+## Remaining workflow milestone
 
 1. Automatic sectioned lyric alignment with intermediate recovery and retained successful sections, verified against representative sung material in all supported language combinations.
 2. A review screen showing proposed lyric replacements and confidence before applying. Optional local-LLM assistance may match text; timestamps must come from audio or existing timing.

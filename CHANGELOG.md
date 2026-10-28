@@ -1,5 +1,12 @@
 # Changelog
 
+## v3.1.5 — Reviewable, resumable lyric syncing
+- Correct lyrics and Sync lyrics now prepare a reviewable proposal in the editor. Compare current/proposed text, listen to a line, apply all, keep current captions, or review later.
+- Saved captions stay unchanged until Apply; stale proposals cannot overwrite later caption edits. Applying retains a restore point.
+- Sync checkpoints its first successful whole-range alignment, then refines bounded lyric sections from those anchors. Resume skips completed sections with the same text, range, language and project.
+- Failed refinements retain first-pass timing and are marked for listening review. This does not guarantee real-song alignment accuracy; mixed-language first-pass alignment still needs matching language sections.
+
+
 All notable changes to the AI Influencer Media Grabber project will be documented in this file.
 
 ## [v3.1.4] - 2026-10-27
