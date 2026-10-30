@@ -1,15 +1,18 @@
-# AI Influencer Media Grabber
+# AI Influencer Media Grabber & Creator Studio
 
 ![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D4?style=for-the-badge&logo=windows)
-![Local editing](https://img.shields.io/badge/Editing-Local-f472b6?style=for-the-badge)
+![Local Studio](https://img.shields.io/badge/Studio-100%25%20Local-0a84ff?style=for-the-badge)
+![GPU Accelerated](https://img.shields.io/badge/Encoding-NVENC%20%2F%20QSV%20%2F%20AMF%20%2F%20CPU-30d158?style=for-the-badge)
 
-**A Windows desktop toolkit for downloading reference media, editing videos and photos, and creating captioned content for Reels, TikTok and YouTube Shorts.**
+**An all-in-one Windows desktop application for downloading high-quality social reference media, editing videos and photos, and producing music and lyric videos with karaoke timing, bilingual translations, and visual effects for Reels, TikTok, and YouTube Shorts.**
 
-Save a reference clip, extract its first frame, prepare a character replacement for Nano Banana and Kling, or work on your own footage. The app brings downloading, conversion, a media library, and editable captions into one place.
+Save reference clips and carousels, prepare character-replacement assets for Nano Banana and Kling, or build full song videos from scratch with multi-clip sequences, synchronized karaoke lyrics, and local AI translations.
 
-[Download the latest Windows release](https://github.com/NextGenInfluencer/ai-influencer-media-grabber/releases/latest) · [Release notes](RELEASE_NOTES.md) · [Changelog](CHANGELOG.md)
+[Download Latest Windows Installer](https://github.com/NextGenInfluencer/ai-influencer-media-grabber/releases/latest) · [Release Notes](RELEASE_NOTES.md) · [Changelog](CHANGELOG.md) · [Lyrics & Translation Guide](docs/creator-lyrics-guide.md)
 
-## A look inside
+---
+
+## A Look Inside
 
 <div align="center">
   <img src="assets/ui_downloader.png" width="49%" alt="Studio Downloader: reference links and processing options" />
@@ -19,234 +22,92 @@ Save a reference clip, extract its first frame, prepare a character replacement 
   <img src="assets/ui_cleaner.png" width="49%" alt="Metadata cleanup tools" />
 </div>
 
-*Studio screenshots show the earlier interface; available controls can differ by version.*
+---
 
-## What you can do
+## Core Capabilities
 
-### Download reference media
+### 1. Reference Media Downloader
+- **Multi-Platform Grabbing**: Download videos from TikTok, YouTube, YouTube Shorts, Instagram Reels, and other supported sites, plus Instagram photos and multi-slide carousels (with automatic `gallery-dl` fallback).
+- **Best Source Quality**: Selects the highest available source stream quality, with options to extract MP3 audio, capture the first video frame as a reference image, or transcode to standard H.264 for editing compatibility.
+- **Library & Source Tracking**: Keeps source-post links alongside downloaded files in the **Output Gallery** with 1-click actions to play, open in Windows Explorer, copy file paths, or revisit the original post.
 
-- Download videos from TikTok, YouTube and YouTube Shorts, Instagram Reels, and other sites supported by the download engines.
-- Save Instagram photos and carousel media, with a gallery-dl fallback where applicable.
-- Choose the best available source quality, including higher-resolution YouTube streams when available. The source platform determines the maximum quality.
-- Extract audio to MP3, or save the first video frame as an image.
-- Optionally convert to standard H.264 for import compatibility. This re-encodes the video; it does not improve character recognition or recover missing detail.
-- Keep source-post links alongside your downloads and revisit posts from the gallery.
+*Note: TikTok downloads use the unwatermarked source stream when available; watermarks already burned into uploaded source footage cannot be removed. Private or restricted posts may require browser cookies.*
 
-TikTok downloads use the available source stream, which can avoid the additional watermark on TikTok's normal downloaded copy. Watermarks already embedded in the source cannot simply be removed. Private, restricted or changed platform endpoints may require cookies or may not be available.
+---
 
-### Edit your own videos and pictures
-
-Use **Media Tools** for conversion, trimming, crop/resize, vertical framing, blurred padding, GIF creation, audio extraction and frame sequences. Output choices include common sharing formats and higher-quality editing formats. Face-tracking framing options help turn suitable footage into vertical clips.
-
-The **Output Gallery** keeps downloaded and generated media together, with previews, file actions and prompt extraction. Local uploads can be used without downloading anything first.
-
-### Prepare Nano Banana → Kling references
-
-Extract a first frame, replace the person with your influencer in your image tool, then use the matching reference video in Kling. The prompt helper describes the scene while instructing the image tool to preserve pose, framing, clothing and lighting. **Kling Prep** helps prepare compatible, matching video/frame outputs; it does not run Kling or guarantee generation quality.
-
-### Captions & Lyrics
+### 2. Creator Video Studio (Music Videos & Multi-Clip Storyboards)
 
 ![Captions editor with aligned lyrics and live font styling](assets/ui_captions.png)
 
-Open **Captions & Lyrics** from the Studio navigation:
-
-1. Upload a video or choose one from the media library.
-2. Auto-transcribe with the optional AI Pack, paste lyrics, or import SRT/LRC.
-3. Edit the words and timing on the waveform timeline. Move or resize caption blocks, split/merge lines, loop a line, adjust playback speed, and undo edits.
-4. Choose a font, colours, size, outline, position, background and word-by-word highlighting. Watch changes in the live preview.
-5. Use **Render 5-second check** to see actual export typography, then export a captioned H.264 MP4 or an SRT file.
-
-Projects autosave under `Caption Projects` in your media library. SRT carries text and timing, not fonts or effects. Automatic transcription needs review, especially for songs. Browser text layout is an approximation; the rendered check shows the final result.
-
-### Karaoke from your existing SRT
-
-Import your SRT and click **Add karaoke timing to all subtitles**. This analyses each line's audio and adds word timings while keeping your text, line breaks, line start/end times and style. Enable **Highlight the current word** to see the result.
-
-The alignment-language selector supports English, French, Korean, Greek, Spanish, German, Italian, Portuguese, Japanese, Chinese, Arabic, Hindi, Russian and Turkish. Choose **Detect per line**, **English + French**, **Korean + English** or **English + French + Korean** for mixed songs, or override a single language and **Retry karaoke for this line**. Ambiguous scripts use local audio language detection; short sung lines can be misidentified. Korean highlighting follows space-separated words. For untimed pasted mixed lyrics, sync matching language sections; these mixed modes apply to the existing-subtitle karaoke action. Mixed-language and unusually short timings are flagged. **Next line to review** visits missing or flagged timings; listen, edit the word boundaries and mark them reviewed. Flags are timing heuristics, not guaranteed accuracy scores.
-
-Failed lines retain their earlier words/timings. **Estimate missing timings** is an explicit approximate fallback, labelled for review. A cancelled operation preserves saved captions; **Restore previous karaoke version** restores the captions from before the last completed karaoke operation, including after reopening the project. Undo also works in the editing session. Long individual lines over 60 seconds need splitting before alignment.
-
-### New in v3.1.3 (Creator Video Studio Responsive Scaling & macOS Aero Suite)
-
-- **Dynamic Responsive Stage Scaling**: The video canvas dynamically fills the viewport in both fullscreen and windowed modes while strictly preserving the video's aspect ratio (16:9 widescreen, 9:16 vertical TikTok/Reels, 1:1 square), eliminating tiny letterboxed previews.
-- **Overhauled Multi-Clip Sequence Drawer (Zero Overflow)**: Structured 2-row cards with index badges, truncated clip names, quick reorder buttons (`◀` `▶`), and an always-visible delete button (`✕`), eliminating horizontal scrolling completely.
-- **4 New Viral 1-Click Caption Presets**: Added *⚡ Beast Pop*, *🌆 Cyberpunk*, *☕ Frosted Vlog*, and *🌅 Sunset Glow* in a clean 2-column macOS action grid.
-- **Apple macOS Aero Refinements**: Frosted acrylic translucent glass surfaces, elevated drop shadows, and structured action button grids.
-
-### New in v3.1.2 (Permanent Fix for Desktop Spontaneous Closing)
-
-- **Eliminated Spontaneous Desktop Shutdowns**: The background heartbeat watchdog thread has been completely disabled by default. The local Python server now runs continuously, eliminating unexpected closures when the window is minimized, when Windows is locked, or during Chromium background timer suspension.
-- **Opt-in Headless Watchdog**: Watchdog is now strictly opt-in via `--enable-watchdog` or `MEDIA_GRABBER_ENABLE_WATCHDOG=1` with a safe 24-hour timeout (86,400s).
-
-### New in v3.1.1 (Dynamic Lyric Animations & Instant Live Preview)
-
-- **Live Animation Preview on Selection**: Selecting any animation style (*Typewriter*, *Pop Entrance*, *Smooth Fade*, *Slide Up*, *Zoom In*) plays an instant 60fps preview directly on the canvas, even while the video is paused.
-- **1-Click Preview Control**: Dedicated `▶ Preview` action button next to the Animation dropdown for instant replaying.
-- **Typewriter + Karaoke Word Timing Integration**: Full progressive character typing and word revelation synchronized with karaoke highlights and active word popping.
-- **Pro Spring Easing**: Enhanced entrance curves with natural overshoot and fluid acceleration.
-- **Exported Subtitle Parity**: Full ASS export synchronization so rendered MP4s display the exact typewriter motion.
-
-### New in v3.1.0 (Watchdog Keepalive Fix + Production Stability Suite)
-
-- **Rock-Solid Background Watchdog & Multitasking Keepalive**: Eliminated unexpected app shutdown caused by Chromium background tab timer throttling. The idle tolerance is increased to 300 seconds (5 minutes), combined with reactive `visibilitychange` and `focus` event listeners for instant session keepalive whenever the user switches back. Removed the aggressive 4-second shutdown on page navigation.
-- **Hardware-Accelerated Video Encoding (NVENC / QSV / AMF / Apple VideoToolbox):** Automatic GPU acceleration probe detects host graphics capabilities on startup, using native NVENC (NVIDIA), QuickSync (Intel), AMF (AMD), or Apple VideoToolbox for ultra-fast exports and trimming, with zero-configuration automatic software CPU fallback (`libx264`/`libx265`).
-- **Live GPU Telemetry Badge:** Dedicated header status indicator displaying the active hardware encoder engine (e.g. `⚡ NVIDIA NVENC`, `⚡ Intel QSV`, `⚡ AMD AMF`) with real-time health feedback.
-- **Apple macOS Pro Acrylic Sheet Dialogs:** Complete redesign of secondary modals (`browserModal`, `mediaPreviewModal`, `aiInstallModal`, `appUpdateModal`) using frosted glass backdrop blur (28px - 32px), translucent obsidian surfaces, and Apple System Blue `#0071e3` tactile action buttons.
-- **Activity Hub Direct Actions:** Completed queue tasks now feature instant 1-click action pills: `📂 Open Folder` (reveals in Explorer), `▶ Play` (launches system media player), and `📋 Copy Path` (copies absolute file path to clipboard). Failed items feature an instant `↻ Retry` button.
-- **Timeline Pro Edge Trimming & Storyboard Sequence Control:** Precision drag-to-trim edge handles (`||`) on timeline cue blocks with hover glow feedback and Apple Blue highlights; tactile storyboard reordering controls (`◀` / `▶`) on sequence clip cards.
-- **Streamlined Pro Navigation:** Clean, uncluttered segmented top bar focusing on primary workflows (Downloader, Media Tools, AI Cleaner, Captions Studio, Gallery, History), with Kling Prep and Carousel Studio tucked into a sleek secondary tools overflow menu.
-
-### New in v3.0.0 (GPU Hardware Acceleration Engine + Apple Pro Acrylic Studio Suite)
-
-- **Hardware-Accelerated Video Encoding (NVENC / QSV / AMF / Apple VideoToolbox):** Automatic GPU acceleration probe detects host graphics capabilities on startup, using native NVENC (NVIDIA), QuickSync (Intel), AMF (AMD), or Apple VideoToolbox for ultra-fast exports and trimming, with zero-configuration automatic software CPU fallback (`libx264`/`libx265`).
-- **Live GPU Telemetry Badge:** Dedicated header status indicator displaying the active hardware encoder engine (e.g. `⚡ NVIDIA NVENC`, `⚡ Intel QSV`, `⚡ AMD AMF`) with real-time health feedback.
-- **Apple macOS Pro Acrylic Sheet Dialogs:** Complete redesign of secondary modals (`browserModal`, `mediaPreviewModal`, `aiInstallModal`, `appUpdateModal`) using frosted glass backdrop blur (28px - 32px), translucent obsidian surfaces, and Apple System Blue `#0071e3` tactile action buttons.
-- **Activity Hub Direct Actions:** Completed queue tasks now feature instant 1-click action pills: `📂 Open Folder` (reveals in Explorer), `▶ Play` (launches system media player), and `📋 Copy Path` (copies absolute file path to clipboard). Failed items feature an instant `↻ Retry` button.
-- **Timeline Pro Edge Trimming & Storyboard Sequence Control:** Precision drag-to-trim edge handles (`||`) on timeline cue blocks with hover glow feedback and Apple Blue highlights; tactile storyboard reordering controls (`◀` / `▶`) on sequence clip cards.
-- **Streamlined Pro Navigation:** Clean, uncluttered segmented top bar focusing on primary workflows (Downloader, Media Tools, AI Cleaner, Captions Studio, Gallery, History), with Kling Prep and Carousel Studio tucked into a sleek secondary tools overflow menu.
-
-### New in v2.8.1 (Apple macOS Pro UI/UX Overhaul + TikTok/Snapchat Suite)
-
-- **TikTok & Snapchat Signature Aesthetic Filters (1-Click Presets & 0ms Live Preview):** Instantly apply iconic social media visual presets with real-time CSS stage preview and native FFmpeg export:
-  - **✨ TikTok Beauty Glow:** Soft-skin porcelain smoothing and luminous highlight bloom.
-  - **📼 VHS 90s Camcorder:** Chromatic RGB aberration, retro tape noise, and scanline texture.
-  - **🌅 Teal & Orange Cinematic:** Deep teal shadows contrasted with warm peach skin tones.
-  - **💖 Vaporwave Neon:** Y2K electric pink and magenta punch with hyper-saturated anime colors.
-  - **💎 KiraKira / Bling Sparkle:** Specular highlight pop and glitz starburst highlights.
-  - **🐟 Fish-Eye Bubble Lens:** Convex wide-angle lens distortion for skate videos and meme POVs.
-  - **🎞️ Film Noir / Gotham Dark:** Crushed moody blacks and desaturated silver tones.
-- **OpenCV Face Snapping for Stickers & Props (🎯 Snap to Face):** Local computer vision face detection finds subjects in the current video frame and snaps stickers/props to the 👑 Head / Crown, 🕶️ Eyes / Shades, or 🎭 Face Center with zero cloud subscriptions or API keys.
-- **Sub-Millisecond Float Precision Sanitization & Auto-Clamping:** Resilient boundary tolerance prevents floating-point rounding errors when aligning lyrics, timing words, or editing cue blocks.
-- **Unified Preview & Export Geometry:** Perfectly aligned center-anchored coordinates between web stage preview and FFmpeg sticker overlay.
-
-### New in v2.7.2 (Cut-to-the-Beat, Per-Clip Speed & Sticker Overlays)
-
-- **Cut-to-the-Beat / Auto Beat-Drop Snapping (`⚡ Cut to Beat`):** Analyze audio transients and snap all clip cuts directly to musical beat drops with 1 click for rhythmic TikTok and Reels videos.
-- **Per-Clip Speed Ramping & Slow-Mo (0.25× to 4×):** Individual speed controls on each clip in the sequence storyboard with pitch-corrected audio and slow-motion video fluidity.
-- **Stickers, Emojis & Transparent Graphic Overlay Track:** Dedicated Stickers pane with 1-click reaction emojis (`🔥`, `💃`, `👑`, `✨`, `💯`, etc.), custom transparent PNG/GIF/WebP file uploads, timing, X/Y placement, scaling, opacity, and entrance animations (`pop`, `fade`, `slide`).
-
-### New in v2.7.1 (Split Clip, Custom Font Upload, 60fps/4K & Audio Badges)
-
-- **Split Clip at Playhead (`Ctrl+B` / Split Clip Button):** Instantly cut any video or photo clip in the sequence at the current playhead position into two adjacent segments with millisecond precision, keeping all lyrics and surrounding clip timings locked.
-- **Custom Font Upload / User Font Import (`.ttf` / `.otf`):** Upload your own TrueType or OpenType typography with magic-byte validation, 0ms live web preview via dynamic `@font-face` injection, and automatic bundling into FFmpeg ASS libass exports.
-- **Advanced Export Quality & Framerate Presets:** Export with smooth **1080p 60fps** (CRF 17, 320k audio) and **4K Ultra HD 2160p** (CRF 15 studio master) for high-end cinematic vertical and horizontal video.
-- **Timeline Audio Indicators:** Visual audio badges (`🔊`/`🔇`) on sequence clip blocks in the bottom timeline for instant audio status verification.
-
-### New in v2.7.0 (Video Transitions, Non-Destructive Effects & Motion Presets)
-
-- **CapCut-style Video Transitions Between Multi-Clip Cuts:** Add smooth cinematic transitions between cuts in multi-clip sequences (`Dissolve / Crossfade`, `Fade to Black`, `Flash White`, `Slide Left`, `Slide Right`, `Zoom / Circle Crop`, `Wipe Left`, `Wipe Right`) with customizable duration (0.1s to 2.0s) and frame-accurate FFmpeg `xfade` chaining.
-- **100% Non-Destructive Reversible Video Filters & Visual FX:** Effects never permanently double-bake into base composition videos (`bake_fx=False`). Switching filters or resetting to `None` immediately restores untouched original colors with 0ms GPU-accelerated CSS preview and dynamic single-pass FFmpeg export.
-- **Multi-Clip Background Audio Mixing with Silence Fallback:** Multi-clip video sequences preserve original audio tracks mixed under the main song with volume and speech ducking controls, with automatic stereo silence synthesis (`anullsrc`) for photos or muted clips.
-- **Animated Caption & Title Card Motion Presets:** Dynamic `Zoom In` and character-by-character `Typewriter` reveal animations synchronized across both live canvas player and exported ASS subtitles.
-
-### New in v2.6.1
-
-Fixed the Creator Studio clip grabber, added cancellable download/search workers and safer URL handling, and corrected long-song clip cycling. See [release notes](RELEASE_NOTES.md).
-
-### New in v2.6.0 (CapCut-Style Creator Studio)
-
-- **Sync pasted lyrics to audio & transcription correction:** keeps your supplied text and line breaks, with editable word timings. Choose **Correct transcription with my lyrics** to match your pasted lyrics directly to existing transcription line timings, or **Sync lyrics to audio** to run audio alignment using local Whisper with stable-ts. Pasted lyrics are auto-saved locally as a draft. Standalone Suno labels such as `[Verse]` are ignored; repeated sung lines must still be included. If individual words have invalid timing, usable timings are retained and uncertain gaps are estimated and flagged for review. The prior captions are retained as a restore point.
-- **Create video from a song:** start with MP3, WAV, M4A, FLAC or OGG. Choose portrait, square or landscape; use a colour, uploaded photo/video or a library background. Short video backgrounds loop and fill the frame with a centre crop. The song replaces background audio.
-- **Audio-reactive spectrum & waveform visualizer:** add animated vertical EQ **Spectrum Bars** or a **Waveform** at the bottom, centre or top of your video with customizable height, sensitivity and colour, rendered with matching geometry in live preview and final export.
-- **Bundled multilingual Google Fonts & 1-click presets:** Montserrat, Roboto, Noto Sans KR, Oswald, Lobster and Bangers (with open-font licenses) work locally in preview and export with Greek, Korean and French coverage. Style captions with **Cumulative karaoke**, **Active word pop (115% scale)**, **High-contrast boxed captions**, and 1-click music-video presets (**Neon Karaoke**, **Cinematic Clean**, **Bold Pop**, **Minimalist Lyric**).
-- **Integrated Free Videos, Mixkit HD Stock, YouTube Shorts Search & Social Clip Grabber:** browse **🔥 Mixkit HD Stock** (1,370+ free HD dance & aesthetic videos) and **📱 YouTube Shorts / Google** directly inside the studio with **no API key required**, or connect **Pixabay** / **Pexels** API keys. Paste any **TikTok, Instagram Reel, or YouTube Short URL** into the built-in **Grab Clip** box to download without watermark and append directly to your music video sequence, or use the 1-click Dance & Vibe category chips (**💃 Dance**, **🔥 Street / Hip-Hop**, **🪩 Club & Party**, **💃 Modern Dance**, **✨ Neon Aesthetic**, **🌆 Night Drive**, **🎤 Concert / DJ**, **🌊 Sunset Vibe**).
-- **CapCut-style 4-Zone Studio & Multi-Clip Video Sequence Storyboard:** work in a single-screen desktop studio with a Left Icon Dock (`🎬 Media & Clips`, `🌐 Free Videos`, `📝 Lyrics & AI`, `✨ Filters & FX`, `🎵 Audio & Voice`, `🎞️ Canvas & PiP`), Center Video Stage, Right Inspector, and Bottom Multitrack Timeline — without popup modal dialogs. Stitch up to **30 video or photo clips** into a multi-clip sequence, reorder clips (`←`/`→`), split your song evenly (`0s Auto`) or cycle clips every N seconds (`10s each`), and apply CapCut-style **Video Filters** (`B&W`, `Sepia`, `Vintage`, `Cyberpunk`, `Warm`, `Cool`, `Dramatic`, `Dreamy`), **Visual FX** (`Vignette`, `Film Grain`, `Sharpen`, `Chromatic Glitch`), and **Audio FX** (`Noise Cancellation`, `Voice Isolation`, `Echo`, `Concert Hall Reverb`, `Studio Vocal`, `Lo-Fi Radio`, `Bass Boost`, `Chorus`).
-- **Multitrack overlays, keyframes & quality presets:** add B-roll / Picture-in-Picture overlays, intro title cards, keyframe pan/zoom, video fade transitions, brightness/contrast/saturation grading, background speed adjustments, automatic background audio ducking, and choose between **Fast Proxy / Draft (720p)**, **Standard HD (1080p)**, and **Studio High Quality (CRF 15 · 320 kbps)** exports.
-- **Kling contact sheets & Carousel Studio:** inspect a 6-frame contact sheet and click any candidate timestamp to re-cut your Kling reference start alongside `first_frame.png`, or open the **Carousel & Still Image Studio** to reorder slides, apply 4:5 / 1:1 / 9:16 / 16:9 canvas presets, safe margins, rotation and multilingual text overlays, and export an ordered ZIP.
-
-Song creation and lyric alignment support up to 20 minutes per operation. Use only the lyrics for the selected audio section. Existing captions are preserved if alignment fails or is cancelled. Manual estimates remain available without AI.
-
-### Editable background and audio composition (source)
-
-Open a song/video project and select **Background & audio → Edit composition**. Replace a background from an upload or your library without losing captions, word timings or style. Choose portrait/square/landscape, fit or fill, horizontal/vertical focus, blur, dimming, tint and slow zoom. Video backgrounds can loop or hold their final frame; still images last for the composition.
-
-Trim the song, delay its start, adjust volume and fades, and optionally mix the background video's audio (muted by default). Lyrics follow changes to the song's source trim/delay. Lines outside the range are removed from that version; cut lines keep their text but lose word timings and are flagged for review. Replacing a song preserves captions and flags them so you can check synchronization.
-
-**Apply & preview** renders a synchronized base and preview using the same composition specification. Seeking, playback speed and lyric looping then use that single prepared timeline. This step is not an instant multitrack preview; caption styling remains live. Use **Restore previous composition** to recover the prior composition and captions, or **Duplicate project** before exploring alternatives.
-
-Projects retain original assets and a versioned composition schema (assets, tracks, clips, source offsets, transforms and text style). Legacy projects remain readable and receive a pre-migration JSON backup when first saved. Missing media is reported; upload its original file in the composition dialog to relink it. Captions autosave; **Recover unsaved captions** offers this browser's saved draft after an interrupted edit. Composition settings have a local draft too; file selections must be chosen again after restart. Generated versions are retained, so repeated changes require additional disk space.
-
-### Optional AI tools and metadata cleanup
-
-The AI Pack enables Whisper transcription, BLIP image descriptions and optional local language-model features. Model files require additional downloads and storage. Music identification uses an online service.
-
-Metadata tools can clean embedded tags and create processed copies. They do **not** guarantee removal of visible/invisible watermarks or prevention of AI detection.
-
-## Install and launch
-
-### Windows installer
-
-1. Open [Releases](https://github.com/NextGenInfluencer/ai-influencer-media-grabber/releases).
-2. Download the latest `Setup.exe`, run it, and launch the desktop shortcut.
-3. Enable the optional AI Pack when you need transcription or image analysis.
-
-The installer bundles the core runtime. You do not need a separate Python installation for that copy. Your media library normally lives in `Documents/Media Grabber`.
-
-### Run from source
-
-Use Python 3.13 and Node 26 for the supported build/test configuration. Install `requirements.txt`, then run `app_local.py`, or use `run.bat` on Windows. `create_shortcut.bat` creates a shortcut; `launch-silent.vbs` opens the app from the folder containing that launcher.
-
-For AI features, install `requirements-ai.txt` into the **same environment** used by the launcher. Existing AI installations need the updated pack for automatic lyric alignment. Restart after installing it.
-
-**A source shortcut and an installed desktop shortcut can point at different app copies.** After updating files, fully exit the running app and reopen the matching shortcut. The launcher reuses an already-running local server.
-
-## Updates
-
-The in-app GitHub updater checks published releases and validates staged changes before applying them. Updates that change dependencies require the release installer. If an older installation cannot stage an update, use the latest release installer. Keep the same user-data folder to retain projects and downloads.
-
-| Version | Highlights |
-| --- | --- |
-| v3.2.0 | Local Qwen3-4B / Ollama lyric translation tracks with review & lock, shared bilingual layout & Greek/Korean font fallback, editable word blocks, per-project IndexedDB upload drafts, and reliable AI Pack installation (requires full installer upgrade) |
-| v3.1.5 | Reviewable lyric replacement & alignment proposals, per-line listening checks, and resumable section refinement |
-| v3.1.4 | Reliable clip splitting, transitions and mixed audio; original-asset exports; CPU fallback; safer fonts and updater; resumable karaoke timing |
-| v3.1.3 | Creator Studio responsive preview scaling (no fullscreen letterbox), 2-row clip cards (zero overflow), macOS Aero UI, 4 viral caption presets |
-| v3.1.2 | Permanent fix for auto-shutdown / crash: disabled spontaneous watchdog timeout, rock-solid desktop session persistence |
-| v3.1.1 | Dynamic lyric animations, instant 60fps live animation preview, typewriter + karaoke sync, pro spring easing |
-| v3.1.0 | Background watchdog keepalive fix (no unexpected closing), GPU Hardware Acceleration (NVENC/QSV/AMF), macOS acrylic sheet modals, Activity Hub direct actions |
-| v3.0.0 | GPU Hardware Acceleration (NVENC/QSV/AMF), macOS acrylic sheet modals, Activity Hub direct actions (Play/Folder/Copy/Retry), Timeline Pro edge trimming handles |
-| v2.8.1 | Apple macOS Pro UI/UX overhaul, 1-click paste & open, shortcuts modal, timeline zoom, TikTok & Snapchat filters |
-| v2.8.0 | TikTok & Snapchat aesthetic filters, OpenCV AR face tracking & auto-snapping, float precision auto-clamping |
-| v2.7.2 | Cut-to-the-beat auto snapping, per-clip speed ramping (0.25x to 4x), stickers & emoji graphic overlay track |
-| v2.7.1 | Split clip at playhead (Ctrl+B), custom font upload (.ttf/.otf), 1080p 60fps & 4K UHD presets, timeline audio indicators |
-| v2.7.0 | Video transitions between multi-clip cuts, 100% reversible non-destructive effects, multi-clip background audio mixing and caption motion presets (Zoom In, Typewriter) |
-| v2.6.1 | Clip-grabber repair, download/search safeguards, cancellation and long-song cycling fixes |
-| v2.6.0 | CapCut-style 4-zone studio, Multi-Clip Video Sequence Storyboard, Free Mixkit HD Stock & YouTube Shorts search (no API key needed), direct TikTok/Reel/Short clip grabber, 1-click dance category chips, multilingual batch karaoke, CapCut video filters & audio effects (noise cancellation, voice isolation, echo/reverb), Carousel Studio & Kling contact sheets |
-| v2.5.0 | Captions & Lyrics editor, waveform timeline, live styling, karaoke and rendered exports |
-| v2.4.1 | Improved Nano Banana character-replacement prompt |
-| v2.4.0 | Kling reference workflow and reliability/security fixes |
-| v2.3 | Higher-quality output formats and trimming improvements |
-| v2.2 | Higher-resolution downloads and expanded framing options |
-| v2.1 | In-app release checking and updating |
-| v2.0 | Windows installer, silent desktop launcher and optional AI Pack |
-
-See [full release notes](RELEASE_NOTES.md) for current releases and [GitHub release history](https://github.com/NextGenInfluencer/ai-influencer-media-grabber/releases) for earlier downloads.
-
-## Development
-
-Run `python -m unittest discover -s tests -v`, `node tests/test_stream.js` and `node --check static/captions.js`. Build staging with `python build_staging.py`; Inno Setup 6 produces the Windows installer. Cached runtime downloads are checked against pinned SHA-256 values.
-
-See [caption implementation and next steps](CAPTIONS_PLAN.md). This is a focused creator toolkit: a full multitrack editor, integrated stock search, editable motion templates and advanced text animation remain future work.
-
-Media processing runs locally. Downloads, model acquisition, release checks and music recognition use online services. Use media you own or have permission to reuse and check stock-asset licensing before publishing.
-
-
-## v3.1.4 reliability update
-
-Clip splitting retains the correct source position. Clip cards now expose **Source start (s)**, and sequence changes can be undone before applying. Apply your sequence to refresh the preview before exporting.
-
-Song-video exports use original assets rather than re-encoding the prepared preview. **Use CPU** is available when troubleshooting GPU exports; recognized hardware encoder failures retry once on CPU. 4K can upscale smaller sources, and 60 fps does not invent missing motion detail.
-
-For lyrics, choose **Correct lyrics, keep timing** to fix transcription words, or **Sync lyrics to audio** to calculate new timings. Both operate on the selected range. Unchanged lines retain their word timings; changed or uncertain lines need karaoke alignment or listening review. Use **Retry uncertain lines** to keep good timings, or **Resume interrupted timing** after a cancelled karaoke pass. Use the five-second rendered check to inspect the exact export appearance.
-
-Custom font uploads are stored in your Media Grabber user-data folder and are preserved through updates. A different font cannot silently replace an installed family. The app backs up project metadata before its first save in this version.
-
-See [release history](CHANGELOG.md) and [remaining reliability work](docs/stability-roadmap.md). Existing screenshots above are retained to explain the application; their controls may differ from the current version.
-
-
-### v3.1.5: review and resume lyric syncing
-
-Pasted lyric corrections and audio syncing now open a review with current/proposed text, timing warnings and per-line listening. Apply only when ready; saved captions remain unchanged until then. After a successful first alignment pass, short sections refine independently and interrupted jobs can resume. Use the same lyrics, language and audio range when resuming. Timing accuracy still needs listening review, particularly with singing and mixed languages.
-
-### v3.2.0: bilingual lyric translation, shared layout, and AI Pack reliability
-
-Add separate per-language translation tracks with approved, locked, and stale states, contextual local translation proposals via **Set up local translator (2.5 GB)** (`Qwen3-4B-Q4_K_M.gguf`) or optional local Ollama streaming, repeated chorus reuse, and original/translated/bilingual MP4, SRT, and ASS exports. Shared layout fits long words and unspaced Korean phrases, animates rounded caption backgrounds alongside entrance scaling and active word-pop, and falls back to bundled `Roboto` (for Greek) and `Noto Sans KR` (for Korean) without splitting Greek words mid-word on decorative fonts. Pending composition uploads and drafts are isolated per project in IndexedDB and preserved across failed renders. Because `requirements-ai.txt` now constrains shared dependencies and prepares build tools for embedded Python, upgrading from `v3.1.5` or earlier requires running the full `AI-Influencer-Media-Grabber-v3.2.0-Setup.exe` installer. See the [lyrics workflow guide](docs/creator-lyrics-guide.md).
+- **4-Zone Desktop Workspace**: Work in a unified studio layout with a Left Tool Dock (`🎬 Media & Clips`, `🌐 Free Videos`, `📝 Lyrics & AI`, `✨ Filters & FX`, `🎵 Audio & Voice`, `🎭 Stickers`, `🎞️ Canvas & PiP`), responsive aspect-ratio Center Stage (`9:16` Portrait, `1:1` Square, `16:9` Landscape), Right Inspector, and Bottom Multitrack Timeline.
+- **Create Video from a Song**: Start with any `MP3`, `WAV`, `M4A`, `FLAC`, or `OGG` audio track (up to 20 minutes), trim the song range, adjust start delay and fades, and combine it with a solid colour, uploaded photo/video, or multi-clip sequence.
+- **Multi-Clip Sequence Storyboard**:
+  - Stitch up to **30 video or photo clips** with structured 2-row clip cards, source-start offsets (`Source start (s)`), per-clip playback speed (`0.25×` slow-motion to `4×` hyper-lapse), and sequence Undo/Redo.
+  - **Split at Playhead (`Ctrl+B`)** and **Cut to Beat (`⚡ Cut to Beat`)** to snap cuts automatically to musical transients.
+  - **Cinematic Transitions**: Smooth FFmpeg `xfade` transitions between cuts (*Dissolve*, *Fade to Black*, *Flash White*, *Slide Left/Right*, *Zoom / Circle Crop*, *Wipe Left/Right*).
+- **Built-In Free Stock & Social Clip Grabber**:
+  - Search **Mixkit HD Stock** and **YouTube Shorts / Google** directly inside the editor with no API key required, or connect free **Pixabay** and **Pexels** keys.
+  - Paste a TikTok, Instagram Reel, or YouTube Short URL into the studio's **Grab Clip** box to download and append it directly to your sequence.
+- **Non-Destructive Visual FX, Audio FX & Stickers**:
+  - **Video Filters & Grading**: 1-click presets (*TikTok Beauty Glow*, *VHS 90s*, *Teal & Orange*, *Vaporwave Neon*, *KiraKira*, *Fish-Eye*, *Film Noir*, *Cyberpunk*, *Vintage*, *Warm*, *Cool*, *Dreamy*) plus brightness, contrast, saturation, vignette, film grain, sharpen, and chromatic RGB shift.
+  - **Audio Processing & Visualizer**: Voice isolation, noise cancellation, studio vocal/reverb/echo/bass-boost effects, background audio mixing with speech ducking, and audio-reactive **Spectrum Bars** or **Waveform** visualizers.
+  - **B-Roll PiP & AR Face-Snapping Stickers**: Picture-in-Picture B-roll overlays, intro title cards, custom PNG/WebP/GIF stickers, reaction emojis, and local OpenCV face detection (`🎯 Snap to Face`) to position props on the head, eyes, or face center.
+- **Per-Project Draft Recovery**: Pending uploads, sticker selections, stock notices, and unsaved lyric drafts are isolated per project in browser `IndexedDB` (up to 512 MB), surviving dialog reopens, project switches, page reloads, and failed renders.
+
+---
+
+### 3. Multilingual Lyrics, Karaoke & Local AI Translation
+
+- **Preserve Your Wording**:
+  - **Correct lyrics, keep timing** maps your pasted lyrics onto existing subtitle timings without altering your spelling or line breaks.
+  - **Sync lyrics to audio** runs local Whisper + `stable-ts` forced alignment across supported languages (including Greek, English, French, Korean, and mixed-language modes such as *Greek + English* and *Korean + Greek*).
+  - **Review Before Apply**: Every alignment or lyric correction prepares a side-by-side proposal with per-line audio auditioning. Uncertain segments, words stretched `> 4.0s` across instrumental breaks, and same-line mixed scripts are automatically flagged (`needs review`) so you can verify them by ear. Interrupted alignments can resume from saved section checkpoints.
+- **Interactive Word-Timing & Karaoke Controls**:
+  - Edit word start/end times numerically, drag or resize word blocks on the lane, or nudge boundaries with keyboard arrow keys (`±0.02s`).
+  - Combine **Highlight current word (Karaoke)**, **Cumulative highlight**, **Active word pop (115% scale)**, and 60fps entrance animations (*Typewriter*, *Pop Entrance*, *Smooth Fade*, *Slide Up*, *Zoom In*) with instant live preview and 1-click viral caption presets (*Beast Pop*, *Cyberpunk*, *Frosted Vlog*, *Sunset Glow*).
+- **Local AI Lyric Translation Workspace**:
+  - Maintain separate per-language translation tracks with `approved`, `locked`, and `stale` states (editing original lyrics automatically marks translations as `stale` for review).
+  - Click **Set up local translator (2.5 GB)** to download and verify the pinned official `Qwen3-4B-Q4_K_M.gguf` model locally (with SHA-256 checksum, disk-space, and cancellation protection), or connect an optional local **Ollama** model.
+  - Provide **Song context** and a **Glossary** for idioms, metaphors, and names; repeated chorus lines automatically reuse approved/generated wording across chunks and resumed jobs.
+  - Export **Original only**, **Translation only** (requires approval for every line), or **Bilingual (original + translation)** captions to burned-in **MP4**, styled **ASS**, or **SRT**.
+- **Shared Layout & Bundled Multilingual Fonts**:
+  - Shared layout engine calculates line wrapping, line/letter spacing, box width, original-translation gap, and animated rounded background plates across both preview and export, automatically fitting overlong words and unspaced Korean phrases without altering karaoke tokens.
+  - Includes bundled open-license fonts (**Montserrat**, **Roboto**, **Noto Sans KR**, **Oswald**, **Lobster**, **Bangers**) and supports custom `.ttf`/`.otf` font uploads stored safely in your user-data folder.
+  - **Smart Script Fallback**: Automatically falls back to bundled **`Roboto`** for Greek and **`Noto Sans KR`** for Korean when using decorative Latin fonts, keeping Greek words unified without splitting mid-word on math symbols (`μ`, `π`, `Δ`, `Ω`).
+
+---
+
+### 4. Media Tools, Kling Prep, Carousel Studio & Metadata Cleaner
+
+- **Media Tools & GPU Encoding**: Convert formats, trim, crop/resize, apply vertical face-tracking framing, extract frame sequences, or create GIFs. Video exports automatically detect and use hardware encoding (**NVIDIA NVENC**, **Intel QuickSync**, **AMD AMF**) with automatic software CPU fallback (`libx264` / `libx265`) and a manual **Use CPU** override.
+- **Nano Banana → Kling Prep**: Extract a reference video, `first_frame.png`, and a 6-frame contact sheet to select the best starting timestamp, paired with scene-description prompts that instruct your image tool to preserve pose, framing, clothing, and lighting.
+- **Carousel & Still Image Studio**: Reorder slides, apply `4:5`, `1:1`, `9:16`, or `16:9` canvas presets, safe margins, rotation, and multilingual text overlays, and export an ordered ZIP.
+- **Metadata Cleaner**: Strip embedded EXIF/container metadata tags and create clean processed copies (*does not remove visible watermarks or guarantee prevention of AI detection*).
+
+---
+
+## Installation & Updates
+
+### Windows Installer (Recommended)
+1. Go to [Releases](https://github.com/NextGenInfluencer/ai-influencer-media-grabber/releases/latest) and download the latest `AI-Influencer-Media-Grabber-vX.Y.Z-Setup.exe`.
+2. Run the installer and launch **AI Influencer Media Grabber** from your Desktop or Start Menu shortcut.
+3. *(Optional)* Click **Install AI Engine** in the top bar when you want local Whisper transcription, `stable-ts` lyric alignment, BLIP vision analysis, or local Qwen3 lyric translation, then restart the app.
+
+The Windows installer bundles an isolated Python 3.13 and Node runtime plus FFmpeg. Your downloads, caption projects, and custom fonts are stored in `Documents/Media Grabber` and are preserved across updates.
+
+### Running from Source
+Use Python 3.13 and Node 26:
+```bash
+python -m pip install -r requirements.txt
+python app_local.py
+```
+For optional AI features, run `install_ai.bat` or install `requirements-ai.txt` constrained by `requirements.txt` into the same Python environment. Run tests with:
+```bash
+python -m unittest discover -s tests -v
+node tests/test_stream.js
+node tests/test_caption_timing.js
+node --check static/captions.js
+```
+
+### Updating
+The in-app updater checks GitHub Releases and applies code-only updates automatically. When a release updates Python or AI dependencies, the updater safely prompts you to run the full `Setup.exe` release installer so your environment remains consistent. See [Release Notes](RELEASE_NOTES.md) and [Changelog](CHANGELOG.md) for version details.
