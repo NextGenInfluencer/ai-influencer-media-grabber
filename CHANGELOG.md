@@ -1,5 +1,25 @@
 # Changelog
 
+## [v3.2.0] - 2026-10-30
+
+- Add separate reviewed/locked translation tracks, contextual local translation proposals, repeated-line reuse, resumable translation and bilingual export controls.
+- Add shared caption layout controls, per-line styles and editable word timing blocks.
+- Isolate pending upload drafts, emoji/sticker removal state, stock notices, and unsaved lyric text drafts between projects and preserve them when reopening settings, switching projects, or reloading.
+- Continue exported entrance animations across karaoke word boundaries; use existing word timings in typewriter mode even without highlighting.
+- Fit long words and unspaced phrases inside shared caption layouts without changing karaoke tokens; share the fitted size and spacing between preview and export.
+- Animate rounded caption backgrounds alongside their text; combine word-pop with entrance scaling and retain padding during slide previews.
+- Resolve missing Greek/Korean glyphs to bundled fallback fonts (Roboto / Noto Sans KR) for shared layout, preview and export, and prevent decorative Latin/CJK fonts with isolated Greek math symbols (μ, π, Δ, Ω) from splitting Greek words mid-word.
+- Automatically flag abnormally stretched word timings (> 4.0s across sustained notes or instrumental gaps) and same-line mixed-script lyrics (state: 'review') during forced alignment so they are surfaced for listening review.
+- Include ssets/*.py helper modules in /api/health restart detection and support isolated staging/output paths (MEDIA_GRABBER_STAGING_DIR / MEDIA_GRABBER_OUTPUT_DIR) in uild_staging.py and installer.iss.
+- Add local translator setup with a pinned official Qwen download, checksum verification, progress, cancellation cleanup, disk-space checks and AI Engine prerequisite guidance.
+- Verify AI library imports in a fresh process before either installer reports success; handle broken native libraries in AI status checks and require a prebuilt llama runtime instead of compiling it on users' machines.
+- Constrain optional AI package installation to the core dependency lock, protecting shared packages used by downloading and song identification.
+- Preserve composition settings/uploads after failed renders and retire consumed drafts only after success; sequence-only renders retain unrelated pending edits.
+- This dependency-changing version requires the full installer when upgrading from the published release; source-only OTA staging correctly refuses it.
+- Stream optional Ollama translations with cancellation checks and response limits; reject interrupted or malformed results while retaining saved lyrics.
+- Prepare build tools explicitly for embedded Python and install the AI Pack without a separate build environment, fixing stable-ts setup failures. Verify the actual BLIP and alignment interfaces before reporting AI readiness.
+- See the [lyrics workflow guide](docs/creator-lyrics-guide.md) and [completion plan](docs/creator-completion-plan.md) for current behavior and verification boundaries.
+
 ## v3.1.5 — Reviewable, resumable lyric syncing
 - Correct lyrics and Sync lyrics now prepare a reviewable proposal in the editor. Compare current/proposed text, listen to a line, apply all, keep current captions, or review later.
 - Saved captions stay unchanged until Apply; stale proposals cannot overwrite later caption edits. Applying retains a restore point.

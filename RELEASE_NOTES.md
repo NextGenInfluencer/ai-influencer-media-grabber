@@ -1,3 +1,29 @@
+# v3.2.0 — Bilingual lyric translation, shared layout, Korean/Greek font fallback & AI Pack reliability
+
+- **🌍 Local Lyric Translation Tracks & Review Workflow**:
+  - Separate per-language translation tracks with `approved`, `locked`, and `stale` states; editing original lyrics automatically marks existing translations for review.
+  - Generate meaning-focused translation proposals locally with 1-click **Set up local translator (2.5 GB)** (pinned official `Qwen3-4B-Q4_K_M.gguf` with size, disk-space, and SHA-256 verification) or optional bounded local Ollama NDJSON streaming.
+  - Supports song context, custom glossaries, ambiguity notes, automatic reuse of repeated chorus lines across chunks/resumes, and original, translated, or bilingual MP4, SRT, and ASS exports.
+- **🔤 Shared Bilingual Layout & Bundled Korean/Greek Font Fallback**:
+  - Shared layout engine across live preview and ASS/MP4 exports with line spacing, letter spacing, box width, original-translation gap, rounded animated caption plates, combined entrance + active `word_pop` scaling, and automatic fitting for long words and unspaced Korean phrases.
+  - Automatic glyph fallback to bundled **`Roboto`** (for Greek) and **`Noto Sans KR`** (for Korean) while preserving decorative Latin fonts (`Lobster`, `Oswald`, `Montserrat`, `Bangers`) and keeping Greek words unified without mid-word splits.
+- **🎤 Karaoke Word Editing & Alignment Review Flags**:
+  - Interactive word-timing blocks with pointer drag/resize, keyboard nudging, numeric editing, and undo.
+  - Forced alignment automatically flags low-confidence segments, words stretched `> 4.0s` across instrumental gaps, and same-line mixed-script lyrics (`state: 'review'`) for listening checks.
+- **💾 Per-Project Upload Draft Recovery**:
+  - Pending composition uploads, emoji/sticker selections, stock notices, and unsaved lyric text are isolated per project in IndexedDB (up to 512 MB), surviving dialog reopens, project switches, reload, and failed renders while retiring cleanly after full renders.
+- **🧠 Reliable AI Engine Pack Installation**:
+  - Prepares `setuptools` and `wheel` explicitly for embedded Python 3.13, installs with `--no-build-isolation` and core dependency constraints (`requirements.txt`), requires prebuilt binary wheels for `llama-cpp-python`, and verifies Whisper, `stable-ts` alignment, Torch, BLIP, and `llama_cpp` in a fresh subprocess before reporting success.
+- **⚠️ Upgrade Note (Full Installer Required)**:
+  - Because `v3.2.0` updates `requirements-ai.txt` constraints, upgrading from `v3.1.5` or earlier requires running the full **`AI-Influencer-Media-Grabber-v3.2.0-Setup.exe`** installer (the source-only OTA updater intentionally refuses dependency-changing updates to protect existing installations).
+
+### 📦 Download & Verification
+- **Installer**: `AI-Influencer-Media-Grabber-v3.2.0-Setup.exe`
+- **Size**: `116,446,365` bytes (111.1 MB)
+- **SHA-256**: `FFD5869FB54B80E333D70E679E2C69DAA7FAC3648579BFE797DF5E789C0BD56F`
+
+## Previous release notes
+
 # v3.1.5 — Review lyrics before applying
 
 Paste your correct lyrics, then choose **Correct lyrics, keep timing** or **Sync lyrics to audio**. The editor shows current and proposed text before changing saved captions. Listen to each line, then apply the proposal or keep your current captions. You can also review later.

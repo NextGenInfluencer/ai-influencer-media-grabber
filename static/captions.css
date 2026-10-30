@@ -898,3 +898,9 @@ kbd {
 #applyLyricReview { background:#0071e3; }
 
 #reviewLyrics[hidden] { display:none; }
+
+#wordLane { position:relative;height:48px;margin:12px 0;background:rgba(10,132,255,.07);border-radius:8px; }
+.wordTimingBlock { position:absolute;top:4px;height:38px;min-width:0;padding:2px;overflow:hidden;touch-action:none;background:#234b73;border:1px solid #5ac8fa;border-radius:5px;font-size:11px;cursor:ew-resize; }
+#translationReviewRows {max-height:55vh;overflow:auto;}
+#translationReviewRows textarea {width:100%;min-height:70px;}
+#translationPanel textarea {width:100%;}

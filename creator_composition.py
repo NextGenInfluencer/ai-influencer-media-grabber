@@ -19,7 +19,7 @@ from pathlib import Path
 LANGUAGES = {'en':'English', 'fr':'French', 'ko':'Korean', 'el':'Greek', 'es':'Spanish',
              'de':'German', 'it':'Italian', 'pt':'Portuguese', 'ja':'Japanese',
              'zh':'Chinese', 'ar':'Arabic', 'hi':'Hindi', 'ru':'Russian', 'tr':'Turkish'}
-MIXED = {'en-fr':('en','fr'), 'en-ko':('en','ko'), 'en-fr-ko':('en','fr','ko')}
+MIXED = {'en-el':('en','el'), 'ko-el':('ko','el'), 'en-fr':('en','fr'), 'en-ko':('en','ko'), 'en-fr-ko':('en','fr','ko')}
 SHAPES = {'portrait':(1080,1920), 'square':(1080,1080), 'landscape':(1920,1080)}
 IMAGES = {'.png','.jpg','.jpeg','.webp'}
 VIDEOS = {'.mp4','.mov','.mkv','.webm','.avi','.m4v'}

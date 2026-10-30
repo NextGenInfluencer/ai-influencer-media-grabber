@@ -36,7 +36,7 @@ class FullAppTests(unittest.TestCase):
             self.assertEqual(asset.status_code, 200)
 
     def test_restart_detection_includes_caption_backend_and_editor(self):
-        for filename in ('captions.py','ai_runtime.py','creator_composition.py','captions.js','captions.html'):
+        for filename in ('captions.py','ai_runtime.py','creator_composition.py','lyric_translation.py','ai_setup.py','captions.js','captions.html'):
             with self.subTest(filename=filename):
                 def mtime(path):
                     return self.module.SERVER_START_TIME + (10 if Path(path).name==filename else -10)

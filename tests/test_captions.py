@@ -81,6 +81,19 @@ class CaptionDataTests(unittest.TestCase):
         self.assertEqual(cues[1]['karaoke']['state'], 'review')
         self.assertTrue(all(w['end'] > w['start'] for c in cues for w in c['words']))
 
+    def test_aligned_cues_flags_stretched_word_timing_across_interlude(self):
+        result = {'segments': [{'words': [
+            dict(word='Έγινες', start=62.84, end=63.38),
+            dict(word='το', start=63.38, end=63.50),
+            dict(word='γιατρικό', start=63.50, end=64.26),
+            dict(word='μου', start=64.26, end=81.82),
+            dict(word='Πάμε', start=82.74, end=83.30),
+        ]}]}
+        cues = aligned_cues(result, ['Έγινες το γιατρικό μου', 'Πάμε'], 0, 90.0, 90.0, recover=True)
+        self.assertEqual(cues[0]['karaoke']['state'], 'review')
+        self.assertIn('stretched', cues[0]['karaoke']['note'])
+        self.assertNotIn('karaoke', cues[1])
+
     def test_match_lyrics_to_transcription_phonetic_and_preservation(self):
         transcribed = [
             dict(start=1.0, end=4.0, text='Παλή μόνος μέσα το ίδιο δω μάτι', words=[]),

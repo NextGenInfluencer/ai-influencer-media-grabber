@@ -306,6 +306,7 @@
             <div class="row">
               <label>Language
                 <select id="alignLanguage">
+                  <option value="auto">Detect per section</option><option value="en-el">Greek + English</option><option value="ko-el">Korean + Greek</option><option value="en-ko">Korean + English</option><option value="en-fr">French + English</option><option value="en-fr-ko">English + French + Korean</option>
                   {% for code, label in languages.items() %}<option value="{{ code }}">{{ label }}</option>{% endfor %}
                 </select>
               </label>
@@ -324,12 +325,28 @@
           </div>
 
           <div class="subCard stackForm">
+            <details class="subCard" id="translationPanel"><summary>Translation workspace</summary>
+              <p class="hint">Uses the translation language chosen under Text Style. Original lyrics stay unchanged. Only approved translations are displayed.</p>
+              <label>Selected line translation<textarea id="translationText" rows="3" maxlength="2000"></textarea></label>
+              <label><input id="translationLocked" type="checkbox"> Lock this translation against AI changes</label>
+              <button id="approveManualTranslation" type="button">Save & approve this translation</button>
+              <p id="translationState" role="status"></p>
+              <label>Song context<textarea id="translationNotes" rows="2" maxlength="4000" placeholder="Story, speaker, intended meaning…"></textarea></label>
+              <label>Glossary<textarea id="translationGlossary" rows="2" maxlength="4000" placeholder="Names, slang and preferred translations…"></textarea></label>
+              <button id="findTranslationModels" type="button">Find installed local models</button>
+              <button id="setupTranslationModel" type="button">Set up local translator (2.5 GB)</button>
+              <p class="hint">Requires the AI Engine Pack. Downloads Qwen3 once from Hugging Face; lyrics stay on your computer. Setup also verifies an existing model. Stop processing cancels a download; retrying starts it again.</p>
+              <label>Local model<select id="translationModel"><option value="">Choose an installed model</option></select></label>
+              <div class="row"><button id="translateAll" type="button">Translate unlocked lines</button><button id="translateSelected" type="button">Translate selected line</button><button id="resumeTranslation" type="button">Resume translation</button><button id="reviewTranslation" type="button">Review proposal</button></div>
+              <p class="hint">Built-in Qwen3 or optional local Ollama; no cloud fallback. Model quality must be reviewed, especially metaphors and mixed languages.</p>
+              <div class="row"><button id="translationSrt" type="button">Translated SRT</button><button id="bilingualSrt" type="button">Bilingual SRT</button><button id="styledAss" type="button">Styled ASS</button></div>
+            </details>
             <h3>3. Karaoke Word-by-Word Timing</h3>
             <div class="row">
               <label>Language
                 <select id="karaokeLanguage">
                   <option value="auto">Detect per line</option>
-                  <option value="en-fr">English + French</option>
+                  <option value="en-el">Greek + English</option><option value="ko-el">Korean + Greek</option><option value="en-fr">English + French</option>
                   <option value="en-ko">Korean + English</option>
                   <option value="en-fr-ko">English + French + Korean</option>
                   {% for code, label in languages.items() %}<option value="{{ code }}">{{ label }}</option>{% endfor %}
@@ -754,7 +771,7 @@
             <details>
               <summary>Word-by-word karaoke timings</summary>
               <button id="estimateWords" type="button" style="margin:6px 0;">Estimate word timings</button>
-              <div id="words"></div>
+              <div id="wordLane" aria-label="Word timing blocks"></div><div id="words"></div>
             </details>
           </div>
         </div>
@@ -798,6 +815,26 @@
                 <input id="fontUploadInput" type="file" accept=".ttf,.otf">
               </label>
             </div>
+
+            <label>Style changes apply to<select id="styleScope"><option value="all">All lines (base style)</option><option value="selected">Selected line</option></select></label><button id="clearLineStyle" type="button">Reset selected line to base style</button>
+            <details class="subCard"><summary>Text layout & bilingual captions</summary>
+              <label><input id="layout_enabled" type="checkbox"> Use shared text layout</label>
+              <label>Line spacing <input id="line_spacing" type="range" min=".8" max="2.5" step=".05" value="1.2"></label>
+              <label>Letter spacing <input id="letter_spacing" type="range" min="0" max="1" step=".02" value="0"></label>
+              <label>Text box width <input id="box_width" type="range" min="20" max="96" value="88"></label>
+              <button id="placeCaption" type="button">Place text on preview</button>
+              <label>Horizontal position <input id="horizontal" type="range" min="2" max="98" value="50"></label>
+              <label>Alignment <select id="alignment"><option value="left">Left</option><option value="center" selected>Center</option><option value="right">Right</option></select></label>
+              <label>Background padding <input id="box_padding" type="range" min="0" max="4" step=".1" value="1.2"></label>
+              <label>Background roundness <input id="box_radius" type="range" min="0" max="2" step=".1" value=".3"></label>
+              <label>Display <select id="track_mode"><option value="original">Original</option><option value="translation">Translation</option><option value="both">Both</option></select></label>
+              <label>Translation language <select id="translation_language">{% for code,label in languages.items() %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</select></label>
+              <label>Translation size <input id="translation_size" type="range" min="2" max="12" step=".25" value="3.5"></label>
+              <label>Translation color <input id="translation_color" type="color" value="#dddddd"></label>
+              <label>Original–translation gap <input id="translation_gap" type="range" min="0" max="10" step=".25" value="1.5"></label>
+              <label><input id="hide_duplicate_translation" type="checkbox" checked> Hide duplicate translations</label>
+              <p class="hint">Manual line breaks keep caption timing. Long words shrink to fit the text box without changing their timings; widen the box if they become too small. Shared layout uses the same row positions in preview and export. Use the rendered check for exact font appearance.</p>
+            </details>
             <label>Size <input id="size" type="range" min="2" max="12" step=".25" value="5"></label>
             <div class="row">
               <label>Text <input id="color" type="color" value="#ffffff"></label>
@@ -902,6 +939,11 @@
     <button id="discardLyricReview" type="button">Keep current captions</button>
     <button id="applyLyricReview" type="button" class="primary">Apply proposed lyrics</button>
   </div>
+</dialog>
+<dialog id="translationReviewDialog" class="lyricReviewDialog" aria-labelledby="translationReviewTitle">
+<h2 id="translationReviewTitle">Review translation</h2><p>Check meaning and naturalness. Edit the proposed wording before applying. Original lyrics and timings stay unchanged.</p>
+<div id="translationReviewRows"></div><p class="dialogStatus" role="status"></p>
+<div class="row"><button id="closeTranslationReview" type="button">Review later</button><button id="discardTranslationReview" type="button">Discard proposal</button><button id="applyTranslationReview" type="button" class="primary">Apply translations</button></div>
 </dialog>
 </body>
 </html>

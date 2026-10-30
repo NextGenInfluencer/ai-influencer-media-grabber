@@ -19,7 +19,13 @@ if not exist "%APP_PYTHON%" (
     echo Run the core setup first.
     exit /b 1
 )
-"%APP_PYTHON%" -m pip install -r requirements-ai.txt
+"%APP_PYTHON%" -m pip install --only-binary=:all: "setuptools>=77" wheel
+if errorlevel 1 (
+    echo [ERROR] Could not prepare AI installation tools.
+    pause
+    exit /b 1
+)
+"%APP_PYTHON%" -m pip install --no-build-isolation -r requirements-ai.txt
 
 if %ERRORLEVEL% NEQ 0 (
     echo.
@@ -31,8 +37,14 @@ if %ERRORLEVEL% NEQ 0 (
 
 echo.
 echo ========================================================
-echo [SUCCESS] AI Engine Pack installed successfully!
-echo You can now use all AI features inside the app.
+"%APP_PYTHON%" -m assets.ai_setup
+if errorlevel 1 (
+    echo [ERROR] AI packages could not be loaded. Review the errors above.
+    pause
+    exit /b 1
+)
+echo [SUCCESS] AI Engine Pack verified!
+echo Restart the app before using AI features. Model files download separately.
 echo ========================================================
 echo.
 pause

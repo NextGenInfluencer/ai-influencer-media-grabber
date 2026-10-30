@@ -780,7 +780,7 @@ def shazam_file(audio_path):
         print("Shazam error:", e)
         return None
 
-APP_VERSION = "3.1.5"
+APP_VERSION = "3.2.0"
 SERVER_START_TIME = time.time()
 
 # --- Active Job & Auto-Shutdown Watchdog State ---
@@ -2194,39 +2194,10 @@ ai_installer_state: dict[str, Any] = {
 }
 
 def get_ai_status():
-    st = {
-        "whisper": False,
-        "lyric_alignment": False,
-        "torch": False,
-        "transformers": False,
-        "llama": False,
-        "all_installed": False
-    }
-    try:
-        import whisper
-        st["whisper"] = True
-    except ImportError: pass
-
-    try:
-        import torch
-        st["torch"] = True
-    except ImportError: pass
-
-    try:
-        import transformers
-        st["transformers"] = True
-    except ImportError: pass
-
-    try:
-        import llama_cpp
-        st["llama"] = True
-    except ImportError: pass
-
-    try:
-        import stable_whisper
-        st["lyric_alignment"] = True
-    except ImportError: pass
-    st["all_installed"] = st["whisper"] and st["lyric_alignment"] and st["torch"] and st["transformers"] and st["llama"]
+    from assets.ai_setup import inspect_runtime
+    checks = inspect_runtime()
+    st = {name: error is None for name, error in checks.items()}
+    st['all_installed'] = all(st.values())
     return st
 
 def run_ai_install_worker():
@@ -2240,11 +2211,15 @@ def run_ai_install_worker():
     req_file = os.path.join(app.root_path, "requirements-ai.txt")
     if not os.path.exists(req_file):
         ai_installer_state["error"] = "requirements-ai.txt not found!"
+        ai_installer_state["status"] = "failed"
         ai_installer_state["is_installing"] = False
         return
 
-    cmd = [sys.executable, "-m", "pip", "install", "-r", req_file]
+    cmd = [sys.executable, "-m", "pip", "install", "--no-build-isolation", "-r", req_file]
     try:
+        from assets.ai_setup import prepare_build_tools
+        ai_installer_state['status'] = 'Preparing AI installation tools...'
+        prepare_build_tools(sys.executable, app.root_path)
         flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
         process = subprocess.Popen(
             cmd,
@@ -2275,10 +2250,14 @@ def run_ai_install_worker():
         code = process.wait()
 
         if code == 0:
+            ai_installer_state["status"] = "Verifying AI libraries..."
+            ai_installer_state["progress"] = 99
+            from assets.ai_setup import verify_runtime
+            verify_runtime(sys.executable, app.root_path)
             ai_installer_state["is_installing"] = False
             ai_installer_state["status"] = "complete"
             ai_installer_state["progress"] = 100
-            ai_installer_state["log"].append("AI Engine Pack installed successfully!")
+            ai_installer_state["log"].append("AI Engine Pack verified. Restart the app before using AI features; model files are downloaded separately.")
         else:
             ai_installer_state["is_installing"] = False
             ai_installer_state["status"] = "failed"
@@ -2352,7 +2331,7 @@ def health_check():
     needs_restart = False
     try:
         root = Path(__file__).resolve().parent
-        paths = [*root.glob('*.py'), *root.glob('templates/*.html'),
+        paths = [*root.glob('*.py'), *root.glob('assets/*.py'), *root.glob('templates/*.html'),
                  *root.glob('static/*.js'), *root.glob('static/*.css')]
         needs_restart = any(os.path.getmtime(path) > SERVER_START_TIME + 2 for path in paths)
     except Exception:

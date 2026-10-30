@@ -1,3 +1,4 @@
+from assets import lyric_tracks, lyric_translation, lyric_layout, lyric_fonts
 """Local caption projects, validated subtitle data and non-destructive rendering."""
 import io
 import hashlib
@@ -32,6 +33,9 @@ import creator_composition as composition_model
 DEFAULT_STYLE = dict(font='Arial', size=5, color='#ffffff', highlight='#ffdc55',
                      outline=2, position=85, background=False, karaoke=False,
                      cumulative=False, word_pop=False,
+                     layout_enabled=False, line_spacing=1.2, letter_spacing=0, box_width=88, horizontal=50, alignment='center',
+                     box_padding=1.2, box_radius=.3, track_mode='original', translation_language='en',
+                     translation_size=3.5, translation_color='#dddddd', translation_gap=1.5, hide_duplicate_translation=True,
                      visualizer=False, visualizer_style='spectrum', visualizer_position='bottom',
                      visualizer_height=18, visualizer_sensitivity=1, visualizer_color='#bba6ff',
                      animation='none', glow=0,
@@ -130,6 +134,18 @@ def validate_edit(data, duration):
         if words and ' '.join(w['text'] for w in words).split() != text.split():
             raise ValueError('Word timing text must match its caption. Rebuild word timings after editing text.')
         item: dict[str, Any] = dict(start=start, end=end, text=text, words=words)
+        if 'id' in cue:
+            if not isinstance(cue['id'],str) or not re.fullmatch(r'[a-zA-Z0-9_-]{8,80}',cue['id']):
+                raise ValueError('Invalid caption identifier.')
+            item['id'] = cue['id']
+        if cue.get('style_override'):
+            allowed={'font','size','color','highlight','outline','position','background','alignment','horizontal','box_width','line_spacing','letter_spacing','box_padding','box_radius','translation_size','translation_color','translation_gap','animation','glow'}
+            override=cue['style_override']
+            if not isinstance(override,dict) or not set(override)<=allowed: raise ValueError('Invalid line style override.')
+            checked=validate_edit(dict(cues=[],style=override),duration)['style']
+            item['style_override']={key:checked[key] for key in override}
+        if cue.get('translations'):
+            item['translations'] = lyric_tracks.clean_translations({**cue,'text':text})
         if isinstance(cue.get('karaoke'), dict):
             info = cue['karaoke']
             state = info.get('state')
@@ -137,6 +153,9 @@ def validate_edit(data, duration):
                 item['karaoke'] = dict(state=state, note=str(info.get('note', ''))[:300],
                                        language=str(info.get('language', ''))[:3])
         clean.append(item)
+    ids = [c['id'] for c in clean if 'id' in c]
+    if len(ids) != len(set(ids)):
+        raise ValueError('Caption identifiers must be unique.')
     clean.sort(key=lambda c: c['start'])
     for left, right in zip(clean, clean[1:]):
         if left['end'] > right['start'] + .001:
@@ -145,7 +164,7 @@ def validate_edit(data, duration):
     if style['font'] not in FONTS:
         raise ValueError('Choose a supported font.')
     style = {k: style[k] for k in DEFAULT_STYLE}
-    for k in ('color', 'highlight', 'visualizer_color'):
+    for k in ('color', 'highlight', 'visualizer_color', 'translation_color'):
         if not re.fullmatch(r'#[0-9a-fA-F]{6}', str(style[k])):
             raise ValueError('Invalid caption color.')
     if style['visualizer_style'] not in {'waveform', 'spectrum'} or style['visualizer_position'] not in {'bottom', 'center', 'top'}:
@@ -154,6 +173,14 @@ def validate_edit(data, duration):
         raise ValueError('Choose a supported video filter and audio effect.')
     if style['animation'] not in composition_model.CAPTION_ANIMATIONS:
         raise ValueError('Choose a supported caption animation.')
+    if style['alignment'] not in {'left','center','right'} or style['track_mode'] not in {'original','translation','both'}:
+        raise ValueError('Invalid text alignment or track mode.')
+    if style['translation_language'] not in composition_model.LANGUAGES:
+        raise ValueError('Choose a supported translation language.')
+    for key,low,high in [('line_spacing',.8,2.5),('letter_spacing',0,1),('box_width',20,96),('horizontal',2,98),('box_padding',0,4),('box_radius',0,2),('translation_size',2,12),('translation_gap',0,10)]:
+        style[key] = number(style[key],low,high)
+    style['layout_enabled'] = bool(style['layout_enabled'])
+    style['hide_duplicate_translation'] = bool(style['hide_duplicate_translation'])
     style['glow'] = number(style['glow'], 0, 10)
     style['size'] = number(style['size'], 2, 12)
     style['outline'] = number(style['outline'], 0, 5)
@@ -269,18 +296,101 @@ def visualizer_bars(peaks, duration, time_sec, width, height, style):
     return rects
 
 
+def layout_rows(cue, style, width, height):
+    def locate(name):return lyric_layout.font_file(name,BUNDLED_FONTS,CUSTOM_FONT_DIR,CUSTOM_FONTS)
+    return lyric_layout.rows(cue,style,width,height,locate(style['font']),
+        lambda text:lyric_fonts.runs(text,style['font'],locate),locate)
+
+
+def _row_background_events(cue, row, style, height):
+    """Keep the rounded plate attached to its row during entrance animation."""
+    pad = height*style['box_padding']/100
+    anchor = {'left':0,'center':.5,'right':1}[row['alignment']]
+    left = row['x']-row['width']*anchor-pad
+    top = row['y']-row['height']-pad
+    width, box_height = row['width']+2*pad, row['height']+2*pad
+    radius = min(box_height/2,width/2,height*style['box_radius']/100)
+    animation = style['animation'] if row['track']=='original' else 'none'
+    duration = {'pop':.16,'zoom_in':.2,'slide_up':.18}.get(animation,0)
+    start, end = cue['start'], cue['end']
+    boundaries = {start,end}
+    if duration:
+        boundaries.add(min(end,start+duration))
+        boundaries.update(start+i/60 for i in range(1,math.ceil(duration*60)) if start+i/60<end)
+    if animation=='fade':
+        boundaries.update(t for t in (start+.18,end-.18,(start+end)/2) if start<t<end)
+    points=sorted(boundaries)
+    events=[]
+    for a,b in zip(points,points[1:]):
+        if round(a*100)>=round(b*100):continue
+        progress=min(1,(a-start)/duration) if duration else 1
+        scale=(.85+.15*progress) if animation=='pop' else (.7+.3*progress) if animation=='zoom_in' else 1
+        offset=height*.035*(1-progress) if animation=='slide_up' else 0
+        x=row['x']+(left-row['x'])*scale
+        y=row['y']+(top-row['y'])*scale+offset
+        w,h,r=width*scale,box_height*scale,radius*scale
+        path=f'm {x+r} {y} l {x+w-r} {y} b {x+w} {y} {x+w} {y} {x+w} {y+r} l {x+w} {y+h-r} b {x+w} {y+h} {x+w} {y+h} {x+w-r} {y+h} l {x+r} {y+h} b {x} {y+h} {x} {y+h} {x} {y+h-r} l {x} {y+r} b {x} {y} {x} {y} {x+r} {y}'
+        def alpha(t):
+            opacity=max(0,min(1,(t-start)/.18,(end-t)/.18)) if animation=='fade' else 1
+            return round(255-(255-56)*opacity)
+        tags=rf'\an7\pos(0,0)\c&H140C0A&\alpha&H{alpha(a):02X}&'
+        if alpha(a)!=alpha(b):tags+=rf'\t(0,{round((b-a)*1000)},\alpha&H{alpha(b):02X}&)'
+        events.append(f'Dialogue: -1,{timestamp(a,True)},{timestamp(b,True)},Vis,,0,0,0,,{{{tags}\\p1}}{path}{{\\p0}}')
+    return events
+
+
 def ass_text(project):
+    style={**DEFAULT_STYLE,**project.get('style',{})}
+    if not style['layout_enabled'] and style['track_mode']=='original' and not any(c.get('style_override') for c in project['cues']):
+        return _legacy_ass_text(project)
+    base=_legacy_ass_text({**project,'cues':[],'style':style})
+    definitions=[];events=[]
+    for cue in project['cues']:
+        cue_style={**style,**cue.get('style_override',{})}
+        for row in layout_rows(cue,cue_style,project['width'],project['height']):
+            if not row['text']: continue
+            name='Row'+str(len(definitions))
+            if cue_style['background']:
+                events.extend(_row_background_events(cue,row,cue_style,project['height']))
+            row_style={**cue_style,'background':False,'size':row['size'],'color':row['color'],'position':row['y']/project['height']*100,
+                       'horizontal':row['x']/project['width']*100,'letter_spacing':row['letter_spacing'],'visualizer':False}
+            if row['track']=='translation': row_style.update(karaoke=False,cumulative=False,word_pop=False,animation='none')
+            piece=_legacy_ass_text({**project,'style':row_style,'studio':{},'composition':{},
+                'cues':[{**cue,'text':row['text'],'words':row['words']}]})
+            definition=next(line for line in piece.splitlines() if line.startswith('Style: Default,'))
+            definitions.append(definition.replace('Style: Default,','Style: '+name+',',1))
+            for line in piece.splitlines():
+                if line.startswith('Dialogue: 0,'):
+                    events.append(line.replace(',Default,',','+name+',',1))
+    return base.replace('[Events]','\n'.join(definitions)+'\n[Events]')+'\n'.join(events)+'\n'
+
+
+def _legacy_ass_text(project):
     style = {**DEFAULT_STYLE, **project.get('style', {})}
     width, height = project['width'], project['height']
     def color(hexcolor, alpha='00'):
         return f'&H{alpha}' + hexcolor[5:7] + hexcolor[3:5] + hexcolor[1:3]
     def escape(text):
         # Fullwidth lookalikes prevent user text becoming ASS override commands.
-        return text.replace('\\', '＼').replace('{', '｛').replace('}', '｝').replace('\r', '').replace('\n', r'\N')
+        def literal(value):
+            return value.replace('\\', '＼').replace('{', '｛').replace('}', '｝').replace('\r', '').replace('\n', r'\N')
+        locate=lambda name:lyric_layout.font_file(name,BUNDLED_FONTS,CUSTOM_FONT_DIR,CUSTOM_FONTS)
+        pieces=[]
+        for run in lyric_fonts.runs(text,style['font'],locate):
+            if run['font']==style['font']:
+                pieces.append(literal(run['text']))
+            else:
+                fallback_size=height*style['size']/100*font_scale(run['font'])
+                original_size=height*style['size']/100*font_scale(style['font'])
+                pieces.append(r'{\fn'+run['font']+rf'\fs{fallback_size:g}'+'}'+literal(run['text'])+
+                              r'{\fn'+style['font']+rf'\fs{original_size:g}'+'}')
+        return ''.join(pieces)
     font_size = height * style['size'] / 100 * font_scale(style['font'])
     outline = height * style['outline'] / 360
     border_style = 3 if style['background'] else 1
-    box_outline = max(outline, height * 0.012) if style['background'] else outline
+    alignment={'left':1,'center':2,'right':3}[style['alignment']]
+    letter_spacing=height*style['letter_spacing']/100
+    box_outline = max(outline, height * style['box_padding']/100) if style['background'] else outline
     outline_col = '&H38140C0A' if style['background'] else '&H00000000'
     vis_col = color(style.get('visualizer_color', '#bba6ff'), '28')
     output = [f'''[Script Info]
@@ -291,7 +401,7 @@ WrapStyle: 0
 ScaledBorderAndShadow: yes
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,{style['font']},{font_size},{color(style['color'])},{color(style['color'])},{outline_col},&H80000000,0,0,0,0,100,100,0,0,{border_style},{box_outline},0,2,{round(width*.06)},{round(width*.06)},0,1
+Style: Default,{style['font']},{font_size},{color(style['color'])},{color(style['color'])},{outline_col},&H80000000,0,0,0,0,100,100,{letter_spacing},0,{border_style},{box_outline},0,{alignment},{round(width*(1-style['box_width']/100)/2)},{round(width*(1-style['box_width']/100)/2)},0,1
 Style: Vis,Arial,20,{vis_col},{vis_col},&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text''']
@@ -319,7 +429,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text'
             output.append(f"Dialogue: 1,{timestamp(0, True)},{timestamp(t_end, True)},Default,,0,0,0,,{{\\an5\\pos({width/2:.0f},{height*.28:.0f})\\fs{title_size}\\fad(250,350)}}{escape(title_text)}")
     for cue in project['cues']:
         anim = style.get('animation', 'none')
-        use_words = bool((style.get('karaoke') or style.get('cumulative') or style.get('word_pop')) and cue['words'])
+        use_words = bool((style.get('karaoke') or style.get('cumulative') or style.get('word_pop') or anim == 'typewriter') and cue['words'])
         if not use_words and anim == 'typewriter' and len(cue['text']) > 1:
             raw_text = cue['text']
             total_dur = cue['end'] - cue['start']
@@ -336,7 +446,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text'
                 if round(start*100) >= round(end*100):
                     continue
                 body = escape(t_slice)
-                cx, cy = width / 2, height * style['position'] / 100
+                cx, cy = width * style['horizontal']/100, height * style['position'] / 100
                 glow = float(style.get('glow') or 0)
                 tags = [rf'\pos({cx:.1f},{cy:.1f})']
                 if glow > 0:
@@ -349,6 +459,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text'
         pieces = [(cue['start'], cue['end'], None)]
         if use_words:
             boundaries = sorted({cue['start'], cue['end'], *(w[k] for w in cue['words'] for k in ('start', 'end'))})
+            if anim == 'fade':
+                ramp = min(.18, (cue['end']-cue['start'])/2)
+                boundaries = sorted(set(boundaries) | {cue['start']+ramp, cue['end']-ramp})
             if anim == 'typewriter':
                 character_times = set(boundaries)
                 for word in cue['words']:
@@ -380,39 +493,56 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text'
                         count = max(1, min(len(text), math.ceil(len(text)*(mid-w['start'])/(max(.08,w['end']-w['start'])*.85))))
                         text = text[:count]
                     w_esc = escape(text)
+                    pop_tags = r'\fscx115\fscy115'
+                    if is_pop and anim in ('pop','zoom_in'):
+                        initial,duration=(85,.16) if anim=='pop' else (70,.2)
+                        elapsed=max(0,start-cue['start'])
+                        if elapsed<duration:
+                            combined=1.15*(initial+(100-initial)*elapsed/duration)
+                            pop_tags=rf'\fscx{combined:g}\fscy{combined:g}\t(0,{round((duration-elapsed)*1000)},\fscx115\fscy115)'
                     if is_lit and is_pop:
-                        parts.append(sep + r'{\c' + hl + r'&\fscx115\fscy115}' + w_esc + r'{\r}')
+                        parts.append(sep + r'{\c' + hl + '&' + pop_tags + '}' + w_esc + r'{\r}')
                     elif is_lit:
                         parts.append(sep + r'{\c' + hl + '&}' + w_esc + r'{\r}')
                     elif is_pop:
-                        parts.append(sep + r'{\fscx115\fscy115}' + w_esc + r'{\r}')
+                        parts.append(sep + '{' + pop_tags + '}' + w_esc + r'{\r}')
                     else:
                         parts.append(sep + w_esc)
                 body = ''.join(parts)
                 if not body and anim == 'typewriter':
                     continue
-            cx, cy = width / 2, height * style['position'] / 100
+            cx, cy = width * style['horizontal']/100, height * style['position'] / 100
             glow = float(style.get('glow') or 0)
-            is_first = abs(start - cue['start']) < 0.005
-            is_last = abs(end - cue['end']) < 0.005
+            elapsed = max(0, start-cue['start'])
             tags = []
-            if anim == 'slide_up' and is_first:
-                tags.append(rf'\move({cx:.1f},{cy+height*0.035:.1f},{cx:.1f},{cy:.1f},0,180)')
+            if anim == 'slide_up' and elapsed < .18:
+                remaining_ms = round((.18-elapsed)*1000)
+                initial_y = cy + height*.035*(1-elapsed/.18)
+                tags.append(rf'\move({cx:.1f},{initial_y:.1f},{cx:.1f},{cy:.1f},0,{remaining_ms})')
             else:
                 tags.append(rf'\pos({cx:.1f},{cy:.1f})')
             if anim == 'fade':
-                fi = 180 if is_first else 0
-                fo = 180 if is_last else 0
-                if fi or fo:
-                    tags.append(rf'\fad({fi},{fo})')
-            elif anim == 'pop' and is_first:
-                tags.append(r'\fscx85\fscy85\t(0,160,\fscx100\fscy100)')
-            elif anim == 'zoom_in' and is_first:
-                tags.append(r'\fscx70\fscy70\t(0,200,\fscx100\fscy100)')
+                def alpha_at(instant):
+                    opacity=max(0,min(1,(instant-cue['start'])/.18,(cue['end']-instant)/.18))
+                    return round(255*(1-opacity))
+                tags.append(rf'\alpha&H{alpha_at(start):02X}&')
+                points=sorted({start,end,*[t for t in (cue['start']+.18,cue['end']-.18,(cue['start']+cue['end'])/2) if start<t<end]})
+                for a,b in zip(points,points[1:]):
+                    if alpha_at(a)!=alpha_at(b):
+                        tags.append(rf'\t({round((a-start)*1000)},{round((b-start)*1000)},\alpha&H{alpha_at(b):02X}&)')
+            elif anim in ('pop','zoom_in'):
+                initial,duration=(85,.16) if anim=='pop' else (70,.2)
+                if elapsed < duration:
+                    scale=initial+(100-initial)*elapsed/duration
+                    tags.append(rf'\fscx{scale:g}\fscy{scale:g}\t(0,{round((duration-elapsed)*1000)},\fscx100\fscy100)')
             if glow > 0:
                 tags.append(rf'\blur{glow:.1f}')
-                body = body.replace(r'{\r}', r'{\r\blur' + f'{glow:.1f}' + '}')
             position = '{' + ''.join(tags) + '}'
+            # Word highlighting resets the style; retain the enclosing cue animation.
+            if anim in ('fade','pop','zoom_in','slide_up'):
+                body = body.replace(r'{\r}', '{\\r' + ''.join(tags) + '}')
+            elif glow > 0:
+                body = body.replace(r'{\r}', r'{\r\blur' + f'{glow:.1f}' + '}')
             output.append(f"Dialogue: 0,{timestamp(start, True)},{timestamp(end, True)},Default,,0,0,0,,{position}{body}")
     return '\n'.join(output) + '\n'
 
@@ -593,6 +723,8 @@ def aligned_cues(result, lines, offset, duration, limit, recover=False):
                 prev_w = w['end']
             cue['words'][0]['start'] = c_s
             cue['words'][-1]['end'] = c_e
+            if recover and any(w['end'] - w['start'] > 4.0 for w in cue['words']) and cue.get('karaoke', {}).get('state') != 'review':
+                cue['karaoke'] = dict(state='review', note='Long stretched word timing detected (sustained note or instrumental gap); listen and check this line.')
     return validate_edit(dict(cues=cues), duration)['cues']
 
 
@@ -1012,6 +1144,8 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
     def read(pid):
         with lock:
             data = json.loads((folder(pid) / 'project.json').read_text(encoding='utf-8'))
+            lyric_tracks.ensure_ids(data.get('cues',[]), data['id'])
+            data['style']={**DEFAULT_STYLE,**data.get('style',{})}
             if data.get('duration'):
                 data['studio'] = composition_model.migrate(data, folder(pid))
                 data['missing_assets'] = [key for key, asset in data['studio']['assets'].items() if not composition_model.local_asset(folder(pid), asset).is_file()]
@@ -1019,7 +1153,10 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
 
     def write(data):
         with lock:
+            lyric_tracks.ensure_ids(data.get('cues',[]), data['id'])
             destination = folder(data['id']) / 'project.json'
+            if destination.exists() and not (destination.parent / 'pre-translation-project.json').exists():
+                shutil.copy2(destination, destination.parent / 'pre-translation-project.json')
             if destination.exists() and not (destination.parent / 'pre-v3.1.4-project.json').exists():
                 shutil.copy2(destination, destination.parent / 'pre-v3.1.4-project.json')
             if destination.exists() and data.get('studio') and not (destination.parent / 'pre-studio-project.json').exists():
@@ -1469,6 +1606,9 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             if data['state'] == 'busy' or incoming.get('revision') != data['revision']:
                 return jsonify(error='Project changed or is processing. Reload it before saving.'), 409
             data.update(validate_edit(incoming, data['duration']))
+            settings = incoming.get('translation_settings',data.get('translation_settings',{}))
+            if not isinstance(settings,dict): raise ValueError('Invalid translation settings.')
+            data['translation_settings'] = {key:str(settings.get(key,''))[:limit] for key,limit in [('notes',4000),('glossary',4000),('model',200)]}
             if data.get('studio'):
                 data['studio'] = composition_model.schema(data['studio']['assets'], data['studio']['settings'], data['style'])
             data['revision'] += 1
@@ -1600,6 +1740,8 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                                 notes = [aligned['karaoke']['note']] if aligned.get('karaoke',{}).get('state') == 'review' else []
                                 if any(w['end']-w['start'] < .06 for w in words):
                                     notes.append('Very short word timings; check against the vocals.')
+                                if any(w['end']-w['start'] > 4.0 for w in words) and not any('stretched' in n for n in notes):
+                                    notes.append('Long stretched word timing detected (sustained note or instrumental gap); listen and check this line.')
                                 if (greek or korean) and latin or language in composition_model.MIXED:
                                     notes.append('Mixed-language selection; check timing or retry this line with a language override.')
                                 if words:
@@ -1648,6 +1790,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             return jsonify(d)
 
     def propose_lyrics(data, cues, options):
+        lyric_tracks.ensure_ids(cues,data['id'])
         validate_edit(dict(cues=cues), data['duration'])
         if options.get('review'):
             data['lyric_proposal'] = dict(id=uuid.uuid4().hex, signature=lyric_signature(data),
@@ -1694,8 +1837,8 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                 return jsonify(error='Project changed. Reload before syncing lyrics.'), 409
             lines = lyric_lines(options.get('text', ''))
             language = options.get('language', '')
-            if language not in composition_model.LANGUAGES:
-                raise ValueError('Choose a lyric language. For mixed songs, sync matching sections or use imported subtitles with per-line karaoke timing.')
+            if language not in {'auto', *composition_model.LANGUAGES, *composition_model.MIXED}:
+                raise ValueError('Choose a supported lyric language or mixed-language pair.')
             start = number(options.get('start', 0), 0, data['duration'])
             end = number(options.get('end', data['duration']), 0, data['duration'])
             if end - start < .1 or end - start > 1200:
@@ -1730,8 +1873,25 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                         if type(completed) is not int or not 0 <= completed <= len(cues):
                             raise ValueError('Invalid lyric checkpoint. Start a new sync.')
                     else:
-                        result = align_lyrics(model, samples, '\n'.join(lines), language)
-                        cues = aligned_cues(result, lines, start, d['duration'], end-start, recover=True)
+                        coarse_language=language if language in composition_model.LANGUAGES else detect_caption_language(model,samples[:480000],composition_model.MIXED.get(language))
+                        try:
+                            result = align_lyrics(model, samples, '\n'.join(lines), coarse_language)
+                            cues = aligned_cues(result, lines, start, d['duration'], end-start, recover=True)
+                        except ValueError:
+                            if not options.get('sections'): raise
+                            # Speech timestamps can provide approximate section anchors when forced alignment fails.
+                            # These remain explicitly reviewable; an LLM never invents timestamps.
+                            process.check_cancelled()
+                            transcript=transcribe(model,samples,word_timestamps=True,language=coarse_language)
+                            anchors=[]
+                            for seg in transcript.get('segments',[]):
+                                a=max(anchors[-1]['end'] if anchors else 0,float(seg['start']))
+                                b=min(end-start,float(seg['end']))
+                                if b>a and str(seg['text']).strip(): anchors.append(dict(start=a,end=b,text=str(seg['text']).strip(),words=[]))
+                            if not anchors: raise ValueError('No reliable vocal sections found. Choose a shorter matching range; saved captions are unchanged.')
+                            cues=match_lyrics_to_transcription(anchors,lines,end-start,language=coarse_language)
+                            cues=composition_model.shift_cues(cues,start,d['duration'])
+                            for cue in cues: cue['karaoke']=dict(state='review',note='Recovered section from transcription; verify its placement against the song.')
                         process.check_cancelled()
                         if options.get('sections'):
                             save_lyric_progress(progress_file, signature, cues, 0)
@@ -1748,14 +1908,23 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                                                 min(len(samples), round((cue['end']-start)*16000))]
                                 if not chunk.size or np.max(np.abs(chunk)) < .0001:
                                     raise ValueError('No audible audio inside this section.')
-                                result = align_caption_words(model, chunk, cue['text'], language)
+                                chosen=language
+                                if language=='auto' or language in composition_model.MIXED:
+                                    if re.search(r'[\u0370-\u03ff\u1f00-\u1fff]',cue['text']): chosen='el'
+                                    elif re.search(r'[\u1100-\u11ff\u3130-\u318f\uac00-\ud7af]',cue['text']): chosen='ko'
+                                    else: chosen=detect_caption_language(model,chunk,composition_model.MIXED.get(language))
+                                result = align_caption_words(model, chunk, cue['text'], chosen)
                                 process.check_cancelled()
                                 refined = aligned_cues(result, [cue['text']], cue['start'], d['duration'], length, recover=True)[0]
                                 validate_edit(dict(cues=[refined]), d['duration'])
                                 # Refining uncertain anchors cannot certify the original placement.
                                 if any(w['end']-w['start'] < .06 for w in refined['words']):
                                     refined['karaoke'] = dict(state='review', note='Very short word timings; check against the vocals.')
-                                if cue.get('karaoke', {}).get('state') == 'review':
+                                if any(w['end']-w['start'] > 4.0 for w in refined['words']):
+                                    refined['karaoke'] = dict(state='review', note='Long stretched word timing detected (sustained note or instrumental gap); listen and check this line.')
+                                if (bool(re.search(r'[\u0370-\u03ff\u1f00-\u1fff]', cue['text'])) or bool(re.search(r'[\u1100-\u11ff\u3130-\u318f\uac00-\ud7af]', cue['text']))) and bool(re.search(r'[a-zA-Z]', cue['text'])):
+                                    refined['karaoke'] = dict(state='review', note='Mixed-language line; check timing or retry this line with a language override.')
+                                if cue.get('karaoke', {}).get('state') == 'review' and 'stretched' not in cue.get('karaoke', {}).get('note', ''):
                                     refined['karaoke'] = dict(state='review', note='First-pass placement was uncertain; listen and check this line.')
                                 cues[i] = refined
                             except (ValueError, KeyError, TypeError) as exc:
@@ -1906,10 +2075,133 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                     temporary.unlink(missing_ok=True)
             return launch(data, 'Rendering five-second check…' if preview else 'Exporting captioned video…', work)
 
+    @bp.post('/api/captions/<pid>/layout')
+    def caption_layout(pid):
+        data=read(pid);incoming=request.get_json() or {}
+        cleaned=validate_edit(dict(cues=[incoming['cue']],style=incoming.get('style',data['style'])),data['duration'])
+        return jsonify(rows=layout_rows(cleaned['cues'][0],{**cleaned['style'],**cleaned['cues'][0].get('style_override',{})},data['width'],data['height']))
+
+    @bp.get('/api/captions/translation-models')
+    def translation_models():
+        return jsonify(models=lyric_translation.models())
+
+    @bp.post('/api/captions/<pid>/translation-setup')
+    def setup_translation_model(pid):
+        with lock:
+            data = read(pid)
+            options = request.get_json() or {}
+            if data['state'] == 'busy' or options.get('revision') != data['revision']:
+                return jsonify(error='Project changed or is processing. Save and reload first.'), 409
+            lyric_translation.require_local_runtime()
+            def work(d, f):
+                def progress(message):
+                    d['status'] = message
+                    write(d)
+                lyric_translation.install_model(progress)
+                d.setdefault('translation_settings', {})['model'] = 'qwen3-4b-local'
+                d['_completion_notice'] = 'Translation model ready. Choose Translate unlocked lines to create a reviewable proposal.'
+            return launch(data, 'Setting up local translation…', work)
+
+    @bp.post('/api/captions/<pid>/translate')
+    def translate_project(pid):
+        with lock:
+            data = read(pid)
+            options = request.get_json() or {}
+            if data['state']=='busy' or options.get('revision') != data['revision']:
+                return jsonify(error='Project changed or is processing. Save and reload first.'),409
+            language = options.get('language','en')
+            if language not in composition_model.LANGUAGES: raise ValueError('Choose a supported target language.')
+            selected = options.get('ids')
+            if selected is not None and (not isinstance(selected,list) or any(i not in {c['id'] for c in data['cues']} for i in selected)):
+                raise ValueError('Choose valid lyric lines.')
+            settings = data.get('translation_settings',{})
+            model = settings.get('model','')
+            if not model: raise ValueError('Select an installed local model, or enter translations manually.')
+            def work(d,f):
+                originals = d['cues']
+                pending = [c for c in originals if (selected is None or c['id'] in selected)
+                           and not c.get('translations',{}).get(language,{}).get('locked')]
+                if not pending: raise ValueError('No unlocked lines selected for translation.')
+                signature = hashlib.sha256(json.dumps([lyric_signature(d),settings,language,selected],sort_keys=True).encode()).hexdigest()
+                path = f/'translation-progress.json'
+                done = {}
+                if options.get('resume'):
+                    if not path.exists(): raise ValueError('No interrupted translation is available.')
+                    saved = json.loads(path.read_text(encoding='utf-8'))
+                    if saved.get('signature') != signature: raise ValueError('Lyrics or translation settings changed. Start a new translation.')
+                    done = saved['done']
+                # Carry user-approved chorus choices into identical repeated lines.
+                chorus = {c['text']:t for c in originals if (t:=c.get('translations',{}).get(language))
+                          and t.get('status')=='approved' and t.get('source')==lyric_tracks.source_hash(c['text'])}
+                for c in pending:
+                    if c['id'] in done:
+                        chorus.setdefault(c['text'], done[c['id']])
+                for offset in range(0,len(pending),8):
+                    process.check_cancelled()
+                    group = [c for c in pending[offset:offset+8] if c['id'] not in done]
+                    request_lines = []
+                    representatives = {}
+                    for c in group:
+                        if c['text'] in chorus:
+                            done[c['id']] = copy.deepcopy(chorus[c['text']])
+                        elif c['text'] not in representatives:
+                            representatives[c['text']] = c['id']
+                            request_lines.append(dict(id=c['id'],text=c['text']))
+                    if request_lines:
+                        first = originals.index(group[0]);last = originals.index(group[-1])
+                        context = '\n'.join(c['text'] for c in originals[max(0,first-3):last+4])[:12000]
+                        answer = lyric_translation.translate(request_lines,context,composition_model.LANGUAGES[language],model,
+                                                              settings.get('notes',''),settings.get('glossary',''))
+                        process.check_cancelled()
+                        done.update(answer)
+                        for text, cue_id in representatives.items():
+                            chorus[text] = copy.deepcopy(answer[cue_id])
+                        for c in group:
+                            done[c['id']] = copy.deepcopy(chorus[c['text']])
+                    temporary=path.with_suffix('.tmp')
+                    temporary.write_text(json.dumps(dict(signature=signature,done=done),ensure_ascii=False),encoding='utf-8')
+                    os.replace(temporary,path)
+                    d['status']=f'Translating: {min(offset+8,len(pending))}/{len(pending)} lines. Saved translations are unchanged.'
+                    write(d)
+                d['translation_proposal']=dict(id=uuid.uuid4().hex,signature=lyric_signature(d),language=language,lines=done)
+                d['_completion_notice']='Translation ready to review. Original lyrics and accepted translations are unchanged.'
+            return launch(data,'Translating locally…',work)
+
+    @bp.post('/api/captions/<pid>/translation-proposal')
+    def apply_translation(pid):
+        with lock:
+            d=read(pid);options=request.get_json() or {};proposal=d.get('translation_proposal')
+            if d['state']=='busy' or options.get('revision')!=d['revision'] or not proposal or proposal['id']!=options.get('id'):
+                return jsonify(error='Project or proposal changed. Reload before applying.'),409
+            if options.get('action') not in {'apply','discard'}: raise ValueError('Choose Apply or Discard.')
+            if options['action']=='apply':
+                if proposal['signature']!=lyric_signature(d): return jsonify(error='Lyrics changed. Regenerate this translation.'),409
+                edits=options.get('lines',proposal['lines'])
+                if not isinstance(edits,dict) or set(edits)!=set(proposal['lines']): raise ValueError('Translation lines must match the proposal.')
+                updated=copy.deepcopy(d['cues']);language=proposal['language']
+                for c in updated:
+                    if c['id'] in edits:
+                        entry=edits[c['id']]
+                        if not isinstance(entry,dict): raise ValueError('Invalid translation.')
+                        if c.get('translations',{}).get(language,{}).get('locked'): continue
+                        c.setdefault('translations',{})[language]=dict(text=entry.get('text',''),source=lyric_tracks.source_hash(c['text']),
+                            status='approved',locked=bool(entry.get('locked',False)),note=entry.get('note',''))
+                updated=validate_edit(dict(cues=updated),d['duration'])['cues']
+                d['karaoke_backup']=dict(cues=copy.deepcopy(d['cues']),timing=d['timing'])
+                d['cues']=updated
+            d.pop('translation_proposal');d['revision']+=1;d.update(state='ready',status='Translation applied' if options['action']=='apply' else 'Translation proposal discarded')
+            write(d);return jsonify(d)
+
+    @bp.get('/api/captions/<pid>/ass')
+    def export_ass(pid):
+        data=read(pid)
+        return send_file(io.BytesIO(ass_text(data).encode('utf-8-sig')),mimetype='text/plain',as_attachment=True,download_name='captions.ass')
+
     @bp.get('/api/captions/<pid>/srt')
     def export_srt(pid):
         data = read(pid)
-        return send_file(io.BytesIO(srt_text(data['cues']).encode('utf-8-sig')), mimetype='application/x-subrip', as_attachment=True, download_name='captions.srt')
+        cues=lyric_tracks.export_cues(data['cues'],request.args.get('language','en'),request.args.get('mode','original'))
+        return send_file(io.BytesIO(srt_text(cues).encode('utf-8-sig')), mimetype='application/x-subrip', as_attachment=True, download_name='captions.srt')
 
     @bp.get('/api/captions/<pid>/media/<name>')
     def media(pid, name):

@@ -11,7 +11,8 @@ import hashlib
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 DIST_DIR = os.path.join(ROOT_DIR, "dist")
 CACHE_DIR = os.path.join(DIST_DIR, "cache")
-STAGING_DIR = os.path.join(DIST_DIR, "app_staging")
+STAGING_DIR = os.path.abspath(os.environ.get("MEDIA_GRABBER_STAGING_DIR") or os.path.join(DIST_DIR, "app_staging"))
+OUTPUT_DIR = os.path.abspath(os.environ.get("MEDIA_GRABBER_OUTPUT_DIR") or DIST_DIR)
 PYTHON_DIR = os.path.join(STAGING_DIR, "python_runtime")
 
 EMBED_URL = "https://www.python.org/ftp/python/3.13.16/python-3.13.16-embed-amd64.zip"
@@ -50,7 +51,8 @@ def remove_readonly(func, path, excinfo):
 
 def clean_directory(dir_path):
     expected = os.path.realpath(STAGING_DIR)
-    if os.path.realpath(dir_path) != expected or os.path.commonpath([expected, os.path.realpath(DIST_DIR)]) != os.path.realpath(DIST_DIR):
+    allowed_roots = (os.path.realpath(DIST_DIR), os.path.realpath(os.path.join(ROOT_DIR, "audit_artifacts")))
+    if os.path.realpath(dir_path) != expected or not any(os.path.commonpath([expected, a]) == a and expected != a for a in allowed_roots):
         raise ValueError('Refusing to clean outside the staging directory')
     if not os.path.exists(dir_path):
         return
@@ -76,7 +78,7 @@ def clean_directory(dir_path):
 
 def main():
     print("\n=======================================================")
-    print(" AI Influencer Media Grabber - Staging Builder v3.1.5")
+    print(" AI Influencer Media Grabber - Staging Builder v3.2.0")
     print("=======================================================\n")
 
     os.makedirs(CACHE_DIR, exist_ok=True)
@@ -207,13 +209,14 @@ def compile_installer():
 
     iss_file = os.path.join(ROOT_DIR, "installer.iss")
     print(f"Compiler: {iscc}")
-    print("Building dist\\AI-Influencer-Media-Grabber-v3.1.5-Setup.exe ...")
-    res = subprocess.run([iscc, "/Q", iss_file], cwd=ROOT_DIR)
+    print("Building dist\\AI-Influencer-Media-Grabber-v3.2.0-Setup.exe ...")
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    res = subprocess.run([iscc, "/Q", f"/DMyStagingDir={STAGING_DIR}", f"/DMyOutputDir={OUTPUT_DIR}", iss_file], cwd=ROOT_DIR)
     if res.returncode != 0:
         print("[ERROR] Inno Setup compilation failed!")
         return False
 
-    output_exe = os.path.join(DIST_DIR, "AI-Influencer-Media-Grabber-v3.1.5-Setup.exe")
+    output_exe = os.path.join(OUTPUT_DIR, "AI-Influencer-Media-Grabber-v3.2.0-Setup.exe")
     if os.path.exists(output_exe):
         size_mb = os.path.getsize(output_exe) / (1024 * 1024)
         print("\n=======================================================")

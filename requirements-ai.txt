@@ -1,4 +1,6 @@
 # Optional AI Engine Dependencies (Whisper, BLIP Vision Prompter, LLaMA)
+# Keep shared packages compatible with the installed core application.
+-c requirements.txt
 openai-whisper>=20231117
 stable-ts==2.19.1
 torch>=2.0.0
@@ -7,4 +9,5 @@ transformers>=4.30.0
 huggingface-hub>=0.23.0
 
 --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
+--only-binary=llama-cpp-python
 llama-cpp-python>=0.2.77

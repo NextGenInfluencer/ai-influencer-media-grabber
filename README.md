@@ -196,6 +196,8 @@ The in-app GitHub updater checks published releases and validates staged changes
 
 | Version | Highlights |
 | --- | --- |
+| v3.2.0 | Local Qwen3-4B / Ollama lyric translation tracks with review & lock, shared bilingual layout & Greek/Korean font fallback, editable word blocks, per-project IndexedDB upload drafts, and reliable AI Pack installation (requires full installer upgrade) |
+| v3.1.5 | Reviewable lyric replacement & alignment proposals, per-line listening checks, and resumable section refinement |
 | v3.1.4 | Reliable clip splitting, transitions and mixed audio; original-asset exports; CPU fallback; safer fonts and updater; resumable karaoke timing |
 | v3.1.3 | Creator Studio responsive preview scaling (no fullscreen letterbox), 2-row clip cards (zero overflow), macOS Aero UI, 4 viral caption presets |
 | v3.1.2 | Permanent fix for auto-shutdown / crash: disabled spontaneous watchdog timeout, rock-solid desktop session persistence |
@@ -244,3 +246,7 @@ See [release history](CHANGELOG.md) and [remaining reliability work](docs/stabil
 ### v3.1.5: review and resume lyric syncing
 
 Pasted lyric corrections and audio syncing now open a review with current/proposed text, timing warnings and per-line listening. Apply only when ready; saved captions remain unchanged until then. After a successful first alignment pass, short sections refine independently and interrupted jobs can resume. Use the same lyrics, language and audio range when resuming. Timing accuracy still needs listening review, particularly with singing and mixed languages.
+
+### v3.2.0: bilingual lyric translation, shared layout, and AI Pack reliability
+
+Add separate per-language translation tracks with approved, locked, and stale states, contextual local translation proposals via **Set up local translator (2.5 GB)** (`Qwen3-4B-Q4_K_M.gguf`) or optional local Ollama streaming, repeated chorus reuse, and original/translated/bilingual MP4, SRT, and ASS exports. Shared layout fits long words and unspaced Korean phrases, animates rounded caption backgrounds alongside entrance scaling and active word-pop, and falls back to bundled `Roboto` (for Greek) and `Noto Sans KR` (for Korean) without splitting Greek words mid-word on decorative fonts. Pending composition uploads and drafts are isolated per project in IndexedDB and preserved across failed renders. Because `requirements-ai.txt` now constrains shared dependencies and prepares build tools for embedded Python, upgrading from `v3.1.5` or earlier requires running the full `AI-Influencer-Media-Grabber-v3.2.0-Setup.exe` installer. See the [lyrics workflow guide](docs/creator-lyrics-guide.md).

@@ -50,6 +50,15 @@ class UpdateTests(unittest.TestCase):
             stage_archive(self.root, self.archive({'requirements.txt': 'Flask==99'}), 'v3')
         self.assertFalse((self.root / '.updates/pending.json').exists())
 
+    def test_ai_dependency_change_requires_installer_and_preserves_live_files(self):
+        (self.root / 'requirements-ai.txt').write_text('llama-cpp-python>=0.2.77\n')
+        with self.assertRaisesRegex(ValueError, 'installer'):
+            stage_archive(self.root, self.archive({'requirements-ai.txt':
+                '-c requirements.txt\n--only-binary=llama-cpp-python\nllama-cpp-python>=0.2.77\n'}), '3.2.0')
+        self.assertEqual((self.root / 'requirements-ai.txt').read_text(),'llama-cpp-python>=0.2.77\n')
+        self.assertIn('old', (self.root / 'app_local.py').read_text())
+        self.assertFalse((self.root / '.updates/pending.json').exists())
+
     def test_missing_import_rejects_update_before_activation(self):
         for source, message in [
             ('import missing_release_module_123', 'missing_release_module_123'),
