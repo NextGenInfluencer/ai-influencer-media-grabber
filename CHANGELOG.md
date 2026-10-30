@@ -1,5 +1,11 @@
 # Changelog
 
+## [v3.2.1] - 2026-10-30
+
+- Verify Ollama model metadata before sending lyrics; reject remote/cloud aliases and unverifiable models, and refuse redirects. Filter remote entries from the model picker.
+- Flag same-line Korean/Greek lyrics for timing review even when they contain no English.
+- Clarify historical installer evidence and publication status in the completion record.
+
 ## [v3.2.0] - 2026-10-30
 
 - Add separate reviewed/locked translation tracks, contextual local translation proposals, repeated-line reuse, resumable translation and bilingual export controls.
@@ -10,7 +16,7 @@
 - Animate rounded caption backgrounds alongside their text; combine word-pop with entrance scaling and retain padding during slide previews.
 - Resolve missing Greek/Korean glyphs to bundled fallback fonts (Roboto / Noto Sans KR) for shared layout, preview and export, and prevent decorative Latin/CJK fonts with isolated Greek math symbols (μ, π, Δ, Ω) from splitting Greek words mid-word.
 - Automatically flag abnormally stretched word timings (> 4.0s across sustained notes or instrumental gaps) and same-line mixed-script lyrics (state: 'review') during forced alignment so they are surfaced for listening review.
-- Include ssets/*.py helper modules in /api/health restart detection and support isolated staging/output paths (MEDIA_GRABBER_STAGING_DIR / MEDIA_GRABBER_OUTPUT_DIR) in uild_staging.py and installer.iss.
+- Include `assets/*.py` helper modules in /api/health restart detection and support isolated staging/output paths (MEDIA_GRABBER_STAGING_DIR / MEDIA_GRABBER_OUTPUT_DIR) in `build_staging.py` and installer.iss.
 - Add local translator setup with a pinned official Qwen download, checksum verification, progress, cancellation cleanup, disk-space checks and AI Engine prerequisite guidance.
 - Verify AI library imports in a fresh process before either installer reports success; handle broken native libraries in AI status checks and require a prebuilt llama runtime instead of compiling it on users' machines.
 - Constrain optional AI package installation to the core dependency lock, protecting shared packages used by downloading and song identification.

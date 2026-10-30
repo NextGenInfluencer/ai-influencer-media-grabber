@@ -1,3 +1,17 @@
+# v3.2.1 — Local translation privacy and mixed-language timing fixes
+
+- Check Ollama model metadata before sending lyrics; reject cloud-backed aliases, unverifiable models, and redirects. The built-in Qwen translator remains local.
+- Flag Greek/Korean lines for timing review even when they contain no English; also recognize accented Latin characters in mixed-script checks.
+- Clarify release verification records and fix changelog formatting.
+
+**Updating:** v3.2.0 users can use the in-app source updater or the installer. Users on v3.1.5 or earlier need the full installer because v3.2.0 changed AI dependencies. Restart after updating.
+
+**Checks:** 165 Python tests passed, 25 targeted tests passed in embedded Python 3.13, and JavaScript timing/recovery and syntax checks passed. Song timings still require listening review; live preview is not guaranteed pixel-identical to export.
+
+Download `AI-Influencer-Media-Grabber-v3.2.1-Setup.exe` and use `SHA256SUMS-v3.2.1.txt` to verify it.
+
+## Previous release notes
+
 # v3.2.0 — Bilingual lyric translation, shared layout, Korean/Greek font fallback & AI Pack reliability
 
 - **🌍 Local Lyric Translation Tracks & Review Workflow**:

@@ -611,6 +611,15 @@ def save_lyric_progress(path, signature, cues, completed):
     os.replace(temporary, path)
 
 
+def has_mixed_lyric_scripts(text):
+    """Flag combinations including Greek/Korean without requiring English."""
+    return sum(bool(re.search(pattern, text)) for pattern in (
+        r'[\u0370-\u03ff\u1f00-\u1fff]',
+        r'[\u1100-\u11ff\u3130-\u318f\uac00-\ud7af]',
+        r'[a-zA-Z\u00c0-\u024f]',
+    )) > 1
+
+
 def aligned_cues(result, lines, offset, duration, limit, recover=False):
     """Rejoin token fragments while preserving supplied spelling and line breaks."""
     pieces = [w for s in result.get('segments', []) for w in s.get('words', [])
@@ -1719,7 +1728,6 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                                 continue
                             cue = pending[i]
                             greek = bool(re.search(r'[\u0370-\u03ff\u1f00-\u1fff]', cue['text']))
-                            latin = bool(re.search(r'[a-zA-Z]', cue['text']))
                             korean = bool(re.search(r'[\u1100-\u11ff\u3130-\u318f\uac00-\ud7af]', cue['text']))
                             chosen = language if language in composition_model.LANGUAGES else ('ko' if korean else 'el' if greek else 'en')
                             try:
@@ -1742,7 +1750,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                                     notes.append('Very short word timings; check against the vocals.')
                                 if any(w['end']-w['start'] > 4.0 for w in words) and not any('stretched' in n for n in notes):
                                     notes.append('Long stretched word timing detected (sustained note or instrumental gap); listen and check this line.')
-                                if (greek or korean) and latin or language in composition_model.MIXED:
+                                if has_mixed_lyric_scripts(cue['text']) or language in composition_model.MIXED:
                                     notes.append('Mixed-language selection; check timing or retry this line with a language override.')
                                 if words:
                                     c_s, c_e = float(cue['start']), float(cue['end'])
@@ -1922,7 +1930,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                                     refined['karaoke'] = dict(state='review', note='Very short word timings; check against the vocals.')
                                 if any(w['end']-w['start'] > 4.0 for w in refined['words']):
                                     refined['karaoke'] = dict(state='review', note='Long stretched word timing detected (sustained note or instrumental gap); listen and check this line.')
-                                if (bool(re.search(r'[\u0370-\u03ff\u1f00-\u1fff]', cue['text'])) or bool(re.search(r'[\u1100-\u11ff\u3130-\u318f\uac00-\ud7af]', cue['text']))) and bool(re.search(r'[a-zA-Z]', cue['text'])):
+                                if has_mixed_lyric_scripts(cue['text']):
                                     refined['karaoke'] = dict(state='review', note='Mixed-language line; check timing or retry this line with a language override.')
                                 if cue.get('karaoke', {}).get('state') == 'review' and 'stretched' not in cue.get('karaoke', {}).get('note', ''):
                                     refined['karaoke'] = dict(state='review', note='First-pass placement was uncertain; listen and check this line.')

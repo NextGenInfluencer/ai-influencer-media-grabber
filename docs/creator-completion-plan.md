@@ -1,6 +1,8 @@
 # Creator Studio v3.2.0 completion plan & verification record
 
-All checklist items and release blockers verified and approved for v3.2.0 publication.
+v3.2.0 was published with user approval at c09acd6. The installer below is the earlier acceptance build, not the final published binary. The handoff records the published installer as 116,446,365 bytes, SHA-256 ffd5869fb54b80e333d70e679e2c69daa7fac3648579bfe797df5e789c0bd56f. Human listening accuracy remains a review task; generated timing reports do not certify that lyrics match the vocals.
+
+v3.2.1 follow-up (publication authorized by the user): Ollama locality checks and Korean/Greek mixed-script review detection. Release publication was subsequently authorized by the user.
 
 ## Checklist
 - [x] 1. Baseline and isolated regression checks
@@ -11,7 +13,7 @@ All checklist items and release blockers verified and approved for v3.2.0 public
 - [x] 6. Contextual translation, glossary, chorus consistency, resumable jobs
 - [x] 7. Translation review, locked approvals, ambiguity and length warnings
 - [x] 8. Original/translated/bilingual MP4, SRT and ASS exports
-- [x] 9. Regression, packaged runtime, real-song checks; release preparation only (awaiting user approval before any tag/push/release)
+- [x] 9. Regression, packaged runtime, real-song checks; v3.2.0 published with user approval
 
 ## Verification boundaries
 Automated model mocks prove data handling, not translation quality or real-song alignment accuracy. User media, saved projects, custom fonts, Desktop shortcut, Start Menu, and registry state remained untouched during all tests.
@@ -20,7 +22,7 @@ Automated model mocks prove data handling, not translation quality or real-song 
 - **Hardware & provider boundary:** The packaged `llama-cpp-python==0.3.36` prebuilt wheel is CPU-only (`llama_supports_gpu_offload() == False`; passing `n_gpu_layers=-1` safely executes on CPU), whereas FFmpeg video composition/export automatically uses NVIDIA NVENC (`h264_nvenc`) on this machine with CPU fallback. Optional Ollama streaming, bounded NDJSON parsing, and mid-stream cancellation are verified against a real local loopback HTTP server; no local `ollama` CLI/daemon is installed on this host.
 - **Upgrade boundary:** Because `requirements-ai.txt` changed in `3.2.0`, the `3.1.5` source-only OTA updater intentionally rejects `3.2.0` archives with `"This release changes dependencies. Install it using the release installer."` Users upgrading from `3.1.5` must run `AI-Influencer-Media-Grabber-v3.2.0-Setup.exe`.
 
-## Current release blockers (resolved locally; awaiting user publication approval)
+## Historical v3.2.0 acceptance evidence (before final publication build)
 
 1. **Installer migration (Resolved & Verified):** Built `audit_artifacts/v320-installer-check/dist/AI-Influencer-Media-Grabber-v3.2.0-Setup.exe` (`116,432,366` bytes, SHA-256 `b189c41ee7156ba34b75e662717dbe112ee5a6c65f69885106540c3bb0609e7e`) using isolated staging (`MEDIA_GRABBER_STAGING_DIR` / `MEDIA_GRABBER_OUTPUT_DIR`). Verified that `v3.1.5`'s `safe_update.stage_archive` rejects a `v3.2.0` payload with installer guidance while leaving `v3.1.5` files intact, and verified that running `AI-Influencer-Media-Grabber-v3.2.0-Setup.exe` upgrades an installed `v3.1.5` instance in-place to `3.2.0` while preserving user custom fonts (`static/fonts/custom/user_kept_font.ttf`). Evidence: `audit_artifacts/v320-installer-check/installer-acceptance-report.json`.
 2. **Complete clean installation (Resolved & Verified):** Verified both clean combined core + AI Engine Pack installation in embedded Python 3.13 (`audit_artifacts/ai-clean-install`, **44 tests in 5.190s**) and full Windows Inno Setup fresh install, `3.1.5 -> 3.2.0` upgrade, `unins000.exe` uninstall cleanup, `/api/health` restart detection (now including `assets/*.py`), and **49 tests in 5.295s** inside the installed `v3.2.0` runtime (`audit_artifacts/v320-installer-check/installed-runtime-tests.log`). Also verified live Hugging Face Range/size/SHA-256 header probe for `Qwen3-4B-Q4_K_M.gguf` (`2,497,280,256` bytes) plus real local HTTP streaming download, mid-stream cancellation cleanup, and corrupt-checksum rejection (`audit_artifacts/v320-translation-check/translation-and-provider-report.json`).

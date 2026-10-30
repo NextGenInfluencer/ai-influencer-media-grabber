@@ -22,6 +22,15 @@ import job_process
 
 
 class CaptionDataTests(unittest.TestCase):
+    def test_mixed_script_review_covers_korean_greek_without_english(self):
+        from captions import has_mixed_lyric_scripts
+        for text in ('사랑해 ανάσα μου', 'My ανάσα', '사랑해 my love', 'é ανάσα'):
+            with self.subTest(text=text):
+                self.assertTrue(has_mixed_lyric_scripts(text))
+        for text in ('Ανάσα μου', '사랑해', 'My love', 'mon été', '(Yeah) 123'):
+            with self.subTest(text=text):
+                self.assertFalse(has_mixed_lyric_scripts(text))
+
     def test_lyrics_preserve_repetition_and_unicode_and_skip_section_headers(self):
         self.assertEqual(lyric_lines('[Verse 1]\nΓεια σου\n\n[Chorus]\nΓεια σου'), ['Γεια σου','Γεια σου'])
         for text in ['', '[Verse]', 'x'*1001, 42]:

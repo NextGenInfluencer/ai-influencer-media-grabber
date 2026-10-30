@@ -113,9 +113,28 @@ def local_chat(messages, schema):
 LOCAL_URL = 'http://127.0.0.1:11434'
 
 
+def require_local_ollama_model(model):
+    """Inspect metadata before sending lyrics: localhost can proxy cloud models."""
+    check_cancelled()
+    try:
+        response = requests.post(LOCAL_URL + '/api/show', json={'model': model},
+                                 timeout=(5, 10), allow_redirects=False)
+        response.raise_for_status()
+        metadata = response.json()
+    except (requests.RequestException, ValueError) as exc:
+        raise ValueError('Cannot verify that this Ollama model runs locally. Choose the built-in Qwen translator or a downloaded local model.') from exc
+    if (response.status_code != 200 or not isinstance(metadata, dict)
+            or metadata.get('remote_host') or metadata.get('remote_model')
+            or not isinstance(metadata.get('model_info'), dict)
+            or not metadata['model_info']):
+        raise ValueError('This Ollama model is remote or cannot be verified as local. No lyrics were sent. Choose a downloaded local model.')
+    check_cancelled()
+
+
 def ollama_chat(model, messages, schema):
     """Read bounded NDJSON, checking cancellation between network chunks."""
     check_cancelled()
+    require_local_ollama_model(model)
     started = time.monotonic()
     received = 0
     pending = b''
@@ -143,8 +162,10 @@ def ollama_chat(model, messages, schema):
         with requests.post(LOCAL_URL+'/api/chat', json=dict(
                 model=model, stream=True, format=schema, messages=messages,
                 options=dict(temperature=.2,num_predict=4096,num_ctx=8192)),
-                stream=True, timeout=(5,30)) as response:
+                stream=True, timeout=(5,30), allow_redirects=False) as response:
             response.raise_for_status()
+            if response.status_code != 200:
+                raise ValueError('Ollama redirected the request. Translation requires a local provider.')
             for chunk in response.iter_content(chunk_size=1024):
                 check_cancelled()
                 if time.monotonic()-started > 180:
@@ -176,8 +197,14 @@ def models():
     try:
         response = requests.get(LOCAL_URL + '/api/tags', timeout=3)
         response.raise_for_status()
-        return installed + [item['name'] for item in response.json().get('models', [])]
-    except (requests.RequestException, ValueError, KeyError) as exc:
+        entries = response.json().get('models', [])
+        if not isinstance(entries, list):
+            raise ValueError('Invalid Ollama model list.')
+        return installed + [item['name'] for item in entries
+                            if isinstance(item, dict) and isinstance(item.get('name'), str)
+                            and item['name'] and not item.get('remote_host')
+                            and not item.get('remote_model')]
+    except (requests.RequestException, ValueError, KeyError, AttributeError) as exc:
         if installed: return installed
         raise ValueError('Start Ollama with a multilingual model, or enter translations manually. No lyrics were sent to the cloud.') from exc
 
