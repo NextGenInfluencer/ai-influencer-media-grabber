@@ -5,12 +5,14 @@ turnaround sheets), and prompt templates for Google Flow and Nano Banana.
 All character data is safely persisted in the user's Documents directory.
 """
 import copy
+import io
 import json
 import os
 from pathlib import Path
 import re
 import shutil
 import uuid
+from PIL import Image
 
 DATA_DIR = Path(os.environ.get('MEDIA_GRABBER_DATA_DIR') or Path.home() / 'Documents' / 'Media Grabber')
 CHARACTERS_DIR = DATA_DIR / 'Characters'
@@ -113,6 +115,16 @@ def delete_character(character_id):
 
 def save_character_image(character_id, image_type, filename, raw_bytes):
     _ensure_storage()
+    if image_type not in ('portrait', 'triptych'):
+        raise ValueError(f"Invalid image type: {image_type}. Must be 'portrait' or 'triptych'.")
+
+    # Validate image data integrity using Pillow
+    try:
+        img = Image.open(io.BytesIO(raw_bytes))
+        img.verify()
+    except Exception:
+        raise ValueError("Provided file is not a valid image.")
+
     safe_cid = re.sub(r'[^a-zA-Z0-9_\-]', '', character_id)
     if not safe_cid:
         raise ValueError("Invalid character ID")

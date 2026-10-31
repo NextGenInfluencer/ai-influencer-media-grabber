@@ -101,7 +101,8 @@ AVAILABLE_TOOLS = [
 
 
 def available_models():
-    """Returns detected local Ollama models plus CPU fallback."""
+    """Returns detected local Ollama models plus CPU fallback.
+    GPU models are prioritized first so NVIDIA RTX users get GPU by default."""
     raw = lyric_translation.models()
     result = []
     for m in raw:
@@ -113,6 +114,9 @@ def available_models():
             result.append({'id': m, 'name': f'{m} (Fast GPU)', 'tier': 'gpu_fast'})
         else:
             result.append({'id': m, 'name': f'{m} (Local Ollama)', 'tier': 'gpu'})
+
+    tier_order = {'gpu_high': 0, 'gpu_fast': 1, 'gpu': 2, 'cpu': 3}
+    result.sort(key=lambda x: tier_order.get(x.get('tier', 'gpu'), 9))
     return result
 
 
@@ -146,22 +150,32 @@ def execute_tool(tool_name, arguments, project_data=None):
         }
 
     elif tool_name == 'generate_social_post':
-        title = project_data.get('title') if project_data else 'Studio Booth At 4AM'
+        title = project_data.get('title') if project_data else 'New Music Video'
         cues = project_data.get('cues', []) if project_data else []
-        summary_text = ' '.join(c.get('text', '') for c in cues[:6]) if cues else 'Late night studio recording sessions.'
+        lead_line = cues[0].get('text', '') if cues else ''
+        second_line = cues[1].get('text', '') if len(cues) > 1 else ''
+
+        tag = arguments.get('character_tag') or '@Airi'
+        char_name = tag.lstrip('@')
+
+        hooks = [
+            f"{lead_line or title} hits different… 🎙️",
+            f"Locked the studio door and let the sound take over.",
+            f"When the mic is live, the music is the only truth left."
+        ]
+        if second_line:
+            hooks[1] = f"\"{second_line}\" — listen closely."
+
+        caption = (
+            f"\"{lead_line or 'Late night studio recording session'}\" 🌙✨\n\n"
+            f"From the new session '{title}'. Drop a ❤️ if you feel this.\n\n"
+            f"#{char_name} #AIInfluencer #MusicVideo #StudioSession #IndieArtist #ProducerLife #ViralSound"
+        )
         return {
             "action": "social_metadata",
-            "title_hooks": [
-                f"Studio at 4AM hits different… 🎙️",
-                f"Nobody told me it would feel like this.",
-                f"Locked the door and let the music speak."
-            ],
-            "caption": (
-                f"When the mic is cold and the timeline is loud, the music is the only truth left. 🌙✨\n\n"
-                f"Drop a ❤️ if you've ever worked until 4AM.\n\n"
-                f"#AIInfluencer #MusicStudio #IndieArtist #LateNightVibes #StudioSession #Airi #MusicVideo #BilingualLyrics #ProducerLife #ViralSound"
-            ),
-            "message": "Generated viral social media titles, caption, and 10 targeted hashtags."
+            "title_hooks": hooks,
+            "caption": caption,
+            "message": f"Generated viral social media titles and caption for #{char_name}."
         }
 
     elif tool_name == 'generate_flow_prompt':
@@ -169,11 +183,11 @@ def execute_tool(tool_name, arguments, project_data=None):
         mood = arguments.get('scene_mood', 'in a recording booth at 4AM')
         char_obj = characters.get_character(tag.lstrip('@'))
         trigger = char_obj['trigger_prompt'] if char_obj else f"{tag}, 22yo virtual singer"
-        negative = char_obj.get('negative_prompt', 'blurry, low quality, distorted anatomy') if char_obj else 'blurry, low quality'
         aspect = char_obj.get('aspect_ratio', '9:16') if char_obj else '9:16'
 
         full_prompt = (
-            f"Add {tag}, {trigger}, {mood}, atmospheric volumetric lighting, cinematic 35mm photography, shallow depth of field, 8k --ar {aspect} --no {negative}"
+            f"Add {tag}, {trigger}, {mood}. "
+            f"Cinematic 35mm photography, volumetric studio lighting, shallow depth of field, photorealistic 8k, aspect ratio {aspect}."
         )
         return {
             "action": "flow_prompt",
@@ -189,16 +203,18 @@ def detect_fallback_intent(text, project_data=None):
     """Detects action intent from text when tool calling is not returned by the LLM."""
     lower = text.lower()
 
-    if 'cyberpunk' in lower:
+    # Style Presets: require explicit style/preset context to avoid false positives (e.g. 'vlog')
+    if 'cyberpunk' in lower and any(w in lower for w in ['preset', 'style', 'neon', 'look', 'theme']):
         return [execute_tool('apply_style_preset', {'preset': 'cyberpunk_neon'}, project_data)]
-    if 'beast' in lower or 'mrbeast' in lower:
+    if ('mrbeast' in lower or 'beast' in lower) and any(w in lower for w in ['pop', 'bold', 'preset', 'style', 'yellow', 'look']):
         return [execute_tool('apply_style_preset', {'preset': 'mrbeast_bold'}, project_data)]
-    if 'sunset' in lower:
+    if 'sunset' in lower and any(w in lower for w in ['glow', 'preset', 'style', 'warm', 'look', 'theme']):
         return [execute_tool('apply_style_preset', {'preset': 'sunset_glow'}, project_data)]
-    if 'frosted' in lower or 'vlog' in lower:
+    if 'frosted' in lower and any(w in lower for w in ['vlog', 'preset', 'style', 'glass', 'dark', 'look']):
         return [execute_tool('apply_style_preset', {'preset': 'frosted_vlog'}, project_data)]
 
-    m_shift = re.search(r'(?:shift|nudge|move|offset)\s*(?:all\s*)?(?:captions\s*)?([+-]?\d+(?:\.\d+)?)\s*(?:s|sec|seconds)?', lower)
+    # Timing Shift: require explicit seconds unit and timing verb so e.g. "move to line 3" does not fire
+    m_shift = re.search(r'\b(?:shift|nudge|offset)\s+(?:all\s+)?(?:captions?\s+)?(?:by\s+)?([+-]?\d+(?:\.\d+)?)\s*(?:s|sec|seconds)\b', lower)
     if m_shift:
         try:
             sec = float(m_shift.group(1))
@@ -208,16 +224,29 @@ def detect_fallback_intent(text, project_data=None):
         except Exception:
             pass
 
-    if any(k in lower for k in ['viral', 'hook', 'hashtag', 'social post', 'tiktok caption']):
-        return [execute_tool('generate_social_post', {'platform': 'tiktok'}, project_data)]
+    # Resolve active or mentioned persona dynamically (never hardcode Airi if user uses another persona)
+    char_list = characters.list_characters()
+    matched_tag = None
+    for c in char_list:
+        c_tag = c.get('tag', '').lower()
+        c_name = c.get('name', '').lower()
+        if (c_tag and c_tag in lower) or (c_name and c_name in lower):
+            matched_tag = c.get('tag')
+            break
+    target_tag = matched_tag or (char_list[0]['tag'] if char_list else '@Airi')
 
-    if any(k in lower for k in ['flow prompt', 'nano banana', '@airi', 'airi prompt', 'storyboard prompt']):
+    if any(k in lower for k in ['viral', 'hook', 'hashtag', 'social post', 'tiktok caption']):
+        return [execute_tool('generate_social_post', {'platform': 'tiktok', 'character_tag': target_tag}, project_data)]
+
+    if any(k in lower for k in ['flow prompt', 'nano banana', 'prompt', 'storyboard prompt']) or (matched_tag and 'prompt' in lower):
         mood = 'in a recording booth at 4AM'
         if 'dim' in lower or 'dark' in lower:
             mood = 'dim recording booth with purple ambient lighting'
         elif 'rain' in lower or 'window' in lower:
             mood = 'looking through rain-streaked studio glass at city night lights'
-        return [execute_tool('generate_flow_prompt', {'character_tag': '@Airi', 'scene_mood': mood}, project_data)]
+        elif 'stage' in lower or 'live' in lower:
+            mood = 'on stage under energetic violet spotlights with subtle stage haze'
+        return [execute_tool('generate_flow_prompt', {'character_tag': target_tag, 'scene_mood': mood}, project_data)]
 
     return []
 
@@ -272,11 +301,14 @@ def chat(messages, model='qwen2.5:14b', project_data=None):
     executed_actions = list(fallback_actions)
 
     if model == 'qwen3-4b-local':
-        reply = lyric_translation.local_chat(convo, schema=None, max_tokens=1000) if hasattr(lyric_translation, 'local_chat') else "I am ready to help you with your project!"
+        try:
+            reply = lyric_translation.local_chat(convo, schema=None, max_tokens=1000) if hasattr(lyric_translation, 'local_chat') else ""
+        except Exception:
+            reply = ""
         if executed_actions and not reply:
             reply = " ".join(a.get('message', '') for a in executed_actions)
         return {
-            "reply": reply or "I am ready to help you with your video and captions!",
+            "reply": reply or "Local assistant ready! How can I help with your video or captions today?",
             "actions": executed_actions,
             "model": model
         }

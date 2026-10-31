@@ -608,7 +608,14 @@ def save_lyric_progress(path, signature, cues, completed):
     temporary = path.with_suffix('.tmp')
     temporary.write_text(json.dumps(dict(signature=signature, cues=cues, completed=completed),
                                     ensure_ascii=False), encoding='utf-8')
-    os.replace(temporary, path)
+    for attempt in range(5):
+        try:
+            os.replace(temporary, path)
+            break
+        except OSError:
+            if attempt == 4:
+                raise
+            time.sleep(0.02 * (attempt + 1))
 
 
 def has_mixed_lyric_scripts(text):

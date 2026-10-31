@@ -161,57 +161,114 @@
           card.className = 'copilotActionCard';
 
           if (act.action === 'apply_style_preset') {
-            card.innerHTML = `
-              <div class="actionTitle">🎨 Style Preset: ${act.preset}</div>
-              <div class="actionBody">${act.message}</div>
-              <button class="copilotActionBtn" type="button">✓ Apply to Project</button>
-            `;
-            card.querySelector('button').onclick = () => {
+            const title = document.createElement('div');
+            title.className = 'actionTitle';
+            title.textContent = `🎨 Style Preset: ${act.preset || ''}`;
+
+            const body = document.createElement('div');
+            body.className = 'actionBody';
+            body.textContent = act.message || '';
+
+            const btn = document.createElement('button');
+            btn.className = 'copilotActionBtn';
+            btn.type = 'button';
+            btn.textContent = '✓ Apply to Project';
+            btn.onclick = () => {
               if (window.applyPresetByName) {
                 window.applyPresetByName(act.preset);
               } else {
-                const btn = document.querySelector(`[data-preset="${act.preset}"]`);
-                if (btn) btn.click();
+                const b = document.querySelector(`[data-preset="${act.preset}"]`);
+                if (b) b.click();
               }
             };
+            card.append(title, body, btn);
           } else if (act.action === 'social_metadata') {
-            card.innerHTML = `
-              <div class="actionTitle">📱 Social Media Hooks & Captions</div>
-              <div class="actionBody">
-                <strong>Hooks:</strong><br>• ${act.title_hooks.join('<br>• ')}<br><br>
-                <strong>Caption & Tags:</strong><br>${act.caption.replace(/\n/g, '<br>')}
-              </div>
-              <button class="copilotActionBtn" type="button">📋 Copy to Clipboard</button>
-            `;
-            card.querySelector('button').onclick = () => {
-              const fullText = `${act.title_hooks[0]}\n\n${act.caption}`;
+            const title = document.createElement('div');
+            title.className = 'actionTitle';
+            title.textContent = '📱 Social Media Hooks & Captions';
+
+            const body = document.createElement('div');
+            body.className = 'actionBody';
+
+            const hooksLabel = document.createElement('strong');
+            hooksLabel.textContent = 'Hooks:';
+            body.appendChild(hooksLabel);
+
+            (act.title_hooks || []).forEach(h => {
+              const hookLine = document.createElement('div');
+              hookLine.textContent = `• ${h}`;
+              body.appendChild(hookLine);
+            });
+
+            const spacer = document.createElement('div');
+            spacer.style.height = '8px';
+            body.appendChild(spacer);
+
+            const captionLabel = document.createElement('strong');
+            captionLabel.textContent = 'Caption & Tags:';
+            body.appendChild(captionLabel);
+
+            const captionText = document.createElement('div');
+            captionText.style.whiteSpace = 'pre-wrap';
+            captionText.textContent = act.caption || '';
+            body.appendChild(captionText);
+
+            const btn = document.createElement('button');
+            btn.className = 'copilotActionBtn';
+            btn.type = 'button';
+            btn.textContent = '📋 Copy to Clipboard';
+            btn.onclick = () => {
+              const hook = (act.title_hooks && act.title_hooks[0]) ? act.title_hooks[0] + '\n\n' : '';
+              const fullText = `${hook}${act.caption || ''}`;
               navigator.clipboard.writeText(fullText);
-              card.querySelector('button').textContent = '✓ Copied!';
+              btn.textContent = '✓ Copied!';
             };
+            card.append(title, body, btn);
           } else if (act.action === 'flow_prompt') {
-            card.innerHTML = `
-              <div class="actionTitle">🎬 Google Flow Prompt (${act.character})</div>
-              <div class="actionBody">${act.prompt}</div>
-              <button class="copilotActionBtn" type="button">📋 Copy Prompt</button>
-            `;
-            card.querySelector('button').onclick = () => {
-              navigator.clipboard.writeText(act.prompt);
-              card.querySelector('button').textContent = '✓ Copied for Flow!';
+            const title = document.createElement('div');
+            title.className = 'actionTitle';
+            title.textContent = `🎬 Google Flow Prompt (${act.character || 'Persona'})`;
+
+            const body = document.createElement('div');
+            body.className = 'actionBody';
+            body.style.whiteSpace = 'pre-wrap';
+            body.textContent = act.prompt || '';
+
+            const btn = document.createElement('button');
+            btn.className = 'copilotActionBtn';
+            btn.type = 'button';
+            btn.textContent = '📋 Copy Prompt';
+            btn.onclick = () => {
+              navigator.clipboard.writeText(act.prompt || '');
+              btn.textContent = '✓ Copied for Flow!';
             };
+            card.append(title, body, btn);
           } else if (act.action === 'shift_caption_timing') {
-            card.innerHTML = `
-              <div class="actionTitle">⏱️ Timing Adjustment</div>
-              <div class="actionBody">${act.message}</div>
-              <button class="copilotActionBtn" type="button">✓ Shift Timing</button>
-            `;
-            card.querySelector('button').onclick = () => {
-              const shiftInput = document.getElementById('shift');
-              const shiftBtn = document.getElementById('shiftAll');
-              if (shiftInput && shiftBtn) {
-                shiftInput.value = act.seconds;
-                shiftBtn.click();
+            const title = document.createElement('div');
+            title.className = 'actionTitle';
+            title.textContent = '⏱️ Timing Adjustment';
+
+            const body = document.createElement('div');
+            body.className = 'actionBody';
+            body.textContent = act.message || '';
+
+            const btn = document.createElement('button');
+            btn.className = 'copilotActionBtn';
+            btn.type = 'button';
+            btn.textContent = '✓ Shift Timing';
+            btn.onclick = () => {
+              if (window.shiftTimingBySeconds) {
+                window.shiftTimingBySeconds(act.seconds);
+              } else {
+                const shiftInput = document.getElementById('shift');
+                const shiftBtn = document.getElementById('shiftAll');
+                if (shiftInput && shiftBtn) {
+                  shiftInput.value = act.seconds;
+                  shiftBtn.click();
+                }
               }
             };
+            card.append(title, body, btn);
           }
 
           el.appendChild(card);

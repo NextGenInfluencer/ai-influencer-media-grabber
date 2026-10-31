@@ -61,12 +61,26 @@ class CharacterLibraryTests(unittest.TestCase):
         self.assertIsNone(characters.get_character(cid))
 
     def test_save_and_get_character_image(self):
-        saved_name = characters.save_character_image('airi', 'portrait', 'photo.png', b'fake image data')
+        import io
+        from PIL import Image
+        buf = io.BytesIO()
+        Image.new('RGB', (10, 10), 'purple').save(buf, format='PNG')
+        valid_png = buf.getvalue()
+
+        saved_name = characters.save_character_image('airi', 'portrait', 'photo.png', valid_png)
         self.assertEqual(saved_name, 'portrait.png')
         p = characters.get_image_path('airi', 'portrait.png')
         self.assertIsNotNone(p)
         self.assertTrue(p.is_file())
-        self.assertEqual(p.read_bytes(), b'fake image data')
+        self.assertEqual(p.read_bytes(), valid_png)
+
+        # Invalid type rejected
+        with self.assertRaises(ValueError):
+            characters.save_character_image('airi', 'malicious/type', 'photo.png', valid_png)
+
+        # Invalid image bytes rejected
+        with self.assertRaises(ValueError):
+            characters.save_character_image('airi', 'portrait', 'photo.png', b'not an image')
 
     def test_traversal_attack_rejected(self):
         self.assertIsNone(characters.get_image_path('airi', '../../etc/passwd'))

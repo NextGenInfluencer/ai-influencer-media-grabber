@@ -91,6 +91,35 @@
     } catch (_) {}
   }
 
+  function inferLyricMood(lyricsText, sceneIndex) {
+    const text = (lyricsText || '').toLowerCase();
+    if (/rain|storm|tear|cry|cold|sad|alone/.test(text)) {
+      return 'rain-streaked studio glass window, soft melancholy lighting, city reflections, emotional close-up';
+    }
+    if (/night|dark|moon|midnight|stars|shadow/.test(text)) {
+      return 'late night recording booth, deep neon purple and indigo shadows, warm microphone rim light';
+    }
+    if (/fire|burn|flame|hot|heat|blaze/.test(text)) {
+      return 'warm amber tungsten backlights, dramatic golden glow, expressive vocal performance';
+    }
+    if (/love|heart|hold|kiss|feel|touch/.test(text)) {
+      return 'intimate studio close-up portrait, shallow depth of field, gentle golden hour warmth';
+    }
+    if (/dance|beat|club|party|jump|drop|bass/.test(text)) {
+      return 'dynamic stage lighting, pulsing magenta and cyan beams, energetic silhouette performance';
+    }
+    if (/dream|fly|sky|light|free|high/.test(text)) {
+      return 'ethereal atmospheric haze, subtle lens flare, soft cinematic glow, uplifting composition';
+    }
+    // Cycling creative studio settings
+    const presets = [
+      'dim studio lighting, cinematic rim lights, atmospheric haze, focused expression',
+      'late night recording booth, warm vintage microphone, deep neon purple shadows',
+      'studio acoustic wood panels, soft diffused key light, natural handheld 35mm feel'
+    ];
+    return presets[(sceneIndex - 1) % presets.length];
+  }
+
   function generateScenes() {
     const container = document.getElementById('storyboardScenesContainer');
     if (!container) return;
@@ -101,12 +130,14 @@
     }
 
     if (!project || !project.cues || !project.cues.length) {
-      container.innerHTML = `
-        <div class="storyboardEmptyState">
-          <span>🎵</span>
-          <p>No active project lyrics found. Load or transcribe a song in Captions Studio first.</p>
-        </div>
-      `;
+      const emptyDiv = document.createElement('div');
+      emptyDiv.className = 'storyboardEmptyState';
+      const icon = document.createElement('span');
+      icon.textContent = '🎵';
+      const msg = document.createElement('p');
+      msg.textContent = 'No active project lyrics found. Load or transcribe a song in Captions Studio first.';
+      emptyDiv.append(icon, msg);
+      container.replaceChildren(emptyDiv);
       return;
     }
 
@@ -131,12 +162,8 @@
       const transLyrics = chunk.map(c => c.translations?.[lang]?.text || '').filter(Boolean).join(' / ');
 
       const sceneIndex = Math.floor(i / sceneSize) + 1;
-      let mood = "dim studio lighting, cinematic rim lights, atmospheric haze";
-      if (sceneIndex % 3 === 1) mood = "late night recording booth, warm vintage microphone, deep neon purple shadows";
-      else if (sceneIndex % 3 === 2) mood = "rain-streaked studio glass window, city skyline reflections, emotional close-up";
-      else mood = "intense studio headphones silhouette, subtle lens flare, dynamic performance pose";
-
-      const flowPrompt = `Add ${charTag}, ${charTrigger}, ${mood}, 35mm lens, photorealistic 8k --ar ${aspect} --no ${charNeg}`;
+      const mood = inferLyricMood(originalLyrics, sceneIndex);
+      const flowPrompt = `Add ${charTag}, ${charTrigger}, ${mood}, 35mm lens, photorealistic 8k, aspect ratio ${aspect}. Avoiding: ${charNeg}.`;
 
       scenes.push({
         number: sceneIndex,
@@ -153,39 +180,69 @@
     scenes.forEach(s => {
       const card = document.createElement('div');
       card.className = 'sceneCard';
-      card.innerHTML = `
-        <div class="sceneHeader">
-          <span class="sceneTag">Scene #${s.number}</span>
-          <span class="sceneTime">${fmt(s.startTime)} → ${fmt(s.endTime)}</span>
-        </div>
-        <div class="sceneLyrics">
-          <div class="sceneOrig">"${s.originalLyrics}"</div>
-          ${s.transLyrics ? `<div class="sceneTrans">🌐 ${s.transLyrics}</div>` : ''}
-        </div>
-        <div class="scenePromptBox">
-          <label>Google Flow Prompt (${charTag}):</label>
-          <div class="promptText">${s.flowPrompt}</div>
-        </div>
-        <div class="sceneActions">
-          <button class="miniActionBtn copySceneBtn" type="button">📋 Copy Flow Prompt</button>
-          <button class="miniActionBtn snapRefBtn" type="button">📸 Grab Ref at ${fmt(s.startTime)}</button>
-        </div>
-      `;
 
-      card.querySelector('.copySceneBtn').onclick = (e) => {
+      // Header
+      const header = document.createElement('div');
+      header.className = 'sceneHeader';
+      const tagSpan = document.createElement('span');
+      tagSpan.className = 'sceneTag';
+      tagSpan.textContent = `Scene #${s.number}`;
+      const timeSpan = document.createElement('span');
+      timeSpan.className = 'sceneTime';
+      timeSpan.textContent = `${fmt(s.startTime)} → ${fmt(s.endTime)}`;
+      header.append(tagSpan, timeSpan);
+
+      // Lyrics
+      const lyricsDiv = document.createElement('div');
+      lyricsDiv.className = 'sceneLyrics';
+      const origDiv = document.createElement('div');
+      origDiv.className = 'sceneOrig';
+      origDiv.textContent = `"${s.originalLyrics}"`;
+      lyricsDiv.appendChild(origDiv);
+      if (s.transLyrics) {
+        const transDiv = document.createElement('div');
+        transDiv.className = 'sceneTrans';
+        transDiv.textContent = `🌐 ${s.transLyrics}`;
+        lyricsDiv.appendChild(transDiv);
+      }
+
+      // Prompt Box
+      const promptBox = document.createElement('div');
+      promptBox.className = 'scenePromptBox';
+      const promptLabel = document.createElement('label');
+      promptLabel.textContent = `Google Flow Prompt (${charTag}):`;
+      const promptText = document.createElement('div');
+      promptText.className = 'promptText';
+      promptText.textContent = s.flowPrompt;
+      promptBox.append(promptLabel, promptText);
+
+      // Actions
+      const actionsDiv = document.createElement('div');
+      actionsDiv.className = 'sceneActions';
+      const copyBtn = document.createElement('button');
+      copyBtn.className = 'miniActionBtn copySceneBtn';
+      copyBtn.type = 'button';
+      copyBtn.textContent = '📋 Copy Flow Prompt';
+      copyBtn.onclick = () => {
         navigator.clipboard.writeText(s.flowPrompt);
-        e.target.textContent = '✓ Copied for Flow!';
-        setTimeout(() => { e.target.textContent = '📋 Copy Flow Prompt'; }, 1500);
+        copyBtn.textContent = '✓ Copied for Flow!';
+        setTimeout(() => { copyBtn.textContent = '📋 Copy Flow Prompt'; }, 1500);
       };
 
-      card.querySelector('.snapRefBtn').onclick = () => {
+      const snapBtn = document.createElement('button');
+      snapBtn.className = 'miniActionBtn snapRefBtn';
+      snapBtn.type = 'button';
+      snapBtn.textContent = `📸 Grab Ref at ${fmt(s.startTime)}`;
+      snapBtn.onclick = () => {
         const vid = document.getElementById('video');
         if (vid) {
           vid.currentTime = s.startTime;
           if (window.motionStudio) window.motionStudio.snapFrame();
         }
       };
+      actionsDiv.append(copyBtn, snapBtn);
 
+      card.append(header, lyricsDiv, promptBox, actionsDiv);
       container.appendChild(card);
     });
   }

@@ -169,7 +169,11 @@
 
       const info = document.createElement('div');
       info.className = 'charMeta';
-      info.innerHTML = `<strong>${c.name}</strong><small>${c.tag}</small>`;
+      const strong = document.createElement('strong');
+      strong.textContent = c.name;
+      const small = document.createElement('small');
+      small.textContent = c.tag;
+      info.replaceChildren(strong, small);
 
       item.appendChild(avatar);
       item.appendChild(info);
@@ -190,19 +194,31 @@
     document.getElementById('charNegativeInput').value = c.negative_prompt || '';
     document.getElementById('charBioInput').value = c.bio || '';
 
-    // Update image previews
+    // Update image previews safely
     const pPrev = document.getElementById('portraitPreview');
     if (c.portrait_file) {
-      pPrev.innerHTML = `<img src="/api/characters/${c.id}/image/${c.portrait_file}" alt="Portrait">`;
+      const img = document.createElement('img');
+      img.src = `/api/characters/${encodeURIComponent(c.id)}/image/${encodeURIComponent(c.portrait_file)}`;
+      img.alt = 'Portrait';
+      pPrev.replaceChildren(img);
     } else {
-      pPrev.innerHTML = `<span class="imagePlaceholder">No portrait uploaded</span>`;
+      const span = document.createElement('span');
+      span.className = 'imagePlaceholder';
+      span.textContent = 'No portrait uploaded';
+      pPrev.replaceChildren(span);
     }
 
     const tPrev = document.getElementById('triptychPreview');
     if (c.triptych_file) {
-      tPrev.innerHTML = `<img src="/api/characters/${c.id}/image/${c.triptych_file}" alt="Triptych">`;
+      const img = document.createElement('img');
+      img.src = `/api/characters/${encodeURIComponent(c.id)}/image/${encodeURIComponent(c.triptych_file)}`;
+      img.alt = 'Triptych';
+      tPrev.replaceChildren(img);
     } else {
-      tPrev.innerHTML = `<span class="imagePlaceholder">No turnaround sheet uploaded</span>`;
+      const span = document.createElement('span');
+      span.className = 'imagePlaceholder';
+      span.textContent = 'No turnaround sheet uploaded';
+      tPrev.replaceChildren(span);
     }
   }
 
@@ -230,7 +246,7 @@
       return;
     }
     let tag = document.getElementById('charTagInput').value.trim();
-    if (tag && !tag.startswith('@')) tag = '@' + tag;
+    if (tag && !tag.startsWith('@')) tag = '@' + tag;
 
     const payload = {
       id: selectedCid,

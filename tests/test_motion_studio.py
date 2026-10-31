@@ -18,6 +18,7 @@ class TestMotionStudio(unittest.TestCase):
         motion_studio.REFERENCES_DIR = motion_studio.DATA_DIR / 'References'
         motion_studio.MOTION_OUTPUT_DIR = motion_studio.DATA_DIR / 'Motion Outputs'
         motion_studio._ensure_dirs()
+        motion_studio._ffmpeg()
 
     def tearDown(self):
         motion_studio.DATA_DIR = self.orig_data_dir
@@ -42,7 +43,7 @@ class TestMotionStudio(unittest.TestCase):
         with self.assertRaises(FileNotFoundError):
             motion_studio.extract_reference_frame('non_existent_video.mp4', 1.5)
 
-    @patch('subprocess.run')
+    @patch('assets.motion_studio.subprocess.run')
     def test_extract_reference_frame_success(self, mock_run):
         mock_run.return_value = MagicMock(returncode=0)
         # Create dummy video file
@@ -78,7 +79,7 @@ class TestMotionStudio(unittest.TestCase):
         with self.assertRaises(FileNotFoundError):
             motion_studio.render_character_motion('', 'missing_image.png')
 
-    @patch('subprocess.run')
+    @patch('assets.motion_studio.subprocess.run')
     def test_render_character_motion_success(self, mock_run):
         # Create dummy image
         p = motion_studio.REFERENCES_DIR / 'face.png'

@@ -2250,5 +2250,19 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
             drawTimeline();drawList();drawCaption();
             return true;
         };
+        window.setProjectBackgroundMedia = async (filePath) => {
+            if (!project || !project.id || !filePath) return false;
+            const form = new FormData();
+            form.append('revision', String(project.revision));
+            form.append('background_path', filePath);
+            form.append('clear_background', 'false');
+            form.append('clear_broll', 'false');
+            form.append('clear_audio', 'false');
+            project = await api(`/api/captions/${project.id}/composition`, 'POST', form);
+            dirty = false;
+            refresh();
+            poll();
+            return true;
+        };
     }
 })();

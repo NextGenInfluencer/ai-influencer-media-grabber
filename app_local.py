@@ -33,6 +33,9 @@ from media_safety import contained_path, safe_media_name, crop_filter, MEDIA_EXT
 from ai_runtime import serialized, transcribe, translate_srt
 import creator_composition
 from assets import hwaccel
+import characters
+import copilot
+from assets import motion_studio
 from typing import Any, Optional, cast
 
 # --- Constants ---
@@ -2270,10 +2273,6 @@ def run_ai_install_worker():
         ai_installer_state["log"].append(f"Error: {str(e)}")
 
 # --- AI Copilot, Character Library & Motion Studio APIs ---
-import copilot
-import characters
-from assets import motion_studio
-
 @app.route('/api/copilot/models', methods=['GET'])
 def copilot_models():
     return jsonify(models=copilot.available_models())
@@ -2299,10 +2298,15 @@ def get_character_route(cid):
     return jsonify(c)
 
 @app.route('/api/characters', methods=['POST'])
-def save_character_route():
+@app.route('/api/characters/<cid>', methods=['POST'])
+def save_character_route(cid=None):
     data = request.get_json() or {}
+    if cid and not data.get('id'):
+        data['id'] = cid
     c = characters.save_character(data)
-    return jsonify(c)
+    res = dict(c)
+    res['character'] = c
+    return jsonify(res)
 
 @app.route('/api/characters/<cid>', methods=['DELETE'])
 def delete_character_route(cid):
@@ -2312,13 +2316,18 @@ def delete_character_route(cid):
 @app.route('/api/characters/<cid>/upload', methods=['POST'])
 def upload_character_image(cid):
     image_type = request.form.get('type', 'portrait')
+    if image_type not in ('portrait', 'triptych'):
+        return jsonify(error="Invalid image type; must be 'portrait' or 'triptych'"), 400
     if 'file' not in request.files:
         return jsonify(error="No file provided"), 400
     file = request.files['file']
     filename = secure_filename(file.filename or 'image.png')
     raw = file.read()
-    dest = characters.save_character_image(cid, image_type, filename, raw)
-    return jsonify(success=True, filename=dest)
+    try:
+        dest = characters.save_character_image(cid, image_type, filename, raw)
+        return jsonify(success=True, filename=dest, url=f'/api/characters/{cid}/image/{dest}')
+    except Exception as e:
+        return jsonify(error=str(e)), 400
 
 @app.route('/api/characters/<cid>/image/<filename>', methods=['GET'])
 def get_character_image_file(cid, filename):
@@ -2337,6 +2346,8 @@ def extract_frame_route():
     try:
         res = motion_studio.extract_reference_frame(video_path, timestamp)
         return jsonify(res)
+    except FileNotFoundError as e:
+        return jsonify(error=str(e)), 400
     except Exception as e:
         return jsonify(error=str(e)), 500
 
@@ -2363,6 +2374,8 @@ def render_motion_route():
     try:
         res = motion_studio.render_character_motion(driving_video, source_image, audio_path)
         return jsonify(res)
+    except FileNotFoundError as e:
+        return jsonify(error=str(e)), 400
     except Exception as e:
         return jsonify(error=str(e)), 500
 
