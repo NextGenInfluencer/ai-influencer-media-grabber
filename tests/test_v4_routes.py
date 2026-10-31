@@ -117,6 +117,142 @@ class TestV4Routes(unittest.TestCase):
         res = self.client.post('/api/motion/render', json={'source_image': 'missing.png'}, headers=self.headers)
         self.assertEqual(res.status_code, 400)
 
+    def test_video_studio_page(self):
+        res = self.client.get('/video-studio')
+        self.assertEqual(res.status_code, 200)
+        self.assertIn(b'AI Video Studio', res.data)
+        self.assertIn(b'Locked Creator Persona', res.data)
+
+    def test_active_persona_routes(self):
+        # 1. GET active persona
+        res = self.client.get('/api/characters/active')
+        self.assertEqual(res.status_code, 200)
+        self.assertIn('active', res.json)
+        self.assertEqual(res.json['active']['id'], 'airi')
+
+        # 2. POST without token is 403
+        res = self.client.post('/api/characters/active', json={'character_id': 'airi'})
+        self.assertEqual(res.status_code, 403)
+
+        # 3. POST with invalid character returns 404
+        res = self.client.post('/api/characters/active', json={'character_id': 'nonexistent_char'}, headers=self.headers)
+        self.assertEqual(res.status_code, 404)
+
+        # 4. POST with airi is 200
+        res = self.client.post('/api/characters/active', json={'character_id': 'airi'}, headers=self.headers)
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json['active']['id'], 'airi')
+
+    def test_video_studio_storyboard_generation(self):
+        # Empty cues returns default starter storyboard gracefully
+        res = self.client.post('/api/video-studio/storyboard/generate', json={}, headers=self.headers)
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(len(res.json.get('storyboard', [])), 3)
+
+        cues = [
+            {'start': 0.0, 'end': 3.5, 'text': 'Under the neon lights we dance until dawn'},
+            {'start': 3.5, 'end': 7.0, 'text': 'Feel the bass drop through the concrete floor'},
+            {'start': 7.0, 'end': 11.0, 'text': 'Stars shine bright over the city skyline'}
+        ]
+        res = self.client.post('/api/video-studio/storyboard/generate', json={'cues': cues, 'character_id': 'airi'}, headers=self.headers)
+        self.assertEqual(res.status_code, 200)
+        scenes = res.json.get('storyboard', [])
+        self.assertEqual(len(scenes), 3)
+        self.assertIn('prompt', scenes[0])
+        self.assertIn('camera_motion', scenes[0])
+        self.assertIn('hand_lock', scenes[0])
+        self.assertTrue('fingers' in scenes[0]['prompt'].lower())
+
+    def test_video_studio_render_image_and_video(self):
+        # 1. Render image
+        img_payload = {
+            'scene_id': 'scene_001',
+            'prompt': 'Airi dancing under cyberpunk neon, ultra detailed 8k',
+            'character_id': 'airi',
+            'aspect_ratio': '9:16'
+        }
+        res = self.client.post('/api/video-studio/render-image', json=img_payload, headers=self.headers)
+        self.assertEqual(res.status_code, 200)
+        img_url = res.json.get('image_url')
+        self.assertTrue(img_url.startswith('/api/video-studio/images/file/'))
+
+        # Fetch rendered image
+        res_file = self.client.get(img_url)
+        self.assertEqual(res_file.status_code, 200)
+        self.assertEqual(res_file.content_type, 'image/png')
+
+        # 2. Render video
+        vid_payload = {
+            'scene_id': 'scene_001',
+            'image_path': res.json.get('image_path'),
+            'motion_prompt': 'dynamic camera push in with rhythmic dance choreography',
+            'duration': 3.5,
+            'camera_motion': 'Push in / forward track'
+        }
+        res = self.client.post('/api/video-studio/render-video', json=vid_payload, headers=self.headers)
+        self.assertEqual(res.status_code, 200)
+        vid_url = res.json.get('video_url')
+        self.assertTrue(vid_url.startswith('/api/video-studio/videos/file/'))
+
+        # Fetch rendered video
+        res_vid = self.client.get(vid_url)
+        self.assertEqual(res_vid.status_code, 200)
+        self.assertEqual(res_vid.content_type, 'video/mp4')
+
+    def test_storyboard_bridge_to_project(self):
+        # 1. Create a dummy project in captions storage
+        pid = 'b' * 32
+        proj_dir = Path(app_local.DEFAULT_SAVE_DIR) / 'Caption Projects' / pid
+        proj_dir.mkdir(parents=True, exist_ok=True)
+        dummy_song = proj_dir / 'song.mp3'
+        dummy_song.write_bytes(b'dummy-audio')
+        project_data = {
+            'id': pid,
+            'name': 'Test AI Song',
+            'source': 'song.mp3',
+            'state': 'ready',
+            'status': 'Ready',
+            'revision': 1,
+            'cues': [{'start': 0.0, 'end': 4.0, 'text': 'Verse 1'}],
+            'duration': 10.0,
+            'width': 1080,
+            'height': 1920,
+            'style': {},
+            'studio': {'version': 1, 'assets': {}, 'layers': []}
+        }
+        (proj_dir / 'project.json').write_text(json.dumps(project_data), encoding='utf-8')
+
+        # 2. Render mock image and video
+        img_res = self.client.post('/api/video-studio/render-image', json={'scene_id': 's1', 'prompt': 'test', 'character_id': 'airi'}, headers=self.headers)
+        self.assertEqual(img_res.status_code, 200)
+        vid_res = self.client.post('/api/video-studio/render-video', json={'scene_id': 's1', 'image_path': img_res.json['image_path'], 'duration': 4.0}, headers=self.headers)
+        self.assertEqual(vid_res.status_code, 200)
+
+        storyboard = [{
+            'id': 's1',
+            'lyric': 'Verse 1',
+            'start': 0.0,
+            'end': 4.0,
+            'duration': 4.0,
+            'prompt': 'Airi singing',
+            'image_url': img_res.json['image_url'],
+            'image_path': img_res.json['image_path'],
+            'video_url': vid_res.json['video_url'],
+            'video_path': vid_res.json['video_path']
+        }]
+
+        # 3. Save storyboard
+        res = self.client.post(f'/api/captions/{pid}/storyboard', json={'storyboard': storyboard}, headers=self.headers)
+        self.assertEqual(res.status_code, 200)
+
+        # 4. Bridge storyboard to timeline
+        res = self.client.post(f'/api/captions/{pid}/bridge-storyboard', headers=self.headers)
+        self.assertEqual(res.status_code, 200)
+        bridged = res.json['project']
+        self.assertTrue(bridged.get('has_composition', False))
+        self.assertTrue(len(bridged.get('composition_sequence', [])) >= 1)
+        self.assertEqual(bridged['composition_sequence'][0]['scene_id'], 's1')
+
 
 if __name__ == '__main__':
     unittest.main()

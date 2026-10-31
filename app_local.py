@@ -36,6 +36,7 @@ from assets import hwaccel
 import characters
 import copilot
 from assets import motion_studio
+from assets import ai_video_engine
 from typing import Any, Optional, cast
 
 # --- Constants ---
@@ -2307,6 +2308,84 @@ def save_character_route(cid=None):
     res = dict(c)
     res['character'] = c
     return jsonify(res)
+
+@app.route('/api/characters/active', methods=['GET'])
+def get_active_character_route():
+    return jsonify(active=characters.get_active_character())
+
+@app.route('/api/characters/active', methods=['POST'])
+def set_active_character_route():
+    data = request.get_json() or {}
+    cid = data.get('id') or data.get('character_id')
+    if not cid:
+        return jsonify(error="id required"), 400
+    if not characters.get_character(cid):
+        return jsonify(error=f"Character '{cid}' not found"), 404
+    characters.set_active_character_id(cid)
+    return jsonify(active=characters.get_active_character())
+
+@app.route('/video-studio', methods=['GET'])
+def video_studio_page():
+    session['authorized'] = True
+    if not session.get('api_token'):
+        session['api_token'] = uuid.uuid4().hex
+    return render_template('video_studio.html', api_token=session['api_token'], version=APP_VERSION)
+
+@app.route('/api/video-studio/storyboard/generate', methods=['POST'])
+def generate_storyboard_route():
+    data = request.get_json() or {}
+    cues = data.get('cues', [])
+    duration = float(data.get('duration', 60.0))
+    cid = data.get('character_id')
+    base_mood = data.get('mood', '')
+    scenes = ai_video_engine.generate_storyboard(cues, duration, cid, base_mood)
+    return jsonify(storyboard=scenes)
+
+@app.route('/api/video-studio/render-image', methods=['POST'])
+def render_keyframe_image_route():
+    data = request.get_json() or {}
+    prompt = data.get('prompt', '')
+    cid = data.get('character_id')
+    scene_num = int(data.get('scene_number', 1))
+    custom_ref = data.get('custom_reference')
+    res = ai_video_engine.render_keyframe_image(prompt, cid, scene_num, custom_ref)
+    res['url'] = f"/api/video-studio/images/file/{res['filename']}"
+    return jsonify(image=res, image_path=res['path'], image_url=res['url'])
+
+@app.route('/api/video-studio/render-video', methods=['POST'])
+def render_scene_video_route():
+    data = request.get_json() or {}
+    image_path = data.get('image_path')
+    motion_prompt = data.get('motion_prompt', '')
+    duration = float(data.get('duration', 5.0))
+    audio_path = data.get('audio_path')
+    scene_num = int(data.get('scene_number', 1))
+    if not image_path:
+        return jsonify(error="image_path required"), 400
+    try:
+        res = ai_video_engine.render_scene_video(image_path, motion_prompt, duration, audio_path, scene_num)
+        res['url'] = f"/api/video-studio/videos/file/{res['filename']}"
+        return jsonify(video=res, video_path=res['path'], video_url=res['url'])
+    except FileNotFoundError as e:
+        return jsonify(error=str(e)), 400
+    except Exception as e:
+        return jsonify(error=str(e)), 500
+
+@app.route('/api/video-studio/images/file/<filename>', methods=['GET'])
+def get_storyboard_image_file(filename):
+    safe_name = secure_filename(filename)
+    p = (ai_video_engine.STORYBOARD_IMG_DIR / safe_name).resolve()
+    if ai_video_engine.STORYBOARD_IMG_DIR.resolve() not in p.parents or not p.is_file():
+        return jsonify(error="Image not found"), 404
+    return send_file(str(p))
+
+@app.route('/api/video-studio/videos/file/<filename>', methods=['GET'])
+def get_storyboard_video_file(filename):
+    safe_name = secure_filename(filename)
+    p = (ai_video_engine.STORYBOARD_VID_DIR / safe_name).resolve()
+    if ai_video_engine.STORYBOARD_VID_DIR.resolve() not in p.parents or not p.is_file():
+        return jsonify(error="Video not found"), 404
+    return send_file(str(p))
 
 @app.route('/api/characters/<cid>', methods=['DELETE'])
 def delete_character_route(cid):

@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="media-token" content="{{ api_token }}">
+<title>AI Video Studio — Media Grabber</title>
+<link rel="stylesheet" href="/static/video_studio.css?v=v4">
+<link rel="stylesheet" href="/static/copilot.css?v=v4">
+<script src="/static/video_studio.js?v=v4" defer></script>
+<script src="/static/copilot.js?v=v4" defer></script>
+<script src="/static/characters.js?v=v4" defer></script>
+</head>
+<body class="videoStudioBody">
+
+<!-- Header -->
+<header class="vsHeader">
+  <div class="vsHeaderLeft">
+    <a href="/" class="vsBackBtn">← Home</a>
+    <div class="vsTitleGroup">
+      <h1>🎬 AI Video Studio</h1>
+      <small>Autonomous Storyboard, FLUX Keyframes &amp; Wan 2.1 Motion</small>
+    </div>
+    <select id="vsProjectSelect" class="vsSelect" aria-label="Select Project">
+      <option value="">Load Song / Project…</option>
+    </select>
+  </div>
+
+  <div class="vsHeaderRight">
+    <button id="activePersonaBtn" class="personaBadgeBtn" type="button" title="View &amp; Lock Character Persona">
+      <span>👤 Persona:</span>
+      <strong id="activePersonaName">@Airi</strong>
+    </button>
+
+    <button id="bridgeToCaptionsBtn" class="bridgeActionBtn" type="button" title="Assemble video timeline and open in Caption Studio">
+      <span>🎤 Open in Caption Studio</span>
+      <span>→</span>
+    </button>
+  </div>
+</header>
+
+<!-- Main Workspace -->
+<main class="vsMainContainer">
+  <!-- Left Sidebar (Director Panel) -->
+  <aside class="vsSidebar">
+    <div class="vsSidebarSection">
+      <div class="vsSectionHeader">
+        <span>🎵</span>
+        <span>Audio &amp; Song Direction</span>
+      </div>
+      <audio id="vsAudioPlayer" controls style="width:100%;height:32px;border-radius:6px;"></audio>
+      <div id="vsSongStats" style="font-size:11px;color:#94a3b8;">
+        Duration: <span id="vsSongDuration">0:00</span> • <span id="vsCueCount">0</span> lyric lines
+      </div>
+    </div>
+
+    <div class="vsSidebarSection">
+      <div class="vsSectionHeader">
+        <span>🎨</span>
+        <span>Visual Lighting &amp; Aesthetic</span>
+      </div>
+      <label for="vsMoodSelect" style="font-size:11px;color:#cbd5e1;font-weight:600;">Atmosphere:</label>
+      <select id="vsMoodSelect" class="vsSelect">
+        <option value="dim studio booth, cinematic rim lights, atmospheric haze">🌆 Neon Recording Booth (Late Night)</option>
+        <option value="rain-streaked studio glass window, soft city reflections">🌧️ Rain-Streaked Studio Glass</option>
+        <option value="modern concert stage, pulsing magenta and cyan lasers">⚡ Concert Stage &amp; Dynamic Lights</option>
+        <option value="warm golden hour studio sunlight, 35mm film grain">🌅 Warm Golden Hour Acoustic</option>
+        <option value="clean minimalist daylight studio, high-fashion editorial">✨ Minimalist Daylight Editorial</option>
+      </select>
+
+      <button id="generateStoryboardBtn" class="vsGenerateBtn" type="button">
+        <span>⚡ Generate Storyboard</span>
+      </button>
+    </div>
+
+    <div class="vsSidebarSection">
+      <div class="vsSectionHeader">
+        <span>👤</span>
+        <span>Locked Creator Persona</span>
+      </div>
+      <div id="sidebarPersonaCard" style="display:flex;align-items:center;gap:10px;">
+        <div id="sidebarPersonaAvatar" style="width:40px;height:40px;border-radius:8px;background:#7c3aed;background-size:cover;background-position:center;display:flex;align-items:center;justify-content:center;font-weight:700;">A</div>
+        <div style="flex:1;">
+          <strong id="sidebarPersonaTitle" style="font-size:12px;display:block;">Airi</strong>
+          <small id="sidebarPersonaTag" style="font-size:10px;color:#c084fc;">@Airi</small>
+        </div>
+        <button id="openPersonaModalBtn" class="vsActionBtn" style="padding:4px 8px;font-size:11px;" type="button">Edit</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Center Content Area (Interactive Storyboard) -->
+  <section class="vsContentArea">
+    <!-- Action Toolbar -->
+    <div class="vsToolbar">
+      <div class="vsToolbarLeft">
+        <span class="phaseBadge" id="vsPhaseBadge">Phase 1: Storyboard Ready</span>
+        <span id="vsSceneCountLabel" style="font-size:12px;color:#94a3b8;">0 Scenes</span>
+      </div>
+      <div style="display:flex;gap:10px;">
+        <button id="renderAllImagesBtn" class="vsActionBtn primaryGlow" type="button">
+          <span>🎨 1. Render Photos (FLUX.1)</span>
+        </button>
+        <button id="animateAllVideosBtn" class="vsActionBtn" type="button">
+          <span>🎬 2. Animate Scenes (Wan 2.1)</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Scene Grid -->
+    <div class="vsSceneGrid" id="vsSceneGrid">
+      <div style="grid-column:1/-1;text-align:center;padding:80px 20px;color:#64748b;">
+        <span style="font-size:42px;display:block;margin-bottom:12px;">🎬</span>
+        <h3 style="margin:0;font-size:16px;color:#e2e8f0;">No Storyboard Loaded</h3>
+        <p style="font-size:13px;max-width:420px;margin:8px auto 20px;">Load a song project from the top left, or click "Generate Storyboard" to create beat-synced AI scenes.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+</body>
+</html>

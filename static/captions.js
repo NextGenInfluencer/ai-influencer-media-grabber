@@ -2175,6 +2175,12 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
     window.addEventListener('focus', () => sendCaptionsHeartbeat());
     
     // Shortcuts Dialog Wireup
+    if($('aiVideoStudioBtn')) $('aiVideoStudioBtn').onclick = (e) => {
+        if(project && project.id) {
+            e.preventDefault();
+            window.location.href = `/video-studio?project=${encodeURIComponent(project.id)}`;
+        }
+    };
     if($('shortcutsBtn')) $('shortcutsBtn').onclick = () => {
         const d = $('shortcutsDialog');
         if(d) d.showModal();
@@ -2218,6 +2224,11 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
     (async()=>{
         await loadCustomFonts();
         await listProjects();
+        const urlParams = new URLSearchParams(window.location.search);
+        const reqPid = urlParams.get('project');
+        if(reqPid) {
+            try { await load(reqPid); } catch (_) {}
+        }
         await refreshLibraries();
     })().catch(e=>say(e.message,true));
 

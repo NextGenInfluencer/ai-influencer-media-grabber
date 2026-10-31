@@ -1627,12 +1627,78 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             data['translation_settings'] = {key:str(settings.get(key,''))[:limit] for key,limit in [('notes',4000),('glossary',4000),('model',200)]}
             if data.get('studio'):
                 data['studio'] = composition_model.schema(data['studio']['assets'], data['studio']['settings'], data['style'])
+            if 'storyboard' in incoming and isinstance(incoming['storyboard'], list):
+                data['storyboard'] = incoming['storyboard'][:60]
             data['revision'] += 1
             data['timing'] = incoming.get('timing', 'edited')
             if data['timing'] not in {'manual', 'estimated', 'automatic', 'aligned', 'imported', 'edited'}:
                 data['timing'] = 'edited'
             write(data)
         return jsonify(data)
+
+    @bp.post('/api/captions/<pid>/storyboard')
+    def save_storyboard(pid):
+        incoming = request.get_json() or {}
+        with lock:
+            data = read(pid)
+            if data['state'] == 'busy':
+                return jsonify(error='Project is busy processing.'), 409
+            storyboard = incoming.get('storyboard', [])
+            if not isinstance(storyboard, list):
+                return jsonify(error='Invalid storyboard list'), 400
+            data['storyboard'] = storyboard[:60]
+            data['revision'] += 1
+            write(data)
+            return jsonify(storyboard=data['storyboard'], revision=data['revision'])
+
+    @bp.post('/api/captions/<pid>/bridge-storyboard')
+    def bridge_storyboard(pid):
+        """Assembles rendered storyboard scene clips into the project sequence timeline."""
+        with lock:
+            data = read(pid)
+            if data['state'] == 'busy':
+                return jsonify(error='Project is busy processing.'), 409
+            storyboard = data.get('storyboard', [])
+            if not storyboard:
+                return jsonify(error='No storyboard scenes found in project.'), 400
+
+            f = folder(pid)
+            assets = copy.deepcopy(data.get('studio', {}).get('assets', {}))
+            settings = copy.deepcopy(data.get('studio', {}).get('settings', {}))
+
+            seq = []
+            for scene in storyboard:
+                vid_path = scene.get('video_path') or scene.get('video_file')
+                if not vid_path:
+                    continue
+                p = Path(vid_path)
+                if not p.is_file():
+                    continue
+                dest_name = f"scene_{uuid.uuid4().hex[:8]}.mp4"
+                shutil.copy2(p, f / dest_name)
+                duration = float(scene.get('duration') or (scene.get('end_time', 0) - scene.get('start_time', 0)) or 5.0)
+                seq.append({
+                    'file': dest_name,
+                    'name': f"Scene #{scene.get('number', len(seq)+1)}",
+                    'duration': duration,
+                    'start': float(scene.get('start_time', 0.0)),
+                    'scene_id': scene.get('id') or scene.get('scene_id') or f"scene_{len(seq)+1:03d}"
+                })
+
+            if not seq:
+                return jsonify(error='No rendered video files found in storyboard scenes. Animate scenes first.'), 400
+
+            settings['sequence'] = seq
+            if not data.get('studio'):
+                data['studio'] = composition_model.schema(assets, settings, data.get('style', {}))
+            else:
+                data['studio']['settings']['sequence'] = seq
+
+            data['has_composition'] = True
+            data['composition_sequence'] = seq
+            data['revision'] += 1
+            write(data)
+            return jsonify(project=data, sequence=seq)
 
     @bp.post('/api/captions/<pid>/import')
     def import_file(pid):

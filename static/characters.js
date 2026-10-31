@@ -7,8 +7,36 @@
     return meta ? meta.content : '';
   }
 
+  function notify(msg, type = 'info') {
+    const existing = document.getElementById('charStudioToast');
+    if (existing) existing.remove();
+
+    const t = document.createElement('div');
+    t.id = 'charStudioToast';
+    t.className = 'snapperToast';
+    t.style.maxWidth = '380px';
+    t.style.display = 'flex';
+    t.style.alignItems = 'center';
+    t.style.gap = '10px';
+
+    const icon = document.createElement('span');
+    icon.textContent = type === 'error' ? '⚠️' : (type === 'success' ? '✓' : (type === 'warning' ? '⚡' : 'ℹ️'));
+
+    const txt = document.createElement('span');
+    txt.textContent = msg;
+
+    t.append(icon, txt);
+    document.body.appendChild(t);
+    setTimeout(() => t.classList.add('show'), 10);
+    setTimeout(() => {
+      t.classList.remove('show');
+      setTimeout(() => t.remove(), 250);
+    }, 3500);
+  }
+
   let characterList = [];
   let selectedCid = 'airi';
+  let lockedActiveCid = 'airi';
 
   function createCharacterModalHTML() {
     if (document.getElementById('characterModal')) return;
@@ -111,6 +139,7 @@
 
             <div class="charActionsRow">
               <div class="leftActions">
+                <button id="lockActivePersonaBtn" class="primaryMiniBtn" style="background:#7c3aed;padding:6px 12px;" type="button">🔒 Lock as Active Persona</button>
                 <button id="copyFlowPromptBtn" class="secondaryBtn" type="button">📋 Copy Flow Tag</button>
                 <button id="deleteCharBtn" class="dangerBtn" type="button">🗑️ Delete</button>
               </div>
@@ -128,6 +157,7 @@
     modal.querySelector('.studioModalBackdrop').onclick = closeCharacterModal;
     document.getElementById('newCharBtn').onclick = createNewCharacter;
     document.getElementById('saveCharBtn').onclick = saveActiveCharacter;
+    document.getElementById('lockActivePersonaBtn').onclick = lockCurrentCharacterAsActive;
     document.getElementById('deleteCharBtn').onclick = deleteActiveCharacter;
     document.getElementById('copyFlowPromptBtn').onclick = copyFlowPrompt;
 
@@ -137,13 +167,22 @@
 
   async function loadCharacters() {
     try {
-      const res = await fetch('/api/characters');
-      if (!res.ok) return;
-      const data = await res.json();
+      const [resChars, resActive] = await Promise.all([
+        fetch('/api/characters'),
+        fetch('/api/characters/active').catch(() => null)
+      ]);
+      if (!resChars.ok) return;
+      const data = await resChars.json();
       characterList = data.characters || [];
+
+      if (resActive && resActive.ok) {
+        const actData = await resActive.json();
+        if (actData?.active?.id) lockedActiveCid = actData.active.id;
+      }
+
       renderCharacterSidebar();
       if (characterList.length) {
-        selectCharacter(characterList.find(c => c.id === selectedCid)?.id || characterList[0].id);
+        selectCharacter(characterList.find(c => c.id === lockedActiveCid)?.id || characterList[0].id);
       }
     } catch (_) {}
   }
@@ -177,6 +216,15 @@
 
       item.appendChild(avatar);
       item.appendChild(info);
+
+      if (c.id === lockedActiveCid) {
+        const lockBadge = document.createElement('span');
+        lockBadge.className = 'charLockBadge';
+        lockBadge.style.cssText = 'background:rgba(124,58,237,0.25);color:#c084fc;border:1px solid rgba(124,58,237,0.4);font-size:10px;padding:2px 6px;border-radius:12px;margin-left:auto;font-weight:600;';
+        lockBadge.textContent = '🔒 Active';
+        item.appendChild(lockBadge);
+      }
+
       listEl.appendChild(item);
     });
   }
@@ -193,6 +241,17 @@
     document.getElementById('charTriggerInput').value = c.trigger_prompt || '';
     document.getElementById('charNegativeInput').value = c.negative_prompt || '';
     document.getElementById('charBioInput').value = c.bio || '';
+
+    const lockBtn = document.getElementById('lockActivePersonaBtn');
+    if (lockBtn) {
+      if (cid === lockedActiveCid) {
+        lockBtn.textContent = '✓ Locked as Active Persona';
+        lockBtn.style.background = '#059669';
+      } else {
+        lockBtn.textContent = '🔒 Lock as Active Persona';
+        lockBtn.style.background = '#7c3aed';
+      }
+    }
 
     // Update image previews safely
     const pPrev = document.getElementById('portraitPreview');
@@ -239,10 +298,33 @@
     selectCharacter(newId);
   }
 
+  async function lockCurrentCharacterAsActive() {
+    try {
+      const res = await fetch('/api/characters/active', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Media-Token': getToken()
+        },
+        body: JSON.stringify({ id: selectedCid })
+      });
+      if (!res.ok) throw new Error('Could not lock active character');
+      const data = await res.json();
+      lockedActiveCid = data?.active?.id || selectedCid;
+      renderCharacterSidebar();
+      selectCharacter(selectedCid);
+      const c = characterList.find(x => x.id === selectedCid);
+      notify(`✓ ${c?.name || selectedCid} locked as active persona!`, 'success');
+      window.dispatchEvent(new CustomEvent('active-persona-changed', { detail: data?.active }));
+    } catch (e) {
+      notify('Could not lock persona: ' + e.message, 'error');
+    }
+  }
+
   async function saveActiveCharacter() {
     const name = document.getElementById('charNameInput').value.trim();
     if (!name) {
-      alert('Please enter a character name.');
+      notify('Please enter a character name.', 'warning');
       return;
     }
     let tag = document.getElementById('charTagInput').value.trim();
@@ -278,15 +360,16 @@
       const btn = document.getElementById('saveCharBtn');
       const orig = btn.textContent;
       btn.textContent = '✓ Saved!';
+      notify('✓ Character profile saved!', 'success');
       setTimeout(() => { btn.textContent = orig; }, 1500);
     } catch (e) {
-      alert('Could not save character: ' + e.message);
+      notify('Could not save character: ' + e.message, 'error');
     }
   }
 
   async function deleteActiveCharacter() {
     if (characterList.length <= 1) {
-      alert('At least one character profile must remain.');
+      notify('At least one character profile must remain.', 'warning');
       return;
     }
     if (!confirm(`Delete character ${document.getElementById('charNameInput').value}?`)) return;
@@ -300,8 +383,9 @@
       selectedCid = characterList[0].id;
       renderCharacterSidebar();
       selectCharacter(selectedCid);
+      notify('Character removed.', 'info');
     } catch (e) {
-      alert('Could not delete character: ' + e.message);
+      notify('Could not delete character: ' + e.message, 'error');
     }
   }
 
@@ -327,8 +411,9 @@
         else c.triptych_file = data.filename;
       }
       selectCharacter(selectedCid);
+      notify(`✓ Reference ${imgType} uploaded!`, 'success');
     } catch (err) {
-      alert('Image upload failed: ' + err.message);
+      notify('Image upload failed: ' + err.message, 'error');
     }
   }
 

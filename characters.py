@@ -38,6 +38,40 @@ def _ensure_storage():
         CHARACTERS_FILE.write_text(json.dumps(default_seed, indent=2, ensure_ascii=False), encoding='utf-8')
 
 
+def _active_file():
+    return CHARACTERS_DIR / 'active_character.json'
+
+
+def get_active_character_id():
+    _ensure_storage()
+    act_file = _active_file()
+    if act_file.exists():
+        try:
+            raw = json.loads(act_file.read_text(encoding='utf-8'))
+            if isinstance(raw, dict) and raw.get('active_id'):
+                return str(raw['active_id'])
+        except Exception:
+            pass
+    chars = list_characters()
+    return chars[0]['id'] if chars else 'airi'
+
+
+def set_active_character_id(cid):
+    _ensure_storage()
+    clean_id = re.sub(r'[^a-zA-Z0-9_\-]', '', str(cid))
+    _active_file().write_text(json.dumps({'active_id': clean_id}, indent=2), encoding='utf-8')
+    return clean_id
+
+
+def get_active_character():
+    cid = get_active_character_id()
+    char = get_character(cid)
+    if not char:
+        chars = list_characters()
+        char = chars[0] if chars else None
+    return copy.deepcopy(char)
+
+
 def list_characters():
     _ensure_storage()
     try:

@@ -86,6 +86,17 @@ class CharacterLibraryTests(unittest.TestCase):
         self.assertIsNone(characters.get_image_path('airi', '../../etc/passwd'))
         self.assertIsNone(characters.get_image_path('../../../airi', 'portrait.png'))
 
+    def test_active_character_lock(self):
+        self.assertEqual(characters.get_active_character_id(), 'airi')
+        active = characters.get_active_character()
+        self.assertIsNotNone(active)
+        self.assertEqual(active['id'], 'airi')
+
+        characters.save_character({'id': 'luna', 'name': 'Luna', 'tag': '@Luna'})
+        characters.set_active_character_id('luna')
+        self.assertEqual(characters.get_active_character_id(), 'luna')
+        self.assertEqual(characters.get_active_character()['name'], 'Luna')
+
 
 if __name__ == '__main__':
     unittest.main()
