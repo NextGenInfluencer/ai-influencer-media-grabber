@@ -342,11 +342,14 @@ https://www.youtube.com/watch?v=..."></textarea>
                     <!-- Config Row (Resolution, Auth, Save Directory) -->
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                         <!-- Resolution -->
-                        <div class="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-1.5">
-                            <label class="block text-xs font-medium text-zinc-300">Target Resolution</label>
-                            <div class="relative">
-                                <select id="videoQuality" name="quality" class="w-full px-3 py-2 bg-zinc-900 border border-zinc-700/80 rounded-lg text-xs font-medium text-zinc-200 focus:outline-none focus:border-blue-500 appearance-none cursor-pointer">
-                                    <option value="max" selected>Max Quality (4K / 2K / Best)</option>
+                        <div class="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] flex items-center justify-between gap-2.5">
+                            <div class="min-w-0">
+                                <label class="block text-xs font-semibold text-zinc-200">Target Resolution</label>
+                                <span class="text-[10px] text-zinc-500 block truncate">Max video quality</span>
+                            </div>
+                            <div class="relative shrink-0 w-44">
+                                <select id="videoQuality" name="quality" class="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-700/80 rounded-lg text-xs font-medium text-zinc-200 focus:outline-none focus:border-blue-500 appearance-none cursor-pointer pr-7 truncate">
+                                    <option value="max" selected>Max Quality (4K / Best)</option>
                                     <option value="2160">4K Ultra HD (2160p)</option>
                                     <option value="1440">2K Quad HD (1440p)</option>
                                     <option value="1080">1080p Full HD</option>
@@ -354,42 +357,47 @@ https://www.youtube.com/watch?v=..."></textarea>
                                     <option value="480">480p SD (Compact)</option>
                                     <option value="audio_only">Audio Only (MP3)</option>
                                 </select>
-                                <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-zinc-500">
-                                    <i class="fa-solid fa-chevron-down text-[10px]"></i>
+                                <div class="absolute inset-y-0 right-0 pr-2 flex items-center pointer-events-none text-zinc-500">
+                                    <i class="fa-solid fa-chevron-down text-[9px]"></i>
                                 </div>
                             </div>
                         </div>
 
                         <!-- Browser Session -->
-                        <div class="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-1.5">
-                            <label class="block text-xs font-medium text-zinc-300">Browser Session (Auth)</label>
-                            <div class="relative">
-                                <select id="browser" name="browser" class="w-full px-3 py-2 bg-zinc-900 border border-zinc-700/80 rounded-lg text-xs font-medium text-zinc-300 focus:outline-none focus:border-blue-500 appearance-none cursor-pointer">
-                                    <option value="none">Anonymous (Public Media)</option>
+                        <div class="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] flex items-center justify-between gap-2.5">
+                            <div class="min-w-0">
+                                <label class="block text-xs font-semibold text-zinc-200">Browser Session</label>
+                                <span class="text-[10px] text-zinc-500 block truncate">Auth &amp; cookies</span>
+                            </div>
+                            <div class="relative shrink-0 w-44">
+                                <select id="browser" name="browser" class="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-700/80 rounded-lg text-xs font-medium text-zinc-300 focus:outline-none focus:border-blue-500 appearance-none cursor-pointer pr-7 truncate">
+                                    <option value="none">Anonymous (Public)</option>
                                     <option value="chrome">Chrome Profile</option>
                                     <option value="firefox">Firefox Profile</option>
                                     <option value="edge">Edge Profile</option>
                                     <option value="safari">Safari Profile</option>
                                     <option value="cookies.txt">Custom cookies.txt</option>
                                 </select>
-                                <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-zinc-500">
-                                    <i class="fa-solid fa-chevron-down text-[10px]"></i>
+                                <div class="absolute inset-y-0 right-0 pr-2 flex items-center pointer-events-none text-zinc-500">
+                                    <i class="fa-solid fa-chevron-down text-[9px]"></i>
                                 </div>
                             </div>
                         </div>
 
                         <!-- Save Directory -->
-                        <div class="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-1.5">
-                            <div class="flex items-center justify-between">
-                                <label class="block text-xs font-medium text-zinc-300">Save Destination</label>
-                                <button type="button" onclick="openCurrentFolder('path')" class="text-[11px] text-blue-400 hover:text-blue-300 font-medium transition flex items-center space-x-1 cursor-pointer" title="Reveal folder in Explorer">
-                                    <i class="fa-regular fa-folder-open text-xs"></i>
-                                    <span>Reveal</span>
-                                </button>
+                        <div class="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] flex items-center justify-between gap-2.5">
+                            <div class="min-w-0">
+                                <div class="flex items-center space-x-1.5">
+                                    <label class="block text-xs font-semibold text-zinc-200">Save Destination</label>
+                                    <button type="button" onclick="openCurrentFolder('path')" class="text-[10px] text-blue-400 hover:text-blue-300 font-medium transition" title="Reveal folder in Explorer">
+                                        <i class="fa-regular fa-folder-open text-xs"></i>
+                                    </button>
+                                </div>
+                                <span class="text-[10px] text-zinc-500 block truncate">Local storage folder</span>
                             </div>
-                            <div class="relative cursor-pointer group" onclick="browseFolder()">
-                                <input type="text" id="path" name="path" class="w-full px-3 py-2 bg-zinc-900 border border-zinc-700/80 rounded-lg text-xs font-medium text-zinc-300 focus:outline-none focus:border-blue-500 shadow-inner group-hover:border-zinc-500 transition pr-8" placeholder="Auto (Documents/Media Grabber)" readonly>
-                                <div class="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none text-zinc-500 group-hover:text-blue-400 transition">
+                            <div class="relative shrink-0 w-44 cursor-pointer group" onclick="browseFolder()">
+                                <input type="text" id="path" name="path" class="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-700/80 rounded-lg text-xs font-medium text-zinc-300 focus:outline-none focus:border-blue-500 shadow-inner group-hover:border-zinc-500 transition pr-7 truncate" placeholder="Auto (Documents)" readonly>
+                                <div class="absolute inset-y-0 right-0 pr-2 flex items-center pointer-events-none text-zinc-500 group-hover:text-blue-400 transition">
                                     <i class="fa-solid fa-folder text-xs"></i>
                                 </div>
                             </div>
@@ -526,12 +534,15 @@ https://www.youtube.com/watch?v=..."></textarea>
                                     <span class="text-[10px] text-zinc-500">Powers scene descriptions &amp; summarization</span>
                                 </div>
                             </div>
-                            <div class="w-60">
-                                <select id="llmModelDownloader" class="w-full px-3 py-1.5 bg-zinc-900 border border-zinc-700/80 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-blue-500">
-                                    <option value="none" selected>None (Disable LLM Features)</option>
-                                    <option value="llama-3.2-1b">Llama 3.2 1B (Fast, CPU Friendly)</option>
-                                    <option value="llama-3-8b">Llama 3 8B (Heavy, High Reasoning)</option>
+                            <div class="relative w-52 shrink-0">
+                                <select id="llmModelDownloader" class="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-700/80 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-blue-500 appearance-none pr-7">
+                                    <option value="none" selected>None (Disabled)</option>
+                                    <option value="llama-3.2-1b">Llama 3.2 1B (Fast CPU)</option>
+                                    <option value="llama-3-8b">Llama 3 8B (High Reasoning)</option>
                                 </select>
+                                <div class="absolute inset-y-0 right-0 pr-2 flex items-center pointer-events-none text-zinc-500">
+                                    <i class="fa-solid fa-chevron-down text-[9px]"></i>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -541,296 +552,417 @@ https://www.youtube.com/watch?v=..."></textarea>
             </div>
 
             <!-- SECTION 2: MEDIA TOOLS (CONVERTER & COMPRESSOR) -->
-            <div id="section-converter" class="hidden flex-1 overflow-y-auto pr-2 scroll-smooth space-y-6">
-                <form id="converterForm" class="space-y-6">
-                    <div>
-                        <h2 class="text-sm font-semibold text-white tracking-tight">Offline Media Tools</h2>
-                        <p class="text-xs text-zinc-400">Trim lengths, resize aspect ratios, reduce MB size, and convert audio/video formats</p>
-                    </div>
-
-                    <!-- Media File Input -->
-                    <div class="space-y-2">
-                        <label class="block text-xs font-medium text-zinc-300">Select Media File</label>
-                        <div id="dropZone" class="relative group cursor-pointer border-2 border-dashed border-white/10 hover:border-blue-500/50 bg-[#090b10] hover:bg-white/[0.02] rounded-2xl p-6 transition-all text-center flex flex-col items-center justify-center space-y-3" onclick="document.getElementById('mediaFile').click()">
-                            <input type="file" id="mediaFile" name="files" class="hidden" accept="video/*,audio/*,image/*">
-                            <i class="fa-solid fa-cloud-arrow-up text-3xl text-zinc-600 group-hover:text-purple-400 transition-colors"></i>
-                            <div>
-                                <span class="text-xs font-bold text-zinc-300">Drag & drop files here</span>
-                                <span class="text-[10px] text-zinc-500 block mt-1">or click to browse</span>
-                            </div>
-                            <div id="selectedFileName" class="hidden mt-2 text-[10px] font-bold text-purple-400 bg-purple-500/10 px-3 py-1 rounded-full truncate max-w-full"></div>
+            <div id="section-converter" class="hidden flex-1 overflow-y-auto pr-2 scroll-smooth">
+                <form id="converterForm" class="space-y-4">
+                    <!-- Top Title Bar -->
+                    <div class="flex items-center justify-between pb-1">
+                        <div>
+                            <h2 class="text-sm font-semibold text-white tracking-tight">Offline Media Tools</h2>
+                            <p class="text-xs text-zinc-400">Trim lengths, resize aspect ratios, reduce MB size, and convert audio/video formats</p>
+                        </div>
+                        <div id="selectedFileName" class="hidden text-xs font-semibold text-purple-300 bg-purple-500/15 border border-purple-500/30 px-3 py-1 rounded-full truncate max-w-xs flex items-center space-x-1.5">
+                            <i class="fa-solid fa-file-video text-purple-400 text-xs"></i>
+                            <span class="truncate"></span>
                         </div>
                     </div>
 
-                    <!-- Trim Options -->
-                    <div id="trimmerContainer" class="space-y-2 hidden">
-                        <label class="block text-xs font-medium text-zinc-300">Video Trimmer &amp; Preview</label>
-                        <div class="bg-[#080809] border border-zinc-800 rounded-2xl p-4 shadow-inner">
-                            <div id="videoPreviewWrapper" class="relative w-full rounded-xl mb-4 bg-black overflow-hidden flex items-center justify-center group">
-                                <video id="videoPreview" class="w-full max-h-[250px] object-contain block mx-auto" controls></video>
-                                
-                                <!-- Dynamic Glowing Crosshair Pin (Direct child of wrapper so it stays visible during playback) -->
-                                <div id="clickTrackReticle" class="absolute hidden -translate-x-1/2 -translate-y-1/2 pointer-events-none transition-all duration-100 ease-out z-20">
-                                    <div class="relative flex items-center justify-center">
-                                        <span class="animate-ping absolute inline-flex h-9 w-9 rounded-full bg-purple-400 opacity-75"></span>
-                                        <div class="w-8 h-8 rounded-full border-2 border-purple-400 bg-purple-600/40 flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.9)] backdrop-blur-sm">
-                                            <div class="w-2 h-2 rounded-full bg-white shadow-sm"></div>
-                                        </div>
-                                        <div class="absolute -top-7 px-2.5 py-0.5 rounded-full bg-zinc-950/90 border border-purple-500/60 text-[9px] font-bold text-purple-200 tracking-wider uppercase whitespace-nowrap shadow-xl">
-                                            <i class="fa-solid fa-crosshairs mr-1 text-purple-400"></i><span id="clickTrackBadgeLabel">Target Locked</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Click-to-Track Interactive Overlay (Leaves bottom 48px clear for native player controls) -->
-                                <div id="clickTrackOverlay" class="absolute top-0 left-0 right-0 bottom-12 cursor-crosshair hidden select-none z-10 transition-colors bg-purple-950/15 hover:bg-purple-900/20">
-                                    <!-- Instructional Top Banner -->
-                                    <div class="absolute top-2.5 left-1/2 -translate-x-1/2 px-3.5 py-1.5 rounded-full bg-zinc-950/90 border border-purple-500/60 text-[11px] text-purple-200 font-medium backdrop-blur-md pointer-events-none flex items-center space-x-2 shadow-2xl z-10 transition-all">
-                                        <i class="fa-solid fa-crosshairs text-purple-400 animate-pulse"></i>
-                                        <span id="clickTrackBanner">Click directly on the person's face to lock target</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label class="block text-[10px] text-zinc-400 font-bold uppercase mb-1">Start Time (HH:MM:SS)</label>
-                                    <div class="flex items-center space-x-2">
-                                        <input type="text" id="trimStart" name="trimStart" placeholder="00:00:00" class="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-xs text-white text-center focus:border-purple-500 focus:outline-none">
-                                        <button type="button" onclick="setTime('start')" class="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-xs transition" title="Set current timestamp"><i class="fa-solid fa-location-crosshairs"></i></button>
-                                    </div>
-                                </div>
-                                <div>
-                                    <label class="block text-[10px] text-zinc-400 font-bold uppercase mb-1">End Time (HH:MM:SS)</label>
-                                    <div class="flex items-center space-x-2">
-                                        <input type="text" id="trimEnd" name="trimEnd" placeholder="00:00:00" class="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-xs text-white text-center focus:border-purple-500 focus:outline-none">
-                                        <button type="button" onclick="setTime('end')" class="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-xs transition" title="Set current timestamp"><i class="fa-solid fa-location-crosshairs"></i></button>
-                                    </div>
-                                </div>
-                            </div>
-                            <div id="trimDurationBadge" class="hidden mt-3 p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-between text-xs">
-                                <span class="text-zinc-400 flex items-center space-x-1.5">
-                                    <i class="fa-solid fa-scissors text-purple-400"></i>
-                                    <span>Cut Clip Length:</span>
-                                </span>
-                                <span id="trimDurationValue" class="font-bold text-purple-300 font-mono">00:00:14 (14s)</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Processing Options -->
-                    <div class="space-y-3">
-                        <label class="block text-xs font-medium text-zinc-300">Crop, Resolution &amp; Compression</label>
+                    <!-- 2-Column Responsive Desktop Grid -->
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
                         
-                        <div class="grid grid-cols-2 gap-4 bg-[#080809] p-4 rounded-2xl border border-zinc-800 shadow-inner">
-                            <!-- Aspect Ratio Crop -->
-                            <div class="space-y-2">
-                                <label class="block text-[10px] font-bold text-zinc-400 uppercase">Crop / Aspect Ratio</label>
-                                <select id="convResize" name="resize" class="w-full px-3 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-zinc-200 focus:outline-none focus:border-purple-500 appearance-none">
-                                    <option value="none">Original Aspect Ratio</option>
-                                    <optgroup label="Vertical (TikTok/IG Reels/Shorts)">
-                                        <option value="crop_9_16">Crop to 9:16 (Fill Screen)</option>
-                                        <option value="pad_9_16">Pad to 9:16 (Letterbox Fit)</option>
-                                    </optgroup>
-                                    <optgroup label="Horizontal (YouTube/TV)">
-                                        <option value="crop_16_9">Crop to 16:9 (Fill Screen)</option>
-                                        <option value="pad_16_9">Pad to 16:9 (Letterbox Fit)</option>
-                                    </optgroup>
-                                    <optgroup label="Blurred Background">
-                                        <option value="pad_blur_9_16">Pad 16:9 to 9:16 (Blurred Canvas)</option>
-                                    </optgroup>
-                                    <optgroup label="Square & Feed">
-                                        <option value="crop_1_1">Crop to 1:1 (Square)</option>
-                                        <option value="crop_4_5">Crop to 4:5 (Vertical Feed)</option>
-                                    </optgroup>
-                                </select>
+                        <!-- LEFT COLUMN (5 of 12 cols): Source & Trimming -->
+                        <div class="lg:col-span-5 space-y-4">
+                            <!-- Drop Zone Card -->
+                            <div class="p-4 rounded-2xl bg-[#080809] border border-white/10 space-y-3 shadow-inner">
+                                <label class="block text-xs font-medium text-zinc-300">Select Media File</label>
+                                <div id="dropZone" class="relative group cursor-pointer border-2 border-dashed border-white/10 hover:border-purple-500/50 bg-[#090b10] hover:bg-white/[0.02] rounded-xl p-5 transition-all text-center flex flex-col items-center justify-center space-y-2.5" onclick="document.getElementById('mediaFile').click()">
+                                    <input type="file" id="mediaFile" name="files" class="hidden" accept="video/*,audio/*,image/*">
+                                    <div class="w-11 h-11 rounded-xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-zinc-400 group-hover:text-purple-400 group-hover:border-purple-500/30 transition-all shadow-inner">
+                                        <i class="fa-solid fa-cloud-arrow-up text-xl"></i>
+                                    </div>
+                                    <div>
+                                        <span class="text-xs font-bold text-zinc-200 group-hover:text-white transition">Drag & drop media files here</span>
+                                        <span class="text-[10px] text-zinc-500 block mt-0.5">or click to browse from disk</span>
+                                    </div>
+                                    <div class="flex flex-wrap items-center justify-center gap-1.5 pt-1">
+                                        <span class="px-2 py-0.5 rounded text-[9px] font-medium bg-white/[0.04] text-zinc-400 border border-white/[0.06]">MP4</span>
+                                        <span class="px-2 py-0.5 rounded text-[9px] font-medium bg-white/[0.04] text-zinc-400 border border-white/[0.06]">MOV</span>
+                                        <span class="px-2 py-0.5 rounded text-[9px] font-medium bg-white/[0.04] text-zinc-400 border border-white/[0.06]">MKV</span>
+                                        <span class="px-2 py-0.5 rounded text-[9px] font-medium bg-white/[0.04] text-zinc-400 border border-white/[0.06]">MP3</span>
+                                        <span class="px-2 py-0.5 rounded text-[9px] font-medium bg-white/[0.04] text-zinc-400 border border-white/[0.06]">WAV</span>
+                                        <span class="px-2 py-0.5 rounded text-[9px] font-medium bg-white/[0.04] text-zinc-400 border border-white/[0.06]">GIF</span>
+                                    </div>
+                                </div>
                             </div>
 
-                            <!-- Quality & File Size -->
-                            <div class="space-y-2">
-                                <label class="block text-[10px] font-bold text-zinc-400 uppercase">Quality & File Size</label>
-                                <select id="convCompress" name="compress" class="w-full px-3 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-zinc-200 focus:outline-none focus:border-purple-500 appearance-none">
-                                    <optgroup label="Master & Lossless Quality">
-                                        <option value="none" selected>💎 High Quality (Larger Files)</option>
-                                        <option value="quality_lossless">👑 Maximum Encoder Quality (Large Files)</option>
-                                        <option value="quality_standard">Standard Web (Balanced Quality)</option>
-                                    </optgroup>
-                                    <optgroup label="MB File Size Compression (Reduce MB)">
-                                        <option value="compress_high">Higher Compression</option>
-                                        <option value="compress_web">Web Compression</option>
-                                        <option value="compress_80">Compress (Strong Smaller MB)</option>
-                                        <option value="compress_85">Compress (Very Strong Smaller MB)</option>
-                                        <option value="compress_extreme">Compress Extreme (Maximum Smaller MB)</option>
-                                    </optgroup>
-                                    <optgroup label="Resolution Downscaling">
-                                        <option value="scale_1080p">Downscale to 1080p Full HD</option>
-                                        <option value="scale_720p">Downscale to 720p HD (Compact)</option>
-                                        <option value="scale_480p">Downscale to 480p SD (Smallest MB)</option>
-                                        <option value="scale_50">Scale 50% (Half Dimensions)</option>
-                                    </optgroup>
-                                </select>
-                            </div>
-
-                            <!-- Auto-Crop & Subtitles Checkboxes -->
-                            <div class="space-y-2 col-span-2 pt-2 border-t border-zinc-800/60">
-                                <label class="flex items-center justify-between space-x-2 text-xs text-zinc-300 cursor-pointer mb-2">
-                                    <div class="flex items-center space-x-2">
-                                        <input type="checkbox" id="convAutoCrop" class="form-checkbox text-purple-500 rounded border-zinc-700 bg-zinc-900 focus:ring-purple-500">
-                                        <span>Dynamic Face-Tracking Crop to 9:16</span>
-                                    </div>
-                                </label>
-
-                                <!-- Dynamic Face Tracking Target Selector & Podcast Split-Screen -->
-                                <div id="convTrackingOptions" class="hidden ml-5 pl-3 py-2.5 my-1.5 border-l-2 border-purple-500/50 bg-zinc-900/60 rounded-r-lg space-y-2 transition-all">
-                                    <div class="flex items-center justify-between space-x-2">
-                                        <label for="convTrackingMode" class="text-[11px] text-zinc-400 font-medium">Tracking Focus & Layout:</label>
-                                        <select id="convTrackingMode" class="px-2.5 py-1 bg-zinc-900 border border-zinc-700/80 rounded text-xs text-zinc-200 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all cursor-pointer">
-                                            <option value="largest">👑 Dominant Subject (Largest Face)</option>
-                                            <option value="custom_point">🎯 Interactive Click-to-Track (Pick on Video)</option>
-                                            <option value="left">👈 Left Person (Speaker 1)</option>
-                                            <option value="right">👉 Right Person (Speaker 2)</option>
-                                            <option value="center">👥 Center (Both Subjects in Frame)</option>
-                                            <option value="split_screen">🎙️ Podcast Split-Screen (Stacked 9:16)</option>
-                                        </select>
-                                    </div>
-                                    <p id="convTrackingHint" class="text-[10.5px] text-purple-300/80 leading-tight">Automatically tracks and centers the primary speaker in 9:16 vertical video.</p>
-
-                                    <!-- Interactive Target Info Bar (Visible when custom_point is active) -->
-                                    <div id="clickTrackInfoBar" class="hidden flex items-center justify-between p-2 rounded-lg bg-purple-950/40 border border-purple-500/30 text-xs mt-1.5">
-                                        <div class="flex items-center space-x-2 overflow-hidden">
-                                            <i class="fa-solid fa-crosshairs text-purple-400 shrink-0"></i>
-                                            <span id="clickTrackStatusText" class="text-zinc-300 font-mono text-[10.5px] truncate">No target locked (click video above)</span>
-                                        </div>
-                                        <div class="flex items-center space-x-1.5 shrink-0">
-                                            <button type="button" id="btnToggleOverlay" class="px-2.5 py-1 rounded-md bg-zinc-800 hover:bg-zinc-700 text-[10px] text-zinc-200 border border-zinc-700 transition flex items-center space-x-1" title="Play or pause video to find a clear frame">
-                                                <i class="fa-solid fa-play text-purple-400"></i><span id="btnToggleOverlayText">Play Video</span>
-                                            </button>
-                                            <button type="button" id="btnResetTrackPoint" class="px-2.5 py-1 rounded-md bg-purple-600/30 hover:bg-purple-600/50 text-[10px] text-purple-200 border border-purple-500/40 transition">
-                                                Reset
-                                            </button>
+                            <!-- Video Trimmer & Preview Card -->
+                            <div id="trimmerContainer" class="p-4 rounded-2xl bg-[#080809] border border-white/10 space-y-3 shadow-inner hidden">
+                                <label class="block text-xs font-medium text-zinc-300">Video Trimmer &amp; Preview</label>
+                                <div id="videoPreviewWrapper" class="relative w-full rounded-xl bg-black overflow-hidden flex items-center justify-center group">
+                                    <video id="videoPreview" class="w-full max-h-[220px] object-contain block mx-auto" controls></video>
+                                    
+                                    <!-- Dynamic Glowing Crosshair Pin -->
+                                    <div id="clickTrackReticle" class="absolute hidden -translate-x-1/2 -translate-y-1/2 pointer-events-none transition-all duration-100 ease-out z-20">
+                                        <div class="relative flex items-center justify-center">
+                                            <span class="animate-ping absolute inline-flex h-9 w-9 rounded-full bg-purple-400 opacity-75"></span>
+                                            <div class="w-8 h-8 rounded-full border-2 border-purple-400 bg-purple-600/40 flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.9)] backdrop-blur-sm">
+                                                <div class="w-2 h-2 rounded-full bg-white shadow-sm"></div>
+                                            </div>
+                                            <div class="absolute -top-7 px-2.5 py-0.5 rounded-full bg-zinc-950/90 border border-purple-500/60 text-[9px] font-bold text-purple-200 tracking-wider uppercase whitespace-nowrap shadow-xl">
+                                                <i class="fa-solid fa-crosshairs mr-1 text-purple-400"></i><span id="clickTrackBadgeLabel">Target Locked</span>
+                                            </div>
                                         </div>
                                     </div>
-                                    <input type="hidden" id="convTargetX" name="target_x" value="">
-                                </div>
-                                <label class="flex items-center justify-between space-x-2 text-xs text-zinc-300 cursor-pointer mb-2">
-                                    <div class="flex items-center space-x-2">
-                                        <input type="checkbox" id="convBurnSubtitles" class="form-checkbox text-purple-500 rounded border-zinc-700 bg-zinc-900 focus:ring-purple-500">
-                                        <span>Burn Subtitles (Whisper AI)</span>
+
+                                    <!-- Click-to-Track Interactive Overlay -->
+                                    <div id="clickTrackOverlay" class="absolute top-0 left-0 right-0 bottom-12 cursor-crosshair hidden select-none z-10 transition-colors bg-purple-950/15 hover:bg-purple-900/20">
+                                        <div class="absolute top-2.5 left-1/2 -translate-x-1/2 px-3.5 py-1.5 rounded-full bg-zinc-950/90 border border-purple-500/60 text-[11px] text-purple-200 font-medium backdrop-blur-md pointer-events-none flex items-center space-x-2 shadow-2xl z-10 transition-all">
+                                            <i class="fa-solid fa-crosshairs text-purple-400 animate-pulse"></i>
+                                            <span id="clickTrackBanner">Click directly on the person's face to lock target</span>
+                                        </div>
                                     </div>
-                                </label>
-                                <label class="flex items-center justify-between space-x-2 text-xs text-zinc-300 cursor-pointer mb-2">
-                                    <div class="flex items-center space-x-2">
-                                        <input type="checkbox" id="convExportSubtitles" class="form-checkbox text-purple-500 rounded border-zinc-700 bg-zinc-900 focus:ring-purple-500">
-                                        <span>Export Subtitle File (.srt)</span>
-                                    </div>
-                                </label>
-                                <div class="flex items-center space-x-2 mt-4 pt-4 border-t border-zinc-800/60 w-full justify-between">
-                                    <label class="flex items-center space-x-2 text-xs text-zinc-300 cursor-pointer">
-                                        <span>AI Translate Subtitles</span>
-                                    </label>
-                                    <select id="convTranslateLang" class="w-1/2 px-2 py-1.5 bg-zinc-900 border border-zinc-700 rounded text-xs text-zinc-200 focus:outline-none focus:border-purple-500">
-                                        <option value="none" selected>No Translation</option>
-                                        <option value="English">English</option>
-                                        <option value="Spanish">Spanish</option>
-                                        <option value="French">French</option>
-                                        <option value="German">German</option>
-                                        <option value="Japanese">Japanese</option>
-                                    </select>
                                 </div>
-                                <div class="flex items-center space-x-2 mt-2 w-full justify-between">
-                                    <label class="text-[10px] font-bold text-zinc-400 uppercase">Local LLM Model</label>
-                                    <select id="llmModelConverter" class="w-2/3 px-2 py-1.5 bg-zinc-900 border border-zinc-700 rounded text-xs text-zinc-200 focus:outline-none focus:border-purple-500">
-                                        <option value="none">None (Disable LLM Features)</option>
-                                        <option value="llama-3.2-1b" selected>Llama 3.2 1B (Fast, CPU Friendly)</option>
-                                        <option value="llama-3-8b">Llama 3 8B (Heavy, High Reasoning)</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <!-- CapCut-Style Video Filters & Audio Effects -->
-                            <div class="col-span-2 pt-3 border-t border-zinc-800/60 space-y-3">
-                                <label class="block text-[10px] font-bold text-purple-400 uppercase tracking-widest"><i class="fa-solid fa-sliders mr-1.5"></i>Video Filters &amp; Audio FX (CapCut Suite)</label>
                                 <div class="grid grid-cols-2 gap-3">
                                     <div>
-                                        <label class="block text-[10px] font-bold text-zinc-400 uppercase mb-1">Video Filter</label>
-                                        <select id="convVideoFilter" name="video_filter" class="w-full px-2.5 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-purple-500">
-                                            <option value="none" selected>None (Original)</option>
-                                            <option value="bw">Black &amp; White</option>
-                                            <option value="sepia">Sepia</option>
-                                            <option value="vintage">Vintage Film</option>
-                                            <option value="cyberpunk">Cyberpunk Neon</option>
-                                            <option value="warm">Warm Golden Hour</option>
-                                            <option value="cool">Cool Cinema</option>
-                                            <option value="dramatic">Dramatic Contrast</option>
-                                            <option value="dreamy">Dreamy Soft Glow</option>
-                                        </select>
+                                        <label class="block text-[10px] text-zinc-400 font-bold uppercase mb-1">Start Time (HH:MM:SS)</label>
+                                        <div class="flex items-center space-x-1.5">
+                                            <input type="text" id="trimStart" name="trimStart" placeholder="00:00:00" class="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-700/80 rounded-lg text-xs text-white text-center focus:border-purple-500 focus:outline-none font-mono">
+                                            <button type="button" onclick="setTime('start')" class="px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-xs transition" title="Set current timestamp"><i class="fa-solid fa-location-crosshairs"></i></button>
+                                        </div>
                                     </div>
                                     <div>
-                                        <label class="block text-[10px] font-bold text-zinc-400 uppercase mb-1">Audio Effect</label>
-                                        <select id="convAudioEffect" name="audio_effect" class="w-full px-2.5 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-purple-500">
-                                            <option value="none" selected>None</option>
-                                            <option value="slowed_reverb">Slowed + Reverb (TikTok)</option>
-                                            <option value="nightcore">Nightcore / High Pitch</option>
-                                            <option value="vocal_remover">Vocal Remover (Karaoke)</option>
-                                            <option value="echo">Echo</option>
-                                            <option value="concert_hall">Concert Hall Reverb</option>
-                                            <option value="studio_vocal">Studio Vocal Polish</option>
-                                            <option value="lofi_radio">Lo-Fi / Vintage Radio</option>
-                                            <option value="bass_boost">Bass Boost</option>
-                                            <option value="chorus">Vocal Chorus</option>
-                                        </select>
+                                        <label class="block text-[10px] text-zinc-400 font-bold uppercase mb-1">End Time (HH:MM:SS)</label>
+                                        <div class="flex items-center space-x-1.5">
+                                            <input type="text" id="trimEnd" name="trimEnd" placeholder="00:00:00" class="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-700/80 rounded-lg text-xs text-white text-center focus:border-purple-500 focus:outline-none font-mono">
+                                            <button type="button" onclick="setTime('end')" class="px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-xs transition" title="Set current timestamp"><i class="fa-solid fa-location-crosshairs"></i></button>
+                                        </div>
                                     </div>
                                 </div>
-                                <div class="grid grid-cols-3 gap-3">
-                                    <div>
-                                        <label class="block text-[10px] text-zinc-400 font-bold uppercase mb-1">Film Grain (0-30)</label>
-                                        <input type="number" id="convFilmGrain" name="film_grain" min="0" max="30" step="1" value="0" class="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-700 rounded-lg text-xs text-white focus:border-purple-500 focus:outline-none">
-                                    </div>
-                                    <div>
-                                        <label class="block text-[10px] text-zinc-400 font-bold uppercase mb-1">Sharpen (0-2)</label>
-                                        <input type="number" id="convSharpen" name="sharpen" min="0" max="2" step="0.1" value="0" class="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-700 rounded-lg text-xs text-white focus:border-purple-500 focus:outline-none">
-                                    </div>
-                                    <div>
-                                        <label class="block text-[10px] text-zinc-400 font-bold uppercase mb-1">RGB Glitch (0-10)</label>
-                                        <input type="number" id="convChromatic" name="chromatic" min="0" max="10" step="1" value="0" class="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-700 rounded-lg text-xs text-white focus:border-purple-500 focus:outline-none">
-                                    </div>
-                                </div>
-                                <div class="flex flex-wrap gap-4 pt-1">
-                                    <label class="flex items-center space-x-2 text-xs text-zinc-300 cursor-pointer">
-                                        <input type="checkbox" id="convVignette" class="form-checkbox text-purple-500 rounded border-zinc-700 bg-zinc-900">
-                                        <span>Cinematic Vignette</span>
-                                    </label>
-                                    <label class="flex items-center space-x-2 text-xs text-zinc-300 cursor-pointer">
-                                        <input type="checkbox" id="convNoiseCancel" class="form-checkbox text-purple-500 rounded border-zinc-700 bg-zinc-900">
-                                        <span>Noise Cancellation (AI/FFT)</span>
-                                    </label>
-                                    <label class="flex items-center space-x-2 text-xs text-zinc-300 cursor-pointer">
-                                        <input type="checkbox" id="convVoiceIsolation" class="form-checkbox text-purple-500 rounded border-zinc-700 bg-zinc-900">
-                                        <span>Voice Isolation &amp; Clarity</span>
-                                    </label>
+                                <div id="trimDurationBadge" class="hidden mt-2 p-2 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-between text-xs">
+                                    <span class="text-zinc-400 flex items-center space-x-1.5">
+                                        <i class="fa-solid fa-scissors text-purple-400"></i>
+                                        <span>Cut Clip Length:</span>
+                                    </span>
+                                    <span id="trimDurationValue" class="font-bold text-purple-300 font-mono">00:00:14 (14s)</span>
                                 </div>
                             </div>
-                            <div class="col-span-2 flex items-center justify-end">
-                                <div class="w-1/2">
-                                    <select id="convFormat" name="format" class="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-zinc-200 focus:outline-none focus:border-purple-500 appearance-none">
-                                        <optgroup label="Video">
-                                            <option value="mp4" selected>MP4 (Universal H.264)</option>
-                                            <option value="mp4_hevc">MP4 (4K / H.265 Master)</option>
-                                            <option value="mov_prores">MOV (Apple ProRes 422 Studio)</option>
-                                            <option value="mkv">MKV (Matroska Master)</option>
-                                            <option value="gif">GIF Animation</option>
-                                        </optgroup>
-                                        <optgroup label="Audio">
-                                            <option value="mp3">MP3 Audio</option>
-                                            <option value="wav">WAV Audio (Lossless PCM)</option>
-                                        </optgroup>
-                                        <optgroup label="Images">
-                                            <option value="png">PNG (Lossless Image)</option>
-                                            <option value="jpg">JPG Image</option>
-                                        </optgroup>
-                                    </select>
+
+                            <!-- Target Output Format Card -->
+                            <div class="p-4 rounded-2xl bg-[#080809] border border-white/10 space-y-2.5 shadow-inner">
+                                <div class="flex items-center justify-between">
+                                    <label class="block text-xs font-semibold text-zinc-200">Target Output Format</label>
+                                    <span class="text-[10px] text-zinc-500 font-medium">Container &amp; Codec</span>
+                                </div>
+                                <div class="flex items-center justify-between gap-3">
+                                    <span class="text-xs text-zinc-400">Export format:</span>
+                                    <div class="relative w-48 shrink-0">
+                                        <select id="convFormat" name="format" class="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-700/80 rounded-lg text-xs font-medium text-zinc-200 focus:outline-none focus:border-purple-500 appearance-none pr-7">
+                                            <optgroup label="Video">
+                                                <option value="mp4" selected>MP4 (Universal H.264)</option>
+                                                <option value="mp4_hevc">MP4 (4K / H.265 Master)</option>
+                                                <option value="mov_prores">MOV (Apple ProRes 422)</option>
+                                                <option value="mkv">MKV (Matroska Master)</option>
+                                                <option value="gif">GIF Animation</option>
+                                            </optgroup>
+                                            <optgroup label="Audio">
+                                                <option value="mp3">MP3 Audio</option>
+                                                <option value="wav">WAV Audio (Lossless PCM)</option>
+                                            </optgroup>
+                                            <optgroup label="Images">
+                                                <option value="png">PNG (Lossless Image)</option>
+                                                <option value="jpg">JPG Image</option>
+                                            </optgroup>
+                                        </select>
+                                        <div class="absolute inset-y-0 right-0 pr-2 flex items-center pointer-events-none text-zinc-500">
+                                            <i class="fa-solid fa-chevron-down text-[9px]"></i>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
+
+                        <!-- RIGHT COLUMN (7 of 12 cols): Framing, Compression, FX & AI -->
+                        <div class="lg:col-span-7 space-y-4">
+                            
+                            <!-- CARD 1: Crop & Aspect Ratio + Smart Tracking -->
+                            <div class="p-4 rounded-2xl bg-[#080809] border border-white/10 space-y-3 shadow-inner">
+                                <div class="flex items-center justify-between">
+                                    <label class="block text-xs font-semibold text-zinc-200 tracking-tight flex items-center gap-1.5">
+                                        <i class="fa-solid fa-crop-simple text-purple-400"></i>
+                                        <span>Crop / Aspect Ratio</span>
+                                    </label>
+                                    <div class="relative w-48 shrink-0">
+                                        <select id="convResize" name="resize" class="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-700/80 rounded-lg text-xs font-medium text-zinc-200 focus:outline-none focus:border-purple-500 appearance-none pr-7">
+                                            <option value="none" selected>Original Aspect Ratio</option>
+                                            <optgroup label="Vertical (TikTok/IG Reels/Shorts)">
+                                                <option value="crop_9_16">Crop to 9:16 (Fill Screen)</option>
+                                                <option value="pad_9_16">Pad to 9:16 (Letterbox Fit)</option>
+                                                <option value="pad_blur_9_16">Pad 16:9 to 9:16 (Blurred)</option>
+                                            </optgroup>
+                                            <optgroup label="Horizontal (YouTube/TV)">
+                                                <option value="crop_16_9">Crop to 16:9 (Fill Screen)</option>
+                                                <option value="pad_16_9">Pad to 16:9 (Letterbox Fit)</option>
+                                            </optgroup>
+                                            <optgroup label="Square & Feed">
+                                                <option value="crop_1_1">Crop to 1:1 (Square)</option>
+                                                <option value="crop_4_5">Crop to 4:5 (Vertical Feed)</option>
+                                            </optgroup>
+                                        </select>
+                                        <div class="absolute inset-y-0 right-0 pr-2 flex items-center pointer-events-none text-zinc-500">
+                                            <i class="fa-solid fa-chevron-down text-[9px]"></i>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Visual Aspect Ratio Quick Chips -->
+                                <div class="flex flex-wrap gap-1.5 pt-1" id="aspectRatioChips">
+                                    <button type="button" onclick="setAspectRatioPreset('none')" data-ratio="none" class="ratio-chip active px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/40 transition shadow-sm">Original</button>
+                                    <button type="button" onclick="setAspectRatioPreset('crop_9_16')" data-ratio="crop_9_16" class="ratio-chip px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white/[0.03] hover:bg-white/[0.08] text-zinc-400 hover:text-white border border-white/[0.06] transition flex items-center gap-1">📱 9:16 Fill</button>
+                                    <button type="button" onclick="setAspectRatioPreset('pad_blur_9_16')" data-ratio="pad_blur_9_16" class="ratio-chip px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white/[0.03] hover:bg-white/[0.08] text-zinc-400 hover:text-white border border-white/[0.06] transition flex items-center gap-1">✨ 9:16 Blurred</button>
+                                    <button type="button" onclick="setAspectRatioPreset('crop_16_9')" data-ratio="crop_16_9" class="ratio-chip px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white/[0.03] hover:bg-white/[0.08] text-zinc-400 hover:text-white border border-white/[0.06] transition flex items-center gap-1">🖥️ 16:9</button>
+                                    <button type="button" onclick="setAspectRatioPreset('crop_1_1')" data-ratio="crop_1_1" class="ratio-chip px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white/[0.03] hover:bg-white/[0.08] text-zinc-400 hover:text-white border border-white/[0.06] transition flex items-center gap-1">⏹️ 1:1</button>
+                                </div>
+
+                                <!-- Dynamic Face Tracking -->
+                                <div class="pt-2.5 border-t border-white/[0.06] space-y-2">
+                                    <label class="flex items-center justify-between text-xs text-zinc-300 cursor-pointer">
+                                        <div class="flex items-center space-x-2">
+                                            <input type="checkbox" id="convAutoCrop" class="form-checkbox text-purple-500 rounded border-zinc-700 bg-zinc-900 focus:ring-purple-500">
+                                            <span class="font-medium">Dynamic Face-Tracking Crop to 9:16</span>
+                                        </div>
+                                    </label>
+
+                                    <!-- Dynamic Face Tracking Target Selector & Podcast Split-Screen -->
+                                    <div id="convTrackingOptions" class="hidden pl-3 py-2 border-l-2 border-purple-500/50 bg-white/[0.02] rounded-r-lg space-y-2 transition-all">
+                                        <div class="flex items-center justify-between gap-2">
+                                            <label for="convTrackingMode" class="text-[11px] text-zinc-400 font-medium shrink-0">Tracking Focus:</label>
+                                            <div class="relative w-56 shrink-0">
+                                                <select id="convTrackingMode" class="w-full px-2 py-1 bg-zinc-900 border border-zinc-700/80 rounded text-xs text-zinc-200 focus:outline-none focus:border-purple-500 appearance-none pr-6">
+                                                    <option value="largest">👑 Dominant Subject (Largest Face)</option>
+                                                    <option value="custom_point">🎯 Click-to-Track (Pick on Video)</option>
+                                                    <option value="left">👈 Left Person (Speaker 1)</option>
+                                                    <option value="right">👉 Right Person (Speaker 2)</option>
+                                                    <option value="center">👥 Center (Both Subjects in Frame)</option>
+                                                    <option value="split_screen">🎙️ Podcast Split-Screen (Stacked 9:16)</option>
+                                                </select>
+                                                <div class="absolute inset-y-0 right-0 pr-1.5 flex items-center pointer-events-none text-zinc-500">
+                                                    <i class="fa-solid fa-chevron-down text-[8px]"></i>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <p id="convTrackingHint" class="text-[10.5px] text-purple-300/80 leading-tight">Automatically tracks and centers the primary speaker in 9:16 vertical video.</p>
+
+                                        <!-- Interactive Target Info Bar -->
+                                        <div id="clickTrackInfoBar" class="hidden flex items-center justify-between p-2 rounded-lg bg-purple-950/40 border border-purple-500/30 text-xs mt-1.5">
+                                            <div class="flex items-center space-x-2 overflow-hidden">
+                                                <i class="fa-solid fa-crosshairs text-purple-400 shrink-0"></i>
+                                                <span id="clickTrackStatusText" class="text-zinc-300 font-mono text-[10.5px] truncate">No target locked (click video above)</span>
+                                            </div>
+                                            <div class="flex items-center space-x-1.5 shrink-0">
+                                                <button type="button" id="btnToggleOverlay" class="px-2.5 py-1 rounded-md bg-zinc-800 hover:bg-zinc-700 text-[10px] text-zinc-200 border border-zinc-700 transition flex items-center space-x-1" title="Play or pause video to find a clear frame">
+                                                    <i class="fa-solid fa-play text-purple-400"></i><span id="btnToggleOverlayText">Play Video</span>
+                                                </button>
+                                                <button type="button" id="btnResetTrackPoint" class="px-2.5 py-1 rounded-md bg-purple-600/30 hover:bg-purple-600/50 text-[10px] text-purple-200 border border-purple-500/40 transition">
+                                                    Reset
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <input type="hidden" id="convTargetX" name="target_x" value="">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- CARD 2: Quality & File Size Compression -->
+                            <div class="p-4 rounded-2xl bg-[#080809] border border-white/10 space-y-3 shadow-inner">
+                                <div class="flex items-center justify-between">
+                                    <label class="block text-xs font-semibold text-zinc-200 tracking-tight flex items-center gap-1.5">
+                                        <i class="fa-solid fa-gauge-high text-blue-400"></i>
+                                        <span>Quality &amp; File Size</span>
+                                    </label>
+                                    <div class="relative w-52 shrink-0">
+                                        <select id="convCompress" name="compress" class="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-700/80 rounded-lg text-xs font-medium text-zinc-200 focus:outline-none focus:border-purple-500 appearance-none pr-7">
+                                            <optgroup label="Master & Lossless Quality">
+                                                <option value="none" selected>💎 High Quality (Larger Files)</option>
+                                                <option value="quality_lossless">👑 Maximum Quality</option>
+                                                <option value="quality_standard">Standard Web (Balanced)</option>
+                                            </optgroup>
+                                            <optgroup label="MB File Size Compression">
+                                                <option value="compress_high">Higher Compression</option>
+                                                <option value="compress_web">Web Compression</option>
+                                                <option value="compress_80">Compress (Strong Smaller MB)</option>
+                                                <option value="compress_85">Compress (Very Strong)</option>
+                                                <option value="compress_extreme">Compress Extreme (Max Small MB)</option>
+                                            </optgroup>
+                                            <optgroup label="Resolution Downscale">
+                                                <option value="scale_1080p">Downscale to 1080p Full HD</option>
+                                                <option value="scale_720p">Downscale to 720p HD</option>
+                                                <option value="scale_480p">Downscale to 480p SD</option>
+                                                <option value="scale_50">Scale 50% (Half Dimensions)</option>
+                                            </optgroup>
+                                        </select>
+                                        <div class="absolute inset-y-0 right-0 pr-2 flex items-center pointer-events-none text-zinc-500">
+                                            <i class="fa-solid fa-chevron-down text-[9px]"></i>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Quality Quick Pills -->
+                                <div class="flex flex-wrap gap-1.5 pt-1" id="qualityChips">
+                                    <button type="button" onclick="setQualityPreset('none')" data-quality="none" class="quality-chip active px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/40 transition shadow-sm">💎 High Quality</button>
+                                    <button type="button" onclick="setQualityPreset('quality_standard')" data-quality="quality_standard" class="quality-chip px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white/[0.03] hover:bg-white/[0.08] text-zinc-400 hover:text-white border border-white/[0.06] transition">⚖️ Balanced</button>
+                                    <button type="button" onclick="setQualityPreset('compress_80')" data-quality="compress_80" class="quality-chip px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white/[0.03] hover:bg-white/[0.08] text-zinc-400 hover:text-white border border-white/[0.06] transition">🗜️ Smaller MB</button>
+                                    <button type="button" onclick="setQualityPreset('compress_extreme')" data-quality="compress_extreme" class="quality-chip px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white/[0.03] hover:bg-white/[0.08] text-zinc-400 hover:text-white border border-white/[0.06] transition">⚡ Extreme</button>
+                                </div>
+                            </div>
+
+                            <!-- CARD 3: Video Filters & Audio FX (CapCut Suite) -->
+                            <div class="p-4 rounded-2xl bg-[#080809] border border-white/10 space-y-3 shadow-inner">
+                                <label class="block text-xs font-semibold text-purple-400 tracking-tight flex items-center gap-1.5">
+                                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                                    <span>Video Filters &amp; Audio FX (CapCut Suite)</span>
+                                </label>
+
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div class="flex items-center justify-between gap-2 p-2 rounded-xl bg-white/[0.02] border border-white/[0.06]">
+                                        <label class="text-[11px] text-zinc-300 font-medium shrink-0">Video Filter:</label>
+                                        <div class="relative w-36 shrink-0">
+                                            <select id="convVideoFilter" name="video_filter" class="w-full px-2 py-1 bg-zinc-900 border border-zinc-700/80 rounded text-xs text-zinc-200 focus:outline-none focus:border-purple-500 appearance-none pr-6">
+                                                <option value="none" selected>None (Original)</option>
+                                                <option value="bw">Black &amp; White</option>
+                                                <option value="sepia">Sepia</option>
+                                                <option value="vintage">Vintage Film</option>
+                                                <option value="cyberpunk">Cyberpunk Neon</option>
+                                                <option value="warm">Warm Golden Hour</option>
+                                                <option value="cool">Cool Cinema</option>
+                                                <option value="dramatic">Dramatic Contrast</option>
+                                                <option value="dreamy">Dreamy Glow</option>
+                                            </select>
+                                            <div class="absolute inset-y-0 right-0 pr-1.5 flex items-center pointer-events-none text-zinc-500">
+                                                <i class="fa-solid fa-chevron-down text-[8px]"></i>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex items-center justify-between gap-2 p-2 rounded-xl bg-white/[0.02] border border-white/[0.06]">
+                                        <label class="text-[11px] text-zinc-300 font-medium shrink-0">Audio Effect:</label>
+                                        <div class="relative w-36 shrink-0">
+                                            <select id="convAudioEffect" name="audio_effect" class="w-full px-2 py-1 bg-zinc-900 border border-zinc-700/80 rounded text-xs text-zinc-200 focus:outline-none focus:border-purple-500 appearance-none pr-6">
+                                                <option value="none" selected>None</option>
+                                                <option value="slowed_reverb">Slowed + Reverb</option>
+                                                <option value="nightcore">Nightcore</option>
+                                                <option value="vocal_remover">Vocal Remover</option>
+                                                <option value="echo">Echo</option>
+                                                <option value="concert_hall">Concert Hall</option>
+                                                <option value="studio_vocal">Studio Vocal</option>
+                                                <option value="lofi_radio">Lo-Fi Radio</option>
+                                                <option value="bass_boost">Bass Boost</option>
+                                                <option value="chorus">Chorus</option>
+                                            </select>
+                                            <div class="absolute inset-y-0 right-0 pr-1.5 flex items-center pointer-events-none text-zinc-500">
+                                                <i class="fa-solid fa-chevron-down text-[8px]"></i>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Fine-tune FX Sliders / Steppers -->
+                                <div class="grid grid-cols-3 gap-2.5 pt-1">
+                                    <div class="p-2 rounded-xl bg-white/[0.02] border border-white/[0.06]">
+                                        <label class="block text-[10px] text-zinc-400 font-medium uppercase mb-1">Film Grain</label>
+                                        <input type="number" id="convFilmGrain" name="film_grain" min="0" max="30" step="1" value="0" class="w-full px-2 py-1 bg-zinc-900 border border-zinc-700/80 rounded text-xs text-white focus:border-purple-500 focus:outline-none font-mono">
+                                    </div>
+                                    <div class="p-2 rounded-xl bg-white/[0.02] border border-white/[0.06]">
+                                        <label class="block text-[10px] text-zinc-400 font-medium uppercase mb-1">Sharpen</label>
+                                        <input type="number" id="convSharpen" name="sharpen" min="0" max="2" step="0.1" value="0" class="w-full px-2 py-1 bg-zinc-900 border border-zinc-700/80 rounded text-xs text-white focus:border-purple-500 focus:outline-none font-mono">
+                                    </div>
+                                    <div class="p-2 rounded-xl bg-white/[0.02] border border-white/[0.06]">
+                                        <label class="block text-[10px] text-zinc-400 font-medium uppercase mb-1">RGB Glitch</label>
+                                        <input type="number" id="convChromatic" name="chromatic" min="0" max="10" step="1" value="0" class="w-full px-2 py-1 bg-zinc-900 border border-zinc-700/80 rounded text-xs text-white focus:border-purple-500 focus:outline-none font-mono">
+                                    </div>
+                                </div>
+
+                                <!-- Tactile Pills for Vignette, Noise Cancel, Voice Isolation -->
+                                <div class="flex flex-wrap gap-2 pt-1">
+                                    <label class="px-2.5 py-1.5 rounded-xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.06] hover:border-white/[0.12] cursor-pointer transition-all flex items-center space-x-2 select-none has-[:checked]:bg-purple-500/10 has-[:checked]:border-purple-500/40">
+                                        <input type="checkbox" id="convVignette" class="form-checkbox text-purple-500 rounded border-zinc-700 bg-zinc-900 w-3.5 h-3.5">
+                                        <span class="text-xs text-zinc-300">Cinematic Vignette</span>
+                                    </label>
+                                    <label class="px-2.5 py-1.5 rounded-xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.06] hover:border-white/[0.12] cursor-pointer transition-all flex items-center space-x-2 select-none has-[:checked]:bg-purple-500/10 has-[:checked]:border-purple-500/40">
+                                        <input type="checkbox" id="convNoiseCancel" class="form-checkbox text-purple-500 rounded border-zinc-700 bg-zinc-900 w-3.5 h-3.5">
+                                        <span class="text-xs text-zinc-300">Noise Cancellation (AI/FFT)</span>
+                                    </label>
+                                    <label class="px-2.5 py-1.5 rounded-xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.06] hover:border-white/[0.12] cursor-pointer transition-all flex items-center space-x-2 select-none has-[:checked]:bg-purple-500/10 has-[:checked]:border-purple-500/40">
+                                        <input type="checkbox" id="convVoiceIsolation" class="form-checkbox text-purple-500 rounded border-zinc-700 bg-zinc-900 w-3.5 h-3.5">
+                                        <span class="text-xs text-zinc-300">Voice Isolation &amp; Clarity</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- CARD 4: Subtitles & Local AI Intelligence -->
+                            <div class="p-4 rounded-2xl bg-[#080809] border border-white/10 space-y-3 shadow-inner">
+                                <label class="block text-xs font-semibold text-zinc-200 tracking-tight flex items-center gap-1.5">
+                                    <i class="fa-solid fa-closed-captioning text-emerald-400"></i>
+                                    <span>Subtitles &amp; Local AI Intelligence</span>
+                                </label>
+
+                                <div class="flex flex-wrap gap-4">
+                                    <label class="flex items-center space-x-2 text-xs text-zinc-300 cursor-pointer">
+                                        <input type="checkbox" id="convBurnSubtitles" class="form-checkbox text-purple-500 rounded border-zinc-700 bg-zinc-900 w-3.5 h-3.5">
+                                        <span>Burn Subtitles (Whisper AI)</span>
+                                    </label>
+                                    <label class="flex items-center space-x-2 text-xs text-zinc-300 cursor-pointer">
+                                        <input type="checkbox" id="convExportSubtitles" class="form-checkbox text-purple-500 rounded border-zinc-700 bg-zinc-900 w-3.5 h-3.5">
+                                        <span>Export Subtitle File (.srt)</span>
+                                    </label>
+                                </div>
+
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                                    <div class="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.06]">
+                                        <span class="text-xs text-zinc-300 font-medium shrink-0">Translate To:</span>
+                                        <div class="relative w-36 shrink-0">
+                                            <select id="convTranslateLang" class="w-full px-2 py-1 bg-zinc-900 border border-zinc-700/80 rounded text-xs text-zinc-200 focus:outline-none focus:border-purple-500 appearance-none pr-6">
+                                                <option value="none" selected>No Translation</option>
+                                                <option value="English">English</option>
+                                                <option value="Spanish">Spanish</option>
+                                                <option value="French">French</option>
+                                                <option value="German">German</option>
+                                                <option value="Japanese">Japanese</option>
+                                            </select>
+                                            <div class="absolute inset-y-0 right-0 pr-1.5 flex items-center pointer-events-none text-zinc-500">
+                                                <i class="fa-solid fa-chevron-down text-[8px]"></i>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.06]">
+                                        <span class="text-xs text-zinc-300 font-medium shrink-0">Local LLM:</span>
+                                        <div class="relative w-44 shrink-0">
+                                            <select id="llmModelConverter" class="w-full px-2 py-1 bg-zinc-900 border border-zinc-700/80 rounded text-xs text-zinc-200 focus:outline-none focus:border-purple-500 appearance-none pr-6">
+                                                <option value="none">None (Disabled)</option>
+                                                <option value="llama-3.2-1b" selected>Llama 3.2 1B (Fast)</option>
+                                                <option value="llama-3-8b">Llama 3 8B (Heavy)</option>
+                                            </select>
+                                            <div class="absolute inset-y-0 right-0 pr-1.5 flex items-center pointer-events-none text-zinc-500">
+                                                <i class="fa-solid fa-chevron-down text-[8px]"></i>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
                     </div>
+                    
+                    <div id="convStatusContainer" class="hidden">
+                        <div class="flex items-center justify-between text-xs mb-2">
+                            <span id="convStatusText" class="text-zinc-400 font-bold uppercase tracking-widest text-[10px]">Processing...</span>
+                            <i id="convStatusIcon" class="fa-solid fa-circle-notch fa-spin text-purple-500"></i>
+                        </div>
+                        <div class="w-full bg-zinc-900 rounded-full h-1.5">
+                            <div id="convProgressBar" class="bg-purple-500 h-1.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </form>
+            </div>
                     
                     <div id="convStatusContainer" class="hidden">
                         <div class="flex items-center justify-between text-xs mb-2">
@@ -897,18 +1029,18 @@ https://www.youtube.com/watch?v=..."></textarea>
 
                         <div class="flex space-x-2">
                             <div class="relative cursor-pointer group flex-1" onclick="browseCleanerFolder()">
-                                <input type="text" id="cleaner_dir" name="cleaner_dir" class="w-full px-4 py-3.5 bg-[#080809] border border-zinc-800 rounded-xl text-xs font-medium text-zinc-300 focus:outline-none focus:border-pink-500 shadow-inner group-hover:border-zinc-700 transition" placeholder="Click to choose folder..." readonly>
-                                <div class="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none opacity-60 group-hover:opacity-100 transition">
-                                    <i class="fa-solid fa-folder-open text-pink-500"></i>
+                                <input type="text" id="cleaner_dir" name="cleaner_dir" class="w-full px-3 py-2 bg-[#080809] border border-zinc-700/80 rounded-lg text-xs font-medium text-zinc-300 focus:outline-none focus:border-pink-500 shadow-inner group-hover:border-zinc-500 transition pr-8 truncate" placeholder="Click to choose folder..." readonly>
+                                <div class="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none opacity-60 group-hover:opacity-100 transition">
+                                    <i class="fa-solid fa-folder-open text-pink-400 text-xs"></i>
                                 </div>
                             </div>
-                            <button type="button" onclick="browseCleanerFile()" class="px-4 py-3.5 bg-[#080809] border border-zinc-800 hover:border-pink-500/50 rounded-xl text-zinc-400 hover:text-pink-400 transition flex items-center space-x-2" title="Select a single AI file">
-                                <i class="fa-solid fa-file-video text-pink-500"></i>
-                                <span class="text-xs font-bold">Pick File</span>
+                            <button type="button" onclick="browseCleanerFile()" class="px-3 py-2 bg-[#080809] border border-zinc-700/80 hover:border-pink-500/50 rounded-lg text-zinc-300 hover:text-pink-300 transition flex items-center space-x-1.5 cursor-pointer text-xs font-medium" title="Select a single AI file">
+                                <i class="fa-solid fa-file-video text-pink-400 text-xs"></i>
+                                <span>Pick File</span>
                             </button>
-                            <button type="button" onclick="openCurrentFolder('cleaner_dir')" class="px-3.5 py-3.5 bg-[#080809] border border-zinc-800 hover:border-pink-500/50 rounded-xl text-zinc-400 hover:text-pink-400 transition flex items-center space-x-1.5 cursor-pointer" title="Open directory in Explorer">
-                                <i class="fa-regular fa-folder-open text-pink-500"></i>
-                                <span class="text-xs font-bold">Open</span>
+                            <button type="button" onclick="openCurrentFolder('cleaner_dir')" class="px-3 py-2 bg-[#080809] border border-zinc-700/80 hover:border-pink-500/50 rounded-lg text-zinc-300 hover:text-pink-300 transition flex items-center space-x-1.5 cursor-pointer text-xs font-medium" title="Open directory in Explorer">
+                                <i class="fa-regular fa-folder-open text-pink-400 text-xs"></i>
+                                <span>Open</span>
                             </button>
                         </div>
                     </div>
@@ -1019,6 +1151,25 @@ https://www.youtube.com/watch?v=..."></textarea>
                             <div class="flex items-center justify-between"><span class="text-zinc-500">Default Save Path:</span><span class="font-mono text-zinc-300">Documents/Media Grabber</span></div>
                             <div class="flex items-center justify-between"><span class="text-zinc-500">Cleaned Directory:</span><span class="font-mono text-emerald-400">AI Cleaned/</span></div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Bottom Quick Access & Storage Bar -->
+                <div class="mt-2 pt-2.5 border-t border-white/[0.06] flex items-center justify-between text-[11px] text-zinc-400 shrink-0">
+                    <div class="flex items-center space-x-2 min-w-0">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"></span>
+                        <span id="quickFolderLocation" class="text-zinc-400 truncate max-w-[170px]" title="Default download directory">Documents/Media Grabber</span>
+                    </div>
+                    <div class="flex items-center space-x-2 shrink-0">
+                        <button type="button" onclick="openCurrentFolder('path')" class="text-zinc-400 hover:text-blue-400 transition flex items-center space-x-1 cursor-pointer" title="Open download folder in Explorer">
+                            <i class="fa-regular fa-folder-open text-xs"></i>
+                            <span>Folder</span>
+                        </button>
+                        <span class="text-zinc-700">|</span>
+                        <a href="/video-studio" class="text-zinc-400 hover:text-pink-400 transition flex items-center space-x-1" title="Launch Autonomous AI Video Studio">
+                            <i class="fa-solid fa-clapperboard text-xs"></i>
+                            <span>Studio</span>
+                        </a>
                     </div>
                 </div>
             </div>
@@ -2084,13 +2235,43 @@ https://www.youtube.com/watch?v=..."></textarea>
                         actualCard.classList.remove('animate-pulse');
                         
                         if (data.error) {
+                            let domainIcon = 'fa-solid fa-link';
+                            let domainColor = 'text-blue-400';
+                            let platformName = 'Media Link';
+                            if (url.includes('instagram.com')) {
+                                domainIcon = 'fa-brands fa-instagram';
+                                domainColor = 'text-pink-400';
+                                platformName = 'Instagram Reel';
+                            } else if (url.includes('tiktok.com')) {
+                                domainIcon = 'fa-brands fa-tiktok';
+                                domainColor = 'text-cyan-400';
+                                platformName = 'TikTok Video';
+                            } else if (url.includes('youtube.com') || url.includes('youtu.be')) {
+                                domainIcon = 'fa-brands fa-youtube';
+                                domainColor = 'text-red-400';
+                                platformName = 'YouTube Video';
+                            } else if (url.includes('twitter.com') || url.includes('x.com')) {
+                                domainIcon = 'fa-brands fa-x-twitter';
+                                domainColor = 'text-zinc-300';
+                                platformName = 'X Media';
+                            }
+
+                            actualCard.className = 'px-4 py-3 rounded-2xl bg-white/[0.02] border border-white/10 hover:border-white/15 transition-all flex items-center space-x-3.5';
                             actualCard.innerHTML = `
-                                <div class="w-20 h-14 bg-zinc-900 flex items-center justify-center rounded-xl">
-                                    <i class="fa-solid fa-triangle-exclamation text-zinc-600"></i>
+                                <div class="w-12 h-12 bg-white/[0.04] border border-white/[0.08] flex items-center justify-center rounded-xl shrink-0">
+                                    <i class="${domainIcon} ${domainColor} text-lg"></i>
                                 </div>
-                                <div class="flex-1 overflow-hidden">
-                                    <div class="text-[10px] font-bold text-red-400 truncate">Preview Failed</div>
-                                    <div class="text-[10px] text-zinc-500 truncate mt-1">${escapeHtml(url)}</div>
+                                <div class="flex-1 min-w-0 pr-2">
+                                    <div class="flex items-center space-x-2">
+                                        <span class="text-xs font-semibold text-zinc-200 truncate">${platformName}</span>
+                                        <span class="px-1.5 py-0.5 rounded text-[9px] font-medium bg-blue-500/10 text-blue-300 border border-blue-500/20">Queued</span>
+                                    </div>
+                                    <div class="text-[10px] text-zinc-400 truncate mt-0.5 font-mono">${escapeHtml(url)}</div>
+                                </div>
+                                <div class="shrink-0 flex items-center space-x-1.5">
+                                    <button onclick="document.getElementById('${previewId}').remove()" class="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-white/5 transition cursor-pointer" title="Dismiss">
+                                        <i class="fa-solid fa-xmark text-xs"></i>
+                                    </button>
                                 </div>
                             `;
                             return;
@@ -2616,7 +2797,8 @@ https://www.youtube.com/watch?v=..."></textarea>
 
         function handleFileSelect(file) {
             if (!file) return;
-            selectedFileName.textContent = file.name;
+            const nameSpan = selectedFileName.querySelector('span.truncate') || selectedFileName;
+            nameSpan.textContent = file.name;
             selectedFileName.classList.remove('hidden');
             
             if (file.type.startsWith('video/')) {
@@ -2630,6 +2812,50 @@ https://www.youtube.com/watch?v=..."></textarea>
                 if (typeof syncTrackingUI === 'function') syncTrackingUI();
             }
         }
+
+        function setAspectRatioPreset(val) {
+            const sel = document.getElementById('convResize');
+            if (!sel) return;
+            sel.value = val;
+            sel.dispatchEvent(new Event('change'));
+            updateRatioChips(val);
+        }
+
+        function updateRatioChips(val) {
+            document.querySelectorAll('#aspectRatioChips .ratio-chip').forEach(btn => {
+                const match = btn.getAttribute('data-ratio') === val;
+                if (match) {
+                    btn.className = 'ratio-chip active px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/40 transition shadow-sm';
+                } else {
+                    btn.className = 'ratio-chip px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white/[0.03] hover:bg-white/[0.08] text-zinc-400 hover:text-white border border-white/[0.06] transition flex items-center gap-1';
+                }
+            });
+        }
+
+        function setQualityPreset(val) {
+            const sel = document.getElementById('convCompress');
+            if (!sel) return;
+            sel.value = val;
+            sel.dispatchEvent(new Event('change'));
+            updateQualityChips(val);
+        }
+
+        function updateQualityChips(val) {
+            document.querySelectorAll('#qualityChips .quality-chip').forEach(btn => {
+                const match = btn.getAttribute('data-quality') === val;
+                if (match) {
+                    btn.className = 'quality-chip active px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/40 transition shadow-sm';
+                } else {
+                    btn.className = 'quality-chip px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white/[0.03] hover:bg-white/[0.08] text-zinc-400 hover:text-white border border-white/[0.06] transition';
+                }
+            });
+        }
+
+        const convResizeEl = document.getElementById('convResize');
+        if (convResizeEl) convResizeEl.addEventListener('change', (e) => updateRatioChips(e.target.value));
+
+        const convCompressEl = document.getElementById('convCompress');
+        if (convCompressEl) convCompressEl.addEventListener('change', (e) => updateQualityChips(e.target.value));
 
         mediaFileInput.addEventListener('change', (e) => {
             handleFileSelect(e.target.files[0]);
