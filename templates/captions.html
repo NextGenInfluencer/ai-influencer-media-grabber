@@ -6,7 +6,12 @@
 <meta name="media-token" content="{{ api_token }}">
 <title>Captions & Video Studio — Media Grabber</title>
 <link rel="stylesheet" href="/static/captions.css?v=capcut4">
+<link rel="stylesheet" href="/static/copilot.css?v=v4">
 <script src="/static/captions.js?v=capcut4" defer></script>
+<script src="/static/copilot.js?v=v4" defer></script>
+<script src="/static/characters.js?v=v4" defer></script>
+<script src="/static/motion_studio.js?v=v4" defer></script>
+<script src="/static/storyboard.js?v=v4" defer></script>
 </head>
 <body class="capcutStudio">
 <header class="capcutHeader">
@@ -24,6 +29,9 @@
   <div class="headerCenter">
     <button id="undo" title="Undo (Ctrl+Z)">↶ Undo</button>
     <button id="redo" title="Redo (Ctrl+Shift+Z)">↷ Redo</button>
+    <button id="charactersBtn" type="button" title="AI Character Library (@Airi)" onclick="window.characterStudio&amp;&amp;window.characterStudio.open()">👤 Characters</button>
+    <button id="storyboardBtn" type="button" title="Song Storyboard &amp; Flow Prompts" onclick="window.storyboardStudio&amp;&amp;window.storyboardStudio.open()">🎬 Storyboard</button>
+    <button id="motionStudioBtn" type="button" title="LivePortrait &amp; Motion Transfer" onclick="window.motionStudio&amp;&amp;window.motionStudio.open()">✨ Motion Studio</button>
     <button id="shortcutsBtn" type="button" title="View Keyboard Shortcuts">⌨️ Shortcuts</button>
     <span id="saveStatus" role="status">Open a video or song to begin</span>
     <button id="save">Save</button>
@@ -739,6 +747,7 @@
       <div class="transport">
         <button id="play">▶ Play</button>
         <button id="splitClip" type="button" title="Split active video clip at playhead (Ctrl+B)">✂️ Split Clip</button>
+        <button id="snapFrameStageBtn" type="button" title="Grab Reference Keyframe for Google Flow (S)" onclick="window.motionStudio&amp;&amp;window.motionStudio.snapFrame()">📸 Grab Frame</button>
         <span id="time">0:00.00</span>
         <select id="speed" aria-label="Playback speed">
           <option value="0.5">0.5×</option>
@@ -765,20 +774,32 @@
           <div class="subCard">
             <div class="row" style="justify-content:space-between;margin-bottom:6px;">
               <h3>Caption Lines</h3>
-              <button id="nextReview" type="button" style="font-size:11px;padding:4px 8px;">⚑ Next to review</button>
+              <div style="display:flex;gap:4px;">
+                <button type="button" onclick="const p=document.getElementById('translationPanel');if(p){p.open=true;p.scrollIntoView({behavior:'smooth'});}" style="font-size:11px;padding:4px 8px;background:rgba(124,58,237,0.2);color:#c084fc;border:1px solid rgba(167,139,250,0.3);border-radius:6px;cursor:pointer;" title="Open AI Translation Workspace">🌐 AI Translator</button>
+                <button id="nextReview" type="button" style="font-size:11px;padding:4px 8px;">⚑ Next to review</button>
+              </div>
             </div>
             <div id="cueList" aria-label="Caption lines"></div>
           </div>
 
           <div class="subCard" id="selection">
-            <h3>Selected Line &amp; Word Timing</h3>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+              <h3 style="margin:0;">✏️ Edit Line &amp; Subtitle</h3>
+              <span id="selectedCueBadge" class="badge" style="background:#7c3aed;color:#fff;font-size:11px;font-weight:600;padding:2px 8px;border-radius:12px;">Line #1</span>
+            </div>
             <p id="lineReview" class="hint" style="margin-top:0;"></p>
             <label style="font-size:11px;color:#94a3b8;font-weight:600;display:flex;flex-direction:column;gap:4px;">Original Lyric
               <textarea id="text" rows="2" maxlength="1000" placeholder="Select a caption line to edit its words" aria-label="Caption text"></textarea>
             </label>
-            <label style="margin-top:8px;font-size:11px;color:#c084fc;font-weight:600;display:flex;flex-direction:column;gap:4px;">🌐 Translated Subtitle
+            <div style="margin-top:8px;padding:8px 10px;background:rgba(124,58,237,0.12);border:1px solid rgba(167,139,250,0.35);border-radius:8px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                <label for="sideTranslationText" style="font-size:11px;color:#c084fc;font-weight:700;display:flex;align-items:center;gap:4px;margin:0;">
+                  🌐 Translated Subtitle (Dual-Language Track)
+                </label>
+                <span style="font-size:10px;color:#a78bfa;opacity:0.85;">Synced to video</span>
+              </div>
               <textarea id="sideTranslationText" rows="2" maxlength="2000" placeholder="Translated text for this line…"></textarea>
-            </label>
+            </div>
             <div class="row">
               <label>Start (s)<input id="start" type="number" min="0" step=".01"></label>
               <label>End (s)<input id="end" type="number" min="0" step=".01"></label>

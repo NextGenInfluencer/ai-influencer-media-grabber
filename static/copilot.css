@@ -1,0 +1,781 @@
+/* AI Influencer Studio Copilot - Apple macOS Pro Design System */
+
+#copilotTrigger {
+  position: fixed;
+  bottom: 20px;
+  right: 24px;
+  z-index: 9990;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: rgba(22, 25, 38, 0.82);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+  color: #f1f5f9;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35), 0 0 16px rgba(168, 85, 247, 0.25);
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+}
+#copilotTrigger:hover {
+  transform: translateY(-2px) scale(1.02);
+  background: rgba(30, 34, 52, 0.92);
+  border-color: rgba(168, 85, 247, 0.45);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45), 0 0 20px rgba(168, 85, 247, 0.4);
+}
+#copilotTrigger .badge {
+  background: rgba(168, 85, 247, 0.25);
+  color: #c084fc;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+/* Slide-Over Drawer */
+#copilotDrawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 410px;
+  max-width: 92vw;
+  z-index: 9995;
+  background: rgba(13, 15, 24, 0.92);
+  backdrop-filter: blur(32px);
+  -webkit-backdrop-filter: blur(32px);
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: -12px 0 36px rgba(0, 0, 0, 0.55);
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+  color: #e2e8f0;
+}
+#copilotDrawer.open {
+  transform: translateX(0);
+}
+
+/* Header */
+.copilotHeader {
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+}
+.copilotTitleGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.copilotTitleGroup h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #ffffff;
+}
+.copilotModelSelect {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #cbd5e1;
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  outline: none;
+  cursor: pointer;
+  max-width: 170px;
+}
+.copilotCloseBtn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+.copilotCloseBtn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* Messages List */
+.copilotMessages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.copilotMsg {
+  display: flex;
+  flex-direction: column;
+  max-width: 90%;
+  animation: copilotFadeIn 0.2s ease-out;
+}
+@keyframes copilotFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.copilotMsg.user {
+  align-self: flex-end;
+  background: #0a84ff;
+  color: #ffffff;
+  padding: 9px 13px;
+  border-radius: 14px 14px 2px 14px;
+  font-size: 12.5px;
+  line-height: 1.42;
+  box-shadow: 0 4px 14px rgba(10, 132, 255, 0.3);
+}
+.copilotMsg.assistant {
+  align-self: flex-start;
+  background: rgba(30, 34, 52, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 11px 14px;
+  border-radius: 14px 14px 14px 2px;
+  font-size: 12.5px;
+  line-height: 1.48;
+  color: #f1f5f9;
+}
+.copilotMsg.assistant p {
+  margin: 0 0 6px 0;
+}
+.copilotMsg.assistant p:last-child {
+  margin-bottom: 0;
+}
+
+/* Action Cards */
+.copilotActionCard {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: rgba(168, 85, 247, 0.12);
+  border: 1px solid rgba(168, 85, 247, 0.28);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.copilotActionCard .actionTitle {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #c084fc;
+}
+.copilotActionCard .actionBody {
+  font-size: 11px;
+  color: #cbd5e1;
+  word-break: break-word;
+}
+.copilotActionBtn {
+  align-self: flex-start;
+  background: #a855f7;
+  color: #ffffff;
+  border: none;
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 4px;
+  transition: all 0.15s ease;
+}
+.copilotActionBtn:hover {
+  background: #9333ea;
+  transform: translateY(-1px);
+}
+
+/* Quick Prompt Chips */
+.copilotChips {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 8px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.2);
+}
+.copilotChip {
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 9999px;
+  color: #94a3b8;
+  font-size: 11px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.copilotChip:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Input Bar */
+.copilotInputArea {
+  padding: 12px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  gap: 8px;
+  background: rgba(18, 21, 33, 0.85);
+}
+.copilotInputArea textarea {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 8px 12px;
+  color: #ffffff;
+  font-size: 12.5px;
+  font-family: inherit;
+  resize: none;
+  outline: none;
+  max-height: 80px;
+}
+.copilotInputArea textarea:focus {
+  border-color: #0a84ff;
+  box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.25);
+}
+.copilotSendBtn {
+  background: #0a84ff;
+  border: none;
+  border-radius: 10px;
+  color: #ffffff;
+  font-size: 15px;
+  padding: 0 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+.copilotSendBtn:hover {
+  background: #0071e3;
+  transform: scale(1.04);
+}
+.copilotSendBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* --- Universal Studio Modals & Components (Apple macOS Pro Design System) --- */
+.studioModal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+}
+.studioModal.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+.studioModalBackdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(6, 8, 14, 0.72);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+}
+.studioModalDialog {
+  position: relative;
+  z-index: 1;
+  background: rgba(18, 21, 33, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 16px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: #f1f5f9;
+  transform: scale(0.96);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.studioModal.open .studioModalDialog {
+  transform: scale(1);
+}
+.characterDialog { width: 880px; max-width: 95vw; }
+.motionDialog { width: 920px; max-width: 95vw; }
+.storyboardDialog { width: 880px; max-width: 95vw; }
+
+.studioModalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.modalTitleGroup {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.modalTitleGroup .modalIcon {
+  font-size: 24px;
+}
+.modalTitleGroup h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #ffffff;
+}
+.modalSubtitle {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  color: #94a3b8;
+}
+.modalCloseBtn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+.modalCloseBtn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+/* Character Library Modal */
+.characterModalBody {
+  display: flex;
+  flex: 1;
+  min-height: 520px;
+  overflow: hidden;
+}
+.charSidebar {
+  width: 240px;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(13, 15, 24, 0.6);
+  display: flex;
+  flex-direction: column;
+}
+.charSidebarHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.sidebarTitle {
+  font-size: 12px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.charItemsList {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.charSidebarItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: 1px solid transparent;
+}
+.charSidebarItem:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.charSidebarItem.active {
+  background: rgba(124, 58, 237, 0.2);
+  border-color: rgba(167, 139, 250, 0.4);
+}
+.charAvatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #334155;
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: #ffffff;
+  font-size: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+.charMeta strong {
+  display: block;
+  font-size: 13px;
+  color: #f8fafc;
+}
+.charMeta small {
+  font-size: 11px;
+  color: #a78bfa;
+}
+
+.charDetails {
+  flex: 1;
+  padding: 18px 24px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.charFormRow {
+  display: flex;
+  gap: 12px;
+}
+.charImagesSection {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 4px;
+}
+.charImageCard {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.charImageHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: #cbd5e1;
+}
+.uploadLink {
+  color: #0a84ff;
+  cursor: pointer;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.uploadLink:hover {
+  text-decoration: underline;
+}
+.charImagePreview {
+  height: 125px;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 8px;
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.charImagePreview img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.imagePlaceholder {
+  font-size: 11px;
+  color: #64748b;
+}
+.imageCaption {
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.charActionsRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.leftActions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Motion Studio Modal */
+.motionModalBody {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+  padding: 20px;
+  flex: 1;
+  overflow-y: auto;
+}
+.motionSourceCard {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+}
+.motionSourceCard h4 {
+  margin: 0 0 4px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #ffffff;
+}
+.motionVideoSlot, .motionImageSlot {
+  flex: 1;
+  min-height: 240px;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 10px;
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.slotPlaceholder {
+  font-size: 11.5px;
+  color: #64748b;
+  text-align: center;
+  padding: 20px;
+}
+
+/* Storyboard Modal */
+.storyboardControlsRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 20px;
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.storyboardBody {
+  flex: 1;
+  padding: 16px 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.storyboardEmptyState {
+  text-align: center;
+  padding: 40px;
+  color: #64748b;
+}
+.storyboardEmptyState span {
+  font-size: 32px;
+  display: block;
+  margin-bottom: 8px;
+}
+.sceneCard {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color 0.15s ease;
+}
+.sceneCard:hover {
+  border-color: rgba(167, 139, 250, 0.35);
+}
+.sceneHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.sceneTag {
+  background: rgba(124, 58, 237, 0.25);
+  color: #c084fc;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+.sceneTime {
+  font-size: 11.5px;
+  font-family: monospace;
+  color: #94a3b8;
+}
+.sceneLyrics {
+  font-size: 12.5px;
+}
+.sceneOrig {
+  color: #f1f5f9;
+  font-weight: 500;
+}
+.sceneTrans {
+  color: #c084fc;
+  font-size: 11px;
+  margin-top: 2px;
+}
+.scenePromptBox {
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.scenePromptBox label {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #a78bfa;
+  margin-bottom: 2px;
+}
+.promptText {
+  font-size: 11.5px;
+  font-family: monospace;
+  color: #cbd5e1;
+  user-select: all;
+  line-height: 1.4;
+}
+.sceneActions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Button & Form UI Helpers */
+.primaryBtn {
+  background: #0a84ff;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.primaryBtn:hover { background: #0071e3; }
+.secondaryBtn {
+  background: rgba(255, 255, 255, 0.08);
+  color: #e2e8f0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.secondaryBtn:hover { background: rgba(255, 255, 255, 0.14); }
+.dangerBtn {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.dangerBtn:hover { background: rgba(239, 68, 68, 0.25); }
+
+.primaryMiniBtn {
+  background: #7c3aed;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.secondaryMiniBtn {
+  background: rgba(255, 255, 255, 0.06);
+  color: #cbd5e1;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.miniActionBtn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: #cbd5e1;
+  font-size: 11px;
+  padding: 4px 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.miniActionBtn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+/* Snapper Floating Toast */
+.snapperToast {
+  position: fixed;
+  bottom: 24px;
+  left: 24px;
+  z-index: 10005;
+  background: rgba(18, 21, 33, 0.92);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 14px;
+  padding: 10px 14px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  transform: translateY(120%);
+  opacity: 0;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+  color: #f1f5f9;
+}
+.snapperToast.show {
+  transform: translateY(0);
+  opacity: 1;
+}
+.snapperContent {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.snapperThumb {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+.snapperMeta strong {
+  display: block;
+  font-size: 12.5px;
+}
+.snapperMeta small {
+  font-size: 11px;
+  color: #94a3b8;
+}
+.snapperActions {
+  display: flex;
+  gap: 6px;
+}

@@ -1,5 +1,15 @@
 # Changelog
 
+## [v4.0.0] - 2026-10-31
+
+- **AI Influencer Studio Suite & Local Copilot**: Added in-app conversational and action-driven AI Copilot (Ctrl+K) with hardware-adaptive routing (NVIDIA RTX 3080 Ollama qwen2.5:14b / llama3.1:8b GPU acceleration with automatic CPU fallback). Supports direct tool execution for caption presets, timing offsets, viral social media posts, and prompt generation.
+- **Universal Character Profile Library**: Added persona manager supporting @Airi and custom creator identities with face portrait and 3-view turnaround triptych references, aspect ratio toggles, and tailored prompts for Google Flow Nano Banana 2.1 / Pro.
+- **1-Click Reference Frame Snapper**: Added high-resolution PNG snapshot tool (Grab Frame / hotkey S) directly on video preview players in Captions Studio and Downloader, saving pristine frames to Documents/Media Grabber/References with instant clipboard copy and persona assignment.
+- **AI Song Storyboard**: Added automated scene segmentation and Google Flow Nano Banana prompt generator with 1-click prompt copying and reference frame snapping synchronized to song verse/chorus timing.
+- **LivePortrait & Motion Transfer Studio**: Added local neural face animation and performance transfer interface, allowing creators to drive character portraits with lip-sync recordings or stage videos and set the result directly on the multitrack timeline.
+- **Enhanced Bilingual Lyric & Translation Editing UX**: Made translation subtitle editing directly visible and accessible on cue cards and selection editor with active line badge, glowing focus cues, and live sync across video stage and export formats.
+- **System Stability & Safe Updates**: Included copilot.py and characters.py in atomic updater manifest (safe_update.py) and passed 100% of the 180 unit, integration, and release regression tests.
+
 ## [v3.2.1] - 2026-10-30
 
 - Verify Ollama model metadata before sending lyrics; reject remote/cloud aliases and unverifiable models, and refuse redirects. Filter remote entries from the model picker.

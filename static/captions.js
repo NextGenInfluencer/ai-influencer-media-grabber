@@ -720,9 +720,20 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
             const trans=c.translations?.[project?.style?.translation_language||'en'];
             if(trans?.text && trans.text!==c.text){
                 const sub=document.createElement('small');
-                sub.style.color='#a78bfa';sub.style.fontSize='10px';sub.style.opacity='0.9';
+                sub.style.color='#c084fc';sub.style.fontSize='11px';sub.style.opacity='0.95';
                 sub.style.overflow='hidden';sub.style.textOverflow='ellipsis';sub.style.whiteSpace='nowrap';
-                sub.textContent=trans.text;
+                sub.style.cursor='pointer';
+                sub.title='Click to edit translated subtitle';
+                sub.textContent='🌐 ' + trans.text;
+                sub.onclick=(e)=>{
+                    e.stopPropagation();
+                    select(i);
+                    const st=$('sideTranslationText');
+                    if(st){
+                        st.focus();
+                        if(typeof st.scrollIntoView === 'function') st.scrollIntoView({behavior:'smooth', block:'center'});
+                    }
+                };
                 textWrap.append(sub);
             }
             row.append(time,textWrap);
@@ -746,6 +757,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         if($('translationText')) $('translationText').value=trVal;
         if($('sideTranslationText')) $('sideTranslationText').value=trVal;
         if($('translationLocked')) $('translationLocked').checked=!!tr?.locked;
+        if($('selectedCueBadge')) $('selectedCueBadge').textContent = c ? `Line #${selected + 1}` : 'None';
         if(project?.state==='busy' && project.status?.includes('Translat')) {
             $('translationState').textContent='⏳ '+project.status;
         } else {
@@ -2208,4 +2220,35 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         await listProjects();
         await refreshLibraries();
     })().catch(e=>say(e.message,true));
+
+    if(typeof window !== 'undefined'){
+        window.currentProjectData = () => project;
+        window.applyPresetByName = (name) => {
+            if(presets && presets[name]){
+                edit(()=>Object.assign(project.style, presets[name]));
+                refresh();
+                return true;
+            }
+            return false;
+        };
+        window.shiftTimingBySeconds = (sec) => {
+            if(!project||!project.cues) return false;
+            const shift=Number(sec);
+            if(isNaN(shift)||shift===0) return false;
+            timingEdit(()=>{
+                for(const cue of project.cues){
+                    cue.start=Math.max(0,Math.min(project.duration,cue.start+shift));
+                    cue.end=Math.max(0,Math.min(project.duration,cue.end+shift));
+                    if(cue.words){
+                        for(const w of cue.words){
+                            w.start=Math.max(0,Math.min(project.duration,w.start+shift));
+                            w.end=Math.max(0,Math.min(project.duration,w.end+shift));
+                        }
+                    }
+                }
+            });
+            drawTimeline();drawList();drawCaption();
+            return true;
+        };
+    }
 })();

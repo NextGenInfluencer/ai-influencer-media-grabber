@@ -780,7 +780,7 @@ def shazam_file(audio_path):
         print("Shazam error:", e)
         return None
 
-APP_VERSION = "3.2.6"
+APP_VERSION = "4.0.0"
 SERVER_START_TIME = time.time()
 
 # --- Active Job & Auto-Shutdown Watchdog State ---
@@ -2268,6 +2268,109 @@ def run_ai_install_worker():
         ai_installer_state["status"] = "failed"
         ai_installer_state["error"] = str(e)
         ai_installer_state["log"].append(f"Error: {str(e)}")
+
+# --- AI Copilot, Character Library & Motion Studio APIs ---
+import copilot
+import characters
+from assets import motion_studio
+
+@app.route('/api/copilot/models', methods=['GET'])
+def copilot_models():
+    return jsonify(models=copilot.available_models())
+
+@app.route('/api/copilot/chat', methods=['POST'])
+def copilot_chat():
+    data = request.get_json() or {}
+    messages = data.get('messages', [])
+    model = data.get('model', 'qwen2.5:14b')
+    project = data.get('project')
+    res = copilot.chat(messages=messages, model=model, project_data=project)
+    return jsonify(res)
+
+@app.route('/api/characters', methods=['GET'])
+def list_characters_route():
+    return jsonify(characters=characters.list_characters())
+
+@app.route('/api/characters/<cid>', methods=['GET'])
+def get_character_route(cid):
+    c = characters.get_character(cid)
+    if not c:
+        return jsonify(error="Character not found"), 404
+    return jsonify(c)
+
+@app.route('/api/characters', methods=['POST'])
+def save_character_route():
+    data = request.get_json() or {}
+    c = characters.save_character(data)
+    return jsonify(c)
+
+@app.route('/api/characters/<cid>', methods=['DELETE'])
+def delete_character_route(cid):
+    ok = characters.delete_character(cid)
+    return jsonify(success=ok)
+
+@app.route('/api/characters/<cid>/upload', methods=['POST'])
+def upload_character_image(cid):
+    image_type = request.form.get('type', 'portrait')
+    if 'file' not in request.files:
+        return jsonify(error="No file provided"), 400
+    file = request.files['file']
+    filename = secure_filename(file.filename or 'image.png')
+    raw = file.read()
+    dest = characters.save_character_image(cid, image_type, filename, raw)
+    return jsonify(success=True, filename=dest)
+
+@app.route('/api/characters/<cid>/image/<filename>', methods=['GET'])
+def get_character_image_file(cid, filename):
+    path = characters.get_image_path(cid, filename)
+    if not path or not path.is_file():
+        return jsonify(error="Image not found"), 404
+    return send_file(str(path))
+
+@app.route('/api/motion/extract-frame', methods=['POST'])
+def extract_frame_route():
+    data = request.get_json() or {}
+    video_path = data.get('video_path')
+    timestamp = float(data.get('timestamp', 0))
+    if not video_path:
+        return jsonify(error="video_path required"), 400
+    try:
+        res = motion_studio.extract_reference_frame(video_path, timestamp)
+        return jsonify(res)
+    except Exception as e:
+        return jsonify(error=str(e)), 500
+
+@app.route('/api/motion/references', methods=['GET'])
+def list_references_route():
+    return jsonify(references=motion_studio.list_references())
+
+@app.route('/api/motion/references/file/<filename>', methods=['GET'])
+def get_reference_file(filename):
+    p = motion_studio.REFERENCES_DIR / secure_filename(filename)
+    if not p.is_file():
+        return jsonify(error="Reference file not found"), 404
+    return send_file(str(p))
+
+@app.route('/api/motion/render', methods=['POST'])
+def render_motion_route():
+    data = request.get_json() or {}
+    driving_video = data.get('driving_video', '')
+    source_image = data.get('source_image', '')
+    audio_path = data.get('audio_path')
+    if not source_image:
+        return jsonify(error="source_image required"), 400
+    try:
+        res = motion_studio.render_character_motion(driving_video, source_image, audio_path)
+        return jsonify(res)
+    except Exception as e:
+        return jsonify(error=str(e)), 500
+
+@app.route('/api/motion/outputs/file/<filename>', methods=['GET'])
+def get_motion_output_file(filename):
+    p = motion_studio.MOTION_OUTPUT_DIR / secure_filename(filename)
+    if not p.is_file():
+        return jsonify(error="Motion output file not found"), 404
+    return send_file(str(p))
 
 @app.route('/api/ai_status', methods=['GET'])
 def api_ai_status():
