@@ -785,7 +785,7 @@ def shazam_file(audio_path):
         print("Shazam error:", e)
         return None
 
-APP_VERSION = "4.1.0"
+APP_VERSION = "4.1.1"
 SERVER_START_TIME = time.time()
 
 # --- Active Job & Auto-Shutdown Watchdog State ---
@@ -1328,6 +1328,14 @@ def preview_url():
                 "duration": info.get('duration', 0)
             })
     except Exception as e:
+        if 'instagram.com' in url.lower():
+            try:
+                from download_support import extract_instagram_preview
+                ig_info = extract_instagram_preview(url)
+                if ig_info:
+                    return jsonify(ig_info)
+            except Exception:
+                pass
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/download', methods=['POST'])
@@ -1485,9 +1493,10 @@ def download_video():
                             check_cancelled()
                             if "Could not copy Chrome cookie database" in err_msg or "database is locked" in err_msg:
                                 raise RuntimeError('Close Chrome completely before using its cookies.')
-                            if any(message in err_msg for message in ('No video formats found', 'Unable to extract data', 'HTTP Error 400', 'Video info extraction failed')):
+                            if any(message in err_msg for message in ('No video formats found', 'Unable to extract data', 'HTTP Error 400', 'Video info extraction failed', 'There is no video in this post', "There's no video", 'no video', 'empty media response', 'does not contain any video', 'only images')) or any(dom in url.lower() for dom in ('instagram.com', 'pin.it', 'pinterest.com')):
+                                q.put({"status": f"{prefix}Unsupported by yt-dlp. Downloading via gallery-dl..."})
                                 from download_support import gallery_download
-                                info = gallery_download(url, output_path, browser, q.put)
+                                info = gallery_download(url, output_path, browser, q.put, custom_name=custom_name)
                             else:
                                 raise
 

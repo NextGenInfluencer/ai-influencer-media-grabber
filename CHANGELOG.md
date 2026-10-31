@@ -1,6 +1,13 @@
 # Changelog
 
-## [v4.0.0] - 2026-10-31
+## [v4.1.1] - 2026-11-01
+
+- **Native Instagram Carousel & Photo Downloader**: Added direct native extraction for Instagram multi-item carousels, photo posts, and mixed photo/video posts. Bypasses anonymous access restrictions, downloading all high-resolution original images and video slides without login failures.
+- **Instagram Preview Support**: Added resilient fallback in `/api/preview` to extract creators, titles, and thumbnails for Instagram posts and carousels, avoiding preview errors.
+- **Gallery Downloader Cleanup**: Prevent orphaned empty `Gallery-*` temporary directories from remaining on disk on failed gallery downloads.
+- **Updated Download Dependencies**: Upgraded `yt-dlp` and `gallery-dl` to latest stable versions.
+
+## [v4.1.0] - 2026-10-31
 
 - **AI Influencer Studio Suite & Local Copilot**: Added in-app conversational and action-driven AI Copilot (Ctrl+K) with hardware-adaptive routing (NVIDIA RTX 3080 Ollama qwen2.5:14b / llama3.1:8b GPU acceleration with automatic CPU fallback). Supports direct tool execution for caption presets, timing offsets, viral social media posts, and prompt generation.
 - **Universal Character Profile Library**: Added persona manager supporting @Airi and custom creator identities with face portrait and 3-view turnaround triptych references, aspect ratio toggles, and natural-language prompt formatting for Google Flow Nano Banana 2.1 / Pro.

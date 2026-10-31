@@ -16,7 +16,7 @@ click==8.5.0
 dataclass-factory==2.16
 Flask==3.1.3
 frozenlist==1.8.0
-gallery_dl==1.32.17
+gallery_dl==1.32.19
 idna==3.20
 imageio-ffmpeg==0.6.0
 itsdangerous==2.2.0
@@ -44,5 +44,5 @@ waitress==3.0.2
 websockets==17.2
 Werkzeug==3.1.9
 yarl==1.25.1
-yt-dlp==2026.8.19
+yt-dlp==2026.10.21
 yt-dlp-ejs==0.8.0
