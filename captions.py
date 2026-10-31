@@ -2158,6 +2158,8 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                     if request_lines:
                         first = originals.index(group[0]);last = originals.index(group[-1])
                         context = '\n'.join(c['text'] for c in originals[max(0,first-3):last+4])[:12000]
+                        d['status']=f'Translating: {len(done)}/{len(pending)} lines (translating lines {offset+1}–{min(offset+8,len(pending))}…)'
+                        write(d)
                         answer = lyric_translation.translate(request_lines,context,composition_model.LANGUAGES[language],model,
                                                               settings.get('notes',''),settings.get('glossary',''))
                         process.check_cancelled()

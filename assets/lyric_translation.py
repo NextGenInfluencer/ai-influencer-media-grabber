@@ -86,7 +86,7 @@ def unload_local_model():
         _local_model = None
 
 @serialized
-def local_chat(messages, schema):
+def local_chat(messages, schema, max_tokens=1500):
     global _local_model, _unload_timer
     if _unload_timer: _unload_timer.cancel()
     if _local_model is None:
@@ -94,7 +94,7 @@ def local_chat(messages, schema):
         from llama_cpp import Llama
         _local_model = Llama(model_path=str(EMBEDDED_MODEL), n_ctx=4096, n_threads=max(1, (os.cpu_count() or 4) - 1), n_batch=512, n_gpu_layers=-1, verbose=False)
     try:
-        stream = _local_model.create_chat_completion(messages=messages, temperature=.2, max_tokens=4096,
+        stream = _local_model.create_chat_completion(messages=messages, temperature=.2, max_tokens=max_tokens,
             response_format={"type":"json_object","schema":schema}, stream=True)
         parts=[]
         try:
@@ -131,7 +131,7 @@ def require_local_ollama_model(model):
     check_cancelled()
 
 
-def ollama_chat(model, messages, schema):
+def ollama_chat(model, messages, schema, max_tokens=1500):
     """Read bounded NDJSON, checking cancellation between network chunks."""
     check_cancelled()
     require_local_ollama_model(model)
@@ -161,8 +161,8 @@ def ollama_chat(model, messages, schema):
     try:
         with requests.post(LOCAL_URL+'/api/chat', json=dict(
                 model=model, stream=True, format=schema, messages=messages,
-                options=dict(temperature=.2,num_predict=4096,num_ctx=8192)),
-                stream=True, timeout=(5,30), allow_redirects=False) as response:
+                options=dict(temperature=.2,num_predict=max_tokens,num_ctx=8192)),
+                stream=True, timeout=(10,120), allow_redirects=False) as response:
             response.raise_for_status()
             if response.status_code != 200:
                 raise ValueError('Ollama redirected the request. Translation requires a local provider.')
@@ -217,7 +217,7 @@ def translate(lines, context, target, model, notes='', glossary=''):
     rev_map = {line['id']: line['id'] for line in lines}
     prompt_lines = [dict(id=str(i + 1), text=line['text']) for i, line in enumerate(lines)]
     allowed_ids = list(id_map.keys()) + [l['id'] for l in lines if l['id'] not in id_map]
-    schema = {'type':'object', 'properties':{'lines':{'type':'array', 'items':{
+    schema = {'type':'object', 'properties':{'lines':{'type':'array', 'minItems':len(lines), 'maxItems':len(lines), 'items':{
         'type':'object', 'properties':{'id':{'type':'string', 'enum': allowed_ids}, 'text':{'type':'string'},
                                      'note':{'type':'string'}},
         'required':['id','text','note'], 'additionalProperties':False}}},
@@ -232,10 +232,11 @@ def translate(lines, context, target, model, notes='', glossary=''):
         'Do not claim confidence scores. Never omit repeated lines.')
     payload = dict(target=target, notes=notes, glossary=glossary, context=context, lines=prompt_lines)
     messages=[dict(role='system',content=system+' /no_think'),dict(role='user',content=json.dumps(payload,ensure_ascii=False)+' /no_think')]
+    calc_max = min(2048, max(300, len(lines) * 140 + 150))
     if model=='qwen3-4b-local':
-        content=local_chat(messages,schema)
+        content=local_chat(messages,schema,max_tokens=calc_max)
     else:
-        content=ollama_chat(model,messages,schema)
+        content=ollama_chat(model,messages,schema,max_tokens=calc_max)
     try:
         answer=json.loads(content)['lines']
     except (KeyError,TypeError,ValueError) as exc:

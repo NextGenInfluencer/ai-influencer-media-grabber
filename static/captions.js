@@ -284,7 +284,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         if(project.width) mountVideo();
         const ts=project.translation_settings||{};
         $('translationNotes').value=ts.notes||'';$('translationGlossary').value=ts.glossary||'';
-        if(ts.model){$('translationModel').replaceChildren(new Option(ts.model,ts.model));}
+        refreshTranslationModels();
         restoringUploads=true;
         try {refresh(); await restoreUploadDraft();} finally {restoringUploads=false;}
         await finishCompositionSubmission();
@@ -1934,7 +1934,29 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
     for(const id of ['translationNotes','translationGlossary','translationModel'])$(id).onchange=()=>{
         if(project)edit(()=>{project.translation_settings={notes:$('translationNotes').value,glossary:$('translationGlossary').value,model:$('translationModel').value};},false);
     };
-    $('findTranslationModels').onclick=act(async()=>{const data=await api('/api/captions/translation-models');$('translationModel').replaceChildren(new Option('Choose a model',''),...data.models.map(m=>new Option(m,m)));});
+    async function refreshTranslationModels(){
+        try{
+            const data=await api('/api/captions/translation-models');
+            const currentVal=$('translationModel').value||(project?.translation_settings?.model||'');
+            const models=data.models||[];
+            if(!models.length)return;
+            const formatLabel=(m)=>{
+                if(m==='qwen3-4b-local')return 'Qwen 3 (4B Built-in CPU)';
+                if(m.includes('14b'))return `${m} (14B High Quality GPU)`;
+                if(m.includes('7b')||m.includes('8b'))return `${m} (Fast GPU)`;
+                return `${m} (Local Ollama)`;
+            };
+            $('translationModel').replaceChildren(
+                new Option('Choose an installed model',''),
+                ...models.map(m=>new Option(formatLabel(m),m))
+            );
+            if(currentVal&&models.includes(currentVal)){
+                $('translationModel').value=currentVal;
+            }
+        }catch(_){}
+    }
+    refreshTranslationModels();
+    $('findTranslationModels').onclick=act(async()=>{await refreshTranslationModels();say('Local translation models updated.');});
     $('setupTranslationModel').onclick=act(()=>job('translation-setup',{}));
     const translateJob=(selectedOnly=false,resume=false)=>act(async()=>{
         if(!project)throw Error('Open a project first.');
