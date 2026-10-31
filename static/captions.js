@@ -742,7 +742,10 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         if($('workspace_track_mode') && project?.style?.track_mode) $('workspace_track_mode').value=project.style.track_mode;
         const tr=c?.translations?.[project?.style.translation_language||'en'];
         const trDraft=c?readDraft('translation-'+c.id+'-'+(project.style.translation_language||'en')):null;
-        $('translationText').value=trDraft?.text??tr?.text??'';$('translationLocked').checked=!!tr?.locked;
+        const trVal=trDraft?.text??tr?.text??'';
+        if($('translationText')) $('translationText').value=trVal;
+        if($('sideTranslationText')) $('sideTranslationText').value=trVal;
+        if($('translationLocked')) $('translationLocked').checked=!!tr?.locked;
         if(project?.state==='busy' && project.status?.includes('Translat')) {
             $('translationState').textContent='⏳ '+project.status;
         } else {
@@ -1818,6 +1821,29 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         }
     };
     $('text').onchange=()=>{drawTimeline();drawList();fillSelection();};
+    if($('sideTranslationText')){
+        $('sideTranslationText').oninput=()=>{
+            const c=current();
+            if(c){
+                const val=$('sideTranslationText').value;
+                const lang=project?.style?.translation_language||'en';
+                storeDraft('translation-'+c.id+'-'+lang,{text:val});
+                if($('translationText')) $('translationText').value=val;
+                edit(()=>{
+                    c.translations??={};
+                    c.translations[lang]={
+                        text:val,
+                        source:c.text,
+                        status:'approved',
+                        locked:true,
+                        note:c.translations[lang]?.note||''
+                    };
+                },false);
+                drawTimeline();drawList();drawCaption();
+            }
+        };
+        $('sideTranslationText').onchange=()=>{drawTimeline();drawList();drawCaption();};
+    }
     for(const k of ['start','end']) $(k).onchange=()=>{if(current())timingEdit(()=>{current()[k]=Number($(k).value);current().words=[];});};
     $('setStart').onclick=()=>{if(current())timingEdit(()=>{current().start=video.currentTime;current().words=[];});};
     $('setEnd').onclick=()=>{if(current())timingEdit(()=>{current().end=video.currentTime;current().words=[];});};

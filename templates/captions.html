@@ -773,7 +773,12 @@
           <div class="subCard" id="selection">
             <h3>Selected Line &amp; Word Timing</h3>
             <p id="lineReview" class="hint" style="margin-top:0;"></p>
-            <textarea id="text" rows="2" maxlength="1000" placeholder="Select a caption line to edit its words" aria-label="Caption text"></textarea>
+            <label style="font-size:11px;color:#94a3b8;font-weight:600;display:flex;flex-direction:column;gap:4px;">Original Lyric
+              <textarea id="text" rows="2" maxlength="1000" placeholder="Select a caption line to edit its words" aria-label="Caption text"></textarea>
+            </label>
+            <label style="margin-top:8px;font-size:11px;color:#c084fc;font-weight:600;display:flex;flex-direction:column;gap:4px;">🌐 Translated Subtitle
+              <textarea id="sideTranslationText" rows="2" maxlength="2000" placeholder="Translated text for this line…"></textarea>
+            </label>
             <div class="row">
               <label>Start (s)<input id="start" type="number" min="0" step=".01"></label>
               <label>End (s)<input id="end" type="number" min="0" step=".01"></label>

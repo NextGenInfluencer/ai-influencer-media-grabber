@@ -780,7 +780,7 @@ def shazam_file(audio_path):
         print("Shazam error:", e)
         return None
 
-APP_VERSION = "3.2.5"
+APP_VERSION = "3.2.6"
 SERVER_START_TIME = time.time()
 
 # --- Active Job & Auto-Shutdown Watchdog State ---
