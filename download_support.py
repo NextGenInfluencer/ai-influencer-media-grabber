@@ -103,6 +103,9 @@ def instagram_download(url, output_path, browser, report, custom_name=None):
                 continue
             media_url = thumbs[-1]['url']
             ext = 'jpg'
+            if raw_title.startswith('Video by '):
+                raw_title = 'Photo by ' + raw_title[9:]
+                clean_title = safe_media_name(raw_title).rsplit('.', 1)[0]
 
         if total > 1:
             filename = f"{idx:02d} - {clean_title}_{entry_id}.{ext}"
@@ -126,6 +129,19 @@ def instagram_download(url, output_path, browser, report, custom_name=None):
                 subprocess.check_cancelled()
                 if chunk:
                     f.write(chunk)
+
+        if ext == 'jpg':
+            try:
+                from PIL import Image
+                with Image.open(dest_file) as im:
+                    w, h = im.size
+                    if w % 8 != 0 or h % 8 != 0:
+                        new_w = (w // 8) * 8
+                        new_h = (h // 8) * 8
+                        cropped = im.crop((0, 0, new_w, new_h))
+                        cropped.save(dest_file, 'JPEG', quality=95)
+            except Exception:
+                pass
 
         downloaded_entries.append({
             'filepath': str(dest_file),
