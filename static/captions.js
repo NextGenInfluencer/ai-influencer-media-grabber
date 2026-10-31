@@ -711,8 +711,21 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         if(!project) return;
         project.cues.forEach((c,i)=>{
             const row=document.createElement('button');row.className='cue'+(i===selected?' active':'');
-            const time=document.createElement('time');time.textContent=`${fmt(c.start)} → ${fmt(c.end)}`;
-            const text=document.createElement('span');text.textContent=(needsReview(c)?'⚑ ': '')+c.text;row.append(time,text);
+            const time=document.createElement('time');
+            time.textContent=`#${i+1}  ${fmt(c.start)} → ${fmt(c.end)}`;
+            const textWrap=document.createElement('div');
+            textWrap.style.display='flex';textWrap.style.flexDirection='column';textWrap.style.gap='2px';textWrap.style.minWidth='0';textWrap.style.flex='1';
+            const text=document.createElement('span');text.textContent=(needsReview(c)?'⚑ ': '')+c.text;
+            textWrap.append(text);
+            const trans=c.translations?.[project?.style?.translation_language||'en'];
+            if(trans?.text && trans.text!==c.text){
+                const sub=document.createElement('small');
+                sub.style.color='#a78bfa';sub.style.fontSize='10px';sub.style.opacity='0.9';
+                sub.style.overflow='hidden';sub.style.textOverflow='ellipsis';sub.style.whiteSpace='nowrap';
+                sub.textContent=trans.text;
+                textWrap.append(sub);
+            }
+            row.append(time,textWrap);
             row.onclick=()=>select(i);list.append(row);
         });
     }
