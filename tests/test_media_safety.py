@@ -232,6 +232,7 @@ class MediaTests(unittest.TestCase):
         list(cleaner.run_batch_cleaner([str(source)], str(output)))
         list(cleaner.run_batch_cleaner([str(source)], str(output)))
         self.assertEqual(len(list(output.rglob('*.png'))), 1)
+        time.sleep(0.05)
         Image.new('RGB', (20, 20), 'blue').save(source)
         list(cleaner.run_batch_cleaner([str(source)], str(output)))
         self.assertEqual(len(list(output.rglob('*.png'))), 2)

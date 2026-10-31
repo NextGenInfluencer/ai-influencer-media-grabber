@@ -95,13 +95,15 @@ def resolve_image_path(src_str):
     # Check /api/motion/references/file/<filename>
     m_ref = re.search(r'/api/motion/references/file/([^/]+)', src_str)
     if m_ref:
-        fname = m_ref.group(1)
-        rp = REFERENCES_DIR / fname
-        if rp.is_file():
+        fname = Path(m_ref.group(1)).name
+        rp = (REFERENCES_DIR / fname).resolve()
+        if REFERENCES_DIR.resolve() in rp.parents and rp.is_file():
             return rp
 
-    if (REFERENCES_DIR / src_str).is_file():
-        return REFERENCES_DIR / src_str
+    safe_name = Path(src_str).name
+    candidate = (REFERENCES_DIR / safe_name).resolve()
+    if REFERENCES_DIR.resolve() in candidate.parents and candidate.is_file():
+        return candidate
 
     return None
 

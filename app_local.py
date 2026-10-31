@@ -2346,8 +2346,9 @@ def list_references_route():
 
 @app.route('/api/motion/references/file/<filename>', methods=['GET'])
 def get_reference_file(filename):
-    p = motion_studio.REFERENCES_DIR / secure_filename(filename)
-    if not p.is_file():
+    safe_name = secure_filename(filename)
+    p = (motion_studio.REFERENCES_DIR / safe_name).resolve()
+    if motion_studio.REFERENCES_DIR.resolve() not in p.parents or not p.is_file():
         return jsonify(error="Reference file not found"), 404
     return send_file(str(p))
 
@@ -2367,8 +2368,9 @@ def render_motion_route():
 
 @app.route('/api/motion/outputs/file/<filename>', methods=['GET'])
 def get_motion_output_file(filename):
-    p = motion_studio.MOTION_OUTPUT_DIR / secure_filename(filename)
-    if not p.is_file():
+    safe_name = secure_filename(filename)
+    p = (motion_studio.MOTION_OUTPUT_DIR / safe_name).resolve()
+    if motion_studio.MOTION_OUTPUT_DIR.resolve() not in p.parents or not p.is_file():
         return jsonify(error="Motion output file not found"), 404
     return send_file(str(p))
 

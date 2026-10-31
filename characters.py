@@ -113,9 +113,16 @@ def delete_character(character_id):
 
 def save_character_image(character_id, image_type, filename, raw_bytes):
     _ensure_storage()
-    char_media = CHARACTERS_DIR / character_id
+    safe_cid = re.sub(r'[^a-zA-Z0-9_\-]', '', character_id)
+    if not safe_cid:
+        raise ValueError("Invalid character ID")
+    char_media = (CHARACTERS_DIR / safe_cid).resolve()
+    if CHARACTERS_DIR.resolve() not in char_media.parents:
+        raise ValueError("Unsafe character directory")
     char_media.mkdir(parents=True, exist_ok=True)
-    ext = Path(filename).suffix.lower() or '.png'
+    ext = Path(filename).suffix.lower()
+    if ext not in ['.png', '.jpg', '.jpeg', '.webp']:
+        ext = '.png'
     dest_name = f"{image_type}{ext}"
     dest_path = char_media / dest_name
     dest_path.write_bytes(raw_bytes)
@@ -133,6 +140,12 @@ def save_character_image(character_id, image_type, filename, raw_bytes):
 
 
 def get_image_path(character_id, filename):
-    char_media = CHARACTERS_DIR / character_id
-    path = char_media / filename
+    safe_cid = re.sub(r'[^a-zA-Z0-9_\-]', '', character_id)
+    safe_fname = Path(filename).name
+    if not safe_cid or not safe_fname:
+        return None
+    char_media = (CHARACTERS_DIR / safe_cid).resolve()
+    path = (char_media / safe_fname).resolve()
+    if CHARACTERS_DIR.resolve() not in path.parents:
+        return None
     return path if path.is_file() else None

@@ -60,6 +60,18 @@ class CharacterLibraryTests(unittest.TestCase):
         self.assertTrue(deleted)
         self.assertIsNone(characters.get_character(cid))
 
+    def test_save_and_get_character_image(self):
+        saved_name = characters.save_character_image('airi', 'portrait', 'photo.png', b'fake image data')
+        self.assertEqual(saved_name, 'portrait.png')
+        p = characters.get_image_path('airi', 'portrait.png')
+        self.assertIsNotNone(p)
+        self.assertTrue(p.is_file())
+        self.assertEqual(p.read_bytes(), b'fake image data')
+
+    def test_traversal_attack_rejected(self):
+        self.assertIsNone(characters.get_image_path('airi', '../../etc/passwd'))
+        self.assertIsNone(characters.get_image_path('../../../airi', 'portrait.png'))
+
 
 if __name__ == '__main__':
     unittest.main()
