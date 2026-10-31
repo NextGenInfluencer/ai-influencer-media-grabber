@@ -78,7 +78,7 @@ def clean_directory(dir_path):
 
 def main():
     print("\n=======================================================")
-    print(" AI Influencer Media Grabber - Staging Builder v3.2.1")
+    print(" AI Influencer Media Grabber - Staging Builder v3.2.2")
     print("=======================================================\n")
 
     os.makedirs(CACHE_DIR, exist_ok=True)
@@ -209,14 +209,14 @@ def compile_installer():
 
     iss_file = os.path.join(ROOT_DIR, "installer.iss")
     print(f"Compiler: {iscc}")
-    print("Building dist\\AI-Influencer-Media-Grabber-v3.2.1-Setup.exe ...")
+    print("Building dist\\AI-Influencer-Media-Grabber-v3.2.2-Setup.exe ...")
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     res = subprocess.run([iscc, "/Q", f"/DMyStagingDir={STAGING_DIR}", f"/DMyOutputDir={OUTPUT_DIR}", iss_file], cwd=ROOT_DIR)
     if res.returncode != 0:
         print("[ERROR] Inno Setup compilation failed!")
         return False
 
-    output_exe = os.path.join(OUTPUT_DIR, "AI-Influencer-Media-Grabber-v3.2.1-Setup.exe")
+    output_exe = os.path.join(OUTPUT_DIR, "AI-Influencer-Media-Grabber-v3.2.2-Setup.exe")
     if os.path.exists(output_exe):
         size_mb = os.path.getsize(output_exe) / (1024 * 1024)
         print("\n=======================================================")

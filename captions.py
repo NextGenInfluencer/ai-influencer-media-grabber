@@ -1512,7 +1512,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                     studio = composition_model.schema(assets,clean,d['style'])
                     d['status'] = 'Applying background and audio settings…'
                     write(d)
-                    ffmpeg(composition_model.render_args(studio,f,output,has_audio,False,include_sticker=False),f)
+                    ffmpeg(composition_model.render_args(studio,f,output,has_audio,False,include_sticker=False,quality='draft'),f)
                     preview_and_peaks(d,f,output,preview)
                     process.check_cancelled()
                     old_settings = d['studio']['settings']

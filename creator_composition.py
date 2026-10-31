@@ -328,7 +328,7 @@ def shift_cues(cues, delta, duration, speed=1.0):
     return result
 
 
-def render_args(studio, folder, output, background_has_audio=False, bake_fx=True, include_sticker=True, fps=30, output_size=None):
+def render_args(studio, folder, output, background_has_audio=False, bake_fx=True, include_sticker=True, fps=30, output_size=None, quality='high'):
     s = {**DEFAULTS, **studio['settings']}
     assets = studio['assets']
     w,h = output_size or SHAPES[s['shape']]
@@ -344,7 +344,7 @@ def render_args(studio, folder, output, background_has_audio=False, bake_fx=True
             longest = max(seg.get('source_start', 0) + (seg['duration'] + 2) * max(1.0, float(seg.get('speed', 1.0) or s['background_speed'])) for seg in seq_segments if seg['asset'] == key)
             in_dur = round(longest + 0.5, 3)
             if c_asset['kind'] == 'image':
-                args += ['-loop', '1', '-framerate', str(fps), '-t', str(in_dur), '-i', c_path.name]
+                args += ['-i', c_path.name]
             else:
                 args += (['-stream_loop', '-1'] if s['loop'] else []) + ['-t', str(in_dur), '-i', c_path.name]
     else:
@@ -352,10 +352,12 @@ def render_args(studio, folder, output, background_has_audio=False, bake_fx=True
         bg = assets.get(bg_key) or assets.get('background')
         if bg:
             path = local_asset(folder,bg)
-            if bg['kind']=='image': args += ['-loop','1','-framerate',str(fps)]
-            elif s['loop']: args += ['-stream_loop','-1']
-            args += ['-ss',str(s['background_start'])] if bg['kind']=='video' else []
-            args += ['-i',path.name]
+            if bg['kind']=='image':
+                args += ['-i',path.name]
+            else:
+                if s['loop']: args += ['-stream_loop','-1']
+                args += ['-ss',str(s['background_start'])]
+                args += ['-i',path.name]
         else:
             args += ['-f','lavfi','-i',f"color=c={s['color']}:s={w}x{h}:r={fps}"]
     broll = assets.get('broll')
@@ -437,9 +439,13 @@ def render_args(studio, folder, output, background_has_audio=False, bake_fx=True
 
         for k, seg in enumerate(seq_segments):
             seg_trim_dur = round(seg['duration'] + (td if xfade_active and k < len(seq_segments)-1 else 0.0), 3)
-            seg_spd = float(seg.get('speed', 1.0) or s.get('background_speed', 1.0))
-            seg_pts = f"{1.0/seg_spd:.4f}*(PTS-STARTPTS)" if abs(seg_spd - 1.0) > 1e-4 else 'PTS-STARTPTS'
-            seg_vf = f"[seqinput{k}]trim=start={seg.get('source_start', 0)},setpts={seg_pts},fps={fps},tpad=stop_mode=clone:stop_duration={seg_trim_dur},trim=duration={seg_trim_dur},setpts=PTS-STARTPTS,{scale_crop},setsar=1,format=yuv420p,fps={fps},settb=1/{fps}"
+            c_asset = assets.get(seg['asset'], {})
+            if c_asset.get('kind') == 'image':
+                seg_vf = f"[seqinput{k}]{scale_crop},setsar=1,loop=loop=-1:size=1:start=0,fps={fps},trim=duration={seg_trim_dur},setsar=1,format=yuv420p,settb=1/{fps}"
+            else:
+                seg_spd = float(seg.get('speed', 1.0) or s.get('background_speed', 1.0))
+                seg_pts = f"{1.0/seg_spd:.4f}*(PTS-STARTPTS)" if abs(seg_spd - 1.0) > 1e-4 else 'PTS-STARTPTS'
+                seg_vf = f"[seqinput{k}]trim=start={seg.get('source_start', 0)},setpts={seg_pts},fps={fps},tpad=stop_mode=clone:stop_duration={seg_trim_dur},trim=duration={seg_trim_dur},setpts=PTS-STARTPTS,{scale_crop},setsar=1,format=yuv420p,fps={fps},settb=1/{fps}"
             if trans in ('fadeblack', 'fadewhite') and td >= 0.05:
                 fcol = 'black' if trans == 'fadeblack' else 'white'
                 seg_vf += f",fade=t=in:st=0:d={td:.2f}:color={fcol},fade=t=out:st={round(seg['duration']-td, 3):.2f}:d={td:.2f}:color={fcol}"
@@ -459,9 +465,14 @@ def render_args(studio, folder, output, background_has_audio=False, bake_fx=True
             concat_in = ''.join(f'[vseg{k}]' for k in range(len(seq_segments)))
             vf = f"{concat_in}concat=n={len(seq_segments)}:v=1:a=0,setsar=1"
     else:
-        vf=f'[1:v]setpts={pts_expr},fps={fps}'
-        if s['background_duration']: vf+=f",trim=duration={s['background_duration']}"
-        vf+=f",tpad=stop_mode=clone:stop_duration={duration},trim=duration={duration},{scale_crop},setsar=1"
+        if bg and bg['kind'] == 'image':
+            vf = f'[1:v]{scale_crop},setsar=1,loop=loop=-1:size=1:start=0,fps={fps}'
+            if s['background_duration']: vf += f",trim=duration={s['background_duration']}"
+            vf += f",trim=duration={duration}"
+        else:
+            vf = f'[1:v]setpts={pts_expr},fps={fps}'
+            if s['background_duration']: vf += f",trim=duration={s['background_duration']}"
+            vf += f",tpad=stop_mode=clone:stop_duration={duration},trim=duration={duration},{scale_crop},setsar=1"
     if s['zoom'] or s['keyframe_end_x'] != s['x'] or s['keyframe_end_y'] != s['y']:
         frames = max(1, round(duration * fps) - 1)
         z_amt = max(s['zoom'], 0.04 if (s['keyframe_end_x'] != s['x'] or s['keyframe_end_y'] != s['y']) else 0)
@@ -530,7 +541,7 @@ def render_args(studio, folder, output, background_has_audio=False, bake_fx=True
     else: graph += ['[mix]anull[aout]','[bg]null[out]']
     try:
         from assets import hwaccel
-        enc_args = hwaccel.get_video_encoder_args(codec='h264', quality='high')
+        enc_args = hwaccel.get_video_encoder_args(codec='h264', quality=quality)
     except Exception:
         enc_args = ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18']
     return [*args,'-filter_complex',';'.join(graph),'-map','[out]','-map','[aout]',

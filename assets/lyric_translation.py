@@ -92,7 +92,7 @@ def local_chat(messages, schema):
     if _local_model is None:
         require_local_runtime()
         from llama_cpp import Llama
-        _local_model = Llama(model_path=str(EMBEDDED_MODEL), n_ctx=8192, n_gpu_layers=-1, verbose=False)
+        _local_model = Llama(model_path=str(EMBEDDED_MODEL), n_ctx=4096, n_threads=max(1, (os.cpu_count() or 4) - 1), n_batch=512, n_gpu_layers=-1, verbose=False)
     try:
         stream = _local_model.create_chat_completion(messages=messages, temperature=.2, max_tokens=4096,
             response_format={"type":"json_object","schema":schema}, stream=True)
@@ -213,8 +213,12 @@ def translate(lines, context, target, model, notes='', glossary=''):
     """The caller owns identifiers/timestamps; model results are untrusted proposals."""
     if model not in models():
         raise ValueError('Choose an installed local translation model.')
+    id_map = {str(i + 1): line['id'] for i, line in enumerate(lines)}
+    rev_map = {line['id']: line['id'] for line in lines}
+    prompt_lines = [dict(id=str(i + 1), text=line['text']) for i, line in enumerate(lines)]
+    allowed_ids = list(id_map.keys()) + [l['id'] for l in lines if l['id'] not in id_map]
     schema = {'type':'object', 'properties':{'lines':{'type':'array', 'items':{
-        'type':'object', 'properties':{'id':{'type':'string'}, 'text':{'type':'string'},
+        'type':'object', 'properties':{'id':{'type':'string', 'enum': allowed_ids}, 'text':{'type':'string'},
                                      'note':{'type':'string'}},
         'required':['id','text','note'], 'additionalProperties':False}}},
         'required':['lines'], 'additionalProperties':False}
@@ -226,8 +230,8 @@ def translate(lines, context, target, model, notes='', glossary=''):
         'Return exactly one item per requested ID, with exact ID and translated text. No timestamps. '
         'Leave note empty unless meaning is ambiguous. If needed, give one alternative interpretation in at most 80 characters; never explain straightforward translations. '
         'Do not claim confidence scores. Never omit repeated lines.')
-    payload = dict(target=target, notes=notes, glossary=glossary, context=context, lines=lines)
-    messages=[dict(role='system',content=system+' /no_think'),dict(role='user',content=json.dumps(payload,ensure_ascii=False))]
+    payload = dict(target=target, notes=notes, glossary=glossary, context=context, lines=prompt_lines)
+    messages=[dict(role='system',content=system+' /no_think'),dict(role='user',content=json.dumps(payload,ensure_ascii=False)+' /no_think')]
     if model=='qwen3-4b-local':
         content=local_chat(messages,schema)
     else:
@@ -236,15 +240,23 @@ def translate(lines, context, target, model, notes='', glossary=''):
         answer=json.loads(content)['lines']
     except (KeyError,TypeError,ValueError) as exc:
         raise ValueError('The model returned incomplete translation data. Saved lyrics were kept.') from exc
-    expected = {line['id'] for line in lines}
-    if not isinstance(answer,list) or len(answer) != len(expected):
+    if not isinstance(answer, list):
         raise ValueError('The model omitted or duplicated lyric lines. Retry this section.')
     cleaned = {}
     for line in answer:
-        if not isinstance(line,dict) or line.get('id') not in expected or line['id'] in cleaned:
+        raw_id = line.get('id') if isinstance(line, dict) else None
+        caller_id = id_map.get(raw_id) or rev_map.get(raw_id)
+        if not caller_id or caller_id in cleaned:
             raise ValueError('The model returned an unknown or duplicate lyric line.')
         text = line.get('text')
-        if not isinstance(text,str) or not text.strip() or len(text)>2000:
+        if not isinstance(text, str) or not text.strip() or len(text) > 2000:
             raise ValueError('The model returned an empty or oversized translation.')
-        cleaned[line['id']] = dict(text=text.strip(),note=str(line.get('note',''))[:500])
+        cleaned[caller_id] = dict(text=text.strip(), note=str(line.get('note', ''))[:500])
+    if len(cleaned) != len(lines):
+        if len(lines) > 1:
+            mid = len(lines) // 2
+            left = translate(lines[:mid], context, target, model, notes, glossary)
+            right = translate(lines[mid:], context, target, model, notes, glossary)
+            return {**left, **right}
+        raise ValueError('The model omitted or duplicated lyric lines. Retry this section.')
     return cleaned

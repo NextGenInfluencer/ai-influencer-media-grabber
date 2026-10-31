@@ -325,20 +325,41 @@
           </div>
 
           <div class="subCard stackForm">
-            <details class="subCard" id="translationPanel"><summary>Translation workspace</summary>
-              <p class="hint">Uses the translation language chosen under Text Style. Original lyrics stay unchanged. Only approved translations are displayed.</p>
-              <label>Selected line translation<textarea id="translationText" rows="3" maxlength="2000"></textarea></label>
-              <label><input id="translationLocked" type="checkbox"> Lock this translation against AI changes</label>
-              <button id="approveManualTranslation" type="button">Save & approve this translation</button>
-              <p id="translationState" role="status"></p>
-              <label>Song context<textarea id="translationNotes" rows="2" maxlength="4000" placeholder="Story, speaker, intended meaning…"></textarea></label>
-              <label>Glossary<textarea id="translationGlossary" rows="2" maxlength="4000" placeholder="Names, slang and preferred translations…"></textarea></label>
-              <button id="findTranslationModels" type="button">Find installed local models</button>
-              <button id="setupTranslationModel" type="button">Set up local translator (2.5 GB)</button>
-              <p class="hint">Requires the AI Engine Pack. Downloads Qwen3 once from Hugging Face; lyrics stay on your computer. Setup also verifies an existing model. Stop processing cancels a download; retrying starts it again.</p>
-              <label>Local model<select id="translationModel"><option value="">Choose an installed model</option></select></label>
-              <div class="row"><button id="translateAll" type="button">Translate unlocked lines</button><button id="translateSelected" type="button">Translate selected line</button><button id="resumeTranslation" type="button">Resume translation</button><button id="reviewTranslation" type="button">Review proposal</button></div>
-              <p class="hint">Built-in Qwen3 or optional local Ollama; no cloud fallback. Model quality must be reviewed, especially metaphors and mixed languages.</p>
+            <details class="subCard" id="translationPanel"><summary>🌐 AI Translation Workspace</summary>
+              <div class="row" style="margin-top:4px;">
+                <label style="flex:1;">Translate into
+                  <select id="workspace_translation_language" aria-label="Target translation language">
+                    {% for code,label in languages.items() %}<option value="{{ code }}" {% if code == 'en' %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                  </select>
+                </label>
+                <label style="flex:1;">Display on video
+                  <select id="workspace_track_mode" aria-label="Subtitle display mode">
+                    <option value="both" selected>Original + Translation (Bilingual)</option>
+                    <option value="translation">Translation only</option>
+                    <option value="original">Original lyrics only</option>
+                  </select>
+                </label>
+              </div>
+              <p class="hint">Original lyrics stay untouched. Unlocked lines are any lines not locked against AI changes. Translating generates a reviewable proposal that you can inspect and edit before applying.</p>
+              <label>Selected line translation<textarea id="translationText" rows="3" maxlength="2000" placeholder="Select any lyric line above to see or edit its translation…"></textarea></label>
+              <label><input id="translationLocked" type="checkbox"> 🔒 Lock this line translation (protects it from AI overwrites)</label>
+              <button id="approveManualTranslation" type="button">Save &amp; approve this line translation</button>
+              <p id="translationState" class="hint" role="status" style="font-weight:600;color:#64b5f6;margin:6px 0;"></p>
+              <label>Song context (optional)<textarea id="translationNotes" rows="2" maxlength="4000" placeholder="Story, theme, mood, speaker perspective…"></textarea></label>
+              <label>Glossary (optional)<textarea id="translationGlossary" rows="2" maxlength="4000" placeholder="Names, slang, preferred terminology…"></textarea></label>
+              <div class="row">
+                <button id="findTranslationModels" type="button">Find installed local models</button>
+                <button id="setupTranslationModel" type="button">Set up local translator (2.5 GB)</button>
+              </div>
+              <p class="hint">Requires the AI Engine Pack. Downloads Qwen3 once from Hugging Face; lyrics stay 100% private on your computer.</p>
+              <label>Local AI model<select id="translationModel"><option value="">Choose an installed model</option></select></label>
+              <div class="row" style="margin-top:6px;">
+                <button id="translateAll" class="primary" type="button" title="Translate all lyric lines that aren't locked">🌐 Translate All Lines (AI)</button>
+                <button id="translateSelected" type="button">Translate selected line</button>
+                <button id="resumeTranslation" type="button">Resume translation</button>
+                <button id="reviewTranslation" type="button">Review proposal</button>
+              </div>
+              <p class="hint">Built-in Qwen3 or local Ollama; no cloud upload. Always review translations before exporting.</p>
               <div class="row"><button id="translationSrt" type="button">Translated SRT</button><button id="bilingualSrt" type="button">Bilingual SRT</button><button id="styledAss" type="button">Styled ASS</button></div>
             </details>
             <h3>3. Karaoke Word-by-Word Timing</h3>

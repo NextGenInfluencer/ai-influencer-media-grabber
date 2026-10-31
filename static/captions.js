@@ -725,10 +725,16 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
                 else if(effective[key]!==undefined)$(key).value=effective[key];
             }
         }
+        if($('workspace_translation_language') && project?.style?.translation_language) $('workspace_translation_language').value=project.style.translation_language;
+        if($('workspace_track_mode') && project?.style?.track_mode) $('workspace_track_mode').value=project.style.track_mode;
         const tr=c?.translations?.[project?.style.translation_language||'en'];
         const trDraft=c?readDraft('translation-'+c.id+'-'+(project.style.translation_language||'en')):null;
         $('translationText').value=trDraft?.text??tr?.text??'';$('translationLocked').checked=!!tr?.locked;
-        $('translationState').textContent=tr?`Translation: ${tr.status}${tr.note?' · '+tr.note:''}`:'No translation for this line.';
+        if(project?.state==='busy' && project.status?.includes('Translat')) {
+            $('translationState').textContent='⏳ '+project.status;
+        } else {
+            $('translationState').textContent=tr?`Translation: ${tr.status}${tr.note?' · '+tr.note:''}`:'No translation for this line yet.';
+        }
         $('lineReview').textContent=c?.karaoke?.note || (c?.words?.length ? 'Word timings available — listen and adjust if needed.' : 'No word timings yet.');
         $('text').value=c?.text||'';$('start').value=c?.start.toFixed(2)||'';$('end').value=c?.end.toFixed(2)||'';
         for(const node of document.querySelectorAll('#selection textarea,#selection input,#selection button')) node.disabled=!c||busy;
@@ -1690,6 +1696,8 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
             else project.style[key]=val;
             const compMirror=$('comp_'+key);
             if(compMirror) {if(styleChecks.includes(key))compMirror.checked=!!val;else compMirror.value=val;}
+            if(key==='translation_language' && $('workspace_translation_language')) $('workspace_translation_language').value=val;
+            if(key==='track_mode' && $('workspace_track_mode')) $('workspace_track_mode').value=val;
             if(key==='video_filter') document.querySelectorAll('[data-filter-pill]').forEach(b=>b.classList.toggle('active',b.dataset.filterPill===val));
             if(key==='animation') triggerAnimationPreview(val);
             },false);
@@ -1934,6 +1942,18 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         await job('translate',{language:project.style.translation_language||'en',ids:selectedOnly?[current().id]:null,resume});
     });
     $('translateAll').onclick=translateJob();$('translateSelected').onclick=translateJob(true);$('resumeTranslation').onclick=translateJob(false,true);
+    if($('workspace_translation_language')){
+        $('workspace_translation_language').onchange=()=>{
+            const v=$('workspace_translation_language').value;
+            if($('translation_language')){$('translation_language').value=v;$('translation_language').dispatchEvent(new Event('change'));}
+        };
+    }
+    if($('workspace_track_mode')){
+        $('workspace_track_mode').onchange=()=>{
+            const v=$('workspace_track_mode').value;
+            if($('track_mode')){$('track_mode').value=v;$('track_mode').dispatchEvent(new Event('change'));}
+        };
+    }
     function showTranslationReview(){
         const proposal=project?.translation_proposal;if(!proposal){say('No translation proposal is ready.');return;}
         const list=$('translationReviewRows');list.replaceChildren();
@@ -1955,6 +1975,10 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         const lines=copy(p.lines);
         for(const input of $('translationReviewRows').querySelectorAll('textarea'))lines[input.dataset.cueId].text=input.value;
         checkpoint();project=await api(`/api/captions/${project.id}/translation-proposal`,'POST',{id:p.id,revision:project.revision,action,lines});
+        if(action==='apply' && project?.style?.track_mode==='original'){
+            project.style.track_mode='both';
+            await save();
+        }
         $('translationReviewDialog').close();refresh();
     }
     $('applyTranslationReview').onclick=act(()=>finishTranslation('apply'));

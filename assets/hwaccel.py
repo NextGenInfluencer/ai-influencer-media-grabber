@@ -47,7 +47,9 @@ def run_render(command, *, cwd, runner):
             retry.append(command[i])
             i += 1
     codec = 'hevc' if encoder.startswith('hevc') else 'h264'
-    retry += get_video_encoder_args(codec=codec, quality='high', force_cpu=True) + [str(retry_output)]
+    orig_preset = command[command.index('-preset') + 1] if '-preset' in command else 'p4'
+    retry_quality = 'draft' if orig_preset in ('p1', 'p2', 'ultrafast', 'veryfast', 'faster', 'speed') else 'high'
+    retry += get_video_encoder_args(codec=codec, quality=retry_quality, force_cpu=True) + [str(retry_output)]
     try:
         logger.warning('Hardware encode failed; retrying on CPU: %s', encoder)
         result = runner(retry, cwd=cwd, capture_output=True)
