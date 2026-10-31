@@ -42,7 +42,8 @@
     bindEvents();
     await Promise.all([
       loadProjects(),
-      loadActivePersona()
+      loadActivePersona(),
+      loadModelHubState()
     ]);
   }
 
@@ -52,6 +53,28 @@
     document.getElementById('renderAllImagesBtn').onclick = renderAllKeyframes;
     document.getElementById('animateAllVideosBtn').onclick = animateAllScenes;
     document.getElementById('bridgeToCaptionsBtn').onclick = bridgeToCaptionStudio;
+
+    // AI Model Hub modal triggers
+    const modelHubBtn = document.getElementById('openModelHubBtn');
+    if (modelHubBtn) modelHubBtn.onclick = openModelHub;
+    const closeHubBtn = document.getElementById('closeModelHubBtn');
+    if (closeHubBtn) closeHubBtn.onclick = closeModelHub;
+    const closeHubFooterBtn = document.getElementById('closeModelHubFooterBtn');
+    if (closeHubFooterBtn) closeHubFooterBtn.onclick = closeModelHub;
+
+    const tabLocal = document.getElementById('tabBtnLocalModels');
+    if (tabLocal) tabLocal.onclick = () => switchModelTab('local');
+    const tabCloud = document.getElementById('tabBtnCloudBackend');
+    if (tabCloud) tabCloud.onclick = () => switchModelTab('cloud');
+
+    const testComfy = document.getElementById('testComfyBtn');
+    if (testComfy) testComfy.onclick = testComfyConnection;
+    const saveCloud = document.getElementById('saveCloudSettingsBtn');
+    if (saveCloud) saveCloud.onclick = saveCloudSettings;
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeModelHub();
+    });
 
     const personaBtn = document.getElementById('activePersonaBtn');
     if (personaBtn) {
@@ -328,7 +351,11 @@
       const data = await res.json();
       scene.image_path = data.image.path;
       renderStoryboardGrid();
-      notify(`✓ Photo ready for Scene #${sceneNum}!`, 'success');
+      if (data.image && data.image.model_ready === false) {
+        notify(`ℹ️ Scene #${sceneNum} preview created. Open 'AI Models' in the header to download FLUX or connect cloud!`, 'info');
+      } else {
+        notify(`✓ Photo ready for Scene #${sceneNum}!`, 'success');
+      }
       saveStoryboardToProject();
     } catch (e) {
       notify('Photo render failed: ' + e.message, 'error');
@@ -341,7 +368,7 @@
     if (!scene.image_path) {
       await renderSingleImage(sceneNum);
     }
-    notify(`Animating Scene #${sceneNum} with Wan 2.1…`, 'info');
+    notify(`Animating Scene #${sceneNum}…`, 'info');
 
     try {
       const dur = Math.max(3.0, (scene.end_time - scene.start_time) || 5.0);
@@ -362,7 +389,11 @@
       const data = await res.json();
       scene.video_path = data.video.path;
       renderStoryboardGrid();
-      notify(`✓ Scene #${sceneNum} video clip ready!`, 'success');
+      if (data.video && data.video.model_ready === false) {
+        notify(`ℹ️ Scene #${sceneNum} camera motion preview created. Download Wan 2.1 in 'AI Models' for full motion diffusion!`, 'info');
+      } else {
+        notify(`✓ Scene #${sceneNum} video clip ready!`, 'success');
+      }
       saveStoryboardToProject();
     } catch (e) {
       notify('Video animation failed: ' + e.message, 'error');
@@ -457,6 +488,305 @@
       notify('Bridge error: ' + e.message, 'error');
       bridgeBtn.disabled = false;
       bridgeBtn.textContent = '🎤 Open in Caption Studio';
+    }
+  }
+
+  // --- AI Model Hub Client Orchestrator (12GB GPU & Cloud Weights) ---
+  let modelsData = null;
+  let modelPollTimer = null;
+
+  async function loadModelHubState() {
+    try {
+      const res = await fetch('/api/video-studio/models');
+      if (!res.ok) return;
+      modelsData = await res.json();
+      updateModelHubUI(modelsData);
+    } catch (_) {}
+  }
+
+  function updateModelHubUI(data) {
+    if (!data) return;
+    const { models, gpu, config, summary } = data;
+
+    // Header badge
+    const badge = document.getElementById('modelHubStatusBadge');
+    if (badge) {
+      if (summary.image_ready && summary.video_ready) {
+        badge.textContent = '🟢 2 Ready';
+        badge.style.color = '#34d399';
+      } else if (summary.image_ready || summary.video_ready) {
+        badge.textContent = '🟡 1 Ready';
+        badge.style.color = '#fbbf24';
+      } else if (summary.cloud_enabled) {
+        badge.textContent = '☁️ Cloud Active';
+        badge.style.color = '#38bdf8';
+      } else {
+        badge.textContent = '⚪ Not Installed';
+        badge.style.color = '#94a3b8';
+      }
+    }
+
+    // Engine pill in toolbar
+    const pill = document.getElementById('vsEnginePill');
+    if (pill && gpu) {
+      const vramStr = gpu.vram_gb > 0 ? `${gpu.vram_gb}GB VRAM` : 'No CUDA';
+      const activeImg = config.active_image_model ? config.active_image_model.split('-')[0].toUpperCase() : 'FLUX';
+      const activeVid = config.active_video_model ? 'Wan 2.1' : 'Video';
+      pill.textContent = `⚡ GPU: ${gpu.device_name} (${vramStr}) • ${activeImg} & ${activeVid}`;
+    }
+
+    // Hardware Banner in Modal
+    const gpuNameEl = document.getElementById('gpuDeviceName');
+    const gpuRecEl = document.getElementById('gpuRecommendation');
+    const gpuBadgeEl = document.getElementById('gpuVramBadge');
+    if (gpuNameEl && gpu) gpuNameEl.textContent = `${gpu.device_name} (${gpu.vram_gb} GB VRAM)`;
+    if (gpuRecEl && gpu) gpuRecEl.textContent = `Preset: ${gpu.recommended_preset} • Optimized for 12GB Quantized weights`;
+    if (gpuBadgeEl && gpu) gpuBadgeEl.textContent = `${gpu.vram_gb} GB VRAM`;
+
+    // Render Cards in Grids
+    renderModelGrid('imageModelsGrid', models.filter(m => m.category === 'image'), config.active_image_model);
+    renderModelGrid('videoModelsGrid', models.filter(m => m.category === 'video'), config.active_video_model);
+
+    // Populate Cloud Config
+    if (config.cloud_backend) {
+      const cb = config.cloud_backend;
+      const toggle = document.getElementById('enableCloudToggle');
+      const comfy = document.getElementById('comfyUrlInput');
+      const prov = document.getElementById('cloudApiProvider');
+      const key = document.getElementById('cloudApiKeyInput');
+      if (toggle) toggle.checked = Boolean(cb.enabled);
+      if (comfy && !comfy.value) comfy.value = cb.comfy_url || 'http://127.0.0.1:8188';
+      if (prov) prov.value = cb.api_provider || 'huggingface';
+      if (key && !key.value) key.value = cb.api_key || '';
+    }
+
+    // Real-time polling if any download is active
+    const isDownloading = models.some(m => m.status === 'downloading');
+    clearTimeout(modelPollTimer);
+    if (isDownloading) {
+      modelPollTimer = setTimeout(loadModelHubState, 1500);
+      if (badge) {
+        badge.textContent = '⏳ Downloading…';
+        badge.style.color = '#38bdf8';
+      }
+    }
+  }
+
+  function renderModelGrid(containerId, modelsList, activeModelId) {
+    const el = document.getElementById(containerId);
+    if (!el) return;
+    el.replaceChildren();
+
+    modelsList.forEach(m => {
+      const card = document.createElement('div');
+      card.className = `hubModelCard ${m.id === activeModelId ? 'activeModel' : ''}`;
+
+      // Top row
+      const top = document.createElement('div');
+      top.className = 'hubCardTop';
+      const title = document.createElement('div');
+      title.className = 'hubCardTitle';
+      title.textContent = m.name;
+      const vramBadge = document.createElement('span');
+      vramBadge.className = 'hubCardVramBadge';
+      vramBadge.textContent = m.vram_req;
+      top.append(title, vramBadge);
+
+      // Description
+      const desc = document.createElement('div');
+      desc.className = 'hubCardDesc';
+      desc.textContent = m.recommended_for;
+
+      // Meta row
+      const meta = document.createElement('div');
+      meta.className = 'hubCardMetaRow';
+      const sizeSpan = document.createElement('span');
+      sizeSpan.textContent = `Size: ~${m.size_gb} GB (${m.format.toUpperCase()})`;
+
+      const statusBox = document.createElement('div');
+      statusBox.className = 'hubCardStatus';
+      const dot = document.createElement('span');
+      dot.className = `hubStatusDot ${m.status}`;
+      const statusLabel = document.createElement('span');
+      statusLabel.textContent = m.status === 'ready' ? 'Ready' : (m.status === 'downloading' ? `Downloading ${m.progress}%` : 'Not Installed');
+      statusBox.append(dot, statusLabel);
+      meta.append(sizeSpan, statusBox);
+
+      card.append(top, desc, meta);
+
+      // Progress bar if downloading
+      if (m.status === 'downloading') {
+        const progWrapper = document.createElement('div');
+        progWrapper.className = 'hubProgressWrapper';
+        const progHeader = document.createElement('div');
+        progHeader.className = 'hubProgressHeader';
+        progHeader.innerHTML = `<span>${m.speed || 'Downloading...'}</span><span>${m.progress}%</span>`;
+        const track = document.createElement('div');
+        track.className = 'hubProgressBarTrack';
+        const fill = document.createElement('div');
+        fill.className = 'hubProgressBarFill';
+        fill.style.width = `${m.progress}%`;
+        track.appendChild(fill);
+        progWrapper.append(progHeader, track);
+        card.appendChild(progWrapper);
+      }
+
+      // Actions row
+      const actions = document.createElement('div');
+      actions.className = 'hubCardActions';
+
+      if (m.status === 'ready') {
+        const selectBtn = document.createElement('button');
+        selectBtn.type = 'button';
+        selectBtn.className = `hubBtn ${m.id === activeModelId ? 'hubBtnPrimary' : 'hubBtnSecondary'}`;
+        selectBtn.textContent = m.id === activeModelId ? '✓ Active Model' : 'Select as Active';
+        selectBtn.onclick = () => selectActiveModel(m.category, m.id);
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'hubBtn hubBtnDanger';
+        deleteBtn.title = 'Delete downloaded weights to reclaim disk space';
+        deleteBtn.innerHTML = '🗑️';
+        deleteBtn.onclick = () => deleteModelWeights(m.id);
+
+        actions.append(selectBtn, deleteBtn);
+      } else if (m.status === 'downloading') {
+        const cancelBtn = document.createElement('button');
+        cancelBtn.type = 'button';
+        cancelBtn.className = 'hubBtn hubBtnSecondary';
+        cancelBtn.textContent = '⏹️ Cancel Download';
+        cancelBtn.onclick = () => cancelDownload(m.id);
+        actions.appendChild(cancelBtn);
+      } else {
+        const dlBtn = document.createElement('button');
+        dlBtn.type = 'button';
+        dlBtn.className = 'hubBtn hubBtnPrimary';
+        dlBtn.innerHTML = `📥 Download (${m.size_gb} GB)`;
+        dlBtn.onclick = () => triggerDownload(m.id);
+        actions.appendChild(dlBtn);
+      }
+
+      card.appendChild(actions);
+      el.appendChild(card);
+    });
+  }
+
+  function openModelHub() {
+    const modal = document.getElementById('modelHubModal');
+    if (modal) {
+      modal.style.display = 'flex';
+      loadModelHubState();
+    }
+  }
+
+  function closeModelHub() {
+    const modal = document.getElementById('modelHubModal');
+    if (modal) modal.style.display = 'none';
+  }
+
+  function switchModelTab(tab) {
+    const isLocal = tab === 'local';
+    document.getElementById('tabBtnLocalModels').classList.toggle('active', isLocal);
+    document.getElementById('tabBtnCloudBackend').classList.toggle('active', !isLocal);
+    document.getElementById('tabPanelLocalModels').style.display = isLocal ? 'block' : 'none';
+    document.getElementById('tabPanelCloudBackend').style.display = isLocal ? 'none' : 'block';
+  }
+
+  async function triggerDownload(modelId) {
+    notify(`Starting download for ${modelId}…`, 'info');
+    try {
+      const res = await fetch('/api/video-studio/models/download', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Media-Token': getToken() },
+        body: JSON.stringify({ model_id: modelId })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to start download');
+      notify(`✓ ${data.message || 'Download started!'}`, 'success');
+      loadModelHubState();
+    } catch (e) {
+      notify(`Download error: ${e.message}`, 'error');
+    }
+  }
+
+  async function cancelDownload(modelId) {
+    try {
+      await fetch('/api/video-studio/models/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Media-Token': getToken() },
+        body: JSON.stringify({ model_id: modelId })
+      });
+      notify('Download cancelled.', 'info');
+      loadModelHubState();
+    } catch (e) {
+      notify('Failed to cancel: ' + e.message, 'error');
+    }
+  }
+
+  async function deleteModelWeights(modelId) {
+    if (!confirm(`Are you sure you want to delete ${modelId} weights from your PC to reclaim storage?`)) return;
+    try {
+      const res = await fetch('/api/video-studio/models/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Media-Token': getToken() },
+        body: JSON.stringify({ model_id: modelId })
+      });
+      const data = await res.json();
+      notify(`✓ ${data.message || 'Model removed'}`, 'success');
+      loadModelHubState();
+    } catch (e) {
+      notify('Delete failed: ' + e.message, 'error');
+    }
+  }
+
+  async function selectActiveModel(category, modelId) {
+    try {
+      const payload = category === 'image' ? { active_image_model: modelId } : { active_video_model: modelId };
+      const res = await fetch('/api/video-studio/models/select', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Media-Token': getToken() },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        notify(`✓ Set active ${category} model to ${modelId}`, 'success');
+        loadModelHubState();
+      }
+    } catch (_) {}
+  }
+
+  async function testComfyConnection() {
+    const url = document.getElementById('comfyUrlInput').value.trim() || 'http://127.0.0.1:8188';
+    notify(`Testing connection to ${url}…`, 'info');
+    try {
+      const res = await fetch(`${url}/system_stats`, { mode: 'cors' }).catch(() => null);
+      if (res && res.ok) {
+        notify(`✓ Connected to ComfyUI successfully!`, 'success');
+      } else {
+        notify(`Could not reach ComfyUI at ${url}. Ensure ComfyUI is running with --enable-cors-header.`, 'warning');
+      }
+    } catch (e) {
+      notify(`Connection error: ${e.message}`, 'error');
+    }
+  }
+
+  async function saveCloudSettings() {
+    const enabled = document.getElementById('enableCloudToggle').checked;
+    const comfy_url = document.getElementById('comfyUrlInput').value.trim();
+    const api_provider = document.getElementById('cloudApiProvider').value;
+    const api_key = document.getElementById('cloudApiKeyInput').value.trim();
+
+    try {
+      const res = await fetch('/api/video-studio/models/cloud-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Media-Token': getToken() },
+        body: JSON.stringify({ enabled, comfy_url, api_provider, api_key })
+      });
+      if (res.ok) {
+        notify('✓ Cloud backend configuration saved!', 'success');
+        loadModelHubState();
+      }
+    } catch (e) {
+      notify('Failed to save settings: ' + e.message, 'error');
     }
   }
 

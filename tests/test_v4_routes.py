@@ -253,6 +253,40 @@ class TestV4Routes(unittest.TestCase):
         self.assertTrue(len(bridged.get('composition_sequence', [])) >= 1)
         self.assertEqual(bridged['composition_sequence'][0]['scene_id'], 's1')
 
+    def test_video_studio_models_api(self):
+        # 1. Test listing models & GPU detection
+        res = self.client.get('/api/video-studio/models')
+        self.assertEqual(res.status_code, 200)
+        data = res.json
+        self.assertIn('models', data)
+        self.assertIn('gpu', data)
+        self.assertIn('summary', data)
+        self.assertTrue(any(m['id'] == 'flux-schnell-nf4' for m in data['models']))
+        self.assertTrue(any(m['id'] == 'wan-2.1-1.3b' for m in data['models']))
+
+        # 2. Test selecting active model
+        sel_res = self.client.post('/api/video-studio/models/select', json={
+            'active_image_model': 'sdxl-lightning',
+            'active_video_model': 'wan-2.1-14b-q4'
+        }, headers=self.headers)
+        self.assertEqual(sel_res.status_code, 200)
+        self.assertEqual(sel_res.json['config']['active_image_model'], 'sdxl-lightning')
+
+        # 3. Test saving cloud backend config
+        cloud_res = self.client.post('/api/video-studio/models/cloud-config', json={
+            'enabled': True,
+            'comfy_url': 'http://127.0.0.1:8188',
+            'api_provider': 'huggingface',
+            'api_key': 'hf_test123'
+        }, headers=self.headers)
+        self.assertEqual(cloud_res.status_code, 200)
+        self.assertTrue(cloud_res.json['config']['cloud_backend']['enabled'])
+        self.assertEqual(cloud_res.json['config']['cloud_backend']['api_key'], 'hf_test123')
+
+        # 4. Test download validation
+        bad_dl = self.client.post('/api/video-studio/models/download', json={'model_id': 'nonexistent'}, headers=self.headers)
+        self.assertEqual(bad_dl.status_code, 400)
+
 
 if __name__ == '__main__':
     unittest.main()

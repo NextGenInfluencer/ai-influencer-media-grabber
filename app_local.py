@@ -37,6 +37,7 @@ import characters
 import copilot
 from assets import motion_studio
 from assets import ai_video_engine
+from assets import ai_model_manager
 from typing import Any, Optional, cast
 
 # --- Constants ---
@@ -2386,6 +2387,67 @@ def get_storyboard_video_file(filename):
     if ai_video_engine.STORYBOARD_VID_DIR.resolve() not in p.parents or not p.is_file():
         return jsonify(error="Video not found"), 404
     return send_file(str(p))
+
+@app.route('/api/video-studio/models', methods=['GET'])
+def get_video_studio_models():
+    data = ai_model_manager.list_models()
+    return jsonify(data)
+
+@app.route('/api/video-studio/models/download', methods=['POST'])
+def download_video_studio_model():
+    req = request.get_json() or {}
+    mid = req.get('model_id')
+    if not mid:
+        return jsonify(error="model_id required"), 400
+    res = ai_model_manager.start_download(mid)
+    if "error" in res:
+        return jsonify(res), 400
+    return jsonify(res)
+
+@app.route('/api/video-studio/models/cancel', methods=['POST'])
+def cancel_video_studio_model_download():
+    req = request.get_json() or {}
+    mid = req.get('model_id')
+    if not mid:
+        return jsonify(error="model_id required"), 400
+    res = ai_model_manager.cancel_download(mid)
+    return jsonify(res)
+
+@app.route('/api/video-studio/models/delete', methods=['POST'])
+def delete_video_studio_model():
+    req = request.get_json() or {}
+    mid = req.get('model_id')
+    if not mid:
+        return jsonify(error="model_id required"), 400
+    res = ai_model_manager.delete_model(mid)
+    return jsonify(res)
+
+@app.route('/api/video-studio/models/select', methods=['POST'])
+def select_video_studio_model():
+    req = request.get_json() or {}
+    cfg = ai_model_manager.load_config()
+    if 'active_image_model' in req:
+        cfg['active_image_model'] = req['active_image_model']
+    if 'active_video_model' in req:
+        cfg['active_video_model'] = req['active_video_model']
+    ai_model_manager.save_config(cfg)
+    return jsonify(status="ok", config=cfg)
+
+@app.route('/api/video-studio/models/cloud-config', methods=['POST'])
+def save_cloud_backend_config():
+    req = request.get_json() or {}
+    cfg = ai_model_manager.load_config()
+    cb = cfg.setdefault('cloud_backend', {})
+    if 'enabled' in req:
+        cb['enabled'] = bool(req['enabled'])
+    if 'comfy_url' in req:
+        cb['comfy_url'] = str(req['comfy_url']).strip()
+    if 'api_provider' in req:
+        cb['api_provider'] = str(req['api_provider']).strip()
+    if 'api_key' in req:
+        cb['api_key'] = str(req['api_key']).strip()
+    ai_model_manager.save_config(cfg)
+    return jsonify(status="ok", config=cfg)
 
 @app.route('/api/characters/<cid>', methods=['DELETE'])
 def delete_character_route(cid):

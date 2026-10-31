@@ -27,6 +27,11 @@
   </div>
 
   <div class="vsHeaderRight">
+    <button id="openModelHubBtn" class="modelHubBtn" type="button" title="Manage AI Weights (FLUX &amp; Wan 2.1)">
+      <span>🧩 AI Models:</span>
+      <strong id="modelHubStatusBadge">Checking…</strong>
+    </button>
+
     <button id="activePersonaBtn" class="personaBadgeBtn" type="button" title="View &amp; Lock Character Persona">
       <span>👤 Persona:</span>
       <strong id="activePersonaName">@Airi</strong>
@@ -95,6 +100,7 @@
     <div class="vsToolbar">
       <div class="vsToolbarLeft">
         <span class="phaseBadge" id="vsPhaseBadge">Phase 1: Storyboard Ready</span>
+        <span id="vsEnginePill" class="enginePill">⚡ GPU: Detecting…</span>
         <span id="vsSceneCountLabel" style="font-size:12px;color:#94a3b8;">0 Scenes</span>
       </div>
       <div style="display:flex;gap:10px;">
@@ -117,6 +123,109 @@
     </div>
   </section>
 </main>
+
+<!-- AI Model Hub Modal (Apple macOS Glass Sheet Standard) -->
+<div id="modelHubModal" class="modalBackdrop" style="display:none;">
+  <div class="modalWindow modelHubWindow">
+    <div class="modalHeader">
+      <div class="modalTitleGroup">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:18px;">🧩</span>
+          <h2 style="margin:0;font-size:15px;color:#fff;">AI Model Hub &amp; Weights Manager</h2>
+        </div>
+        <small style="color:#94a3b8;font-size:11px;">1-Click Local Downloads for 12GB GPUs (FLUX.1 &amp; Wan 2.1) + Cloud Backends</small>
+      </div>
+      <button type="button" id="closeModelHubBtn" class="modalCloseBtn" title="Close (Esc)">✕</button>
+    </div>
+
+    <!-- GPU Hardware Banner -->
+    <div id="modelHubGpuBanner" class="gpuBanner">
+      <div class="gpuBannerIcon">⚡</div>
+      <div class="gpuBannerInfo">
+        <div class="gpuName" id="gpuDeviceName">Detecting GPU hardware…</div>
+        <div class="gpuRecommendation" id="gpuRecommendation">Scanning VRAM capacity…</div>
+      </div>
+      <span class="gpuBadge" id="gpuVramBadge">12GB VRAM</span>
+    </div>
+
+    <!-- Segmented Navigation Tabs -->
+    <div class="modalTabs">
+      <button type="button" id="tabBtnLocalModels" class="modalTab active">💻 Local GPU Models (12GB Optimized)</button>
+      <button type="button" id="tabBtnCloudBackend" class="modalTab">☁️ Cloud &amp; ComfyUI Backend</button>
+    </div>
+
+    <!-- Tab 1: Local GPU Models -->
+    <div id="tabPanelLocalModels" class="modalTabPanel">
+      <div class="modelSection">
+        <div class="modelSectionHeader">
+          <span>🎨 1. Keyframe Image Synthesis (Realistic Humans &amp; Hands)</span>
+        </div>
+        <div class="modelCardsGrid" id="imageModelsGrid">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+
+      <div class="modelSection" style="margin-top:20px;">
+        <div class="modelSectionHeader">
+          <span>🎬 2. Wan 2.1 Video Motion Synthesis (Character Acting)</span>
+        </div>
+        <div class="modelCardsGrid" id="videoModelsGrid">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab 2: Cloud & External Backends -->
+    <div id="tabPanelCloudBackend" class="modalTabPanel" style="display:none;">
+      <div class="cloudCard">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <strong style="color:#fff;font-size:13px;">Enable Cloud / External Inference</strong>
+          <label class="switch">
+            <input type="checkbox" id="enableCloudToggle">
+            <span class="slider round"></span>
+          </label>
+        </div>
+        <p style="font-size:11px;color:#94a3b8;margin:0 0 16px;">Generate images and videos instantly without downloading multi-gigabyte models to your hard drive.</p>
+
+        <!-- ComfyUI / Local WebUI Server -->
+        <div class="inputGroup">
+          <label for="comfyUrlInput">ComfyUI / WebUI Local Server URL:</label>
+          <div style="display:flex;gap:8px;">
+            <input type="text" id="comfyUrlInput" placeholder="http://127.0.0.1:8188" class="vsInput" style="flex:1;">
+            <button type="button" id="testComfyBtn" class="vsActionBtn">Test Connection</button>
+          </div>
+          <small style="color:#64748b;font-size:10px;">Connect directly to an existing local ComfyUI instance running Wan 2.1 or FLUX workflows.</small>
+        </div>
+
+        <!-- Cloud API Provider -->
+        <div class="inputGroup" style="margin-top:14px;">
+          <label for="cloudApiProvider">Cloud API Provider:</label>
+          <select id="cloudApiProvider" class="vsSelect">
+            <option value="huggingface">Hugging Face Inference API</option>
+            <option value="replicate">Replicate</option>
+            <option value="fal">Fal.ai</option>
+            <option value="together">Together AI</option>
+          </select>
+        </div>
+
+        <div class="inputGroup" style="margin-top:10px;">
+          <label for="cloudApiKeyInput">API Token / Secret Key:</label>
+          <input type="password" id="cloudApiKeyInput" placeholder="hf_... or r8_..." class="vsInput">
+        </div>
+
+        <div style="margin-top:16px;display:flex;justify-content:flex-end;">
+          <button type="button" id="saveCloudSettingsBtn" class="vsActionBtn primaryGlow">Save Cloud Settings</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Footer -->
+    <div class="modalFooter">
+      <span style="font-size:11px;color:#64748b;">Weights are stored safely in Documents/Media Grabber/models/</span>
+      <button type="button" id="closeModelHubFooterBtn" class="vsActionBtn">Close</button>
+    </div>
+  </div>
+</div>
 
 </body>
 </html>
