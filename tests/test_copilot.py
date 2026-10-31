@@ -64,6 +64,26 @@ class CopilotEngineTests(unittest.TestCase):
         self.assertEqual(len(actions), 1)
         self.assertEqual(actions[0]['action'], 'apply_style_preset')
 
+    def test_beast_pop_preset_and_pop_in_validation(self):
+        import captions
+        # Beast pop fallback intent
+        actions = copilot.detect_fallback_intent('apply the beast pop style')
+        self.assertEqual(len(actions), 1)
+        self.assertEqual(actions[0]['preset'], 'mrbeast_bold')
+
+        # Test both 'pop' and 'pop_in' style validation
+        clean_pop = captions.validate_edit({
+            'cues': [{'start': 0.0, 'end': 1.0, 'text': 'Hello world'}],
+            'style': {'animation': 'pop', 'color': '#ffe600'}
+        }, 5.0)
+        self.assertEqual(clean_pop['style']['animation'], 'pop')
+
+        clean_pop_in = captions.validate_edit({
+            'cues': [{'start': 0.0, 'end': 1.0, 'text': 'Hello world'}],
+            'style': {'animation': 'pop_in', 'color': '#ffe600'}
+        }, 5.0)
+        self.assertEqual(clean_pop_in['style']['animation'], 'pop')
+
 
 if __name__ == '__main__':
     unittest.main()

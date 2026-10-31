@@ -80,8 +80,8 @@
       <div class="modalTitleGroup">
         <span class="modalIcon">🎬</span>
         <div>
-          <h3>LivePortrait &amp; Motion Transfer Studio</h3>
-          <p class="modalSubtitle">Animate character still images with driving lip-sync and dance performance takes</p>
+          <h3>Wan 2.1 &amp; LivePortrait Motion Studio</h3>
+          <p class="modalSubtitle">Animate character still images with Wan 2.1 video diffusion or facial performance takes</p>
         </div>
       </div>
       <button class="modalCloseBtn" id="closeMotionModalBtn" aria-label="Close">✕</button>
@@ -94,26 +94,39 @@
       <!-- Left: Driving Performance Video -->
       <div class="motionSourceCard">
         <h4>1. Driving Performance Video</h4>
-        <p class="hint">Your webcam lip-sync take, TikTok reference, or stage video.</p>
+        <p class="hint">Your webcam lip-sync take, TikTok dance, or stage video.</p>
         <div class="motionVideoSlot" id="drivingVideoPreview">
           <span class="slotPlaceholder">No driving video selected</span>
         </div>
-        <div class="row" style="margin-top:8px;">
-          <input type="text" id="drivingVideoInput" placeholder="Video path or filename…" style="flex:1;">
-          <button id="useCurrentProjectVideoBtn" class="secondaryMiniBtn" type="button">Use Current</button>
+        <div style="margin-top:8px;">
+          <label for="drivingVideoSelectCaptions" style="font-size:10px;color:#94a3b8;font-weight:600;display:block;margin-bottom:3px;">Select Downloaded Video:</label>
+          <select id="drivingVideoSelectCaptions" style="width:100%;padding:5px 8px;border-radius:6px;background:#141724;color:#f8fafc;border:1px solid rgba(255,255,255,0.12);font-size:11px;">
+            <option value="">Loading downloaded videos…</option>
+          </select>
         </div>
+        <div class="row" style="margin-top:8px;gap:6px;">
+          <button id="uploadDrivingVideoCaptionsBtn" class="secondaryMiniBtn" type="button" style="flex:1;">📂 Upload Video…</button>
+          <input type="file" id="drivingVideoFileInputCaptions" accept="video/*" style="display:none;">
+          <button id="useCurrentProjectVideoBtn" class="secondaryMiniBtn" type="button">Use Timeline Video</button>
+        </div>
+        <input type="hidden" id="drivingVideoInput">
       </div>
 
-      <!-- Middle: Character Portrait -->
+      <!-- Middle: Character or Custom Still Image -->
       <div class="motionSourceCard">
-        <h4>2. Character Still Image</h4>
-        <p class="hint">Source face image (e.g. @Airi from Google Flow).</p>
+        <h4>2. Character / Source Still Image</h4>
+        <p class="hint">Select an AI persona, pick a reference frame, or upload ANY custom photo.</p>
         <div class="motionImageSlot" id="sourceImagePreview">
-          <span class="slotPlaceholder">No character image selected</span>
+          <span class="slotPlaceholder">No image selected</span>
         </div>
-        <div class="row" style="margin-top:8px;">
-          <select id="charSelectForMotion" style="flex:1;"></select>
-          <button id="refreshCharMotionBtn" class="secondaryMiniBtn" type="button">🔄</button>
+        <div style="margin-top:8px;">
+          <label for="charSelectForMotion" style="font-size:10px;color:#94a3b8;font-weight:600;display:block;margin-bottom:3px;">Select Character or Photo:</label>
+          <select id="charSelectForMotion" style="width:100%;padding:5px 8px;border-radius:6px;background:#141724;color:#f8fafc;border:1px solid rgba(255,255,255,0.12);font-size:11px;"></select>
+        </div>
+        <div class="row" style="margin-top:8px;gap:6px;">
+          <button id="uploadCustomSourceImageCaptionsBtn" class="secondaryMiniBtn" type="button" style="flex:1;">📁 Upload Custom Photo…</button>
+          <input type="file" id="customSourceImageFileInputCaptions" accept="image/*" style="display:none;">
+          <button id="refreshCharMotionBtn" class="secondaryMiniBtn" type="button" title="Refresh available images">🔄</button>
         </div>
       </div>
 
@@ -125,8 +138,15 @@
           <span class="slotPlaceholder">Render result will appear here</span>
         </div>
         <div style="margin-top:8px;">
+          <label for="captionsMotionModelSelect" style="font-size:10px;color:#94a3b8;font-weight:600;display:block;margin-bottom:3px;">Motion Engine:</label>
+          <select id="captionsMotionModelSelect" style="width:100%;padding:5px 8px;border-radius:6px;background:#141724;color:#f8fafc;border:1px solid rgba(255,255,255,0.12);font-size:11px;margin-bottom:8px;">
+            <option value="wan-2.1-1.3b">Wan 2.1 Video Motion (RTX 3080 12GB Diffusion)</option>
+            <option value="wan-2.1-14b-q4">Wan 2.1 - 14B Q4 (Cinematic 720p)</option>
+            <option value="liveportrait">LivePortrait (Facial &amp; Lip-Sync Performance)</option>
+          </select>
           <button id="renderMotionBtn" class="primaryBtn" style="width:100%;" type="button">✨ Render Performance</button>
           <button id="applyToTimelineBtn" class="secondaryBtn" style="width:100%;margin-top:6px;display:none;" type="button">📥 Set as Timeline Background</button>
+          <a href="/video-studio" class="secondaryBtn" style="width:100%;margin-top:6px;text-align:center;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:6px;font-size:11px;padding:6px;" target="_blank">🎬 Open Full AI Video Studio →</a>
         </div>
       </div>
     `;
@@ -145,11 +165,28 @@
     document.getElementById('charSelectForMotion').onchange = onCharSelectChange;
     document.getElementById('refreshCharMotionBtn').onclick = populateMotionCharacters;
     document.getElementById('applyToTimelineBtn').onclick = applyOutputToTimeline;
+
+    const driveSelect = document.getElementById('drivingVideoSelectCaptions');
+    if (driveSelect) driveSelect.onchange = onDrivingVideoSelectCaptionsChange;
+    const uploadDriveBtn = document.getElementById('uploadDrivingVideoCaptionsBtn');
+    const driveFileInput = document.getElementById('drivingVideoFileInputCaptions');
+    if (uploadDriveBtn && driveFileInput) {
+      uploadDriveBtn.onclick = () => driveFileInput.click();
+      driveFileInput.onchange = uploadDrivingVideoCaptions;
+    }
+
+    const uploadPhotoBtn = document.getElementById('uploadCustomSourceImageCaptionsBtn');
+    const photoFileInput = document.getElementById('customSourceImageFileInputCaptions');
+    if (uploadPhotoBtn && photoFileInput) {
+      uploadPhotoBtn.onclick = () => photoFileInput.click();
+      photoFileInput.onchange = uploadCustomSourceImageCaptions;
+    }
   }
 
   function openMotionModal() {
     createMotionStudioModalHTML();
     populateMotionCharacters();
+    loadDrivingVideosCaptions();
     useCurrentVideo();
     const modal = document.getElementById('motionStudioModal');
     if (modal) modal.classList.add('open');
@@ -160,23 +197,158 @@
     if (modal) modal.classList.remove('open');
   }
 
-  async function populateMotionCharacters() {
+  let captionsDrivingVideos = [];
+
+  async function loadDrivingVideosCaptions() {
+    const sel = document.getElementById('drivingVideoSelectCaptions');
+    if (!sel) return;
+    try {
+      const res = await fetch('/api/motion/driving-videos');
+      if (!res.ok) return;
+      const data = await res.json();
+      captionsDrivingVideos = data.videos || [];
+      sel.replaceChildren(
+        Object.assign(document.createElement('option'), { value: '', textContent: 'Select downloaded video…' }),
+        ...captionsDrivingVideos.map(v => Object.assign(document.createElement('option'), {
+          value: v.path || v.name,
+          textContent: `${v.name} (${v.size_mb} MB)`
+        }))
+      );
+      const preview = document.getElementById('drivingVideoPreview');
+      if (captionsDrivingVideos.length && (!preview || !preview.querySelector('video'))) {
+        sel.value = captionsDrivingVideos[0].path || captionsDrivingVideos[0].name;
+        onDrivingVideoSelectCaptionsChange();
+      }
+    } catch (_) {}
+  }
+
+  function onDrivingVideoSelectCaptionsChange() {
+    const sel = document.getElementById('drivingVideoSelectCaptions');
+    const input = document.getElementById('drivingVideoInput');
+    const preview = document.getElementById('drivingVideoPreview');
+    if (!sel || !sel.value) return;
+    if (input) input.value = sel.value;
+
+    const mediaUrl = `/api/media/${encodeURIComponent(sel.value)}`;
+    const v = document.createElement('video');
+    v.src = mediaUrl;
+    v.controls = true;
+    v.style.maxHeight = '100%';
+    v.style.maxWidth = '100%';
+    v.style.borderRadius = '8px';
+    preview.replaceChildren(v);
+  }
+
+  async function uploadDrivingVideoCaptions(e) {
+    const file = e.target?.files?.[0];
+    if (!file) return;
+    const fd = new FormData();
+    fd.append('video', file);
+    notify(`Uploading driving video: ${file.name}…`, 'info');
+
+    try {
+      const res = await fetch('/api/motion/upload-driving-video', {
+        method: 'POST',
+        headers: { 'X-Media-Token': getToken() },
+        body: fd
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Upload failed');
+      notify(`✓ Reference video uploaded!`, 'success');
+      await loadDrivingVideosCaptions();
+      const sel = document.getElementById('drivingVideoSelectCaptions');
+      if (sel) {
+        sel.value = data.path || data.name;
+        onDrivingVideoSelectCaptionsChange();
+      }
+    } catch (err) {
+      notify('Upload failed: ' + err.message, 'error');
+    }
+  }
+
+  async function uploadCustomSourceImageCaptions(e) {
+    const file = e.target?.files?.[0];
+    if (!file) return;
+    const fd = new FormData();
+    fd.append('image', file);
+    notify(`Uploading custom photo: ${file.name}…`, 'info');
+
+    try {
+      const res = await fetch('/api/motion/upload-swapped-frame', {
+        method: 'POST',
+        headers: { 'X-Media-Token': getToken() },
+        body: fd
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Upload failed');
+      notify(`✓ Custom source photo loaded: ${file.name}!`, 'success');
+      await populateMotionCharacters(data.filename || data.url);
+    } catch (err) {
+      notify('Photo upload failed: ' + err.message, 'error');
+    }
+  }
+
+  async function populateMotionCharacters(preferredSelection = null) {
     const sel = document.getElementById('charSelectForMotion');
     if (!sel) return;
     try {
-      const res = await fetch('/api/characters');
-      if (!res.ok) return;
-      const data = await res.json();
-      const chars = data.characters || [];
-      sel.replaceChildren(
-        ...chars.map(c => {
+      // 1. Fetch AI personas
+      const charRes = await fetch('/api/characters').catch(() => null);
+      const charData = charRes && charRes.ok ? await charRes.json() : { characters: [] };
+      const chars = charData.characters || [];
+
+      // 2. Fetch references and swapped photos
+      const refRes = await fetch('/api/motion/references').catch(() => null);
+      const refData = refRes && refRes.ok ? await refRes.json() : { references: [] };
+      const refs = refData.references || [];
+
+      sel.replaceChildren();
+
+      // Persona group
+      if (chars.length) {
+        const groupChars = document.createElement('optgroup');
+        groupChars.label = '👤 AI Personas';
+        chars.forEach(c => {
           const opt = document.createElement('option');
           opt.value = c.id;
           opt.textContent = `${c.name} (${c.tag})`;
           opt.dataset.portrait = c.portrait_file ? `/api/characters/${encodeURIComponent(c.id)}/image/${encodeURIComponent(c.portrait_file)}` : '';
-          return opt;
-        })
-      );
+          groupChars.appendChild(opt);
+        });
+        sel.appendChild(groupChars);
+      }
+
+      // References & Swapped Photos group
+      if (refs.length) {
+        const groupRefs = document.createElement('optgroup');
+        groupRefs.label = '✨ Custom & Swapped Photos';
+        refs.forEach(r => {
+          const opt = document.createElement('option');
+          opt.value = `/api/motion/references/file/${encodeURIComponent(r.name)}`;
+          const isCustom = r.name.startsWith('custom_swapped_');
+          const isSwapped = r.name.startsWith('swapped_');
+          opt.textContent = isCustom ? `📁 Custom Photo: ${r.name}` : (isSwapped ? `✨ Swapped: ${r.name}` : `📸 Frame: ${r.name}`);
+          opt.dataset.portrait = `/api/motion/references/file/${encodeURIComponent(r.name)}`;
+          groupRefs.appendChild(opt);
+        });
+        sel.appendChild(groupRefs);
+      }
+
+      // Select preferred, active persona, or first option
+      if (preferredSelection) {
+        const match = Array.from(sel.options).find(o => o.value === preferredSelection || o.dataset.portrait === preferredSelection || o.value.includes(preferredSelection));
+        if (match) {
+          sel.value = match.value;
+        }
+      } else {
+        const activeRes = await fetch('/api/characters/active').catch(() => null);
+        if (activeRes && activeRes.ok) {
+          const actData = await activeRes.json();
+          if (actData?.active?.id && Array.from(sel.options).some(o => o.value === actData.active.id)) {
+            sel.value = actData.active.id;
+          }
+        }
+      }
       onCharSelectChange();
     } catch (_) {}
   }
@@ -186,10 +358,11 @@
     const opt = sel?.options[sel.selectedIndex];
     const preview = document.getElementById('sourceImagePreview');
     if (!preview) return;
-    if (opt && opt.dataset.portrait) {
+    const imgUrl = opt?.dataset?.portrait || (opt?.value?.startsWith('/') ? opt.value : '');
+    if (imgUrl) {
       const img = document.createElement('img');
-      img.src = opt.dataset.portrait;
-      img.alt = 'Character';
+      img.src = imgUrl;
+      img.alt = opt.textContent;
       img.style.maxHeight = '100%';
       img.style.maxWidth = '100%';
       img.style.borderRadius = '8px';
@@ -198,7 +371,7 @@
     } else {
       const ph = document.createElement('span');
       ph.className = 'slotPlaceholder';
-      ph.textContent = 'No portrait uploaded for this character';
+      ph.textContent = 'No photo or portrait uploaded for this selection';
       preview.replaceChildren(ph);
     }
   }
@@ -225,13 +398,20 @@
   let lastRenderedVideoPath = '';
 
   async function executeRenderMotion() {
-    const drivingVideo = document.getElementById('drivingVideoInput').value.trim();
+    const driveSelect = document.getElementById('drivingVideoSelectCaptions');
+    const driveInput = document.getElementById('drivingVideoInput');
+    const drivingVideo = (driveSelect && driveSelect.value) ? driveSelect.value : (driveInput ? driveInput.value.trim() : '');
+    const modelId = document.getElementById('captionsMotionModelSelect')?.value || 'wan-2.1-1.3b';
     const sel = document.getElementById('charSelectForMotion');
     const opt = sel?.options[sel.selectedIndex];
-    const portraitUrl = opt?.dataset?.portrait;
+    const portraitUrl = opt?.dataset?.portrait || opt?.value;
 
     if (!portraitUrl) {
-      notify('Please upload or select a character with a face portrait first.', 'warning');
+      notify('Please upload or select a character portrait or still photo first.', 'warning');
+      return;
+    }
+    if (!drivingVideo) {
+      notify('Please select or upload a driving dance/action video first.', 'warning');
       return;
     }
 
@@ -248,7 +428,8 @@
         },
         body: JSON.stringify({
           driving_video: drivingVideo,
-          source_image: portraitUrl
+          source_image: portraitUrl,
+          model_id: modelId
         })
       });
 

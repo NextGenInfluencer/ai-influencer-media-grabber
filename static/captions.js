@@ -431,7 +431,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
                 background:s.background?'rgba(10,12,20,.78)':'transparent',padding:s.background?h*(s.box_padding||0)/100+'px':'0',borderRadius:h*(s.box_radius||0)/100+'px'});
             const elapsed=video.currentTime-cue.start,remaining=cue.end-video.currentTime;
             if(row.track==='original'&&s.animation==='fade')line.style.opacity=String(Math.max(0,Math.min(1,elapsed/.18,remaining/.18)));
-            if(row.track==='original'&&s.animation==='pop'&&elapsed<.16)line.style.transform+=` scale(${.85+.15*Math.max(0,elapsed)/.16})`;
+            if(row.track==='original'&&(s.animation==='pop'||s.animation==='pop_in')&&elapsed<.16)line.style.transform+=` scale(${.85+.15*Math.max(0,elapsed)/.16})`;
             if(row.track==='original'&&s.animation==='zoom_in'&&elapsed<.2)line.style.transform+=` scale(${.7+.3*Math.max(0,elapsed)/.2})`;
             if(row.track==='original'&&s.animation==='slide_up'&&elapsed<.18)line.style.marginTop=(rowPadding+h*.035*(1-Math.max(0,elapsed)/.18))+'px';
             if(row.track==='original' && row.words.length){
@@ -1679,6 +1679,160 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
     if($('grabClipUrl')) $('grabClipUrl').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('grabClipBtn').click();}};
     if($('grabStockBtn')) $('grabStockBtn').onclick=act(()=>grabSocialClip($('grabStockUrl'),$('grabStockBtn')));
     if($('grabStockUrl')) $('grabStockUrl').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('grabStockBtn').click();}};
+
+    // --- Autonomous AI Backdrop Generator ---
+    let latestGeneratedBackdrop = null;
+
+    document.querySelectorAll('[data-backdrop-prompt]').forEach(b => {
+        b.onclick = () => {
+            const promptVal = b.dataset.backdropPrompt;
+            if (promptVal === 'auto-lyrics') {
+                let words = [];
+                if (project?.captions?.length) {
+                    words = project.captions.slice(0, 12).map(c => c.text || '').filter(Boolean);
+                }
+                const sampleText = words.length ? words.join(' ') : ($('songLibrary')?.value || 'Aesthetic music video');
+                const cleanSample = sampleText.replace(/[^a-zA-Z0-9\s]/g, '').trim().slice(0, 100);
+                $('aiBackdropPrompt').value = `Cinematic atmospheric music backdrop for: "${cleanSample}", dynamic volumetric lighting, 8k vertical video wallpaper`;
+                say('Prompt auto-generated from song lyrics!');
+            } else {
+                $('aiBackdropPrompt').value = promptVal;
+            }
+        };
+    });
+
+    if ($('aiBackdropSongBtn')) $('aiBackdropSongBtn').onclick = () => {
+        switchDock('ai-backdrop');
+        if (!$('aiBackdropPrompt').value.trim()) {
+            $('aiBackdropFromLyricsBtn')?.click();
+        }
+    };
+    if ($('seqAiBackdropBtn')) $('seqAiBackdropBtn').onclick = () => switchDock('ai-backdrop');
+    if ($('compAiBackdropBtn')) $('compAiBackdropBtn').onclick = () => switchDock('ai-backdrop');
+
+    if ($('generateAiBackdropBtn')) {
+        $('generateAiBackdropBtn').onclick = act(async () => {
+            const prompt = ($('aiBackdropPrompt')?.value || '').trim();
+            if (!prompt) throw Error('Please describe the backdrop or select a preset chip above.');
+
+            const style = $('aiBackdropStyle')?.value || 'auto';
+            const format = $('aiBackdropFormat')?.value || 'image';
+            const isMotion = format === 'video';
+            const btn = $('generateAiBackdropBtn');
+            const statusEl = $('aiBackdropStatus');
+
+            const origText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = `<span>⏳ Synthesizing AI ${isMotion ? 'Animated Loop' : 'Backdrop'}…</span>`;
+            if (statusEl) {
+                statusEl.hidden = false;
+                statusEl.textContent = `Generating 1080x1920 ${isMotion ? 'motion video loop' : 'atmospheric image'}…`;
+            }
+
+            try {
+                const res = await api('/api/captions/generate-backdrop', 'POST', {
+                    prompt,
+                    style,
+                    motion: isMotion,
+                    duration: 10.0
+                });
+
+                latestGeneratedBackdrop = res;
+                await refreshLibraries();
+
+                const card = $('aiBackdropResultCard');
+                const imgEl = $('aiBackdropPreviewImg');
+                const vidEl = $('aiBackdropPreviewVid');
+
+                if (card) card.style.display = 'block';
+
+                if (isMotion && vidEl) {
+                    vidEl.src = res.url;
+                    vidEl.style.display = 'block';
+                    if (imgEl) imgEl.style.display = 'none';
+                    vidEl.play().catch(() => {});
+                } else if (imgEl) {
+                    imgEl.src = res.url;
+                    imgEl.style.display = 'block';
+                    if (vidEl) {
+                        vidEl.pause();
+                        vidEl.style.display = 'none';
+                    }
+                }
+
+                if (statusEl) {
+                    statusEl.textContent = `✓ Generated ${res.name} • Ready to apply or add to sequence!`;
+                }
+                say(`✓ AI ${isMotion ? 'Motion Loop' : 'Backdrop'} generated successfully!`);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = origText;
+            }
+        });
+    }
+
+    if ($('aiBackdropApplyBgBtn')) {
+        $('aiBackdropApplyBgBtn').onclick = act(async () => {
+            if (!latestGeneratedBackdrop) throw Error('No backdrop generated yet.');
+            const item = latestGeneratedBackdrop;
+
+            if (![...$('songLibrary').options].some(o => o.value === item.path)) {
+                $('songLibrary').append(new Option(item.name, item.path));
+            }
+            $('songLibrary').value = item.path;
+            if ($('songBackground')) $('songBackground').value = '';
+
+            if (project?.studio) {
+                if (![...$('compLibrary').options].some(o => o.value === item.path)) {
+                    $('compLibrary').append(new Option(item.name, item.path));
+                }
+                $('compLibrary').value = item.path;
+                if ($('compClear')) $('compClear').checked = false;
+                say(`✓ Applied "${item.name}" as active project background!`);
+                switchDock('canvas');
+                drawCaption();
+            } else {
+                say(`✓ Set "${item.name}" as background for your new song project!`);
+                switchDock('media');
+            }
+        });
+    }
+
+    if ($('aiBackdropAddToSeqBtn')) {
+        $('aiBackdropAddToSeqBtn').onclick = act(async () => {
+            if (!latestGeneratedBackdrop) throw Error('No backdrop generated yet.');
+            const item = latestGeneratedBackdrop;
+
+            if (project?.studio) {
+                checkpointSequence();
+                clipSequence.push({
+                    path: item.path,
+                    name: item.name,
+                    duration: 0,
+                    provenance: item.provenance
+                });
+                drawSequenceLists();
+                say(`✓ Added "${item.name}" to video sequence (${clipSequence.length} clips total)!`);
+                switchDock('media');
+            } else {
+                if (![...$('songLibrary').options].some(o => o.value === item.path)) {
+                    $('songLibrary').append(new Option(item.name, item.path));
+                }
+                $('songLibrary').value = item.path;
+                say(`Saved to library: "${item.name}". Open or create a project to use it.`);
+            }
+        });
+    }
+
+    if ($('aiBackdropDownloadBtn')) {
+        $('aiBackdropDownloadBtn').onclick = () => {
+            if (!latestGeneratedBackdrop) return;
+            const a = document.createElement('a');
+            a.href = latestGeneratedBackdrop.url;
+            a.download = latestGeneratedBackdrop.name;
+            a.click();
+        };
+    }
     $('restoreComposition').onclick=act(async()=>{
         if(!project||!confirm('Restore the previous composition and its captions? The current version will become the restore point.'))return;
         await save();video.pause();project=await api(`/api/captions/${project.id}/restore-composition`,'POST',{revision:project.revision});history=[];future=[];selected=0;mountVideo();refresh();
@@ -1760,7 +1914,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         };
     });
     const presets={
-        mrbeast_bold:{font:'Montserrat',size:6.8,outline:3.8,position:78,background:false,karaoke:true,cumulative:false,word_pop:true,animation:'pop_in',color:'#ffe600',highlight:'#ffffff',visualizer:false},
+        mrbeast_bold:{font:'Montserrat',size:6.8,outline:3.8,position:78,background:false,karaoke:true,cumulative:false,word_pop:true,animation:'pop',color:'#ffe600',highlight:'#ffffff',visualizer:false},
         cyberpunk_neon:{font:'Montserrat',size:5.5,outline:2.8,position:82,background:false,karaoke:true,cumulative:true,word_pop:true,animation:'typewriter',glow:8,color:'#00f0ff',highlight:'#ff0055',visualizer:true,visualizer_style:'spectrum',visualizer_position:'bottom',visualizer_height:20,visualizer_sensitivity:1.4,visualizer_color:'#00f0ff'},
         frosted_vlog:{font:'Roboto',size:4.6,outline:0,position:86,background:true,karaoke:true,cumulative:false,word_pop:false,animation:'fade',color:'#f8f9fa',highlight:'#a5f3fc',visualizer:false},
         sunset_glow:{font:'Montserrat',size:5.4,outline:2.2,position:80,background:false,karaoke:true,cumulative:true,word_pop:true,animation:'slide_up',glow:6,color:'#ffffff',highlight:'#ff7b54',visualizer:true,visualizer_style:'waveform',visualizer_position:'bottom',visualizer_height:16,visualizer_sensitivity:1.1,visualizer_color:'#ff7b54'},

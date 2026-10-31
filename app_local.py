@@ -785,7 +785,7 @@ def shazam_file(audio_path):
         print("Shazam error:", e)
         return None
 
-APP_VERSION = "4.0.0"
+APP_VERSION = "4.1.0"
 SERVER_START_TIME = time.time()
 
 # --- Active Job & Auto-Shutdown Watchdog State ---
@@ -2339,8 +2339,46 @@ def generate_storyboard_route():
     duration = float(data.get('duration', 60.0))
     cid = data.get('character_id')
     base_mood = data.get('mood', '')
-    scenes = ai_video_engine.generate_storyboard(cues, duration, cid, base_mood)
+    concept = data.get('concept', '')
+    num_scenes = data.get('num_scenes')
+    scenes = ai_video_engine.generate_storyboard(cues, duration, cid, base_mood, concept=concept, num_scenes=num_scenes)
     return jsonify(storyboard=scenes)
+
+@app.route('/api/video-studio/projects/create', methods=['POST'])
+def create_video_studio_project_route():
+    if request.is_json:
+        data = request.get_json() or {}
+        title = data.get('title', '')
+        mode = data.get('mode', 'freeform')
+        duration = float(data.get('duration', 15.0))
+        scene_count = int(data.get('scene_count', 4))
+        concept = data.get('concept', '')
+        mood = data.get('mood', '')
+        cid = data.get('character_id')
+        audio_file = None
+    else:
+        title = request.form.get('title', '')
+        mode = request.form.get('mode', 'freeform')
+        duration = float(request.form.get('duration', 15.0))
+        scene_count = int(request.form.get('scene_count', 4))
+        concept = request.form.get('concept', '')
+        mood = request.form.get('mood', '')
+        cid = request.form.get('character_id')
+        audio_file = request.files.get('audio')
+    try:
+        res = ai_video_engine.create_video_studio_project(
+            title=title,
+            mode=mode,
+            duration=duration,
+            scene_count=scene_count,
+            concept=concept,
+            mood=mood,
+            character_id=cid,
+            audio_file=audio_file
+        )
+        return jsonify(res), 201
+    except Exception as e:
+        return jsonify(error=str(e)), 500
 
 @app.route('/api/video-studio/render-image', methods=['POST'])
 def render_keyframe_image_route():
@@ -2349,9 +2387,13 @@ def render_keyframe_image_route():
     cid = data.get('character_id')
     scene_num = int(data.get('scene_number', 1))
     custom_ref = data.get('custom_reference')
-    res = ai_video_engine.render_keyframe_image(prompt, cid, scene_num, custom_ref)
-    res['url'] = f"/api/video-studio/images/file/{res['filename']}"
-    return jsonify(image=res, image_path=res['path'], image_url=res['url'])
+    model_id = data.get('model_id')
+    try:
+        res = ai_video_engine.render_keyframe_image(prompt, cid, scene_num, custom_ref, model_id=model_id)
+        res['url'] = f"/api/video-studio/images/file/{res['filename']}"
+        return jsonify(image=res, image_path=res['path'], image_url=res['url'])
+    except Exception as e:
+        return jsonify(error=str(e)), 500
 
 @app.route('/api/video-studio/render-video', methods=['POST'])
 def render_scene_video_route():
@@ -2361,31 +2403,38 @@ def render_scene_video_route():
     duration = float(data.get('duration', 5.0))
     audio_path = data.get('audio_path')
     scene_num = int(data.get('scene_number', 1))
+    model_id = data.get('model_id')
     if not image_path:
         return jsonify(error="image_path required"), 400
     try:
-        res = ai_video_engine.render_scene_video(image_path, motion_prompt, duration, audio_path, scene_num)
+        res = ai_video_engine.render_scene_video(image_path, motion_prompt, duration, audio_path, scene_num, model_id=model_id)
         res['url'] = f"/api/video-studio/videos/file/{res['filename']}"
         return jsonify(video=res, video_path=res['path'], video_url=res['url'])
-    except FileNotFoundError as e:
+    except (FileNotFoundError, ValueError) as e:
         return jsonify(error=str(e)), 400
     except Exception as e:
         return jsonify(error=str(e)), 500
 
-@app.route('/api/video-studio/images/file/<filename>', methods=['GET'])
+@app.route('/api/video-studio/images/file/<path:filename>', methods=['GET'])
 def get_storyboard_image_file(filename):
-    safe_name = secure_filename(filename)
-    p = (ai_video_engine.STORYBOARD_IMG_DIR / safe_name).resolve()
+    clean_name = Path(filename).name
+    p = (ai_video_engine.STORYBOARD_IMG_DIR / clean_name).resolve()
     if ai_video_engine.STORYBOARD_IMG_DIR.resolve() not in p.parents or not p.is_file():
-        return jsonify(error="Image not found"), 404
+        safe_name = secure_filename(filename)
+        p = (ai_video_engine.STORYBOARD_IMG_DIR / safe_name).resolve()
+        if ai_video_engine.STORYBOARD_IMG_DIR.resolve() not in p.parents or not p.is_file():
+            return jsonify(error="Image not found"), 404
     return send_file(str(p))
 
-@app.route('/api/video-studio/videos/file/<filename>', methods=['GET'])
+@app.route('/api/video-studio/videos/file/<path:filename>', methods=['GET'])
 def get_storyboard_video_file(filename):
-    safe_name = secure_filename(filename)
-    p = (ai_video_engine.STORYBOARD_VID_DIR / safe_name).resolve()
+    clean_name = Path(filename).name
+    p = (ai_video_engine.STORYBOARD_VID_DIR / clean_name).resolve()
     if ai_video_engine.STORYBOARD_VID_DIR.resolve() not in p.parents or not p.is_file():
-        return jsonify(error="Video not found"), 404
+        safe_name = secure_filename(filename)
+        p = (ai_video_engine.STORYBOARD_VID_DIR / safe_name).resolve()
+        if ai_video_engine.STORYBOARD_VID_DIR.resolve() not in p.parents or not p.is_file():
+            return jsonify(error="Video not found"), 404
     return send_file(str(p))
 
 @app.route('/api/video-studio/models', methods=['GET'])
@@ -2445,9 +2494,36 @@ def save_cloud_backend_config():
     if 'api_provider' in req:
         cb['api_provider'] = str(req['api_provider']).strip()
     if 'api_key' in req:
-        cb['api_key'] = str(req['api_key']).strip()
+        new_key = str(req['api_key']).strip()
+        if new_key and new_key != "••••••••":
+            cb['api_key'] = new_key
+        elif not new_key:
+            cb['api_key'] = ""
     ai_model_manager.save_config(cfg)
     return jsonify(status="ok", config=cfg)
+
+@app.route('/api/video-studio/director/analyze', methods=['POST'])
+def video_studio_director_analyze_route():
+    data = request.get_json() or {}
+    lyrics = data.get('lyrics', '')
+    song_title = data.get('song_title', '')
+    concept = data.get('concept', '')
+    cid = data.get('character_id')
+    res = ai_video_engine.analyze_song_and_suggest_styles(lyrics, song_title, concept, cid)
+    return jsonify(res)
+
+@app.route('/api/video-studio/director/chat', methods=['POST'])
+def video_studio_director_chat_route():
+    data = request.get_json() or {}
+    message = data.get('message', '')
+    lyrics = data.get('lyrics', '')
+    song_title = data.get('song_title', '')
+    cid = data.get('character_id')
+    if not message:
+        return jsonify(error="message required"), 400
+    combined_lyrics = f"{song_title} {lyrics}".strip()
+    res = ai_video_engine.directorial_chat_and_invent_style(message, combined_lyrics, cid)
+    return jsonify(res)
 
 @app.route('/api/characters/<cid>', methods=['DELETE'])
 def delete_character_route(cid):
@@ -2486,9 +2562,60 @@ def extract_frame_route():
         return jsonify(error="video_path required"), 400
     try:
         res = motion_studio.extract_reference_frame(video_path, timestamp)
+        if 'url' not in res:
+            res['url'] = f"/api/motion/references/file/{res['filename']}"
         return jsonify(res)
-    except FileNotFoundError as e:
+    except (FileNotFoundError, ValueError) as e:
         return jsonify(error=str(e)), 400
+    except Exception as e:
+        return jsonify(error=str(e)), 500
+
+@app.route('/api/motion/swap-identity', methods=['POST'])
+def swap_character_identity_route():
+    data = request.get_json() or {}
+    target_frame = data.get('target_frame_path')
+    driving_video = data.get('driving_video_path')
+    cid = data.get('character_id')
+    custom_portrait = data.get('custom_portrait_path')
+
+    # If target_frame not provided but driving video is, extract frame 0 first
+    if not target_frame and driving_video:
+        try:
+            extracted = motion_studio.extract_reference_frame(driving_video, 0.0)
+            target_frame = extracted['filename']
+        except Exception as e:
+            return jsonify(error=f"Failed to extract frame from video: {e}"), 400
+
+    if not target_frame:
+        return jsonify(error="target_frame_path or driving_video_path required"), 400
+
+    engine = data.get('engine', 'neural')
+
+    try:
+        res = motion_studio.swap_character_identity(
+            target_frame_path=target_frame,
+            character_id=cid,
+            custom_portrait_path=custom_portrait,
+            engine=engine
+        )
+        if 'extracted_frame' not in res or not res['extracted_frame']:
+            t_name = Path(target_frame).name
+            res['extracted_frame'] = t_name
+            res['extracted_frame_url'] = f"/api/motion/references/file/{t_name}"
+        return jsonify(res)
+    except (FileNotFoundError, ValueError) as e:
+        return jsonify(error=str(e)), 400
+    except Exception as e:
+        return jsonify(error=str(e)), 500
+
+@app.route('/api/motion/upload-swapped-frame', methods=['POST'])
+def upload_swapped_frame_route():
+    file_obj = request.files.get('image')
+    if not file_obj or not file_obj.filename:
+        return jsonify(error="No image file uploaded"), 400
+    try:
+        res = motion_studio.save_uploaded_swapped_frame(file_obj)
+        return jsonify(res), 201
     except Exception as e:
         return jsonify(error=str(e)), 500
 
@@ -2496,13 +2623,31 @@ def extract_frame_route():
 def list_references_route():
     return jsonify(references=motion_studio.list_references())
 
-@app.route('/api/motion/references/file/<filename>', methods=['GET'])
+@app.route('/api/motion/references/file/<path:filename>', methods=['GET'])
 def get_reference_file(filename):
-    safe_name = secure_filename(filename)
-    p = (motion_studio.REFERENCES_DIR / safe_name).resolve()
+    clean_name = Path(filename).name
+    p = (motion_studio.REFERENCES_DIR / clean_name).resolve()
     if motion_studio.REFERENCES_DIR.resolve() not in p.parents or not p.is_file():
-        return jsonify(error="Reference file not found"), 404
+        safe_name = secure_filename(filename)
+        p = (motion_studio.REFERENCES_DIR / safe_name).resolve()
+        if motion_studio.REFERENCES_DIR.resolve() not in p.parents or not p.is_file():
+            return jsonify(error="Reference file not found"), 404
     return send_file(str(p))
+
+@app.route('/api/motion/driving-videos', methods=['GET'])
+def list_driving_videos_route():
+    return jsonify(videos=motion_studio.list_driving_videos())
+
+@app.route('/api/motion/upload-driving-video', methods=['POST'])
+def upload_driving_video_route():
+    file_obj = request.files.get('video')
+    if not file_obj or not file_obj.filename:
+        return jsonify(error="No video file uploaded"), 400
+    try:
+        res = motion_studio.save_uploaded_driving_video(file_obj)
+        return jsonify(res), 201
+    except Exception as e:
+        return jsonify(error=str(e)), 500
 
 @app.route('/api/motion/render', methods=['POST'])
 def render_motion_route():
@@ -2510,22 +2655,53 @@ def render_motion_route():
     driving_video = data.get('driving_video', '')
     source_image = data.get('source_image', '')
     audio_path = data.get('audio_path')
+    model_id = data.get('model_id', 'wan-2.1-1.3b')
+    is_async = data.get('async', False) or request.args.get('async') == '1'
     if not source_image:
         return jsonify(error="source_image required"), 400
+
+    if is_async:
+        try:
+            job_id = motion_studio.start_motion_job(driving_video, source_image, audio_path, model_id=model_id)
+            return jsonify({
+                "job_id": job_id,
+                "status": "running",
+                "poll_url": f"/api/motion/jobs/{job_id}"
+            }), 202
+        except Exception as e:
+            return jsonify(error=str(e)), 500
+
     try:
-        res = motion_studio.render_character_motion(driving_video, source_image, audio_path)
+        res = motion_studio.render_character_motion(driving_video, source_image, audio_path, model_id=model_id)
         return jsonify(res)
-    except FileNotFoundError as e:
+    except (FileNotFoundError, ValueError) as e:
         return jsonify(error=str(e)), 400
     except Exception as e:
         return jsonify(error=str(e)), 500
 
-@app.route('/api/motion/outputs/file/<filename>', methods=['GET'])
+@app.route('/api/motion/jobs/<job_id>', methods=['GET'])
+def get_motion_job_status(job_id):
+    clean_id = secure_filename(job_id)
+    job = motion_studio.get_motion_job(clean_id)
+    if not job:
+        return jsonify(error="Motion job not found"), 404
+    return jsonify(job)
+
+@app.route('/api/motion/jobs/<job_id>/cancel', methods=['POST'])
+def cancel_motion_job_route(job_id):
+    clean_id = secure_filename(job_id)
+    ok = motion_studio.cancel_motion_job(clean_id)
+    return jsonify(success=ok)
+
+@app.route('/api/motion/outputs/file/<path:filename>', methods=['GET'])
 def get_motion_output_file(filename):
-    safe_name = secure_filename(filename)
-    p = (motion_studio.MOTION_OUTPUT_DIR / safe_name).resolve()
+    clean_name = Path(filename).name
+    p = (motion_studio.MOTION_OUTPUT_DIR / clean_name).resolve()
     if motion_studio.MOTION_OUTPUT_DIR.resolve() not in p.parents or not p.is_file():
-        return jsonify(error="Motion output file not found"), 404
+        safe_name = secure_filename(filename)
+        p = (motion_studio.MOTION_OUTPUT_DIR / safe_name).resolve()
+        if motion_studio.MOTION_OUTPUT_DIR.resolve() not in p.parents or not p.is_file():
+            return jsonify(error="Motion output file not found"), 404
     return send_file(str(p))
 
 @app.route('/api/ai_status', methods=['GET'])

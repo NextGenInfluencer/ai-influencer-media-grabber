@@ -1,5 +1,6 @@
 /* AI Video Studio - Apple macOS Pro Dark Theme */
 :root {
+  color-scheme: dark;
   --bg-obsidian: #0a0b10;
   --surface-glass: rgba(22, 24, 34, 0.75);
   --surface-elevated: rgba(30, 33, 46, 0.85);
@@ -70,14 +71,44 @@ body.videoStudioBody {
   color: var(--text-muted);
 }
 
-.vsSelect {
-  background: rgba(255, 255, 255, 0.06);
+.vsSelect,
+select {
+  color-scheme: dark;
+  background-color: #141724;
   border: 1px solid var(--border-subtle);
-  color: #fff;
+  color: #f8fafc;
   padding: 6px 12px;
   border-radius: 8px;
   font-size: 12px;
   outline: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.vsSelect:hover,
+select:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  background-color: #1a1e2e;
+}
+
+.vsSelect:focus,
+select:focus {
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 2px rgba(0, 113, 227, 0.25);
+}
+
+.vsSelect option,
+select option {
+  background-color: #141724 !important;
+  color: #f8fafc !important;
+  padding: 10px 14px;
+  font-size: 12px;
+}
+
+.vsSelect option:checked,
+select option:checked {
+  background-color: #0071e3 !important;
+  color: #ffffff !important;
 }
 
 .personaBadgeBtn {
@@ -675,7 +706,21 @@ body.videoStudioBody {
 .hubStatusDot.ready { background: #10b981; box-shadow: 0 0 8px #10b981; }
 .hubStatusDot.downloading { background: #38bdf8; animation: pulse 1.2s infinite; }
 .hubStatusDot.not_installed { background: #64748b; }
-.hubStatusDot.error { background: #ef4444; }
+.hubStatusDot.error { background: #ef4444; box-shadow: 0 0 8px rgba(239, 68, 68, 0.6); }
+
+.hubErrorBanner {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #fca5a5;
+  font-size: 11px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  margin-top: 8px;
+  line-height: 1.35;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 
 /* Progress Bar */
 .hubProgressWrapper {
@@ -860,3 +905,435 @@ input:checked + .slider:before {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
 }
+
+/* Studio Mode Switcher (macOS Pro Segmented Control) */
+.studioModeSwitcher {
+  display: flex;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+  padding: 3px;
+  gap: 4px;
+  backdrop-filter: blur(16px);
+  margin: 0 16px;
+}
+
+.modeTabBtn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  padding: 6px 16px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: inherit;
+}
+
+.modeTabBtn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.modeTabBtn.active {
+  background: linear-gradient(135deg, #0071e3, #0a84ff);
+  color: #fff;
+  box-shadow: 0 2px 10px rgba(0, 113, 227, 0.45);
+}
+
+/* Wan 2.1 Motion Mimic Compare Grid */
+.motionCompareGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.motionCard {
+  background: rgba(18, 20, 32, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 14px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+}
+
+.motionCardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: #cbd5e1;
+  margin-bottom: 10px;
+  padding: 0 4px;
+}
+
+.badge {
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.1);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* Scene Card Mimic Button */
+.vsSceneBtn.mimicBtn {
+  background: rgba(236, 72, 153, 0.12);
+  border: 1px solid rgba(236, 72, 153, 0.3);
+  color: #f472b6;
+  grid-column: 1 / -1;
+  margin-top: 4px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.vsSceneBtn.mimicBtn:hover {
+  background: rgba(236, 72, 153, 0.25);
+  border-color: #ec4899;
+  color: #fff;
+  box-shadow: 0 0 14px rgba(236, 72, 153, 0.4);
+}
+
+/* Dark dropdown options with high contrast */
+select, select option, .vsSelect, .vsSelect option {
+  background-color: #121422 !important;
+  color: #f8fafc !important;
+}
+
+/* ==========================================================================
+   AI Director & Style Generator UI (Apple Pro / CapCut Glass Aesthetic)
+   ========================================================================== */
+
+.aiDirectorAnalyzeBtn {
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.28), rgba(6, 182, 212, 0.28));
+  border: 1px solid rgba(124, 58, 237, 0.5);
+  color: #f1f5f9;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+  width: 100%;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.aiDirectorAnalyzeBtn:hover {
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.45), rgba(6, 182, 212, 0.45));
+  border-color: rgba(168, 85, 247, 0.8);
+  color: #ffffff;
+  box-shadow: 0 0 14px rgba(124, 58, 237, 0.35);
+  transform: translateY(-1px);
+}
+
+.aiSuggestedStylesContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.aiDirectorAnalysisBox {
+  background: rgba(18, 22, 36, 0.85);
+  border: 1px solid rgba(124, 58, 237, 0.3);
+  border-radius: 10px;
+  padding: 10px 12px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.analysisHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.analysisPill {
+  background: rgba(124, 58, 237, 0.25);
+  border: 1px solid rgba(124, 58, 237, 0.45);
+  color: #d8b4fe;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 10px;
+}
+
+.analysisTone {
+  font-size: 10px;
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+.analysisHookText {
+  color: #cbd5e1;
+  font-size: 11px;
+  line-height: 1.4;
+  margin: 6px 0 0 0;
+}
+
+.stylesListTitle {
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+}
+
+.aiDirectorCardsGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.directorStyleCard {
+  background: rgba(20, 24, 38, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 9px;
+  padding: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  position: relative;
+}
+
+.directorStyleCard:hover {
+  background: rgba(28, 34, 54, 0.85);
+  border-color: rgba(0, 113, 227, 0.5);
+  transform: translateY(-1px);
+}
+
+.directorStyleCard.active {
+  background: rgba(10, 132, 255, 0.12);
+  border-color: #0a84ff;
+  box-shadow: 0 0 12px rgba(10, 132, 255, 0.3);
+}
+
+.directorStyleCard.active::after {
+  content: "✓ Selected";
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: 9px;
+  font-weight: 700;
+  background: #0071e3;
+  color: #fff;
+  padding: 1px 6px;
+  border-radius: 10px;
+}
+
+.cardStyleTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.cardTagline {
+  font-size: 10px;
+  color: #94a3b8;
+  margin: 0;
+  line-height: 1.35;
+}
+
+.swatchRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.swatchDot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  display: inline-block;
+}
+
+.cardDetailBrief {
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 10px;
+  color: #cbd5e1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 2px;
+}
+
+.cardDetailBrief span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Co-Director Chat Section */
+.aiDirectorChatSection {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chatHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.chatHeaderTitle {
+  font-size: 11px;
+  font-weight: 700;
+  color: #c084fc;
+}
+
+.chatHeaderBadge {
+  font-size: 9px;
+  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.directorPillsRow {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.directorPillBtn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  color: #cbd5e1;
+  font-size: 10px;
+  padding: 3px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.directorPillBtn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+.aiDirectorChatStream {
+  max-height: 150px;
+  min-height: 50px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 7px;
+  background: rgba(10, 12, 18, 0.65);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.chatMsg {
+  padding: 6px 9px;
+  border-radius: 7px;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.chatMsg.userMsg {
+  background: rgba(0, 113, 227, 0.28);
+  border: 1px solid rgba(0, 113, 227, 0.45);
+  color: #f0f6fc;
+  align-self: flex-end;
+  max-width: 88%;
+}
+
+.chatMsg.aiMsg {
+  background: rgba(124, 58, 237, 0.22);
+  border: 1px solid rgba(124, 58, 237, 0.38);
+  color: #e2e8f0;
+  align-self: flex-start;
+  max-width: 95%;
+}
+
+.chatMsg.systemMsg {
+  background: transparent;
+  color: #94a3b8;
+  font-size: 10px;
+  font-style: italic;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.chatInputRow {
+  display: flex;
+  gap: 6px;
+}
+
+.directorChatInput {
+  flex: 1;
+  background: #141724;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 7px;
+  color: #f8fafc;
+  font-size: 11px;
+  padding: 6px 10px;
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+.directorChatInput:focus {
+  border-color: #0071e3;
+  box-shadow: 0 0 0 2px rgba(0, 113, 227, 0.25);
+}
+
+.directorSendBtn {
+  background: #0071e3;
+  border: none;
+  border-radius: 7px;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.directorSendBtn:hover {
+  background: #0a84ff;
+  box-shadow: 0 0 8px rgba(0, 113, 227, 0.4);
+}
+

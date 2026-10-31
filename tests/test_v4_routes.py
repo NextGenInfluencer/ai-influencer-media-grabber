@@ -4,6 +4,7 @@ import io
 import json
 import os
 from pathlib import Path
+import shutil
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -286,6 +287,182 @@ class TestV4Routes(unittest.TestCase):
         # 4. Test download validation
         bad_dl = self.client.post('/api/video-studio/models/download', json={'model_id': 'nonexistent'}, headers=self.headers)
         self.assertEqual(bad_dl.status_code, 400)
+
+    def test_create_video_studio_freeform_project(self):
+        res = self.client.post('/api/video-studio/projects/create', json={
+            'title': 'Unit Test Cyberpunk Project',
+            'mode': 'freeform',
+            'duration': 15.0,
+            'scene_count': 3,
+            'concept': 'Airi cyberpunk neon night walk',
+            'mood': 'dim studio booth, cinematic rim lights, atmospheric haze',
+            'character_id': 'airi'
+        }, headers=self.headers)
+        self.assertEqual(res.status_code, 201)
+        data = res.json
+        self.assertIn('project', data)
+        self.assertIn('storyboard', data)
+        self.assertEqual(data['project']['name'], 'Unit Test Cyberpunk Project')
+        self.assertEqual(len(data['storyboard']), 3)
+
+        # Clean up
+        pid = data['project']['id']
+        from assets.ai_video_engine import DATA_DIR
+        pdir = DATA_DIR / 'Caption Projects' / pid
+        if pdir.exists():
+            shutil.rmtree(pdir, ignore_errors=True)
+
+    def test_driving_videos_route(self):
+        res = self.client.get('/api/motion/driving-videos')
+        self.assertEqual(res.status_code, 200)
+        self.assertIn('videos', res.json)
+        self.assertIsInstance(res.json['videos'], list)
+
+    def test_video_studio_director_analyze_route(self):
+        res = self.client.post('/api/video-studio/director/analyze', json={
+            'lyrics': 'walking through the cold rain in tokyo late at night',
+            'song_title': 'Midnight Drift',
+            'character_id': 'airi'
+        }, headers=self.headers)
+        self.assertEqual(res.status_code, 200)
+        data = res.json
+        self.assertIn('analysis', data)
+        self.assertIn('concepts', data)
+        self.assertEqual(len(data['concepts']), 4)
+        first_concept = data['concepts'][0]
+        self.assertIn('name', first_concept)
+        self.assertIn('palette', first_concept)
+        self.assertIn('prompt_atmosphere', first_concept)
+        self.assertEqual(len(first_concept['palette']), 5)
+
+    def test_video_studio_director_chat_route(self):
+        # 1. Successful directorial chat
+        res = self.client.post('/api/video-studio/director/chat', json={
+            'message': 'create a 90s anime retro cel aesthetic',
+            'character_id': 'airi'
+        }, headers=self.headers)
+        self.assertEqual(res.status_code, 200)
+        data = res.json
+        self.assertIn('reply', data)
+        self.assertIn('concept', data)
+        self.assertEqual(data['concept']['icon'], '🌸')
+        self.assertIn('anime', data['concept']['name'].lower())
+
+        # 2. Missing message returns 400
+        bad_res = self.client.post('/api/video-studio/director/chat', json={}, headers=self.headers)
+        self.assertEqual(bad_res.status_code, 400)
+
+    def test_motion_swap_identity_route(self):
+        # 1. Missing target frame and driving video returns 400
+        res = self.client.post('/api/motion/swap-identity', json={}, headers=self.headers)
+        self.assertEqual(res.status_code, 400)
+
+        # 2. Non-existent file returns 400
+        res = self.client.post('/api/motion/swap-identity', json={
+            'target_frame_path': 'nonexistent_frame.png',
+            'character_id': 'airi'
+        }, headers=self.headers)
+        self.assertEqual(res.status_code, 400)
+
+    def test_motion_reference_file_serving_with_spaces(self):
+        from assets.motion_studio import REFERENCES_DIR
+        REFERENCES_DIR.mkdir(parents=True, exist_ok=True)
+        test_file = REFERENCES_DIR / 'ref_Test Video with spaces_123.png'
+        img = Image.new('RGB', (32, 32), color='purple')
+        img.save(test_file, format='PNG')
+        try:
+            # 1. Access with percent-encoded spaces
+            res1 = self.client.get('/api/motion/references/file/ref_Test%20Video%20with%20spaces_123.png')
+            self.assertEqual(res1.status_code, 200)
+            self.assertEqual(res1.content_type, 'image/png')
+            res1.close()
+
+            # 2. Access with raw spaces
+            res2 = self.client.get('/api/motion/references/file/ref_Test Video with spaces_123.png')
+            self.assertEqual(res2.status_code, 200)
+            self.assertEqual(res2.content_type, 'image/png')
+            res2.close()
+        finally:
+            try:
+                test_file.unlink(missing_ok=True)
+            except Exception:
+                pass
+
+    def test_upload_swapped_frame_route(self):
+        # 1. Missing image returns 400
+        res = self.client.post('/api/motion/upload-swapped-frame', headers=self.headers)
+        self.assertEqual(res.status_code, 400)
+
+        # 2. Upload valid swapped image
+        data = {'image': (self._sample_png(), 'custom_swapped_test.png')}
+        res = self.client.post('/api/motion/upload-swapped-frame', data=data, headers=self.headers, content_type='multipart/form-data')
+        self.assertEqual(res.status_code, 201)
+        self.assertTrue(res.json.get('success'))
+        self.assertIn('custom_swapped_', res.json.get('filename', ''))
+        self.assertTrue(res.json.get('url', '').startswith('/api/motion/references/file/'))
+
+    def test_captions_generate_backdrop_route(self):
+        # 1. Missing prompt returns 400
+        res = self.client.post('/api/captions/generate-backdrop', json={}, headers=self.headers)
+        self.assertEqual(res.status_code, 400)
+
+        # 2. Generate still image backdrop
+        res = self.client.post('/api/captions/generate-backdrop', json={
+            'prompt': 'Cyberpunk neon city street night',
+            'style': 'neon',
+            'motion': False
+        }, headers=self.headers)
+        self.assertEqual(res.status_code, 200)
+        data = res.json
+        self.assertTrue(data.get('success'))
+        self.assertEqual(data.get('kind'), 'image')
+        self.assertTrue(data.get('path', '').endswith('.png'))
+        self.assertTrue(Path(data['path']).is_file())
+
+        # Cleanup generated test backdrop
+        try:
+            Path(data['path']).unlink(missing_ok=True)
+        except Exception:
+            pass
+
+    def test_motion_async_jobs_and_cancel(self):
+        # 1. Create dummy image for source_image
+        from assets.motion_studio import REFERENCES_DIR
+        REFERENCES_DIR.mkdir(parents=True, exist_ok=True)
+        dummy_img = REFERENCES_DIR / 'dummy_source_test.png'
+        Image.new('RGB', (64, 64), color='green').save(dummy_img, format='PNG')
+
+        try:
+            # 2. Start async motion job
+            res = self.client.post('/api/motion/render', json={
+                'source_image': str(dummy_img),
+                'async': True
+            }, headers=self.headers)
+            self.assertEqual(res.status_code, 202)
+            data = res.json
+            self.assertIn('job_id', data)
+            job_id = data['job_id']
+
+            # 3. Query job status
+            res_stat = self.client.get(f'/api/motion/jobs/{job_id}', headers=self.headers)
+            self.assertEqual(res_stat.status_code, 200)
+            job = res_stat.json
+            self.assertEqual(job['id'], job_id)
+            self.assertIn(job['status'], ('pending', 'running', 'completed', 'cancelled'))
+
+            # 4. Cancel job
+            res_cancel = self.client.post(f'/api/motion/jobs/{job_id}/cancel', headers=self.headers)
+            self.assertEqual(res_cancel.status_code, 200)
+            self.assertTrue(res_cancel.json.get('success'))
+
+            # 5. Non-existent job returns 404
+            res_bad = self.client.get('/api/motion/jobs/nonexistent_job_123', headers=self.headers)
+            self.assertEqual(res_bad.status_code, 404)
+        finally:
+            try:
+                dummy_img.unlink(missing_ok=True)
+            except Exception:
+                pass
 
 
 if __name__ == '__main__':

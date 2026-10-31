@@ -93,7 +93,8 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
   outline:2px solid #c9a9ff;
   outline-offset:1px;
 }
-select{max-width:240px}
+select{max-width:240px;color-scheme:dark;background-color:#141724;}
+select option{background-color:#141724 !important;color:#f8fafc !important;padding:8px 12px;}
 label{display:flex;gap:6px;align-items:center;font-size:12px}
 input[type=checkbox]{accent-color:#a855f7}
 input[type=range]{

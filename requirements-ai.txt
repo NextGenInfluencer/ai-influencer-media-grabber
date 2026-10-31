@@ -7,6 +7,9 @@ torch>=2.0.0
 torchvision>=0.15.0
 transformers>=4.30.0
 huggingface-hub>=0.23.0
+onnx>=1.13.0
+scikit-image>=0.20.0
+insightface>=2.1
 
 --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
 --only-binary=llama-cpp-python

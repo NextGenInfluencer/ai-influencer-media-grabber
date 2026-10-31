@@ -159,7 +159,14 @@ def clean_photo(file_path, inject_exif=False):
                 scrambled_img.save(temp_output, 'PNG', **save_options)
             else:
                 scrambled_img.save(temp_output, **save_options)
-        os.replace(temp_output, file_path)
+        for attempt in range(5):
+            try:
+                os.replace(temp_output, file_path)
+                break
+            except (PermissionError, OSError):
+                if attempt == 4:
+                    raise
+                time.sleep(0.04)
         return True, 'Success'
     except Exception as e:
         return False, str(e)

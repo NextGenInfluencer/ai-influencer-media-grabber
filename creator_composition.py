@@ -51,7 +51,7 @@ VIDEO_FILTERS = {
     'fisheye': 'lenscorrection=cx=0.5:cy=0.5:k1=-0.22:k2=-0.22',
     'noir': 'colorbalance=rs=-0.1:gs=-0.1:bs=0.05,eq=contrast=1.4:saturation=0.5:brightness=-0.04',
 }
-CAPTION_ANIMATIONS = {'none', 'fade', 'pop', 'slide_up', 'typewriter', 'zoom_in'}
+CAPTION_ANIMATIONS = {'none', 'fade', 'pop', 'pop_in', 'slide_up', 'typewriter', 'zoom_in'}
 STICKER_ANIMATIONS = {'none', 'fade', 'pop', 'slide'}
 SEQUENCE_TRANSITIONS = {'none', 'fade', 'dissolve', 'fadeblack', 'fadewhite', 'slideleft', 'slideright', 'circlecrop', 'wipeleft', 'wiperight'}
 AUDIO_EFFECTS = {

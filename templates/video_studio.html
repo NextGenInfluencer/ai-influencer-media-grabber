@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="media-token" content="{{ api_token }}">
 <title>AI Video Studio — Media Grabber</title>
-<link rel="stylesheet" href="/static/video_studio.css?v=v4">
-<link rel="stylesheet" href="/static/copilot.css?v=v4">
-<script src="/static/video_studio.js?v=v4" defer></script>
+<link rel="stylesheet" href="/static/video_studio.css?v=v4.1">
+<link rel="stylesheet" href="/static/copilot.css?v=v4.1">
+<script src="/static/video_studio.js?v=v4.1" defer></script>
 <script src="/static/copilot.js?v=v4" defer></script>
 <script src="/static/characters.js?v=v4" defer></script>
 </head>
@@ -24,6 +24,14 @@
     <select id="vsProjectSelect" class="vsSelect" aria-label="Select Project">
       <option value="">Load Song / Project…</option>
     </select>
+    <button id="vsNewProjectBtn" class="vsActionBtn primaryGlow" type="button" title="Create a new AI Video Project">
+      <span>+ New Project</span>
+    </button>
+  </div>
+
+  <div class="studioModeSwitcher" role="tablist">
+    <button id="modeStoryboardBtn" class="modeTabBtn active" type="button">🎬 Storyboard Studio</button>
+    <button id="modeMotionBtn" class="modeTabBtn" type="button">💃 Wan 2.1 Motion Mimic</button>
   </div>
 
   <div class="vsHeaderRight">
@@ -45,7 +53,7 @@
 </header>
 
 <!-- Main Workspace -->
-<main class="vsMainContainer">
+<main class="vsMainContainer" id="storyboardWorkspace">
   <!-- Left Sidebar (Director Panel) -->
   <aside class="vsSidebar">
     <div class="vsSidebarSection">
@@ -64,7 +72,8 @@
         <span>🎨</span>
         <span>Visual Lighting &amp; Aesthetic</span>
       </div>
-      <label for="vsMoodSelect" style="font-size:11px;color:#cbd5e1;font-weight:600;">Atmosphere:</label>
+
+      <label for="vsMoodSelect" style="font-size:11px;color:#cbd5e1;font-weight:600;">Active Atmosphere:</label>
       <select id="vsMoodSelect" class="vsSelect">
         <option value="dim studio booth, cinematic rim lights, atmospheric haze">🌆 Neon Recording Booth (Late Night)</option>
         <option value="rain-streaked studio glass window, soft city reflections">🌧️ Rain-Streaked Studio Glass</option>
@@ -73,7 +82,52 @@
         <option value="clean minimalist daylight studio, high-fashion editorial">✨ Minimalist Daylight Editorial</option>
       </select>
 
-      <button id="generateStoryboardBtn" class="vsGenerateBtn" type="button">
+      <button id="aiAnalyzeStylesBtn" class="aiDirectorAnalyzeBtn" type="button" title="Analyze song lyrics, emotional arc and rhythm to generate 4 bespoke directorial concepts">
+        <span>🧠 AI Director: Analyze Song &amp; Suggest Styles</span>
+      </button>
+
+      <!-- AI Suggested Bespoke Styles Container -->
+      <div id="aiSuggestedStylesContainer" class="aiSuggestedStylesContainer" style="display:none;">
+        <div id="aiDirectorAnalysisBox" class="aiDirectorAnalysisBox">
+          <div class="analysisHeader">
+            <span class="analysisPill" id="aiDirectorGenrePill">🎵 Nocturnal Melancholy</span>
+            <span class="analysisTone" id="aiDirectorTonePill">Introspective &amp; Moody</span>
+          </div>
+          <p id="aiDirectorHookText" class="analysisHookText"></p>
+        </div>
+
+        <div class="stylesListTitle">
+          <span>🎬 Bespoke Directorial Concepts:</span>
+        </div>
+        <div id="aiDirectorCardsGrid" class="aiDirectorCardsGrid"></div>
+      </div>
+
+      <!-- Co-Director Brainstorm & Custom Style Panel -->
+      <div class="aiDirectorChatSection">
+        <div class="chatHeaderRow">
+          <span class="chatHeaderTitle">💬 Co-Director Brainstorm</span>
+          <span class="chatHeaderBadge">AI Creative Partner</span>
+        </div>
+        <div class="directorPillsRow">
+          <button type="button" class="directorPillBtn" data-prompt="vintage 1990s cel-shaded anime aesthetic, retro cherry blossom tones">🌸 90s Anime</button>
+          <button type="button" class="directorPillBtn" data-prompt="futuristic Tokyo neon streets, cyberpunk noir with cyan and magenta rim lights">🌆 Cyberpunk</button>
+          <button type="button" class="directorPillBtn" data-prompt="authentic 35mm Kodak Portra film photography, warm tungsten grain">🎞️ Kodak 35mm</button>
+          <button type="button" class="directorPillBtn" data-prompt="dramatic velvet gothic chiaroscuro, deep crimson rim light">🖤 Gothic Noir</button>
+          <button type="button" class="directorPillBtn" data-prompt="cozy candlelit vintage vinyl studio, warm amber acoustic panels">🕯️ Acoustic Lounge</button>
+        </div>
+        <div id="aiDirectorChatStream" class="aiDirectorChatStream">
+          <div class="chatMsg systemMsg">
+            <span class="msgIcon">💡</span>
+            <span>Ask me to invent any visual style, lighting vibe, or aesthetic direction for this song!</span>
+          </div>
+        </div>
+        <div class="chatInputRow">
+          <input type="text" id="aiDirectorInput" placeholder="e.g. moody purple synthwave in rain…" class="directorChatInput">
+          <button type="button" id="aiDirectorSendBtn" class="directorSendBtn">Ask</button>
+        </div>
+      </div>
+
+      <button id="generateStoryboardBtn" class="vsGenerateBtn" type="button" style="margin-top:6px;">
         <span>⚡ Generate Storyboard</span>
       </button>
     </div>
@@ -103,13 +157,32 @@
         <span id="vsEnginePill" class="enginePill">⚡ GPU: Detecting…</span>
         <span id="vsSceneCountLabel" style="font-size:12px;color:#94a3b8;">0 Scenes</span>
       </div>
-      <div style="display:flex;gap:10px;">
-        <button id="renderAllImagesBtn" class="vsActionBtn primaryGlow" type="button">
-          <span>🎨 1. Render Photos (FLUX.1)</span>
-        </button>
-        <button id="animateAllVideosBtn" class="vsActionBtn" type="button">
-          <span>🎬 2. Animate Scenes (Wan 2.1)</span>
-        </button>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <!-- Photo Render Group: Model Selector + Action Button -->
+        <div style="display:flex;align-items:center;gap:6px;background:rgba(20,24,36,0.85);padding:4px 8px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);">
+          <label for="storyboardPhotoModelSelect" style="font-size:10px;color:#94a3b8;font-weight:600;white-space:nowrap;">Photo Model:</label>
+          <select id="storyboardPhotoModelSelect" class="vsSelect" style="font-size:11px;padding:4px 8px;width:auto;margin:0;min-width:180px;background:#0d0f18;">
+            <option value="flux-2-klein-4b">⚡ FLUX.2 [klein] 4B (2.6GB)</option>
+            <option value="flux-2-klein-9b">🎨 FLUX.2 [klein] 9B (5.6GB)</option>
+            <option value="flux-schnell-nf4" selected>🎨 FLUX.1 Schnell (4-Bit)</option>
+            <option value="sdxl-lightning">⚡ SDXL Lightning (4-Step)</option>
+          </select>
+          <button id="renderAllImagesBtn" class="vsActionBtn primaryGlow" style="margin:0;padding:6px 14px;white-space:nowrap;" type="button">
+            <span id="renderAllImagesLabel">🎨 1. Render Photos (FLUX.1)</span>
+          </button>
+        </div>
+
+        <!-- Video Animate Group: Model Selector + Action Button -->
+        <div style="display:flex;align-items:center;gap:6px;background:rgba(20,24,36,0.85);padding:4px 8px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);">
+          <label for="storyboardVideoModelSelect" style="font-size:10px;color:#94a3b8;font-weight:600;white-space:nowrap;">Video Model:</label>
+          <select id="storyboardVideoModelSelect" class="vsSelect" style="font-size:11px;padding:4px 8px;width:auto;margin:0;min-width:170px;background:#0d0f18;">
+            <option value="wan-2.1-1.3b" selected>🎬 Wan 2.1 - 1.3B Video</option>
+            <option value="wan-2.1-14b-q4">🎬 Wan 2.1 - 14B Q4 (12GB)</option>
+          </select>
+          <button id="animateAllVideosBtn" class="vsActionBtn" style="margin:0;padding:6px 14px;white-space:nowrap;" type="button">
+            <span id="animateAllVideosLabel">🎬 2. Animate Scenes (Wan 2.1)</span>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -119,6 +192,200 @@
         <span style="font-size:42px;display:block;margin-bottom:12px;">🎬</span>
         <h3 style="margin:0;font-size:16px;color:#e2e8f0;">No Storyboard Loaded</h3>
         <p style="font-size:13px;max-width:420px;margin:8px auto 20px;">Load a song project from the top left, or click "Generate Storyboard" to create beat-synced AI scenes.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- Wan 2.1 Motion Mimic & Dance Workspace -->
+<main class="vsMainContainer wanMotionWorkspace" id="wanMotionWorkspace" style="display:none;">
+  <!-- Left Sidebar (Motion Control Panel) -->
+  <aside class="vsSidebar">
+    <!-- Card 1: Target Character -->
+    <div class="vsSidebarSection">
+      <div class="vsSectionHeader">
+        <span>👤</span>
+        <span>Target Character</span>
+      </div>
+      <div id="motionPersonaCard" style="display:flex;align-items:center;gap:10px;">
+        <div id="motionPersonaAvatar" style="width:44px;height:44px;border-radius:10px;background:#7c3aed;background-size:cover;background-position:center;display:flex;align-items:center;justify-content:center;font-weight:700;">A</div>
+        <div style="flex:1;">
+          <strong id="motionPersonaTitle" style="font-size:13px;display:block;color:#fff;">Airi</strong>
+          <small id="motionPersonaTag" style="font-size:11px;color:#c084fc;">@Airi</small>
+        </div>
+        <button id="motionSwitchPersonaBtn" class="vsActionBtn" style="padding:4px 8px;font-size:11px;" type="button">Change</button>
+      </div>
+    </div>
+
+    <!-- Card 2: Driving Video (Dance & Action Source) -->
+    <div class="vsSidebarSection">
+      <div class="vsSectionHeader">
+        <span>💃</span>
+        <span>Driving Reference Video</span>
+      </div>
+      <label for="drivingVideoSelect" style="font-size:11px;color:#cbd5e1;font-weight:600;">Pick from Downloads:</label>
+      <select id="drivingVideoSelect" class="vsSelect">
+        <option value="">Loading videos…</option>
+      </select>
+
+      <div style="display:flex;gap:6px;margin-top:8px;">
+        <button id="uploadDrivingVideoBtn" class="vsActionBtn" style="flex:1;font-size:11px;" type="button">📂 Upload Video…</button>
+        <button id="refreshDrivingVideosBtn" class="vsActionBtn" style="padding:4px 10px;font-size:11px;" type="button" title="Refresh video list">🔄</button>
+        <input type="file" id="drivingVideoFileInput" accept="video/*" style="display:none;">
+      </div>
+
+      <video id="drivingVideoPreview" controls playsinline style="width:100%;height:180px;border-radius:8px;background:#000;margin-top:10px;object-fit:contain;"></video>
+      <div id="drivingVideoMeta" style="font-size:11px;color:#94a3b8;margin-top:4px;">No video selected</div>
+      <button id="extractRefFrameBtn" class="vsActionBtn" style="width:100%;margin-top:6px;font-size:11px;" type="button">📸 Extract Frame as Reference</button>
+    </div>
+
+    <!-- Card 2.5: Character Identity Replacement (In-App Face & Pose Fusion) -->
+    <div class="vsSidebarSection" id="motionIdentitySwapSection">
+      <div class="vsSectionHeader">
+        <span>✨</span>
+        <span>Character Swap on First Frame</span>
+      </div>
+      <p style="font-size:10px;color:#94a3b8;margin:0;line-height:1.4;">
+        Transplant <strong id="swapPersonaLabel" style="color:#c084fc;">@Airi</strong> onto the driving video's initial pose. For photorealistic generative quality, use <strong>📁 Upload Custom</strong> from Nano Banana Pro, or run a fast local preview.
+      </p>
+
+      <div style="display:flex;gap:8px;margin-top:6px;">
+        <!-- Left: Extracted frame thumbnail -->
+        <div style="flex:1;text-align:center;">
+          <span style="font-size:9px;color:#94a3b8;font-weight:600;display:block;margin-bottom:2px;">Original Frame 0:</span>
+          <img id="motionExtractedFrameThumb" src="" alt="Frame 0" style="width:100%;height:100px;object-fit:cover;border-radius:6px;border:1px solid rgba(255,255,255,0.1);display:none;background:#000;" onerror="this.style.display='none';const p=document.getElementById('motionExtractedFramePlaceholder');if(p){p.style.display='flex';p.textContent='Frame unavailable';}">
+          <div id="motionExtractedFramePlaceholder" style="width:100%;height:100px;border-radius:6px;border:1px dashed rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;font-size:10px;color:#64748b;padding:4px;text-align:center;">No frame extracted</div>
+        </div>
+
+        <!-- Right: Swapped character start frame -->
+        <div style="flex:1;text-align:center;">
+          <span style="font-size:9px;color:#38bdf8;font-weight:600;display:block;margin-bottom:2px;">✨ Swapped Start Frame:</span>
+          <img id="motionSwappedFrameThumb" src="" alt="Swapped Start Frame" style="width:100%;height:100px;object-fit:cover;border-radius:6px;border:1px solid #0071e3;display:none;background:#000;" onerror="this.style.display='none';const p=document.getElementById('motionSwappedFramePlaceholder');if(p){p.style.display='flex';p.textContent='Swap preview unavailable';}">
+          <div id="motionSwappedFramePlaceholder" style="width:100%;height:100px;border-radius:6px;border:1px dashed rgba(0,113,227,0.3);display:flex;align-items:center;justify-content:center;font-size:10px;color:#0071e3;padding:4px;text-align:center;">Ready to swap</div>
+        </div>
+      </div>
+
+      <!-- Model / Engine Selector -->
+      <div style="margin-top:8px;">
+        <label for="motionSwapEngineSelect" style="font-size:10px;color:#94a3b8;font-weight:600;display:block;margin-bottom:3px;">Swap Model / Method:</label>
+        <select id="motionSwapEngineSelect" class="vsSelect" style="font-size:11px;">
+          <option value="neural" selected>🧠 In-App Neural Identity Swap (Instant Local AI) — Recommended</option>
+          <option value="custom">📁 Custom Generative Image (Upload External File)</option>
+          <option value="opencv">⚡ Fast Geometric Match (Local 2D Preview)</option>
+        </select>
+      </div>
+
+      <div style="display:flex;gap:6px;margin-top:8px;">
+        <button id="motionSwapIdentityBtn" class="aiDirectorAnalyzeBtn" style="flex:2;background:linear-gradient(135deg, rgba(0,113,227,0.3), rgba(124,58,237,0.3));font-size:11px;" type="button">
+          <span>✨ 1-Click: AI Swap Character</span>
+        </button>
+        <button id="uploadSwappedFrameBtn" class="vsActionBtn" style="flex:1;font-size:11px;display:flex;align-items:center;justify-content:center;gap:4px;" type="button" title="Upload custom swapped image from Nano Banana or external editor">
+          <span>📁 Upload Custom</span>
+        </button>
+        <input type="file" id="swappedFrameFileInput" accept="image/*" style="display:none;">
+      </div>
+
+      <div id="motionPromptBox" style="display:none;margin-top:6px;background:rgba(0,0,0,0.3);padding:6px;border-radius:6px;font-size:10px;color:#cbd5e1;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
+          <span style="font-weight:600;color:#c084fc;">Identity Replacement Prompt:</span>
+          <button id="copyMotionPromptBtn" class="vsActionBtn" style="font-size:9px;padding:2px 6px;" type="button">📋 Copy</button>
+        </div>
+        <p id="motionPromptText" style="margin:0;font-size:9px;color:#94a3b8;line-height:1.3;max-height:48px;overflow-y:auto;"></p>
+      </div>
+    </div>
+
+    <!-- Card 3: Wan 2.1 Motion Engine & Settings -->
+    <div class="vsSidebarSection">
+      <div class="vsSectionHeader">
+        <span>⚡</span>
+        <span>Wan 2.1 Motion Engine</span>
+      </div>
+      <div class="gpuBanner" style="padding:8px 12px;margin-bottom:10px;">
+        <span id="motionEngineStatusBadge" style="font-size:11px;color:#34d399;font-weight:700;">🟢 Wan 2.1 Ready (RTX 3080 12GB)</span>
+      </div>
+
+      <label for="motionModelSelect" style="font-size:11px;color:#cbd5e1;font-weight:600;">Diffusion Model:</label>
+      <select id="motionModelSelect" class="vsSelect">
+        <option value="wan-2.2-animate-14b">Wan 2.2 Animate 14B Q4 (Best Quality Motion Mimic) — 12GB</option>
+        <option value="wan-2.1-14b-q4">Wan 2.1 - 14B Q4 (Cinematic Video Diffusion) — 12GB</option>
+        <option value="wan-2.1-1.3b">Wan 2.1 - 1.3B Video (Lightweight &amp; Fast)</option>
+      </select>
+
+      <label for="motionAudioSource" style="font-size:11px;color:#cbd5e1;font-weight:600;margin-top:10px;display:block;">Audio Track:</label>
+      <select id="motionAudioSource" class="vsSelect">
+        <option value="driving">Keep Driving Video Audio (Original Sound)</option>
+        <option value="project">Use Active Song / Project Audio</option>
+        <option value="mute">Mute Audio (Motion Only)</option>
+      </select>
+
+      <button id="generateWanMotionBtn" class="vsGenerateBtn" type="button" style="margin-top:14px;">
+        <span>✨ Generate Character Motion</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Right Content Area (Motion Studio Viewport) -->
+  <section class="vsContentArea">
+    <div class="vsToolbar">
+      <div class="vsToolbarLeft">
+        <span class="phaseBadge" id="motionPhaseBadge">Wan 2.1 Motion Transfer</span>
+        <span id="motionOutputStatus" style="font-size:12px;color:#94a3b8;">Mimic dance, facial acting &amp; rhythm transfer</span>
+      </div>
+      <div id="motionActionButtons" style="display:none;gap:8px;">
+        <button id="motionOpenFolderBtn" class="vsActionBtn" type="button">📂 Open in Folder</button>
+        <button id="motionDownloadBtn" class="vsActionBtn" type="button">📥 Download MP4</button>
+        <button id="motionAddToStoryboardBtn" class="vsActionBtn" type="button">🎬 Add to Storyboard</button>
+        <button id="motionBridgeToCaptionsBtn" class="bridgeActionBtn" type="button">🎤 Caption Studio →</button>
+      </div>
+    </div>
+
+    <!-- Motion Synthesis Live Progress Bar -->
+    <div id="motionProgressContainer" style="display:none;margin:12px 16px;padding:14px 18px;background:rgba(15,23,42,0.85);border:1px solid rgba(14,165,233,0.3);border-radius:12px;backdrop-filter:blur(24px);box-shadow:0 8px 32px rgba(0,0,0,0.4);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:16px;animation:spin 1.5s linear infinite;display:inline-block;">⚡</span>
+          <span id="motionProgressLabel" style="font-size:13px;font-weight:600;color:#f1f5f9;">Synthesizing Motion Transfer…</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span id="motionProgressPercent" style="font-size:12px;color:#38bdf8;font-weight:700;">0%</span>
+          <button id="cancelMotionBtn" type="button" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#fca5a5;padding:3px 10px;border-radius:6px;font-size:11px;cursor:pointer;">Cancel</button>
+        </div>
+      </div>
+      <div style="width:100%;height:6px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden;">
+        <div id="motionProgressBar" style="width:0%;height:100%;background:linear-gradient(90deg,#0ea5e9,#6366f1);border-radius:3px;transition:width 0.25s ease;"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-size:11px;color:#94a3b8;">
+        <span id="motionProgressDetails">Initializing neural frame processor…</span>
+        <span id="motionProgressFrames">0 / 0 frames</span>
+      </div>
+    </div>
+
+    <!-- Active Viewport Container -->
+    <div id="motionEmptyState" style="padding:100px 20px;text-align:center;color:#64748b;">
+      <span style="font-size:48px;display:block;margin-bottom:14px;">💃</span>
+      <h3 style="margin:0;font-size:18px;color:#f8fafc;">Wan 2.1 Motion Mimic &amp; Dance Studio</h3>
+      <p style="font-size:13px;max-width:480px;margin:10px auto 20px;color:#94a3b8;line-height:1.5;">
+        Give any character photo and a reference driving video (dance, TikTok, viral clip). Wan 2.1 transfers the moves, body rhythm, and facial acting onto your character!
+      </p>
+      <button id="quickStartMotionBtn" class="vsActionBtn primaryGlow" type="button">⚡ Select Video &amp; Generate Motion</button>
+    </div>
+
+    <div id="motionResultContainer" style="display:none;padding:16px;">
+      <div class="motionCompareGrid">
+        <div class="motionCard">
+          <div class="motionCardHeader">
+            <span>🎬 Driving Reference Video</span>
+            <span id="compareDrivingTag" class="badge">Reference</span>
+          </div>
+          <video id="compareDrivingPlayer" controls loop playsinline style="width:100%;height:460px;border-radius:10px;background:#000;object-fit:contain;"></video>
+        </div>
+        <div class="motionCard">
+          <div class="motionCardHeader">
+            <span>💃 Wan 2.1 Animated Character</span>
+            <span class="badge" style="background:#10b981;color:#fff;">AI Motion Generated</span>
+          </div>
+          <video id="compareResultPlayer" controls loop playsinline style="width:100%;height:460px;border-radius:10px;background:#000;object-fit:contain;"></video>
+        </div>
       </div>
     </div>
   </section>
@@ -223,6 +490,137 @@
     <div class="modalFooter">
       <span style="font-size:11px;color:#64748b;">Weights are stored safely in Documents/Media Grabber/models/</span>
       <button type="button" id="closeModelHubFooterBtn" class="vsActionBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- New AI Video Project Modal -->
+<div id="newProjectModal" class="modalBackdrop" style="display:none;">
+  <div class="modalWindow" style="max-width:540px;">
+    <div class="modalHeader">
+      <div class="modalTitleGroup">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:18px;">✨</span>
+          <h2 style="margin:0;font-size:16px;color:#fff;">New AI Video Project</h2>
+        </div>
+        <small style="color:#94a3b8;font-size:11px;">Create a freeform scripted video or upload a song</small>
+      </div>
+      <button type="button" id="closeNewProjectBtn" class="modalCloseBtn" title="Close">✕</button>
+    </div>
+
+    <div class="modalTabs">
+      <button type="button" id="tabBtnFreeform" class="modalTab active">🎬 Freeform AI Video (No Music)</button>
+      <button type="button" id="tabBtnAudio" class="modalTab">🎵 Music &amp; Audio Project</button>
+    </div>
+
+    <!-- Tab 1: Freeform AI Video -->
+    <div id="tabPanelFreeform" class="modalTabPanel" style="padding:16px 0;">
+      <div class="inputGroup">
+        <label for="newFreeformTitle" style="font-size:11px;color:#cbd5e1;font-weight:600;">Project Title:</label>
+        <input type="text" id="newFreeformTitle" class="vsInput" placeholder="e.g. Airi — Midnight Tokyo Run">
+      </div>
+
+      <div class="inputGroup" style="margin-top:12px;">
+        <label for="newFreeformConcept" style="font-size:11px;color:#cbd5e1;font-weight:600;">Story Concept / Theme Prompt:</label>
+        <textarea id="newFreeformConcept" class="vsInput" rows="3" placeholder="e.g. Airi in futuristic cyberpunk streetwear exploring an underground record store with neon reflections, holding vinyls and drinking matcha" style="resize:vertical;"></textarea>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">
+        <div class="inputGroup">
+          <label style="font-size:11px;color:#cbd5e1;font-weight:600;">Duration:</label>
+          <select id="newFreeformDuration" class="vsSelect">
+            <option value="10">10 Seconds (Quick Cut)</option>
+            <option value="15" selected>15 Seconds (Story / Reel)</option>
+            <option value="20">20 Seconds (Extended)</option>
+            <option value="30">30 Seconds (Full Short)</option>
+          </select>
+        </div>
+        <div class="inputGroup">
+          <label style="font-size:11px;color:#cbd5e1;font-weight:600;">Scene Count:</label>
+          <select id="newFreeformScenes" class="vsSelect">
+            <option value="2">2 Scenes</option>
+            <option value="3">3 Scenes</option>
+            <option value="4" selected>4 Scenes</option>
+            <option value="6">6 Scenes</option>
+            <option value="8">8 Scenes</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="inputGroup" style="margin-top:12px;">
+        <label for="newFreeformMood" style="font-size:11px;color:#cbd5e1;font-weight:600;">Atmosphere &amp; Lighting:</label>
+        <select id="newFreeformMood" class="vsSelect">
+          <option value="dim studio booth, cinematic rim lights, atmospheric haze">🌆 Neon Recording Booth (Late Night)</option>
+          <option value="rain-streaked studio glass window, soft city reflections">🌧️ Rain-Streaked Studio Glass</option>
+          <option value="modern concert stage, pulsing magenta and cyan lasers">⚡ Concert Stage &amp; Dynamic Lights</option>
+          <option value="warm golden hour studio sunlight, 35mm film grain">🌅 Warm Golden Hour Acoustic</option>
+          <option value="clean minimalist daylight studio, high-fashion editorial">✨ Minimalist Daylight Editorial</option>
+        </select>
+      </div>
+
+      <div style="margin-top:20px;display:flex;justify-content:flex-end;gap:8px;">
+        <button type="button" id="cancelNewProjectBtn" class="vsActionBtn">Cancel</button>
+        <button type="button" id="createFreeformProjectBtn" class="vsActionBtn primaryGlow">✨ Generate Freeform Storyboard</button>
+      </div>
+    </div>
+
+    <!-- Tab 2: Music / Audio Upload -->
+    <div id="tabPanelAudio" class="modalTabPanel" style="display:none;padding:16px 0;">
+      <div id="audioDropArea" class="dropZone" style="border:2px dashed rgba(255,255,255,0.15);border-radius:10px;padding:30px;text-align:center;cursor:pointer;background:rgba(255,255,255,0.02);">
+        <span style="font-size:32px;display:block;margin-bottom:8px;">🎵</span>
+        <strong style="color:#fff;font-size:13px;display:block;">Drag &amp; drop audio file here</strong>
+        <small style="color:#94a3b8;font-size:11px;">Supports MP3, WAV, M4A, FLAC, OGG</small>
+        <input type="file" id="audioFileInput" accept="audio/*" style="display:none;">
+      </div>
+      <div id="selectedAudioFileName" style="font-size:11px;color:#34d399;margin-top:6px;display:none;"></div>
+
+      <div class="inputGroup" style="margin-top:12px;">
+        <label for="newAudioTitle" style="font-size:11px;color:#cbd5e1;font-weight:600;">Project Title:</label>
+        <input type="text" id="newAudioTitle" class="vsInput" placeholder="Auto-filled from song name">
+      </div>
+
+      <div class="inputGroup" style="margin-top:12px;">
+        <label for="newAudioMood" style="font-size:11px;color:#cbd5e1;font-weight:600;">Atmosphere &amp; Lighting:</label>
+        <select id="newAudioMood" class="vsSelect">
+          <option value="dim studio booth, cinematic rim lights, atmospheric haze">🌆 Neon Recording Booth (Late Night)</option>
+          <option value="rain-streaked studio glass window, soft city reflections">🌧️ Rain-Streaked Studio Glass</option>
+          <option value="modern concert stage, pulsing magenta and cyan lasers">⚡ Concert Stage &amp; Dynamic Lights</option>
+          <option value="warm golden hour studio sunlight, 35mm film grain">🌅 Warm Golden Hour Acoustic</option>
+          <option value="clean minimalist daylight studio, high-fashion editorial">✨ Minimalist Daylight Editorial</option>
+        </select>
+      </div>
+
+      <div style="margin-top:20px;display:flex;justify-content:flex-end;gap:8px;">
+        <button type="button" id="cancelAudioProjectBtn" class="vsActionBtn">Cancel</button>
+        <button type="button" id="createAudioProjectBtn" class="vsActionBtn primaryGlow">🎵 Create Music Storyboard</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Per-Scene Mimic Video Picker Modal -->
+<div id="sceneMimicModal" class="modalBackdrop" style="display:none;">
+  <div class="modalWindow" style="max-width:480px;">
+    <div class="modalHeader">
+      <div class="modalTitleGroup">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span>💃</span>
+          <h2 style="margin:0;font-size:15px;color:#fff;" id="sceneMimicTitle">Mimic Dance / Action for Scene</h2>
+        </div>
+        <small style="color:#94a3b8;font-size:11px;">Pick reference video to drive character motion for this scene</small>
+      </div>
+      <button type="button" id="closeSceneMimicBtn" class="modalCloseBtn">✕</button>
+    </div>
+    <div style="padding:16px 0;">
+      <label for="sceneMimicSelect" style="font-size:11px;color:#cbd5e1;font-weight:600;">Select Reference Video:</label>
+      <select id="sceneMimicSelect" class="vsSelect">
+        <option value="">Loading videos…</option>
+      </select>
+      <video id="sceneMimicPreview" controls playsinline style="width:100%;height:180px;border-radius:8px;background:#000;margin-top:10px;object-fit:contain;"></video>
+      <div style="margin-top:16px;display:flex;justify-content:flex-end;gap:8px;">
+        <button type="button" id="cancelSceneMimicBtn" class="vsActionBtn">Cancel</button>
+        <button type="button" id="confirmSceneMimicBtn" class="vsActionBtn primaryGlow">✨ Animate Scene with Wan 2.1</button>
+      </div>
     </div>
   </div>
 </div>

@@ -9,9 +9,6 @@
 <link rel="stylesheet" href="/static/copilot.css?v=v4">
 <script src="/static/captions.js?v=capcut4" defer></script>
 <script src="/static/copilot.js?v=v4" defer></script>
-<script src="/static/characters.js?v=v4" defer></script>
-<script src="/static/motion_studio.js?v=v4" defer></script>
-<script src="/static/storyboard.js?v=v4" defer></script>
 </head>
 <body class="capcutStudio">
 <header class="capcutHeader">
@@ -29,10 +26,7 @@
   <div class="headerCenter">
     <button id="undo" title="Undo (Ctrl+Z)">↶ Undo</button>
     <button id="redo" title="Redo (Ctrl+Shift+Z)">↷ Redo</button>
-    <button id="charactersBtn" type="button" title="AI Character Library (@Airi)" onclick="window.characterStudio&amp;&amp;window.characterStudio.open()">👤 Characters</button>
-    <button id="storyboardBtn" type="button" title="Song Storyboard &amp; Flow Prompts" onclick="window.storyboardStudio&amp;&amp;window.storyboardStudio.open()">🎬 Storyboard</button>
-    <button id="motionStudioBtn" type="button" title="LivePortrait &amp; Motion Transfer" onclick="window.motionStudio&amp;&amp;window.motionStudio.open()">✨ Motion Studio</button>
-    <a id="aiVideoStudioBtn" href="/video-studio" title="Launch Autonomous AI Video Studio (Wan 2.1 + FLUX)" style="text-decoration:none; display:inline-flex; align-items:center; gap:4px; padding: 4px 10px; border-radius: 6px; background: rgba(236,72,153,0.15); border: 1px solid rgba(236,72,153,0.35); color: #f472b6; font-size: 11px; font-weight: 600; cursor:pointer;">🎬 AI Video Studio</a>
+    <a id="aiVideoStudioBtn" href="/video-studio" title="Launch Autonomous AI Video Studio" style="text-decoration:none; display:inline-flex; align-items:center; gap:6px; padding: 5px 12px; border-radius: 8px; background: rgba(236,72,153,0.12); border: 1px solid rgba(236,72,153,0.3); color: #f472b6; font-size: 11px; font-weight: 600; cursor:pointer; transition: all 0.2s ease;">🎬 AI Video Studio</a>
     <button id="shortcutsBtn" type="button" title="View Keyboard Shortcuts">⌨️ Shortcuts</button>
     <span id="saveStatus" role="status">Open a video or song to begin</span>
     <button id="save">Save</button>
@@ -92,8 +86,12 @@
           <span class="dockIcon">🎞️</span>
           <span>Canvas &amp; PiP</span>
         </button>
-        <button type="button" class="dockTab" data-dock="stickers">
+        <button type="button" class="dockTab" data-dock="ai-backdrop">
           <span class="dockIcon">🎨</span>
+          <span>AI Backdrop</span>
+        </button>
+        <button type="button" class="dockTab" data-dock="stickers">
+          <span class="dockIcon">🎭</span>
           <span>Stickers</span>
         </button>
       </nav>
@@ -129,9 +127,10 @@
                 <input id="grabClipUrl" type="text" maxlength="500" placeholder="Paste TikTok / Reel / YouTube URL…" aria-label="TikTok or social video URL" style="flex:1;">
                 <button id="grabClipBtn" class="primary" type="button" title="Download video without watermark and add to your video clips">⬇️ Grab</button>
               </div>
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">
-                <button id="seqBrowseStock" class="primary" type="button" style="padding:6px 8px;font-size:11px;justify-content:center;">🌐 Free Stock</button>
-                <label class="upload" style="padding:6px 8px;font-size:11px;justify-content:center;">➕ Upload Clips<input id="seqUploadInput" type="file" multiple accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,.mkv,.webm"></label>
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px;">
+                <button id="seqBrowseStock" class="primary" type="button" style="padding:6px 6px;font-size:11px;justify-content:center;">🌐 Free Stock</button>
+                <button id="seqAiBackdropBtn" type="button" style="display:inline-flex;align-items:center;justify-content:center;gap:4px;background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.35);color:#c084fc;padding:6px 6px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;">🎨 AI Backdrop</button>
+                <label class="upload" style="padding:6px 6px;font-size:11px;justify-content:center;">➕ Upload<input id="seqUploadInput" type="file" multiple accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,.mkv,.webm"></label>
               </div>
               <div style="margin-bottom:8px;">
                 <select id="seqLibrarySelect" aria-label="Add clip from library" style="width:100%;"><option value="">+ Add clip from library…</option></select>
@@ -193,6 +192,7 @@
               <div class="row">
                 <select id="songLibrary" aria-label="Background from library" style="flex:1;"><option value="">Use colour / uploaded background</option></select>
                 <button id="browseStockSong" type="button">🌐 Free Videos</button>
+                <button id="aiBackdropSongBtn" type="button" style="display:inline-flex;align-items:center;gap:4px;background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.35);color:#c084fc;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;">🎨 AI Backdrop</button>
               </div>
               <p id="songStockNotice" class="hint" hidden></p>
               <label><input id="songVisualizer" type="checkbox"> Add audio-reactive waveform</label>
@@ -547,8 +547,9 @@
             <div class="sequenceSection" style="margin:6px 0;">
               <div class="row" style="justify-content:space-between;margin-bottom:6px;">
                 <strong style="font-size:12px;">Clips in Sequence</strong>
-                <div class="row" style="margin:0;">
+                <div class="row" style="margin:0;gap:6px;">
                   <button id="browseStockComp" class="primary" type="button">🌐 + Pixabay</button>
+                  <button id="compAiBackdropBtn" type="button" style="display:inline-flex;align-items:center;gap:4px;background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.35);color:#c084fc;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;">🎨 + AI Backdrop</button>
                   <label class="upload">+ Upload<input id="compSeqUpload" type="file" multiple accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,.mkv,.webm"></label>
                 </div>
               </div>
@@ -723,6 +724,75 @@
             </div>
           </div>
         </section>
+
+        <!-- PANE 8: AI BACKDROP GENERATOR -->
+        <section class="dockPane" data-dock-pane="ai-backdrop" id="aiBackdropPane">
+          <div class="paneHeader">
+            <h2>🎨 Autonomous AI Backdrop Generator</h2>
+          </div>
+
+          <div class="subCard">
+            <p style="font-size:12px;color:#94a3b8;margin-bottom:12px;line-height:1.4;">
+              Generate high-definition 9:16 portrait backdrops (PNG) or animated loops (MP4) to play behind your lyrics or clip sequence without requiring character references.
+            </p>
+
+            <div style="margin-bottom:10px;">
+              <label for="aiBackdropPrompt" style="display:block;font-size:11px;font-weight:600;color:#cbd5e1;margin-bottom:4px;">Atmospheric Scene Description</label>
+              <textarea id="aiBackdropPrompt" rows="3" placeholder="e.g. Cyberpunk rainy Tokyo neon alleyway with purple reflections and bokeh lights" style="width:100%;box-sizing:border-box;border-radius:8px;padding:8px;font-size:12px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.12);color:#fff;resize:vertical;"></textarea>
+            </div>
+
+            <!-- Quick Preset Chips -->
+            <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;">
+              <button type="button" class="chip" data-backdrop-prompt="auto-lyrics" id="aiBackdropFromLyricsBtn" style="background:rgba(168,85,247,0.18);border-color:rgba(168,85,247,0.4);color:#c084fc;cursor:pointer;">✨ From Song Lyrics</button>
+              <button type="button" class="chip" data-backdrop-prompt="Cyberpunk neon city street at night, wet asphalt reflections, magenta and cyan bokeh glow" style="cursor:pointer;">🌆 Cyberpunk</button>
+              <button type="button" class="chip" data-backdrop-prompt="Moody rainy cafe window, blue dusk lighting, raindrops on glass with soft city bokeh" style="cursor:pointer;">🌧️ Rainy Dusk</button>
+              <button type="button" class="chip" data-backdrop-prompt="Warm golden hour sunset, hazy amber sunbeams, acoustic lo-fi vibes" style="cursor:pointer;">🌅 Golden Hour</button>
+              <button type="button" class="chip" data-backdrop-prompt="Dynamic stadium concert stage with intense laser beams, smoke haze and violet lights" style="cursor:pointer;">🎸 Stage Concert</button>
+              <button type="button" class="chip" data-backdrop-prompt="Aesthetic pastel anime bedroom interior, warm twilight sky outside window, lo-fi aesthetic" style="cursor:pointer;">🌸 Anime Lo-Fi</button>
+              <button type="button" class="chip" data-backdrop-prompt="Deep cosmic nebula in space, glowing stars, ethereal purple and turquoise dust clouds" style="cursor:pointer;">🌌 Deep Galaxy</button>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+              <div>
+                <label for="aiBackdropFormat" style="display:block;font-size:11px;color:#cbd5e1;margin-bottom:4px;">Backdrop Format</label>
+                <select id="aiBackdropFormat" style="width:100%;">
+                  <option value="image">🖼️ Still Backdrop (1080x1920 PNG)</option>
+                  <option value="video">🎥 Animated Loop (1080x1920 MP4)</option>
+                </select>
+              </div>
+              <div>
+                <label for="aiBackdropStyle" style="display:block;font-size:11px;color:#cbd5e1;margin-bottom:4px;">Color Atmosphere</label>
+                <select id="aiBackdropStyle" style="width:100%;">
+                  <option value="auto">Auto (from prompt)</option>
+                  <option value="neon">Neon Magenta / Cyan</option>
+                  <option value="rain">Deep Rainy Blue / Teal</option>
+                  <option value="golden">Warm Golden Hour Amber</option>
+                  <option value="concert">High-Contrast Stage Lasers</option>
+                  <option value="anime">Pastel Anime Twilight</option>
+                  <option value="minimal">Minimal Obsidian Dark</option>
+                </select>
+              </div>
+            </div>
+
+            <button id="generateAiBackdropBtn" class="primary" type="button" style="width:100%;padding:10px;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;">
+              <span>🎨 Generate AI Backdrop</span>
+            </button>
+            <p id="aiBackdropStatus" style="font-size:11px;color:#94a3b8;margin-top:8px;text-align:center;" hidden></p>
+          </div>
+
+          <!-- Preview & Action Card (shown when generated) -->
+          <div id="aiBackdropResultCard" class="subCard" style="display:none;margin-top:14px;">
+            <div style="position:relative;width:100%;height:320px;border-radius:10px;overflow:hidden;background:#000;display:flex;align-items:center;justify-content:center;margin-bottom:12px;">
+              <img id="aiBackdropPreviewImg" style="width:100%;height:100%;object-fit:cover;display:none;" alt="Generated Backdrop Preview">
+              <video id="aiBackdropPreviewVid" loop muted playsinline controls style="width:100%;height:100%;object-fit:contain;display:none;"></video>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <button id="aiBackdropApplyBgBtn" class="primary" type="button" style="padding:8px 12px;font-size:12px;justify-content:center;cursor:pointer;">✓ Set as Active Background</button>
+              <button id="aiBackdropAddToSeqBtn" type="button" style="padding:8px 12px;font-size:12px;justify-content:center;cursor:pointer;">+ Add to Multi-Clip Sequence</button>
+              <button id="aiBackdropDownloadBtn" type="button" style="padding:8px 12px;font-size:12px;justify-content:center;cursor:pointer;">💾 Download File</button>
+            </div>
+          </div>
+        </section>
       </div>
     </aside>
 
@@ -748,7 +818,6 @@
       <div class="transport">
         <button id="play">▶ Play</button>
         <button id="splitClip" type="button" title="Split active video clip at playhead (Ctrl+B)">✂️ Split Clip</button>
-        <button id="snapFrameStageBtn" type="button" title="Grab Reference Keyframe for Google Flow (S)" onclick="window.motionStudio&amp;&amp;window.motionStudio.snapFrame()">📸 Grab Frame</button>
         <span id="time">0:00.00</span>
         <select id="speed" aria-label="Playback speed">
           <option value="0.5">0.5×</option>

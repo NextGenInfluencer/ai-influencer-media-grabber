@@ -3,6 +3,7 @@
 Manages FLUX.1, SDXL Lightning, and Wan 2.1 models optimized for 12GB NVIDIA GPUs
 (RTX 3080/4070) with background chunked downloads, progress streaming, and ComfyUI integration.
 """
+import copy
 import json
 import os
 from pathlib import Path
@@ -34,15 +35,41 @@ CONFIG_FILE = MODELS_DIR / 'models_config.json'
 MODEL_CATALOG = {
     "flux-schnell-nf4": {
         "id": "flux-schnell-nf4",
-        "name": "FLUX.1 Schnell (4-Bit NF4)",
+        "name": "FLUX.1 Schnell (4-Bit 12GB)",
         "category": "image",
-        "format": "safetensors",
-        "size_gb": 6.5,
+        "format": "gguf",
+        "size_gb": 6.3,
         "vram_req": "8GB - 12GB",
         "recommended_for": "Photorealistic character keyframes, 5-finger anatomy, accurate styling",
-        "repo_id": "sayakpaul/flux.1-schnell-nf4-pkg",
-        "filename": "flux1-schnell-nf4.safetensors",
-        "url": "https://huggingface.co/sayakpaul/flux.1-schnell-nf4-pkg/resolve/main/flux1-schnell-nf4.safetensors",
+        "repo_id": "city96/FLUX.1-schnell-gguf",
+        "filename": "flux1-schnell-Q4_0.gguf",
+        "url": "https://huggingface.co/city96/FLUX.1-schnell-gguf/resolve/main/flux1-schnell-Q4_0.gguf",
+        "default_steps": 4
+    },
+    "flux-2-klein-4b": {
+        "id": "flux-2-klein-4b",
+        "name": "FLUX.2 [klein] 4B (Multi-Reference)",
+        "category": "image",
+        "format": "gguf",
+        "size_gb": 2.6,
+        "vram_req": "6GB - 8GB",
+        "recommended_for": "Native multi-reference character swapping, Apache 2.0 open-weights, ultra-fast 1s inference on 12GB RTX 3080",
+        "repo_id": "unsloth/FLUX.2-klein-4B-GGUF",
+        "filename": "flux-2-klein-4b-Q4_K_M.gguf",
+        "url": "https://huggingface.co/unsloth/FLUX.2-klein-4B-GGUF/resolve/main/flux-2-klein-4b-Q4_K_M.gguf",
+        "default_steps": 4
+    },
+    "flux-2-klein-9b": {
+        "id": "flux-2-klein-9b",
+        "name": "FLUX.2 [klein] 9B (High Fidelity)",
+        "category": "image",
+        "format": "gguf",
+        "size_gb": 5.6,
+        "vram_req": "10GB - 12GB",
+        "recommended_for": "High-resolution multi-reference character fusion, enhanced skin detail & lighting accuracy on 12GB GPUs",
+        "repo_id": "unsloth/FLUX.2-klein-9B-GGUF",
+        "filename": "flux-2-klein-9b-Q4_K_M.gguf",
+        "url": "https://huggingface.co/unsloth/FLUX.2-klein-9B-GGUF/resolve/main/flux-2-klein-9b-Q4_K_M.gguf",
         "default_steps": 4
     },
     "sdxl-lightning": {
@@ -50,12 +77,12 @@ MODEL_CATALOG = {
         "name": "SDXL Lightning 4-Step",
         "category": "image",
         "format": "safetensors",
-        "size_gb": 3.8,
+        "size_gb": 6.5,
         "vram_req": "6GB - 8GB",
         "recommended_for": "Ultra-fast generation (3s per photo), sharp realistic portraiture",
         "repo_id": "ByteDance/SDXL-Lightning",
-        "filename": "sdxl_lightning_4step_unet.safetensors",
-        "url": "https://huggingface.co/ByteDance/SDXL-Lightning/resolve/main/sdxl_lightning_4step_unet.safetensors",
+        "filename": "sdxl_lightning_4step.safetensors",
+        "url": "https://huggingface.co/ByteDance/SDXL-Lightning/resolve/main/sdxl_lightning_4step.safetensors",
         "default_steps": 4
     },
     "wan-2.1-1.3b": {
@@ -63,7 +90,7 @@ MODEL_CATALOG = {
         "name": "Wan 2.1 - 1.3B Video",
         "category": "video",
         "format": "safetensors",
-        "size_gb": 4.2,
+        "size_gb": 5.3,
         "vram_req": "8GB - 12GB",
         "recommended_for": "Lightweight motion diffusion, fast dance and lip-sync rhythm, fits comfortably in 12GB",
         "repo_id": "Wan-AI/Wan2.1-T2V-1.3B",
@@ -80,9 +107,34 @@ MODEL_CATALOG = {
         "vram_req": "12GB (Quantized)",
         "recommended_for": "Pro cinematic camera motion, stable hand gestures, 720p vertical video cuts",
         "repo_id": "city96/Wan2.1-I2V-14B-480P-GGUF",
-        "filename": "wan2.1-i2v-14b-480p-Q4_K.gguf",
-        "url": "https://huggingface.co/city96/Wan2.1-I2V-14B-480P-GGUF/resolve/main/wan2.1-i2v-14b-480p-Q4_K.gguf",
+        "filename": "wan2.1-i2v-14b-480p-Q4_0.gguf",
+        "url": "https://huggingface.co/city96/Wan2.1-I2V-14B-480P-GGUF/resolve/main/wan2.1-i2v-14b-480p-Q4_0.gguf",
         "default_frames": 81
+    },
+    "wan-2.2-animate-14b": {
+        "id": "wan-2.2-animate-14b",
+        "name": "Wan 2.2 Animate 14B Q4 (Motion Mimic)",
+        "category": "video",
+        "format": "gguf",
+        "size_gb": 9.8,
+        "vram_req": "12GB (Quantized)",
+        "recommended_for": "State-of-the-art motion imitation, fluid dance tracking, non-commercial research weights",
+        "repo_id": "city96/Wan2.1-I2V-14B-480P-GGUF",
+        "filename": "wan2.2-animate-14b-480p-Q4_0.gguf",
+        "url": "https://huggingface.co/city96/Wan2.1-I2V-14B-480P-GGUF/resolve/main/wan2.1-i2v-14b-480p-Q4_0.gguf",
+        "default_frames": 81
+    },
+    "inswapper-128": {
+        "id": "inswapper-128",
+        "name": "InSwapper 128 (Neural Face Swap)",
+        "category": "faceswap",
+        "format": "onnx",
+        "size_gb": 0.53,
+        "vram_req": "2GB - 4GB",
+        "recommended_for": "1-Click photorealistic face swap, exact head pose & gaze transfer, occlusion-aware",
+        "repo_id": "ezioruan/inswapper_128.onnx",
+        "filename": "inswapper_128.onnx",
+        "url": "https://huggingface.co/ezioruan/inswapper_128.onnx/resolve/main/inswapper_128.onnx"
     }
 }
 
@@ -94,6 +146,7 @@ def _ensure_dirs():
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
     (MODELS_DIR / 'image').mkdir(parents=True, exist_ok=True)
     (MODELS_DIR / 'video').mkdir(parents=True, exist_ok=True)
+    (MODELS_DIR / 'faceswap').mkdir(parents=True, exist_ok=True)
 
 
 def get_gpu_info() -> Dict[str, Any]:
@@ -220,10 +273,17 @@ def list_models() -> Dict[str, Any]:
     ready_image = any(m["category"] == "image" and m["status"] == "ready" for m in models)
     ready_video = any(m["category"] == "video" and m["status"] == "ready" for m in models)
 
+    safe_cfg = copy.deepcopy(cfg)
+    cb = safe_cfg.get("cloud_backend", {})
+    if "api_key" in cb:
+        raw_key = str(cb.get("api_key") or "").strip()
+        cb["has_api_key"] = bool(raw_key)
+        cb["api_key"] = "••••••••" if raw_key else ""
+
     return {
         "models": models,
         "gpu": gpu,
-        "config": cfg,
+        "config": safe_cfg,
         "summary": {
             "image_ready": ready_image,
             "video_ready": ready_video,
@@ -263,25 +323,36 @@ def _download_worker(model_id: str):
             resumed_bytes = temp_file.stat().st_size
 
         url = meta["url"]
-        req = urllib.request.Request(
-            url,
-            headers={
-                "User-Agent": "MediaGrabberPro/4.0.0 (AI-Video-Studio)",
-            }
-        )
+        headers = {
+            "User-Agent": "MediaGrabberPro/4.0.0 (AI-Video-Studio)",
+        }
+        # Inject Hugging Face API token if configured
+        cfg = load_config()
+        hf_token = cfg.get("cloud_backend", {}).get("api_key") or os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
+        if hf_token and str(hf_token).strip():
+            headers["Authorization"] = f"Bearer {str(hf_token).strip()}"
+
+        req = urllib.request.Request(url, headers=headers)
         if resumed_bytes > 0:
             req.add_header("Range", f"bytes={resumed_bytes}-")
 
         with urllib.request.urlopen(req, timeout=30) as resp:
+            status_code = getattr(resp, 'status', getattr(resp, 'code', 200))
+            is_partial = (status_code == 206)
             content_length = resp.headers.get("Content-Length")
-            total = int(content_length) + resumed_bytes if content_length else int(meta["size_gb"] * (1024**3))
+
+            if resumed_bytes > 0 and not is_partial:
+                # Server served full file (200), not partial (206) - reset resume offset
+                resumed_bytes = 0
+
+            total = int(content_length) + (resumed_bytes if is_partial else 0) if content_length else int(meta["size_gb"] * (1024**3))
             
             with _lock:
                 if model_id in _active_downloads:
                     _active_downloads[model_id]["total_bytes"] = total
 
-            mode = "ab" if resumed_bytes > 0 else "wb"
-            downloaded = resumed_bytes
+            mode = "ab" if (resumed_bytes > 0 and is_partial) else "wb"
+            downloaded = resumed_bytes if is_partial else 0
             start_time = time.time()
             last_calc_time = start_time
             last_bytes = downloaded
@@ -323,20 +394,36 @@ def _download_worker(model_id: str):
                 _active_downloads.pop(model_id, None)
             return
 
-        # Atomic rename part to final file
-        if temp_file.is_file() and temp_file.stat().st_size > 1024 * 1024:
-            if target_file.is_file():
-                target_file.unlink()
-            shutil.move(str(temp_file), str(target_file))
+        # Atomic verification: ensure download actually reached expected size
+        if not temp_file.is_file():
+            raise RuntimeError("Downloaded temporary file missing on disk.")
+
+        actual_size = temp_file.stat().st_size
+        min_expected = int(total * 0.98) if total > 1024 * 1024 else 1024 * 1024
+        if actual_size < min_expected:
+            raise RuntimeError(
+                f"Download incomplete: received {round(actual_size / (1024**3), 2)} GB, expected ~{round(total / (1024**3), 2)} GB."
+            )
+
+        if target_file.is_file():
+            target_file.unlink()
+        shutil.move(str(temp_file), str(target_file))
 
         with _lock:
             _active_downloads.pop(model_id, None)
 
     except Exception as e:
+        err_msg = str(e)
+        if "401" in err_msg:
+            err_msg = "Access requires Hugging Face API Token (401 Unauthorized)."
+        elif "404" in err_msg:
+            err_msg = "Model file not found on remote server (404)."
+        elif "timed out" in err_msg.lower():
+            err_msg = "Connection timed out. Check your internet connection."
         with _lock:
             if model_id in _active_downloads:
                 _active_downloads[model_id]["status"] = "error"
-                _active_downloads[model_id]["error"] = str(e)
+                _active_downloads[model_id]["error"] = err_msg
 
 
 def start_download(model_id: str) -> Dict[str, Any]:
@@ -349,7 +436,10 @@ def start_download(model_id: str) -> Dict[str, Any]:
 
     with _lock:
         if model_id in _active_downloads:
-            return {"status": "already_downloading", "message": "Download is already in progress."}
+            if _active_downloads[model_id].get("status") == "error":
+                _active_downloads.pop(model_id, None)
+            else:
+                return {"status": "already_downloading", "message": "Download is already in progress."}
 
     t = threading.Thread(target=_download_worker, args=(model_id,), daemon=True)
     t.start()

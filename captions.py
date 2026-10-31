@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import subprocess
 import threading
 import time
 import urllib.parse
@@ -171,6 +172,8 @@ def validate_edit(data, duration):
         raise ValueError('Choose a supported visualizer style and position.')
     if style['video_filter'] not in composition_model.VIDEO_FILTERS or style['audio_effect'] not in composition_model.AUDIO_EFFECTS:
         raise ValueError('Choose a supported video filter and audio effect.')
+    if style.get('animation') == 'pop_in':
+        style['animation'] = 'pop'
     if style['animation'] not in composition_model.CAPTION_ANIMATIONS:
         raise ValueError('Choose a supported caption animation.')
     if style['alignment'] not in {'left','center','right'} or style['track_mode'] not in {'original','translation','both'}:
@@ -311,6 +314,8 @@ def _row_background_events(cue, row, style, height):
     width, box_height = row['width']+2*pad, row['height']+2*pad
     radius = min(box_height/2,width/2,height*style['box_radius']/100)
     animation = style['animation'] if row['track']=='original' else 'none'
+    if animation == 'pop_in':
+        animation = 'pop'
     duration = {'pop':.16,'zoom_in':.2,'slide_up':.18}.get(animation,0)
     start, end = cue['start'], cue['end']
     boundaries = {start,end}
@@ -429,6 +434,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text'
             output.append(f"Dialogue: 1,{timestamp(0, True)},{timestamp(t_end, True)},Default,,0,0,0,,{{\\an5\\pos({width/2:.0f},{height*.28:.0f})\\fs{title_size}\\fad(250,350)}}{escape(title_text)}")
     for cue in project['cues']:
         anim = style.get('animation', 'none')
+        if anim == 'pop_in':
+            anim = 'pop'
         use_words = bool((style.get('karaoke') or style.get('cumulative') or style.get('word_pop') or anim == 'typewriter') and cue['words'])
         if not use_words and anim == 'typewriter' and len(cue['text']) > 1:
             raw_text = cue['text']
@@ -2437,6 +2444,94 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             raise ValueError('Paste a valid TikTok, Instagram, or YouTube video URL.')
         found, title = _grab_social_video(raw_url, prefix='social')
         return jsonify(path=str(found), name=found.name, title=title, kind='video')
+
+    @bp.post('/api/captions/generate-backdrop')
+    def generate_ai_backdrop():
+        payload = request.get_json() or {}
+        if not isinstance(payload, dict):
+            raise ValueError('Invalid AI backdrop request.')
+
+        prompt = str(payload.get('prompt', '')).strip()
+        if not prompt:
+            raise ValueError('Please provide a prompt or description for the backdrop.')
+
+        style = str(payload.get('style', 'auto')).strip().lower()
+        if style != 'auto':
+            prompt = f"{prompt}, {style} lighting style, atmospheric mood"
+
+        motion = bool(payload.get('motion', False))
+        duration = float(payload.get('duration', 10.0))
+        duration = max(2.0, min(60.0, duration))
+
+        process.begin_job()
+        job_started()
+        try:
+            from assets import ai_video_engine
+            # Synthesize 9:16 atmospheric backdrop without requiring character references
+            res = ai_video_engine.render_keyframe_image(
+                prompt=prompt,
+                character_id=None,
+                scene_number=1,
+                custom_reference=None
+            )
+            raw_img_path = Path(res['path'])
+            if not raw_img_path.is_file():
+                raise RuntimeError("Failed to generate base backdrop image.")
+
+            stock_dir.mkdir(parents=True, exist_ok=True)
+
+            if motion:
+                # Convert the static backdrop into a cinematic slow push-in 1080x1920 MP4 loop
+                out_name = f"ai_loop_{uuid.uuid4().hex[:8]}.mp4"
+                dest_file = stock_dir / out_name
+                fps = 30
+                total_frames = int(duration * fps)
+                vf = (
+                    f"scale=1080:1920:force_original_aspect_ratio=increase,"
+                    f"crop=1080:1920,"
+                    f"zoompan=z='min(zoom+0.0006,1.12)':d={total_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1080x1920:fps={fps},"
+                    f"format=yuv420p"
+                )
+                ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+                cmd = [
+                    ffmpeg_exe, '-nostdin', '-y', '-loop', '1', '-i', str(raw_img_path),
+                    '-t', f"{duration:.2f}",
+                    '-vf', vf,
+                    '-c:v', 'libx264', '-preset', 'fast', '-crf', '19', '-pix_fmt', 'yuv420p',
+                    str(dest_file)
+                ]
+                res_proc = subprocess.run(cmd, capture_output=True)
+                if res_proc.returncode != 0 or not dest_file.is_file():
+                    raise RuntimeError("Failed to generate motion backdrop loop: " + res_proc.stderr.decode('utf-8', errors='ignore')[-300:])
+                kind = 'video'
+            else:
+                out_name = f"ai_backdrop_{uuid.uuid4().hex[:8]}.png"
+                dest_file = stock_dir / out_name
+                shutil.copy2(str(raw_img_path), str(dest_file))
+                kind = 'image'
+
+            prov = {
+                "provider": "ai_backdrop",
+                "attribution": f"Autonomous AI Generation ({style if style != 'auto' else 'Custom'})",
+                "license": "Royalty Free / Local Synthesis"
+            }
+            refresh_gallery()
+
+            media_rel = f"Stock Media/{dest_file.name}"
+            web_url = f"/api/media/{urllib.parse.quote(media_rel)}"
+
+            return jsonify({
+                "success": True,
+                "path": str(dest_file),
+                "name": dest_file.name,
+                "kind": kind,
+                "url": web_url,
+                "provenance": prov,
+                "message": f"AI {kind.capitalize()} backdrop synthesized successfully!"
+            })
+        finally:
+            process.end_job()
+            job_finished()
 
     @bp.get('/api/captions/fonts')
     def get_available_fonts():

@@ -95,6 +95,30 @@ class TestMotionStudio(unittest.TestCase):
         self.assertIn('motion_face_', res['filename'])
         self.assertTrue(Path(res['path']).is_file())
 
+    @patch('assets.motion_studio.subprocess.run')
+    def test_motion_job_lifecycle(self, mock_run):
+        # Create dummy image
+        p = motion_studio.REFERENCES_DIR / 'face.png'
+        p.write_bytes(b'image data')
+
+        def fake_ffmpeg(*args, **kwargs):
+            out_file = args[0][-1]
+            Path(out_file).write_bytes(b'fake mp4 video')
+            return MagicMock(returncode=0)
+
+        mock_run.side_effect = fake_ffmpeg
+
+        job_id = motion_studio.start_motion_job('', str(p))
+        self.assertTrue(job_id.startswith('motion_'))
+
+        job = motion_studio.get_motion_job(job_id)
+        self.assertIsNotNone(job)
+        self.assertEqual(job['id'], job_id)
+
+        # Test cancellation
+        cancelled = motion_studio.cancel_motion_job(job_id)
+        self.assertTrue(cancelled)
+
 
 if __name__ == '__main__':
     unittest.main()
