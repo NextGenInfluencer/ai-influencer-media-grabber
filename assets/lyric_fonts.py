@@ -43,11 +43,13 @@ def runs(text, family, locate):
     Unsupported symbols retain the requested font and platform fallback.
     """
     candidates = []
-    for name in dict.fromkeys((family, 'Roboto', 'Noto Sans KR')):
+    fallback_fonts = ('Black Han Sans', 'Roboto', 'Noto Sans KR') if family == 'Impact' else ('Roboto', 'Noto Sans KR')
+    for name in dict.fromkeys((family, *fallback_fonts)):
         path = Path(locate(name))
         if path.is_file():
             candidates.append((name, str(path), path.stat().st_mtime_ns))
     result = []
+    last_non_space = family
     for character in text:
         chosen = family
         if not character.isspace() and unicodedata.category(character) not in ('Cf','Cc'):
@@ -55,9 +57,12 @@ def runs(text, family, locate):
                 try:
                     if _supports_character(path, modified, character):
                         chosen = name
+                        last_non_space = name
                         break
                 except OSError:
                     continue
+        elif character.isspace() and last_non_space != family:
+            chosen = last_non_space
         if result and result[-1]['font'] == chosen:
             result[-1]['text'] += character
         else:
