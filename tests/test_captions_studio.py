@@ -1,10 +1,15 @@
 """Captions Studio v5: storyboard bridge, disk hygiene, preview/export parity and rendering."""
 import tests._isolation  # Must precede application imports.
+import inspect
+import io
 import json
+import re
 import subprocess
 import tempfile
+import threading
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import imageio_ffmpeg
 
@@ -110,6 +115,118 @@ class PreviewExportParityTests(unittest.TestCase):
         source = (ROOT / 'static' / 'captions.js').read_text(encoding='utf-8')
         keys = source[source.index('const compositionKeys='):source.index('let previousComposition')]
         self.assertNotIn('visualizer', keys)
+
+
+class RenderingTests(unittest.TestCase):
+    setUp = test_captions.CaptionWorkflowTests.setUp
+    tearDown = test_captions.CaptionWorkflowTests.tearDown
+    wait = test_captions.CaptionWorkflowTests.wait
+    j = test_captions.CaptionWorkflowTests.j
+    karaoke_project = test_captions.CaptionWorkflowTests.karaoke_project
+
+    def white_pixels(self, video, at):
+        frame = subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), '-v', 'error', '-ss', str(at), '-i', str(video), '-frames:v', '1',
+                                '-pix_fmt', 'rgb24', '-f', 'rawvideo', '-'], capture_output=True, check=True, timeout=30).stdout
+        self.assertTrue(frame)
+        return sum(1 for i in range(0, len(frame), 3) if min(frame[i], frame[i + 1], frame[i + 2]) > 200)
+
+    def duration(self, video):
+        probe = subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), '-i', str(video)], capture_output=True, text=True)
+        h, m, s = re.search(r'Duration: (\d+):(\d+):([\d.]+)', probe.stderr).groups()
+        return int(h) * 3600 + int(m) * 60 + float(s)
+
+    def test_check_render_seeks_on_input_and_keeps_caption_timing(self):
+        source = self.root / 'long.mp4'
+        subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), '-y', '-f', 'lavfi', '-i', 'color=blue:size=320x240:rate=10', '-f', 'lavfi',
+                        '-i', 'sine=frequency=440', '-t', '6', '-c:v', 'libx264', '-c:a', 'aac', str(source)], capture_output=True, check=True)
+        pid = self.j(self.client.post('/api/captions', data={'video': (io.BytesIO(source.read_bytes()), 'long.mp4')}))['id']
+        data = self.wait(pid)
+        data['cues'] = [dict(start=3.0, end=4.0, text='HELLO', words=[])]
+        data['style'] = {**data['style'], 'size': 12, 'position': 60}
+        saved = self.j(self.client.put('/api/captions/' + pid, json=data))
+        from assets import hwaccel
+        with patch.object(hwaccel, 'run_render', wraps=hwaccel.run_render) as run_render:
+            self.assertEqual(self.client.post(f'/api/captions/{pid}/render', json={'preview': True, 'start': 2.5, 'force_cpu': True}).status_code, 202)
+            rendered = self.wait(pid)
+        command = run_render.call_args.args[0]
+        self.assertLess(command.index('-ss'), command.index('-i'), 'Check renders seek on the input')
+        self.assertEqual(run_render.call_args.kwargs['runner'].__qualname__, 'progress_runner.<locals>.run',
+                         'Renders stream FFmpeg -progress into the project status')
+        video = self.root / 'library' / 'Caption Projects' / pid / rendered['last_render']
+        self.assertAlmostEqual(self.duration(video), 3.5, delta=.25)
+        self.assertEqual(self.white_pixels(video, .2), 0, 'Caption must not appear before its start (source 2.7 s)')
+        self.assertGreater(self.white_pixels(video, 1.0), 50, 'Caption must appear at source 3.5 s')
+        self.assertEqual(self.white_pixels(video, 2.0), 0, 'Caption must end at source 4.0 s')
+
+    def test_composition_check_render_after_five_seconds_is_not_empty(self):
+        audio = self.root / 'song.wav'
+        subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), '-y', '-f', 'lavfi', '-i', 'sine=frequency=330', '-t', '7', str(audio)], capture_output=True, check=True)
+        pid = self.j(self.client.post('/api/captions', data={'audio': (io.BytesIO(audio.read_bytes()), 'song.wav'), 'shape': 'square', 'color': '#102040'}))['id']
+        data = self.wait(pid)
+        data['cues'] = [dict(start=6.0, end=6.8, text='LATE', words=[])]
+        data['style'] = {**data['style'], 'size': 12, 'position': 60}
+        self.j(self.client.put('/api/captions/' + pid, json=data))
+        self.assertEqual(self.client.post(f'/api/captions/{pid}/render', json={'preview': True, 'start': 5.5, 'quality': 'draft', 'force_cpu': True}).status_code, 202)
+        rendered = self.wait(pid)
+        video = self.root / 'library' / 'Caption Projects' / pid / rendered['last_render']
+        self.assertAlmostEqual(self.duration(video), 1.5, delta=.3)
+        self.assertEqual(self.white_pixels(video, .2), 0)
+        self.assertGreater(self.white_pixels(video, .9), 50)
+
+    def test_stop_cancels_only_this_projects_job(self):
+        pid_a, a = self.karaoke_project()
+        pid_b, b = self.karaoke_project()
+        entered, release = threading.Event(), threading.Event()
+        result = {'segments': [{'words': [dict(word='Γεια', start=.05, end=.3), dict(word=' σου', start=.4, end=.7)]}]}
+
+        def blocked(*args):
+            entered.set()
+            release.wait(5)
+            return result
+        with patch('captions.align_caption_words', side_effect=blocked):
+            self.client.post(f'/api/captions/{pid_a}/karaoke', json={'revision': a['revision'], 'index': 1, 'language': 'el'})
+            try:
+                self.assertTrue(entered.wait(5))
+                other = self.j(self.client.post(f'/api/captions/{pid_b}/cancel', json={}))
+                self.assertFalse(other['cancelled'])
+                self.assertEqual(self.j(self.client.get('/api/captions/' + pid_a))['state'], 'busy')
+                stopped = self.j(self.client.post(f'/api/captions/{pid_a}/cancel', json={}))
+                self.assertTrue(stopped['cancelled'])
+            finally:
+                release.set()
+            cancelled = self.wait(pid_a, 'error')
+        self.assertIn('Cancelled', cancelled['status'])
+        self.assertEqual(cancelled['cues'], a['cues'])
+        self.assertEqual(self.j(self.client.get('/api/captions/' + pid_b))['state'], 'ready')
+        self.assertFalse(self.j(self.client.post(f'/api/captions/{pid_a}/cancel', json={}))['cancelled'])
+
+
+class RenderHelperTests(unittest.TestCase):
+    def test_progress_runner_streams_encoded_seconds(self):
+        from captions import progress_runner
+        seen = []
+        command = [imageio_ffmpeg.get_ffmpeg_exe(), '-nostdin', '-y', '-f', 'lavfi', '-i', 'testsrc=d=2:s=64x64:r=10', '-f', 'null', '-']
+        result = progress_runner(seen.append)(command, cwd=None, capture_output=True)
+        self.assertEqual(result.returncode, 0)
+        self.assertTrue(seen)
+        self.assertEqual(seen, sorted(seen))
+        self.assertGreaterEqual(seen[-1], 1.5)
+
+    def test_fonts_copy_only_when_changed_and_dead_code_removed(self):
+        from captions import match_lyrics_to_transcription, sync_file
+        with tempfile.TemporaryDirectory() as directory:
+            source, target = Path(directory, 'a.ttf'), Path(directory, 'b.ttf')
+            source.write_bytes(b'font')
+            self.assertTrue(sync_file(source, target))
+            self.assertFalse(sync_file(source, target))
+            source.write_bytes(b'font v2')
+            self.assertTrue(sync_file(source, target))
+            self.assertEqual(target.read_bytes(), b'font v2')
+        self.assertEqual(list(inspect.signature(match_lyrics_to_transcription).parameters), ['cues', 'lyrics', 'duration'])
+        source_code = (ROOT / 'captions.py').read_text(encoding='utf-8')
+        self.assertNotIn('subprocess.run(', source_code, 'All captions processes go through the cancellable job runner')
+        js = (ROOT / 'static' / 'captions.js').read_text(encoding='utf-8')
+        self.assertNotIn('/api/cancel_all', js)
 
 
 class StoryboardBridgeTests(unittest.TestCase):

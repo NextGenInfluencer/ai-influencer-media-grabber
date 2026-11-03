@@ -9,7 +9,6 @@ import os
 from pathlib import Path
 import re
 import shutil
-import subprocess
 import threading
 import time
 import urllib.parse
@@ -255,6 +254,42 @@ def prune_renders(project, folder, keep_checks=3):
             except OSError:
                 pass  # A player may still hold the file; the next prune retries.
     return removed
+
+
+def progress_runner(report):
+    """Runner for ``hwaccel.run_render`` that streams FFmpeg ``-progress`` output.
+
+    ``report`` receives the encoded output time in seconds. Cancellation still goes
+    through ``job_process`` (the process is killed when the job is cancelled).
+    """
+    def run(command, *, cwd=None, capture_output=True):
+        command = [*command[:-1], '-progress', 'pipe:1', '-nostats', command[-1]]
+        errors = bytearray()
+        with process.Popen(command, cwd=cwd, stdin=process.DEVNULL, stdout=process.PIPE, stderr=process.PIPE) as proc:
+            reader = threading.Thread(target=lambda: errors.extend(proc.stderr.read()), daemon=True)
+            reader.start()
+            for raw in proc.stdout:
+                key, _, value = raw.decode('ascii', errors='replace').strip().partition('=')
+                if key in ('out_time_us', 'out_time_ms') and value.isdigit():
+                    report(int(value) / 1_000_000)  # FFmpeg reports both keys in microseconds.
+            proc.wait()
+            reader.join()
+        process.check_cancelled()
+        return process.CompletedProcess(command, proc.returncode, b'', bytes(errors))
+    return run
+
+
+def sync_file(source, target):
+    """Copy only when the target is missing or differs (size or modification time)."""
+    src = source.stat()
+    try:
+        dst = target.stat()
+        if dst.st_size == src.st_size and dst.st_mtime_ns == src.st_mtime_ns:
+            return False
+    except FileNotFoundError:
+        pass
+    shutil.copy2(source, target)
+    return True
 
 
 def font_scale(name):
@@ -977,7 +1012,7 @@ def distribute_words_in_cue(words_text: list[str], cue_start: float, cue_end: fl
     return words
 
 
-def match_lyrics_to_transcription(cues, lyrics, duration, language=None, model=None, audio_samples=None, generate_fn=None, llm_model_id='llama-3.2-1b'):
+def match_lyrics_to_transcription(cues, lyrics, duration):
     """Match user's supplied lyrics to existing timed transcription cues using global sequence alignment.
 
     Replaces transcription text using ONLY supplied lyrics, preserves valid line timings,
@@ -1398,23 +1433,42 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                         raise
                     time.sleep(.05 * (attempt + 1))
 
-    def ffmpeg(args, cwd):
+    cancel_events: dict[str, threading.Event] = {}
+
+    def ffmpeg(args, cwd, progress=None):
         from assets import hwaccel
-        result = hwaccel.run_render([imageio_ffmpeg.get_ffmpeg_exe(), '-nostdin', '-y', *args], cwd=cwd, runner=process.run)
+        runner = progress_runner(progress) if progress else process.run
+        result = hwaccel.run_render([imageio_ffmpeg.get_ffmpeg_exe(), '-nostdin', '-y', *args], cwd=cwd, runner=runner)
         if result.returncode:
             raise ValueError('Video processing failed: ' + result.stderr.decode('utf-8', errors='replace')[-700:])
         return getattr(result, 'video_encoder', '')
 
+    def progress_reporter(d, label, total):
+        """Write '<label> NN%' into the project status at most every 0.75 s."""
+        last = dict(at=0.0, percent=-1)
+        def report(seconds):
+            percent = max(0, min(99, int(seconds / max(total, .01) * 100)))
+            now = time.monotonic()
+            if percent != last['percent'] and now - last['at'] >= .75:
+                last.update(at=now, percent=percent)
+                d['status'] = f'{label} {percent}%'
+                write(d)
+        return report
+
     def launch(data, action, work):
+        event = threading.Event()
         with lock:
             data['state'], data['status'] = 'busy', action
             write(data)
+            cancel_events[data['id']] = event
             job_started()
         def run():
             process.begin_job()
             original = copy.deepcopy(data)
             try:
-                work(data, folder(data['id']))
+                # Project-scoped cancel: Stop in this editor ends only this project's job.
+                with process.cancellation_scope(event.is_set):
+                    work(data, folder(data['id']))
                 process.check_cancelled()
                 data['state'], data['status'] = 'ready', data.pop('_completion_notice', 'Ready')
                 data['revision'] += 1
@@ -1427,10 +1481,21 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                 try:
                     write(data)
                 finally:
+                    if cancel_events.get(data['id']) is event:
+                        cancel_events.pop(data['id'], None)
                     process.end_job()
                     job_finished()
         threading.Thread(target=run, daemon=True).start()
         return jsonify(data), 202
+
+    @bp.post('/api/captions/<pid>/cancel')
+    def cancel_project(pid):
+        folder(pid)
+        event = cancel_events.get(pid)
+        if event is None:
+            return jsonify(cancelled=False, status='Nothing is running for this project.')
+        event.set()
+        return jsonify(cancelled=True, status='Stopping this project’s task… Saved captions are kept.')
 
     @bp.errorhandler(ValueError)
     @bp.errorhandler(KeyError)
@@ -2203,7 +2268,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                                 b=min(end-start,float(seg['end']))
                                 if b>a and str(seg['text']).strip(): anchors.append(dict(start=a,end=b,text=str(seg['text']).strip(),words=[]))
                             if not anchors: raise ValueError('No reliable vocal sections found. Choose a shorter matching range; saved captions are unchanged.')
-                            cues=match_lyrics_to_transcription(anchors,lines,end-start,language=coarse_language)
+                            cues=match_lyrics_to_transcription(anchors,lines,end-start)
                             cues=composition_model.shift_cues(cues,start,d['duration'])
                             for cue in cues: cue['karaoke']=dict(state='review',note='Recovered section from transcription; verify its placement against the song.')
                         process.check_cancelled()
@@ -2282,7 +2347,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             def work(d, f):
                 process.check_cancelled()
                 shifted = composition_model.shift_cues(selected_cues, -start, end-start)
-                matched = match_lyrics_to_transcription(shifted, lines, end-start, language=language)
+                matched = match_lyrics_to_transcription(shifted, lines, end-start)
                 matched = composition_model.shift_cues(matched, start, d['duration'])
                 outside = [c for c in d['cues'] if c['end'] <= start or c['start'] >= end]
                 matched = sorted(outside + matched,key=lambda c:c['start'])
@@ -2322,11 +2387,11 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                     fonts = f / 'caption_fonts'
                     fonts.mkdir(exist_ok=True)
                     for filename in BUNDLED_FONTS.values():
-                        shutil.copy2(FONT_DIR / filename, fonts / filename)
+                        sync_file(FONT_DIR / filename, fonts / filename)
                     for filename in CUSTOM_FONTS.values():
                         cf = CUSTOM_FONT_DIR / filename
                         if cf.is_file():
-                            shutil.copy2(cf, fonts / filename)
+                            sync_file(cf, fonts / filename)
                     style_cfg = {**DEFAULT_STYLE, **d.get('style', {})}
                     baked = d.get('composition') if isinstance(d.get('composition'), dict) else {}
                     fx_already_baked = baked.get('fx_baked', True)
@@ -2343,9 +2408,17 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                         scale_vf = 'scale=trunc(iw/2)*2:trunc(ih/2)*2'
                     if q_spec.get('fps'):
                         scale_vf += f",fps={q_spec['fps']}"
-                    vf_chain = [*composition_model.video_fx_chain(render_fx), f'ass={ass.name}:fontsdir=caption_fonts', scale_vf]
+                    clip = min(5, d['duration']-start) if preview else d['duration']
+                    subtitles = f'ass={ass.name}:fontsdir=caption_fonts'
+                    vf_chain = [*composition_model.video_fx_chain(render_fx), subtitles, scale_vf]
+                    seek = []
+                    if preview:
+                        # Seek on the input (fast), shift frames back to source time for the
+                        # subtitle filter, then restart the clip at zero.
+                        seek = ['-ss', f'{start:.3f}', '-t', f'{clip:.3f}']
+                        vf_chain = [f'setpts=PTS+{start:.3f}/TB', *vf_chain[:-1], 'setpts=PTS-STARTPTS', scale_vf]
                     af_chain = composition_model.audio_fx_chain(render_fx)
-                    args = ['-i', d['source'], '-map', '0:v:0', '-map', '0:a:0?', '-vf', ','.join(vf_chain)]
+                    args = [*seek, '-i', d['source'], '-map', '0:v:0', '-map', '0:a:0?', '-vf', ','.join(vf_chain)]
                     if af_chain:
                         args += ['-af', ','.join(af_chain)]
                     if d.get('composition') and d.get('studio'):
@@ -2369,18 +2442,26 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                         # Keep inputs, graph and maps; apply the chosen encoder below.
                         args = composed[:composed.index('-c:v')]
                         gi = args.index('-filter_complex')+1
-                        args[gi] = args[gi].replace('[out]', '[composed]') + f';[composed]ass={ass.name}:fontsdir=caption_fonts,{scale_vf}[out]'
                         if preview:
-                            ti = args.index('-t', args.index('-filter_complex'))
-                            args[ti+1] = str(min(5,d['duration']-start))
-                    if preview:
-                        args += ['-ss', str(start), '-t', str(min(5, d['duration']-start))]
+                            # The composed timeline starts at zero; trim after the subtitles so caption
+                            # timing stays exact, and stop decoding at the end of the check window.
+                            window = f'start={start:.3f}:end={start+clip:.3f}'
+                            args[gi] = (args[gi].replace('[out]', '[composed]') +
+                                        f';[composed]{subtitles},trim={window},setpts=PTS-STARTPTS,{scale_vf}[out]'
+                                        f';[aout]atrim={window},asetpts=PTS-STARTPTS[aclip]')
+                            args[args.index('[aout]')] = '[aclip]'
+                            ti = args.index('-t', gi)
+                            args[ti+1] = f'{clip:.3f}'
+                        else:
+                            args[gi] = args[gi].replace('[out]', '[composed]') + f';[composed]{subtitles},{scale_vf}[out]'
                     try:
                         from assets import hwaccel
                         enc_args = hwaccel.get_video_encoder_args(codec='h264', quality=quality, force_cpu=bool(options.get('force_cpu')))
                     except Exception:
                         enc_args = ['-c:v', 'libx264', '-preset', q_spec['preset'], '-crf', q_spec['crf']]
-                    completed_encoder = ffmpeg([*args, *enc_args, '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', q_spec['audio_bitrate'], '-movflags', '+faststart', temporary.name], f)
+                    label = 'Rendering five-second check…' if preview else 'Exporting captioned video…'
+                    completed_encoder = ffmpeg([*args, *enc_args, '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', q_spec['audio_bitrate'], '-movflags', '+faststart', temporary.name], f,
+                                               progress=progress_reporter(d, label, clip))
                     os.replace(temporary, f / output)
                     d['exports'].append(output)
                     d['last_render'] = output
@@ -2742,7 +2823,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                     '-c:v', 'libx264', '-preset', 'fast', '-crf', '19', '-pix_fmt', 'yuv420p',
                     str(dest_file)
                 ]
-                res_proc = subprocess.run(cmd, capture_output=True)
+                res_proc = process.run(cmd, capture_output=True)
                 if res_proc.returncode != 0 or not dest_file.is_file():
                     raise RuntimeError("Failed to generate motion backdrop loop: " + res_proc.stderr.decode('utf-8', errors='ignore')[-300:])
                 kind = 'video'

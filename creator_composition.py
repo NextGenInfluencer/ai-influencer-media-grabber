@@ -348,8 +348,7 @@ def render_args(studio, folder, output, background_has_audio=False, bake_fx=True
             else:
                 args += (['-stream_loop', '-1'] if s['loop'] else []) + ['-t', str(in_dur), '-i', c_path.name]
     else:
-        bg_key = seq_segments[0]['asset'] if len(seq_segments) == 1 else 'background'
-        bg = assets.get(bg_key) or assets.get('background')
+        bg = assets.get('background')
         if bg:
             path = local_asset(folder,bg)
             if bg['kind']=='image':

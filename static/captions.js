@@ -2427,18 +2427,22 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         if(project?.cues.length&&!confirm('Replace existing captions with automatic transcription? The current version stays saved if transcription fails.'))return;
         checkpoint();await job('transcribe',{language:$('language').value});
     });
-    $('renderCheck').onclick=act(async()=>{
-        if(sequenceHasChanges())throw Error('Apply your clip sequence changes before rendering.');
-        const guard=await exportGuard(project.style.track_mode||'original');if(!guard.proceed)return;
-        return job('render',{preview:true,quality:$('renderQuality').value||'standard',force_cpu:$('renderCpu').checked,skip_unapproved:guard.skip,start:Math.min(video.currentTime,Math.max(0,project.duration-.1))});
-    });
+    // A 5-second check is not an export: it renders approved translations only and never blocks on review.
+    $('renderCheck').onclick=act(()=>{if(sequenceHasChanges())throw Error('Apply your clip sequence changes before rendering.');return job('render',{preview:true,quality:$('renderQuality').value||'standard',force_cpu:$('renderCpu').checked,skip_unapproved:true,start:Math.min(video.currentTime,Math.max(0,project.duration-.1))});});
     $('export').onclick=act(async()=>{
         if(sequenceHasChanges())throw Error('Apply your clip sequence changes before exporting.');
         const guard=await exportGuard(project.style.track_mode||'original');if(!guard.proceed)return;
         return job('render',{preview:false,quality:$('renderQuality').value||'standard',force_cpu:$('renderCpu').checked,skip_unapproved:guard.skip});
     });
     $('srt').onclick=act(async()=>{await save();const a=document.createElement('a');a.href=`/api/captions/${project.id}/srt`;a.click();});
-    $('stop').onclick=act(async()=>{if(confirm('Stop active app jobs, including downloads and caption processing?')){const d=await api('/api/cancel_all','POST',{});say(d.status||'Stopping…');}});
+    $('stop').onclick=act(async()=>{
+        if(!project)return;
+        if(project.state!=='busy'){say('Nothing is running for this project.');return;}
+        if(!confirm('Stop the current task for this project? Saved captions are kept; other app jobs keep running.'))return;
+        const d=await api(`/api/captions/${project.id}/cancel`,'POST',{});
+        say(d.status||'Stopping…');
+        if(d.cancelled)poll();
+    });
     $('closeRender').onclick=()=>{$('renderVideo').pause();$('renderDialog').close();};
     window.addEventListener('resize',()=>{fitVideo();drawTimeline();});
     if(typeof ResizeObserver !== 'undefined') {
