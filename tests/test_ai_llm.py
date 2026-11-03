@@ -305,6 +305,19 @@ class TranslationRoutingTests(unittest.TestCase):
         self.assertEqual(set(result), {'a', 'b'})
         self.assertEqual(state['calls'], 3)
 
+    def test_classify_english_lines_with_indefinite_article_and_negation(self):
+        english_lines = [
+            'Cutting through sadness like a knife',
+            'Living in a time where a man gets zero rest',
+            'Nobody cares about the way a broken man feels',
+            'Turned a simple peace into misery and strife',
+            'Surrounded by a million people feeling so alone',
+            'No turning back',
+        ]
+        for line in english_lines:
+            with self.subTest(line=line):
+                self.assertEqual(translate.classify_line(line, 'en'), ('same', 'en'))
+
 
 if __name__ == '__main__':
     unittest.main()

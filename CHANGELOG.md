@@ -1,5 +1,11 @@
 # Changelog
 
+## [v5.0.4] - 2026-11-03
+- Translation routing (`ai_core/translate.py`): expanded `STOPWORDS['en']` with core English words (`a`, `an`, `no`, `not`, `by`, `into`, `about`, `where`, `when`, `who`, `how`, `why`, `out`, `up`, `down`, `back`, `through`, `like`, `from`, `at`, `as`, `but`, `or`, `if`, `never`, `always`, `nothing`, `nobody`, `somebody`, `everything`) and broke Latin stopword ties in favor of `target_code` so English lyric lines containing `'a'` or `'no'` are not misclassified as Portuguese/Spanish.
+- Captions translation (`captions.py`): restricted chorus pre-seeding in `translate_project` to lines outside `pending_ids` so re-translating unlocked already-approved lines calls `ai_translate.translate_lines` instead of returning cached chorus text.
+- Captions Translation Review modal (`static/captions.js`): display each line's translation route (`Translator`, `Helper (mixed language)`, or `Same as original`) in `showTranslationReview()`.
+- Captions transcription & alignment status (`captions.py`): display the active Whisper model (`Whisper <model>`) in `/transcribe` and `/align` running and completion status messages.
+
 ## [v5.0.3] - 2026-11-03
 - Downloads & Storage: `ai_core.models.storage()` now verifies pre-existing installed model files against their catalog SHA-256 and records them in `.verified.json` so existing models (FLUX.1 schnell, Wan 2.1 I2V 14B, InSwapper 128, InsightFace buffalo_l, Whisper base, Qwen3 4B) display as `Verified` instead of `Not verified`.
 - AI Engine Pack notice: avoided repeating "NVIDIA NVIDIA ..." in the recommendation reason when the GPU name reported by `nvidia-smi` already starts with `NVIDIA`.

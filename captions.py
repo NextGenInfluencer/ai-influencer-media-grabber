@@ -2096,9 +2096,21 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                         raise ValueError('No speech detected. Paste lyrics or import subtitles instead.')
                     d.update(validate_edit(dict(cues=cues, style=d['style']), d['duration']))
                     d['timing'] = 'automatic'
+                    model_name = (result.get('meta') or {}).get('model') if isinstance(result, dict) else None
+                    if not model_name:
+                        try:
+                            model_name = asr.whisper_model_name()
+                        except Exception:
+                            model_name = None
+                    if model_name:
+                        d['_completion_notice'] = f'Transcribed with Whisper {model_name}.'
                 finally:
                     (f / 'speech.wav').unlink(missing_ok=True)
-            return launch(data, 'Transcribing audio (existing captions are kept if this fails)…', work)
+            try:
+                transcribe_label = f'Transcribing audio with Whisper {asr.whisper_model_name()} (existing captions are kept if this fails)…'
+            except Exception:
+                transcribe_label = 'Transcribing audio (existing captions are kept if this fails)…'
+            return launch(data, transcribe_label, work)
 
     @bp.post('/api/captions/<pid>/karaoke')
     def karaoke(pid):
@@ -2367,17 +2379,31 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                             process.check_cancelled()
                             save_lyric_progress(progress_file, signature, cues, i+1)
                             d['status'] = f'Refining lyric sections: {i+1}/{len(cues)}. Saved captions are kept until review.'
+                            try:
+                                d['status'] = f'Refining lyric sections (Whisper {asr.whisper_model_name()}): {i+1}/{len(cues)}. Saved captions are kept until review.'
+                            except Exception:
+                                pass
                             write(d)
                     process.check_cancelled()
                     outside = [c for c in d['cues'] if c['end'] <= start or c['start'] >= end]
                     combined = sorted(outside + cues, key=lambda c:c['start'])
                     propose_lyrics(d, combined, options)
+                    try:
+                        speech_tag = f' (Whisper {asr.whisper_model_name()})'
+                    except Exception:
+                        speech_tag = ''
+                    if options.get('review'):
+                        d['_completion_notice'] = f'Lyrics are ready to review{speech_tag}. Saved captions have not changed.'
                     if not options.get('review'):
                         flagged = sum(c.get('karaoke',{}).get('state') == 'review' for c in cues)
-                        d['_completion_notice'] = f'Lyrics updated. {flagged} lines need timing review.'
+                        d['_completion_notice'] = f'Lyrics updated{speech_tag}. {flagged} lines need timing review.'
                 finally:
                     audio_file.unlink(missing_ok=True)
-            return launch(data, 'Matching your lyrics to the audio (existing captions are kept if this fails)…', work)
+            try:
+                align_label = f'Matching your lyrics to the audio with Whisper {asr.whisper_model_name()} (existing captions are kept if this fails)…'
+            except Exception:
+                align_label = 'Matching your lyrics to the audio (existing captions are kept if this fails)…'
+            return launch(data, align_label, work)
 
     @bp.post('/api/captions/<pid>/correct-lyrics')
     def correct_lyrics(pid):
@@ -2577,7 +2603,8 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                     if saved.get('signature') != signature: raise ValueError('Lyrics or translation settings changed. Start a new translation.')
                     done = saved['done']
                 # Carry user-approved chorus choices into identical repeated lines.
-                chorus = {c['text']:t for c in originals if (t:=c.get('translations',{}).get(language))
+                pending_ids = {c['id'] for c in pending}
+                chorus = {c['text']:t for c in originals if c['id'] not in pending_ids and (t:=c.get('translations',{}).get(language))
                           and t.get('status')=='approved' and lyric_tracks.matches_source(t.get('source'),c['text'])}
                 for c in pending:
                     if c['id'] in done:

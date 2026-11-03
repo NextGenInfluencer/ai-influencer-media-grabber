@@ -284,3 +284,20 @@ class TrackWorkflowTests(unittest.TestCase):
         self.assertEqual(len(proposal), 10)
         self.assertEqual({proposal[c['id']]['text'] for c in ready['cues'] if c['text']=='Chorus'}, {'Translated Chorus'})
         self.assertEqual(ready['cues'], data['cues'])
+
+    def test_retranslate_unlocked_approved_lines_calls_translator(self):
+        pid, data = self.karaoke_project()
+        for cue in data['cues']:
+            cue['translations'] = {'en': dict(text='Old translation', source=lyric_tracks.source_hash(cue['text']),
+                                              status='approved', locked=False)}
+        data = self.client.put('/api/captions/' + pid, json=data).json
+        def translate(lines, *args, **kwargs):
+            return {line['id']: dict(text='Fresh translation', note='', route='translator') for line in lines}
+        with patch('captions.ai_translate.translate_lines', side_effect=translate) as model:
+            self.assertEqual(self.client.post(f'/api/captions/{pid}/translate',
+                                              json=dict(revision=data['revision'], language='en')).status_code, 202)
+            proposed = self.wait(pid)
+            self.assertEqual(model.call_count, 1)
+        for entry in proposed['translation_proposal']['lines'].values():
+            self.assertEqual(entry['text'], 'Fresh translation')
+            self.assertEqual(entry['route'], 'translator')

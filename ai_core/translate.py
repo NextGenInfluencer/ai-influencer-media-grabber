@@ -33,7 +33,7 @@ SCRIPT_DEFAULT_LANGUAGE = {'greek': 'el', 'hangul': 'ko', 'kana': 'ja', 'cjk': '
                            'arabic': 'ar', 'hebrew': 'he', 'thai': 'th', 'devanagari': 'hi'}
 STOPWORDS = {
     'en': {'the', 'and', 'you', 'i', 'my', 'me', 'is', 'are', 'to', 'of', 'in', 'it', 'on', 'we', 'your', 'love',
-           'all', 'what', 'with', 'for', 'this', 'that', 'be', 'can', 'just', 'dont', "don't", 'im', "i'm", 'so', 'now'},
+           'all', 'what', 'with', 'for', 'this', 'that', 'be', 'can', 'just', 'dont', "don't", 'im', "i'm", 'so', 'now', 'a', 'an', 'no', 'not', 'by', 'into', 'about', 'where', 'when', 'who', 'how', 'why', 'out', 'up', 'down', 'back', 'through', 'like', 'from', 'at', 'as', 'but', 'or', 'if', 'never', 'always', 'nothing', 'nobody', 'somebody', 'everything'},
     'es': {'el', 'la', 'los', 'las', 'que', 'y', 'de', 'en', 'mi', 'tu', 'yo', 'es', 'por', 'con', 'una', 'un', 'amor', 'no', 'me', 'te'},
     'fr': {'le', 'la', 'les', 'et', 'de', 'je', 'tu', 'il', 'est', 'pas', 'que', 'une', 'un', 'mon', 'moi', 'toi', 'avec', 'pour'},
     'de': {'der', 'die', 'das', 'und', 'ich', 'du', 'nicht', 'ist', 'mein', 'mich', 'dich', 'ein', 'eine', 'mit', 'wir', 'auf'},
@@ -86,13 +86,14 @@ def _word_scripts(text):
     return counts, words
 
 
-def _latin_language(words):
+def _latin_language(words, target_code=None):
     latin = [w for w, s in words if s == 'latin']
     scores = {code: sum(1 for w in latin if w in vocab) for code, vocab in STOPWORDS.items()}
     best = max(scores, key=scores.get)
     ranked = sorted(scores.values(), reverse=True)
-    if ranked[0] == 0 or (len(ranked) > 1 and ranked[0] == ranked[1]):
-        return None
+    if ranked[0] == 0: return None
+    if len(ranked) > 1 and ranked[0] == ranked[1]: return target_code if target_code in scores and scores[target_code] == ranked[0] else None
+
     return best
 
 
@@ -121,7 +122,7 @@ def classify_line(text, target):
         return 'same', target_code
     if all(w in INTERJECTIONS for w, _ in words):
         return 'same', target_code
-    detected = _latin_language(words)
+    detected = _latin_language(words, target_code)
     if detected == target_code:
         return 'same', target_code
     return 'single', detected
