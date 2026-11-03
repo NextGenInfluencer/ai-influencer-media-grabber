@@ -288,8 +288,9 @@
             get ready() { return !entry.notice?.non_commercial || entry.notice.license_accepted || ncBox.checked; }};
         api(`/api/ai/notice/${encodeURIComponent(itemId)}`).then(notice => {
             entry.notice = notice;
-            title.replaceChildren(notice.name, localChip(notice.local), notice.installed ? chip('Installed', 'ok') : null,
-                notice.non_commercial ? ncBadge() : null);
+            // DOM replaceChildren() stringifies null, so drop absent badges first.
+            title.replaceChildren(...[notice.name, localChip(notice.local), notice.installed ? chip('Installed', 'ok') : null,
+                notice.non_commercial ? ncBadge() : null].filter(Boolean));
             const parts = [];
             if (notice.features?.length) parts.push(`Unlocks: ${notice.features.join(', ')}`);
             parts.push(notice.installed ? 'Already on this PC' : `Download ${bytes(notice.download_bytes)}${notice.size_source === 'live' ? ' (live size)' : ''}${eta(notice.eta_download_seconds) ? ` · ${eta(notice.eta_download_seconds)}` : ''}`);
