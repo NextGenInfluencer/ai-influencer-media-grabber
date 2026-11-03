@@ -182,31 +182,84 @@ def get_gpu_info() -> Dict[str, Any]:
 
 
 def load_config() -> Dict[str, Any]:
-    """Loads active model selections and cloud backend settings."""
+    """Loads active model selections, cloud backend, and local engine settings."""
     _ensure_dirs()
-    if not CONFIG_FILE.is_file():
-        default_cfg = {
-            "active_image_model": "sdxl-lightning",
-            "active_video_model": "wan-2.1-1.3b",
-            "cloud_backend": {
-                "enabled": False,
-                "comfy_url": "http://127.0.0.1:8188",
-                "api_provider": "huggingface",
-                "api_key": ""
-            }
+    default_cfg = {
+        "active_image_model": "sdxl-lightning",
+        "active_video_model": "wan-2.1-1.3b",
+        "cloud_backend": {
+            "enabled": False,
+            "comfy_url": "http://127.0.0.1:8188",
+            "api_provider": "fal",
+            "api_key": ""
+        },
+        "local_engine": {
+            "facefusion_python": "",
+            "facefusion_script": ""
         }
+    }
+    if not CONFIG_FILE.is_file():
         save_config(default_cfg)
         return default_cfg
 
     try:
         with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
+            data = json.load(f)
+            # Ensure keys exist
+            for k, v in default_cfg.items():
+                if k not in data:
+                    data[k] = v
+                elif isinstance(v, dict):
+                    for sub_k, sub_v in v.items():
+                        if sub_k not in data[k]:
+                            data[k][sub_k] = sub_v
+            return data
     except Exception:
-        return {
-            "active_image_model": "sdxl-lightning",
-            "active_video_model": "wan-2.1-1.3b",
-            "cloud_backend": {"enabled": False, "comfy_url": "", "api_provider": "huggingface", "api_key": ""}
+        return default_cfg
+
+
+def detect_local_engines() -> Dict[str, Any]:
+    """Detects available local AI engines (FaceFusion, ComfyUI, and InSwapper)."""
+    cfg = load_config()
+    local_eng = cfg.get("local_engine", {})
+
+    # 1. FaceFusion detection
+    try:
+        from assets import motion_studio
+        ff_py, ff_script = motion_studio.detect_facefusion(cfg)
+    except Exception:
+        ff_py, ff_script = None, None
+
+    # 2. ComfyUI check
+    comfy_url = cfg.get("cloud_backend", {}).get("comfy_url") or "http://127.0.0.1:8188"
+    comfy_running = False
+    try:
+        import urllib.request
+        with urllib.request.urlopen(f"{comfy_url.rstrip('/')}/system_stats", timeout=0.8) as resp:
+            if resp.status == 200:
+                comfy_running = True
+    except Exception:
+        pass
+
+    # 3. InSwapper 128 ONNX
+    inswapper_path = get_model_path("inswapper-128")
+
+    return {
+        "facefusion": {
+            "detected": bool(ff_py and ff_script),
+            "python": ff_py or "",
+            "script": ff_script or "",
+            "is_configured": bool(local_eng.get("facefusion_python") or local_eng.get("facefusion_script"))
+        },
+        "comfyui": {
+            "detected": comfy_running,
+            "url": comfy_url
+        },
+        "inswapper": {
+            "installed": bool(inswapper_path),
+            "path": str(inswapper_path) if inswapper_path else ""
         }
+    }
 
 
 def save_config(cfg: Dict[str, Any]):
@@ -272,6 +325,7 @@ def list_models() -> Dict[str, Any]:
 
     ready_image = any(m["category"] == "image" and m["status"] == "ready" for m in models)
     ready_video = any(m["category"] == "video" and m["status"] == "ready" for m in models)
+    ready_faceswap = any(m["category"] == "faceswap" and m["status"] == "ready" for m in models)
 
     safe_cfg = copy.deepcopy(cfg)
     cb = safe_cfg.get("cloud_backend", {})
@@ -284,9 +338,11 @@ def list_models() -> Dict[str, Any]:
         "models": models,
         "gpu": gpu,
         "config": safe_cfg,
+        "engines": detect_local_engines(),
         "summary": {
             "image_ready": ready_image,
             "video_ready": ready_video,
+            "faceswap_ready": ready_faceswap,
             "cloud_enabled": bool(cfg.get("cloud_backend", {}).get("enabled")),
             "active_image_model": cfg.get("active_image_model"),
             "active_video_model": cfg.get("active_video_model")

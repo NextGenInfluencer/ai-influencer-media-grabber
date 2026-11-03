@@ -259,7 +259,14 @@ def get_neural_swapper():
             try:
                 import insightface
                 from insightface.app import FaceAnalysis
-                app = FaceAnalysis(name='buffalo_l', providers=['CPUExecutionProvider'])
+                providers = ['CUDAExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+                try:
+                    import onnxruntime as ort
+                    avail = ort.get_available_providers()
+                    providers = [p for p in providers if p in avail] or ['CPUExecutionProvider']
+                except Exception:
+                    providers = ['CPUExecutionProvider']
+                app = FaceAnalysis(name='buffalo_l', providers=providers)
                 app.prepare(ctx_id=0, det_size=(640, 640))
                 _face_app = app
             except Exception as e:
@@ -276,6 +283,213 @@ def get_neural_swapper():
                 _swapper_model = None
 
     return _face_app, _swapper_model
+
+
+def detect_facefusion(cfg=None):
+    """Detects available FaceFusion installation on the user's system.
+    
+    Checks in order:
+    1. User configuration in models_config.json ('facefusion_python' and 'facefusion_script')
+    2. Environment variables (FACEFUSION_PYTHON, FACEFUSION_PATH / FACEFUSION_SCRIPT)
+    3. Auto-detected system paths and common virtual environments
+    """
+    if cfg is None:
+        try:
+            from assets import ai_model_manager as model_mgr
+            cfg = model_mgr.load_config()
+        except Exception:
+            cfg = {}
+
+    local_eng = cfg.get("local_engine", {})
+    configured_py = local_eng.get("facefusion_python") or cfg.get("facefusion_python")
+    configured_script = local_eng.get("facefusion_script") or cfg.get("facefusion_script") or cfg.get("facefusion_path")
+
+    # 1. Configured paths
+    if configured_py and configured_script:
+        py_p = Path(configured_py)
+        script_p = Path(configured_script)
+        if py_p.is_file() and script_p.is_file():
+            return str(py_p), str(script_p)
+
+    # 2. Environment variables
+    env_py = os.environ.get("FACEFUSION_PYTHON")
+    env_script = os.environ.get("FACEFUSION_PATH") or os.environ.get("FACEFUSION_SCRIPT")
+    if env_py and env_script:
+        py_p = Path(env_py)
+        script_p = Path(env_script)
+        if py_p.is_file() and script_p.is_file():
+            return str(py_p), str(script_p)
+
+    # 3. Known / common install locations (auto-detection)
+    try:
+        home = Path.home()
+    except Exception:
+        home = Path.cwd()
+    py_candidates = [
+        home / "miniconda3" / "envs" / "facefusion" / "python.exe",
+        home / "anaconda3" / "envs" / "facefusion" / "python.exe",
+        Path(r"C:\miniconda3\envs\facefusion\python.exe"),
+        Path(r"C:\Users\lefte\miniconda3\envs\facefusion\python.exe"),
+    ]
+
+    script_candidates = [
+        Path(r"F:\new faceswap\facefusion-master\facefusion.py"),
+        home / "facefusion" / "facefusion.py",
+        home / "Documents" / "facefusion" / "facefusion.py",
+        Path.cwd().parent / "facefusion" / "facefusion.py",
+    ]
+
+    detected_py = next((p for p in py_candidates if p.is_file()), None)
+    detected_script = next((s for s in script_candidates if s.is_file()), None)
+
+    if detected_py and detected_script:
+        return str(detected_py), str(detected_script)
+
+    return None, None
+
+
+def cloud_swap_identity(target_path, source_path, dest_path, cfg):
+    """Executes neural face swap via configured Cloud API (Fal.ai or Replicate)."""
+    cb = cfg.get("cloud_backend", {})
+    if not cb.get("enabled"):
+        return False
+
+    api_key = str(cb.get("api_key") or "").strip()
+    provider = str(cb.get("api_provider") or "fal").lower()
+    if not api_key:
+        return False
+
+    if provider in ("fal", "fal.ai"):
+        try:
+            import os
+            os.environ["FAL_KEY"] = api_key
+            import fal_client
+            t_url = fal_client.upload_file(str(target_path))
+            s_url = fal_client.upload_file(str(source_path))
+            res = fal_client.subscribe(
+                "fal-ai/face-swap",
+                arguments={
+                    "base_image_url": t_url,
+                    "swap_image_url": s_url
+                }
+            )
+            img_data = res.get("image") or res.get("image_url")
+            out_url = img_data.get("url") if isinstance(img_data, dict) else img_data
+            if out_url:
+                import urllib.request
+                with urllib.request.urlopen(out_url, timeout=60) as resp:
+                    Path(dest_path).write_bytes(resp.read())
+                return True
+        except Exception:
+            return False
+
+    elif provider in ("replicate",):
+        try:
+            import base64
+            import json
+            import time
+            import urllib.request
+            with open(target_path, "rb") as f:
+                target_b64 = "data:image/jpeg;base64," + base64.b64encode(f.read()).decode('utf-8')
+            with open(source_path, "rb") as f:
+                source_b64 = "data:image/jpeg;base64," + base64.b64encode(f.read()).decode('utf-8')
+
+            headers = {
+                "Authorization": f"Token {api_key}",
+                "Content-Type": "application/json"
+            }
+            payload = {
+                "version": "c2d78d10e508d0bbd8142004d41a89b1fb240c80fdf2d73dd7d0f97bf4b7f35c",
+                "input": {
+                    "target_image": target_b64,
+                    "swap_image": source_b64
+                }
+            }
+            req = urllib.request.Request("https://api.replicate.com/v1/predictions", data=json.dumps(payload).encode('utf-8'), headers=headers)
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                pred = json.loads(resp.read().decode('utf-8'))
+            pred_id = pred.get("id")
+            if not pred_id:
+                return False
+            poll_url = f"https://api.replicate.com/v1/predictions/{pred_id}"
+            for _ in range(45):
+                time.sleep(2)
+                p_req = urllib.request.Request(poll_url, headers=headers)
+                with urllib.request.urlopen(p_req, timeout=30) as p_resp:
+                    p_data = json.loads(p_resp.read().decode('utf-8'))
+                if p_data.get("status") == "succeeded":
+                    out_url = p_data.get("output")
+                    if out_url:
+                        with urllib.request.urlopen(out_url, timeout=60) as out_resp:
+                            Path(dest_path).write_bytes(out_resp.read())
+                        return True
+                    break
+                elif p_data.get("status") in ("failed", "canceled"):
+                    return False
+        except Exception:
+            return False
+
+    return False
+
+
+def cloud_render_motion(source_image_path, driving_video_path, output_path, cfg, progress_callback=None):
+    """Executes neural video motion transfer via configured Cloud API (Fal.ai or Replicate)."""
+    cb = cfg.get("cloud_backend", {})
+    if not cb.get("enabled"):
+        return False
+
+    api_key = str(cb.get("api_key") or "").strip()
+    provider = str(cb.get("api_provider") or "fal").lower()
+    if not api_key:
+        return False
+
+    if provider in ("fal", "fal.ai"):
+        try:
+            import os
+            os.environ["FAL_KEY"] = api_key
+            import fal_client
+            if progress_callback:
+                progress_callback(15, 100, "Uploading source portrait to Fal.ai...")
+            img_url = fal_client.upload_file(str(source_image_path))
+
+            driving_url = None
+            if driving_video_path and Path(driving_video_path).is_file():
+                if progress_callback:
+                    progress_callback(30, 100, "Uploading driving video...")
+                driving_url = fal_client.upload_file(str(driving_video_path))
+
+            if progress_callback:
+                progress_callback(50, 100, "Synthesizing neural video motion via Fal.ai Cloud GPU...")
+
+            if driving_url:
+                res = fal_client.subscribe(
+                    "fal-ai/live-portrait",
+                    arguments={
+                        "face_image_url": img_url,
+                        "driving_video_url": driving_url
+                    }
+                )
+            else:
+                res = fal_client.subscribe(
+                    "fal-ai/kling-video/v1.5/pro/image-to-video",
+                    arguments={
+                        "image_url": img_url,
+                        "prompt": "dynamic rhythmic dance, fluid natural body motion, cinematic lighting"
+                    }
+                )
+            vid_data = res.get("video") or res.get("video_url")
+            out_url = vid_data.get("url") if isinstance(vid_data, dict) else vid_data
+            if out_url:
+                if progress_callback:
+                    progress_callback(90, 100, "Downloading synthesized video...")
+                import urllib.request
+                with urllib.request.urlopen(out_url, timeout=120) as resp:
+                    Path(output_path).write_bytes(resp.read())
+                return True
+        except Exception:
+            return False
+
+    return False
 
 
 def swap_character_identity(target_frame_path, character_id=None, custom_portrait_path=None, output_path=None, engine='neural'):
@@ -362,134 +576,95 @@ def swap_character_identity(target_frame_path, character_id=None, custom_portrai
     dest_path = Path(output_path) if output_path else (REFERENCES_DIR / out_name)
 
     used_neural = False
+    from assets import ai_model_manager as model_mgr
+    cfg = model_mgr.load_config()
 
-    # 1. Try local GPU FaceFusion engine if available
-    ff_python = Path(r"C:\Users\lefte\miniconda3\envs\facefusion\python.exe")
-    ff_script = Path(r"F:\new faceswap\facefusion-master\facefusion.py")
-    if ff_python.is_file() and ff_script.is_file():
-        try:
-            cmd = [
-                str(ff_python), str(ff_script), "headless-run",
-                "-s", str(src_p),
-                "-t", str(target_p),
-                "-o", str(dest_path),
-                "--processors", "face_swapper",
-                "--execution-providers", "cuda"
-            ]
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-            if res.returncode == 0 and Path(dest_path).is_file():
-                used_neural = True
-        except Exception:
-            pass
+    # 1. Try Cloud Inference if configured
+    if cloud_swap_identity(target_p, source_p, dest_path, cfg):
+        used_neural = True
 
-    app, swapper = get_neural_swapper()
-    if not used_neural and swapper is not None and app is not None and engine in ('neural', 'opencv', 'default'):
-        try:
-            target_faces = app.get(target_img)
-            source_faces = app.get(src_img)
-            if len(target_faces) > 0 and len(source_faces) > 0:
-                tf = max(target_faces, key=lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]))
-                sf = max(source_faces, key=lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]))
-                res_bgr = swapper.get(target_img, tf, sf, paste_back=True)
-                cv2.imwrite(str(dest_path), res_bgr)
-                used_neural = True
-        except Exception:
-            pass
+    # 2. Try local FaceFusion engine if detected
+    if not used_neural:
+        ff_py, ff_script = detect_facefusion(cfg)
+        if ff_py and ff_script:
+            try:
+                cmd = [
+                    ff_py, ff_script, "headless-run",
+                    "-s", str(source_p),
+                    "-t", str(target_p),
+                    "-o", str(dest_path),
+                    "--processors", "face_swapper",
+                    "--execution-providers", "cuda"
+                ]
+                res = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+                if res.returncode == 0 and Path(dest_path).is_file():
+                    used_neural = True
+            except Exception:
+                pass
+
+    # 3. Try built-in InSwapper 128 ONNX
+    if not used_neural:
+        app, swapper = get_neural_swapper()
+        if swapper is not None and app is not None and engine in ('neural', 'opencv', 'default'):
+            try:
+                target_faces = app.get(target_img)
+                source_faces = app.get(src_img)
+                if len(target_faces) > 0 and len(source_faces) > 0:
+                    tf = max(target_faces, key=lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]))
+                    sf = max(source_faces, key=lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]))
+                    res_bgr = swapper.get(target_img, tf, sf, paste_back=True)
+                    cv2.imwrite(str(dest_path), res_bgr)
+                    used_neural = True
+            except Exception:
+                pass
 
     if not used_neural:
-        cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
-        cascade = cv2.CascadeClassifier(cascade_path)
+        if engine == 'opencv':
+            cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
+            cascade = cv2.CascadeClassifier(cascade_path)
 
-        # 1. Detect face on target frame
-        target_gray = cv2.cvtColor(target_img, cv2.COLOR_BGR2GRAY)
-        target_faces = cascade.detectMultiScale(target_gray, scaleFactor=1.15, minNeighbors=4, minSize=(60, 60))
+            target_gray = cv2.cvtColor(target_img, cv2.COLOR_BGR2GRAY)
+            target_faces = cascade.detectMultiScale(target_gray, scaleFactor=1.15, minNeighbors=4, minSize=(60, 60))
+            src_gray = cv2.cvtColor(src_img, cv2.COLOR_BGR2GRAY)
+            src_faces = cascade.detectMultiScale(src_gray, scaleFactor=1.15, minNeighbors=4, minSize=(60, 60))
 
-        # 2. Detect face on character source portrait
-        src_gray = cv2.cvtColor(src_img, cv2.COLOR_BGR2GRAY)
-        src_faces = cascade.detectMultiScale(src_gray, scaleFactor=1.15, minNeighbors=4, minSize=(60, 60))
+            real_target_faces = [f for f in target_faces if f[1] < target_img.shape[0] * 0.55]
+            if len(real_target_faces) > 0 and len(src_faces) > 0:
+                tf = max(real_target_faces, key=lambda f: f[2] * f[3])
+                sf = max(src_faces, key=lambda f: f[2] * f[3])
+                tx, ty, tw, th = tf
+                sx, sy, sw, sh = sf
+                pad_w, pad_top, pad_bot = int(sw * 0.28), int(sh * 0.45), int(sh * 0.18)
+                x1, y1 = max(0, sx - pad_w), max(0, sy - pad_top)
+                x2, y2 = min(src_img.shape[1], sx + sw + pad_w), min(src_img.shape[0], sy + sh + pad_bot)
+                face_crop = src_img[y1:y2, x1:x2]
 
-        # Filter target face: the face is in upper half of the video (y < height * 0.55)
-        real_target_faces = [f for f in target_faces if f[1] < target_img.shape[0] * 0.55]
-        if len(real_target_faces) > 0 and len(src_faces) > 0:
-            tf = max(real_target_faces, key=lambda f: f[2] * f[3])
-            sf = max(src_faces, key=lambda f: f[2] * f[3])
+                t_pad_w, t_pad_top, t_pad_bot = int(tw * 0.28), int(th * 0.45), int(th * 0.18)
+                tx1, ty1 = max(0, tx - t_pad_w), max(0, ty - t_pad_top)
+                tx2, ty2 = min(target_img.shape[1], tx + tw + t_pad_w), min(target_img.shape[0], ty + th + t_pad_bot)
+                target_w, target_h = tx2 - tx1, ty2 - ty1
 
-            tx, ty, tw, th = tf
-            sx, sy, sw, sh = sf
-
-            # Expand crop box around character face to include hair, temples, and jawline
-            pad_w = int(sw * 0.28)
-            pad_top = int(sh * 0.45)
-            pad_bot = int(sh * 0.18)
-
-            x1 = max(0, sx - pad_w)
-            y1 = max(0, sy - pad_top)
-            x2 = min(src_img.shape[1], sx + sw + pad_w)
-            y2 = min(src_img.shape[0], sy + sh + pad_bot)
-
-            face_crop = src_img[y1:y2, x1:x2]
-
-            t_pad_w = int(tw * 0.28)
-            t_pad_top = int(th * 0.45)
-            t_pad_bot = int(th * 0.18)
-
-            tx1 = max(0, tx - t_pad_w)
-            ty1 = max(0, ty - t_pad_top)
-            tx2 = min(target_img.shape[1], tx + tw + t_pad_w)
-            ty2 = min(target_img.shape[0], ty + th + t_pad_bot)
-
-            target_w = tx2 - tx1
-            target_h = ty2 - ty1
-
-            if target_w > 10 and target_h > 10 and face_crop.shape[0] > 10 and face_crop.shape[1] > 10:
-                resized_face = cv2.resize(face_crop, (target_w, target_h), interpolation=cv2.INTER_LANCZOS4)
-
-                mask = np.zeros((target_h, target_w), dtype=np.float32)
-                center = (target_w // 2, int(target_h * 0.48))
-                axes = (int(target_w * 0.44), int(target_h * 0.46))
-                cv2.ellipse(mask, center, axes, 0, 0, 360, 1.0, -1)
-
-                hsv_crop = cv2.cvtColor(resized_face, cv2.COLOR_BGR2HSV)
-                sat = hsv_crop[:, :, 1]
-                val = hsv_crop[:, :, 2]
-                is_backdrop = (sat < 25) & (val > 45)
-                y_indices, x_indices = np.indices((target_h, target_w))
-                dist_from_center = np.sqrt(((x_indices - center[0]) / max(1, axes[0]))**2 + ((y_indices - center[1]) / max(1, axes[1]))**2)
-                mask[is_backdrop & (dist_from_center > 0.65)] = 0.0
-
-                mask = cv2.GaussianBlur(mask, (31, 31), 0)[:, :, np.newaxis]
-
-                comp = target_img.copy()
-                comp[ty1:ty2, tx1:tx2] = (resized_face * mask + comp[ty1:ty2, tx1:tx2] * (1.0 - mask)).astype(np.uint8)
-                cv2.imwrite(str(dest_path), comp)
+                if target_w > 10 and target_h > 10 and face_crop.shape[0] > 10 and face_crop.shape[1] > 10:
+                    resized_face = cv2.resize(face_crop, (target_w, target_h), interpolation=cv2.INTER_LANCZOS4)
+                    mask = np.zeros((target_h, target_w), dtype=np.float32)
+                    center = (target_w // 2, int(target_h * 0.48))
+                    axes = (int(target_w * 0.44), int(target_h * 0.46))
+                    cv2.ellipse(mask, center, axes, 0, 0, 360, 1.0, -1)
+                    mask = cv2.GaussianBlur(mask, (31, 31), 0)[:, :, np.newaxis]
+                    comp = target_img.copy()
+                    comp[ty1:ty2, tx1:tx2] = (resized_face * mask + comp[ty1:ty2, tx1:tx2] * (1.0 - mask)).astype(np.uint8)
+                    cv2.imwrite(str(dest_path), comp)
+                else:
+                    cv2.imwrite(str(dest_path), target_img)
             else:
                 cv2.imwrite(str(dest_path), target_img)
         else:
-            th_img, tw_img = target_img.shape[:2]
-            crop_h = int(th_img * 0.45)
-            crop_w = int(tw_img * 0.55)
-            top_y = int(th_img * 0.08)
-            left_x = int((tw_img - crop_w) / 2)
-
-            resized_src = cv2.resize(src_img, (crop_w, crop_h), interpolation=cv2.INTER_LANCZOS4)
-            mask = np.zeros((crop_h, crop_w), dtype=np.float32)
-            center_fb = (crop_w // 2, int(crop_h * 0.48))
-            axes_fb = (int(crop_w * 0.44), int(crop_h * 0.46))
-            cv2.ellipse(mask, center_fb, axes_fb, 0, 0, 360, 1.0, -1)
-
-            hsv_crop = cv2.cvtColor(resized_src, cv2.COLOR_BGR2HSV)
-            sat = hsv_crop[:, :, 1]
-            val = hsv_crop[:, :, 2]
-            is_backdrop = (sat < 25) & (val > 45)
-            y_indices, x_indices = np.indices((crop_h, crop_w))
-            dist_from_center = np.sqrt(((x_indices - center_fb[0]) / max(1, axes_fb[0]))**2 + ((y_indices - center_fb[1]) / max(1, axes_fb[1]))**2)
-            mask[is_backdrop & (dist_from_center > 0.65)] = 0.0
-
-            mask = cv2.GaussianBlur(mask, (31, 31), 0)[:, :, np.newaxis]
-
-            comp = target_img.copy()
-            comp[top_y:top_y+crop_h, left_x:left_x+crop_w] = (resized_src * mask + comp[top_y:top_y+crop_h, left_x:left_x+crop_w] * (1.0 - mask)).astype(np.uint8)
-            cv2.imwrite(str(dest_path), comp)
+            raise RuntimeError(
+                "No neural face swap engine is ready. To swap faces: "
+                "1) Download the free InSwapper 128 model (530 MB) via '⚡ AI Models' for 100% in-app local swaps, "
+                "2) Enable Cloud Inference in AI Settings for instant laptop swaps, or "
+                "3) Configure your local FaceFusion path in Settings."
+            )
 
     char_name = char['name'] if char else 'Airi'
     char_tag = char['tag'] if char else '@Airi'
@@ -644,15 +819,30 @@ def render_character_motion(driving_video_path, source_image_path, audio_path=No
     use_neural_for_video = False
 
     if resolved_driving and resolved_driving.is_file():
-        # 1. Try local GPU FaceFusion engine for full-fidelity neural video tracking
-        ff_python = Path(r"C:\Users\lefte\miniconda3\envs\facefusion\python.exe")
-        ff_script = Path(r"F:\new faceswap\facefusion-master\facefusion.py")
-        if ff_python.is_file() and ff_script.is_file():
+        from assets import ai_model_manager as model_mgr
+        cfg = model_mgr.load_config()
+
+        # 1. Try Cloud Inference if configured
+        if cloud_render_motion(ipath, resolved_driving, out_path, cfg, progress_callback=progress_callback):
+            return {
+                "filename": out_name,
+                "path": str(out_path),
+                "duration": duration,
+                "status": "ready",
+                "model_ready": True,
+                "model_required": "Cloud-LivePortrait",
+                "mode": "cloud_neural_motion",
+                "message": "Character identity motion synthesized via Cloud GPU."
+            }
+
+        # 2. Try local FaceFusion engine if detected
+        ff_py, ff_script = detect_facefusion(cfg)
+        if ff_py and ff_script:
             if progress_callback:
-                progress_callback(10, 100, "Synthesizing neural character motion via FaceFusion CUDA...")
+                progress_callback(10, 100, "Synthesizing neural character motion via FaceFusion...")
             try:
                 cmd = [
-                    str(ff_python), str(ff_script), "headless-run",
+                    ff_py, ff_script, "headless-run",
                     "-s", str(ipath),
                     "-t", str(resolved_driving),
                     "-o", str(out_path),
@@ -669,15 +859,14 @@ def render_character_motion(driving_video_path, source_image_path, audio_path=No
                         "duration": duration,
                         "status": "ready",
                         "model_ready": True,
-                        "model_required": "FaceFusion-CUDA",
+                        "model_required": "FaceFusion",
                         "mode": "facefusion_cuda_motion",
-                        "message": "Character identity motion synthesized via FaceFusion CUDA."
+                        "message": "Character identity motion synthesized via FaceFusion."
                     }
             except Exception:
                 pass
 
-        # Fallback: High-fidelity video motion synthesis:
-        # Transpose character face/identity onto the driving video's motion frames!
+        # 3. Built-in InSwapper 128 ONNX: Transpose character face onto driving video motion frames
         import cv2
         import numpy as np
 
@@ -706,120 +895,40 @@ def render_character_motion(driving_video_path, source_image_path, audio_path=No
             except Exception:
                 pass
 
-        cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-
-        sf = None
-        if not use_neural_for_video and src_img is not None:
-            faces_src = cascade.detectMultiScale(cv2.cvtColor(src_img, cv2.COLOR_BGR2GRAY), 1.2, 4, minSize=(40, 40))
-            if len(faces_src) > 0:
-                sf = max(faces_src, key=lambda f: f[2] * f[3])
+        if not use_neural_for_video or sf_neural is None:
+            cap.release()
+            raise RuntimeError(
+                "No neural motion engine is ready. To animate driving videos: "
+                "1) Download the free InSwapper 128 model (530 MB) in '⚡ AI Models' for in-app swaps, "
+                "2) Enable Cloud Inference in AI Settings for instant laptop swaps, or "
+                "3) Configure your local FaceFusion path in Settings."
+            )
 
         temp_raw_vid = MOTION_OUTPUT_DIR / f"temp_{out_name}"
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         writer = cv2.VideoWriter(str(temp_raw_vid), fourcc, orig_fps, (in_w, in_h))
 
         frame_count = 0
-        last_box = None
-
-        if use_neural_for_video and sf_neural is not None:
-            while frame_count < max_frames:
-                if cancel_check and cancel_check():
-                    cap.release()
-                    writer.release()
-                    temp_raw_vid.unlink(missing_ok=True)
-                    raise InterruptedError("Motion generation cancelled by user.")
-                ret, frame = cap.read()
-                if not ret:
-                    break
-                try:
-                    t_faces = app.get(frame)
-                    if len(t_faces) > 0:
-                        tf = max(t_faces, key=lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]))
-                        frame = swapper.get(frame, tf, sf_neural, paste_back=True)
-                except Exception:
-                    pass
-                writer.write(frame)
-                frame_count += 1
-                if progress_callback and (frame_count % 3 == 0 or frame_count == max_frames):
-                    progress_callback(frame_count, max_frames, "Neural identity face & expression synthesis...")
-        elif sf is not None:
-            sx, sy, sw, sh = sf
-            pad_w = int(sw * 0.22)
-            pad_top = int(sh * 0.40)
-            pad_bot = int(sh * 0.20)
-            x1 = max(0, sx - pad_w)
-            y1 = max(0, sy - pad_top)
-            x2 = min(src_img.shape[1], sx + sw + pad_w)
-            y2 = min(src_img.shape[0], sy + sh + pad_bot)
-            char_crop = src_img[y1:y2, x1:x2]
-
-            while frame_count < max_frames:
-                if cancel_check and cancel_check():
-                    cap.release()
-                    writer.release()
-                    temp_raw_vid.unlink(missing_ok=True)
-                    raise InterruptedError("Motion generation cancelled by user.")
-                ret, frame = cap.read()
-                if not ret:
-                    break
-
-                # Detect face periodically or track
-                if frame_count % 3 == 0 or last_box is None:
-                    small = cv2.resize(frame, (in_w // 2, in_h // 2))
-                    faces = cascade.detectMultiScale(cv2.cvtColor(small, cv2.COLOR_BGR2GRAY), 1.2, 4, minSize=(30, 30))
-                    if len(faces) > 0:
-                        tf = max(faces, key=lambda f: f[2] * f[3])
-                        last_box = (tf[0] * 2, tf[1] * 2, tf[2] * 2, tf[3] * 2)
-
-                if last_box is not None:
-                    tx, ty, tw, th = last_box
-                    t_pad_w = int(tw * 0.22)
-                    t_pad_top = int(th * 0.40)
-                    t_pad_bot = int(th * 0.20)
-                    tx1 = max(0, tx - t_pad_w)
-                    ty1 = max(0, ty - t_pad_top)
-                    tx2 = min(in_w, tx + tw + t_pad_w)
-                    ty2 = min(in_h, ty + th + t_pad_bot)
-                    target_w = tx2 - tx1
-                    target_h = ty2 - ty1
-
-                    if target_w > 10 and target_h > 10:
-                        resized_char = cv2.resize(char_crop, (target_w, target_h), interpolation=cv2.INTER_LANCZOS4)
-                        src_lab = cv2.cvtColor(resized_char, cv2.COLOR_BGR2LAB).astype(np.float32)
-                        tgt_lab = cv2.cvtColor(frame[ty1:ty2, tx1:tx2], cv2.COLOR_BGR2LAB).astype(np.float32)
-                        l_diff = (tgt_lab[:, :, 0].mean() - src_lab[:, :, 0].mean()) * 0.30
-                        src_lab[:, :, 0] = np.clip(src_lab[:, :, 0] + l_diff, 0, 255)
-                        src_matched = cv2.cvtColor(src_lab.astype(np.uint8), cv2.COLOR_LAB2BGR)
-
-                        mask = np.zeros((target_h, target_w), dtype=np.uint8)
-                        center = (target_w // 2, target_h // 2)
-                        axes = (int(target_w * 0.46), int(target_h * 0.48))
-                        cv2.ellipse(mask, center, axes, 0, 0, 360, 255, -1)
-
-                        try:
-                            frame = cv2.seamlessClone(src_matched, frame, mask, (tx1 + target_w // 2, ty1 + target_h // 2), cv2.NORMAL_CLONE)
-                        except Exception:
-                            alpha = (mask.astype(np.float32) / 255.0)[:, :, np.newaxis]
-                            frame[ty1:ty2, tx1:tx2] = (src_matched * alpha + frame[ty1:ty2, tx1:tx2] * (1 - alpha)).astype(np.uint8)
-
-                writer.write(frame)
-                frame_count += 1
-                if progress_callback and (frame_count % 3 == 0 or frame_count == max_frames):
-                    progress_callback(frame_count, max_frames, "Synthesizing motion frames...")
-        else:
-            while frame_count < max_frames:
-                if cancel_check and cancel_check():
-                    cap.release()
-                    writer.release()
-                    temp_raw_vid.unlink(missing_ok=True)
-                    raise InterruptedError("Motion generation cancelled by user.")
-                ret, frame = cap.read()
-                if not ret:
-                    break
-                writer.write(frame)
-                frame_count += 1
-                if progress_callback and (frame_count % 5 == 0 or frame_count == max_frames):
-                    progress_callback(frame_count, max_frames, "Processing motion frames...")
+        while frame_count < max_frames:
+            if cancel_check and cancel_check():
+                cap.release()
+                writer.release()
+                temp_raw_vid.unlink(missing_ok=True)
+                raise InterruptedError("Motion generation cancelled by user.")
+            ret, frame = cap.read()
+            if not ret:
+                break
+            try:
+                t_faces = app.get(frame)
+                if len(t_faces) > 0:
+                    tf = max(t_faces, key=lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]))
+                    frame = swapper.get(frame, tf, sf_neural, paste_back=True)
+            except Exception:
+                pass
+            writer.write(frame)
+            frame_count += 1
+            if progress_callback and (frame_count % 3 == 0 or frame_count == max_frames):
+                progress_callback(frame_count, max_frames, "Neural identity face & expression synthesis...")
 
         cap.release()
         writer.release()

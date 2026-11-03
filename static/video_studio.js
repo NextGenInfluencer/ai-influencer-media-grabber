@@ -198,6 +198,8 @@
     if (testComfy) testComfy.onclick = testComfyConnection;
     const saveCloud = document.getElementById('saveCloudSettingsBtn');
     if (saveCloud) saveCloud.onclick = saveCloudSettings;
+    const autoDetectBtn = document.getElementById('autoDetectEnginesBtn');
+    if (autoDetectBtn) autoDetectBtn.onclick = autoDetectEngines;
 
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
@@ -975,6 +977,25 @@
     // Render Cards in Grids
     renderModelGrid('imageModelsGrid', models.filter(m => m.category === 'image'), config.active_image_model);
     renderModelGrid('videoModelsGrid', models.filter(m => m.category === 'video'), config.active_video_model);
+    renderModelGrid('faceswapModelsGrid', models.filter(m => m.category === 'faceswap'), null);
+
+    // Update Local Engine & FaceFusion Status
+    const ffScript = document.getElementById('facefusionScriptInput');
+    const ffPy = document.getElementById('facefusionPythonInput');
+    const ffBadge = document.getElementById('facefusionStatusBadge');
+    const localEng = config.local_engine || {};
+    const engines = data.engines || {};
+    if (ffScript && !ffScript.value) ffScript.value = localEng.facefusion_script || (engines.facefusion?.script || '');
+    if (ffPy && !ffPy.value) ffPy.value = localEng.facefusion_python || (engines.facefusion?.python || '');
+    if (ffBadge) {
+      if (engines.facefusion?.detected) {
+        ffBadge.textContent = '🟢 Detected & Ready';
+        ffBadge.style.color = '#10b981';
+      } else {
+        ffBadge.textContent = '⚪ Not Installed (Using Built-In ONNX / Cloud)';
+        ffBadge.style.color = '#94a3b8';
+      }
+    }
 
     // Update Storyboard Toolbar Model Selectors
     const photoSel = document.getElementById('storyboardPhotoModelSelect');
@@ -1286,19 +1307,52 @@
     const comfy_url = document.getElementById('comfyUrlInput').value.trim();
     const api_provider = document.getElementById('cloudApiProvider').value;
     const api_key = document.getElementById('cloudApiKeyInput').value.trim();
+    const facefusion_script = document.getElementById('facefusionScriptInput')?.value.trim() || '';
+    const facefusion_python = document.getElementById('facefusionPythonInput')?.value.trim() || '';
 
     try {
       const res = await fetch('/api/video-studio/models/cloud-config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Media-Token': getToken() },
-        body: JSON.stringify({ enabled, comfy_url, api_provider, api_key })
+        body: JSON.stringify({ enabled, comfy_url, api_provider, api_key, facefusion_script, facefusion_python })
       });
       if (res.ok) {
-        notify('✓ Cloud backend configuration saved!', 'success');
+        notify('✓ Engine & cloud settings saved successfully!', 'success');
         loadModelHubState();
       }
     } catch (e) {
       notify('Failed to save settings: ' + e.message, 'error');
+    }
+  }
+
+  async function autoDetectEngines() {
+    try {
+      notify('Scanning system for local AI engines...', 'info');
+      const res = await fetch('/api/video-studio/detect-local-engines', {
+        headers: { 'X-Media-Token': getToken() }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const ff = data.facefusion || {};
+        const ffScript = document.getElementById('facefusionScriptInput');
+        const ffPy = document.getElementById('facefusionPythonInput');
+        const ffBadge = document.getElementById('facefusionStatusBadge');
+        if (ffScript && ff.script) ffScript.value = ff.script;
+        if (ffPy && ff.python) ffPy.value = ff.python;
+        if (ffBadge) {
+          if (ff.detected) {
+            ffBadge.textContent = '🟢 Detected & Ready';
+            ffBadge.style.color = '#10b981';
+            notify('✓ Local FaceFusion installation detected & linked!', 'success');
+          } else {
+            ffBadge.textContent = '⚪ Not Found (Using Built-In ONNX / Cloud)';
+            ffBadge.style.color = '#94a3b8';
+            notify('No local FaceFusion detected. Built-in InSwapper & Cloud will be used.', 'info');
+          }
+        }
+      }
+    } catch (e) {
+      notify('Auto-detection error: ' + e.message, 'error');
     }
   }
 

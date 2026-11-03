@@ -801,6 +801,53 @@ def render_scene_video(image_path, motion_prompt, duration_sec=5.0, audio_path=N
     out_name = f"video_scene_{scene_number}_{uuid.uuid4().hex[:8]}.mp4"
     out_path = STORYBOARD_VID_DIR / out_name
 
+    # Check if Cloud Diffusion is configured and active
+    if cloud_enabled:
+        cfg = model_mgr.load_config().get("cloud_backend", {})
+        api_key = cfg.get("api_key", "").strip()
+        provider = cfg.get("api_provider", "fal").lower()
+        if api_key and provider in ("fal", "fal.ai"):
+            try:
+                import os
+                import shutil
+                os.environ["FAL_KEY"] = api_key
+                import fal_client
+                img_url = fal_client.upload_file(str(ipath))
+                res = fal_client.subscribe(
+                    "fal-ai/kling-video/v1.5/pro/image-to-video",
+                    arguments={
+                        "image_url": img_url,
+                        "prompt": motion_prompt or "cinematic camera push-in, natural movement, atmospheric lighting",
+                        "duration": "5" if duration <= 6 else "10"
+                    }
+                )
+                vid_data = res.get("video") or res.get("video_url")
+                out_url = vid_data.get("url") if isinstance(vid_data, dict) else vid_data
+                if out_url:
+                    import urllib.request
+                    temp_cloud_vid = STORYBOARD_VID_DIR / f"cloud_{out_name}"
+                    with urllib.request.urlopen(out_url, timeout=120) as resp:
+                        temp_cloud_vid.write_bytes(resp.read())
+                    if audio_path and Path(audio_path).is_file():
+                        cmd_mux = [_ffmpeg(), '-nostdin', '-y', '-i', str(temp_cloud_vid), '-i', str(audio_path), '-map', '0:v:0', '-map', '1:a:0?', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-shortest', str(out_path)]
+                        subprocess.run(cmd_mux, capture_output=True)
+                        temp_cloud_vid.unlink(missing_ok=True)
+                    else:
+                        shutil.move(str(temp_cloud_vid), str(out_path))
+
+                    return {
+                        "filename": out_name,
+                        "path": str(out_path),
+                        "duration": duration,
+                        "status": "ready",
+                        "model_ready": True,
+                        "model_required": "Fal.ai-Kling/Wan",
+                        "mode": "cloud_video_diffusion",
+                        "message": f"Scene #{scene_number} synthesized via Fal.ai Cloud Video Diffusion"
+                    }
+            except Exception:
+                pass
+
     # Build cinematic zoompan & push motion filter with libx264
     fps = 30
     total_frames = int(duration * fps)

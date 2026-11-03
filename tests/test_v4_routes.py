@@ -277,12 +277,22 @@ class TestV4Routes(unittest.TestCase):
         cloud_res = self.client.post('/api/video-studio/models/cloud-config', json={
             'enabled': True,
             'comfy_url': 'http://127.0.0.1:8188',
-            'api_provider': 'huggingface',
-            'api_key': 'hf_test123'
+            'api_provider': 'fal',
+            'api_key': 'fal_test123',
+            'facefusion_python': 'C:\\fake\\python.exe',
+            'facefusion_script': 'C:\\fake\\facefusion.py'
         }, headers=self.headers)
         self.assertEqual(cloud_res.status_code, 200)
         self.assertTrue(cloud_res.json['config']['cloud_backend']['enabled'])
-        self.assertEqual(cloud_res.json['config']['cloud_backend']['api_key'], 'hf_test123')
+        self.assertEqual(cloud_res.json['config']['cloud_backend']['api_key'], 'fal_test123')
+        self.assertEqual(cloud_res.json['config']['local_engine']['facefusion_python'], 'C:\\fake\\python.exe')
+
+        # 3b. Test detect-local-engines endpoint
+        det_res = self.client.get('/api/video-studio/detect-local-engines', headers=self.headers)
+        self.assertEqual(det_res.status_code, 200)
+        self.assertIn('facefusion', det_res.json)
+        self.assertIn('comfyui', det_res.json)
+        self.assertIn('inswapper', det_res.json)
 
         # 4. Test download validation
         bad_dl = self.client.post('/api/video-studio/models/download', json={'model_id': 'nonexistent'}, headers=self.headers)

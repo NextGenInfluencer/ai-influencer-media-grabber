@@ -785,7 +785,7 @@ def shazam_file(audio_path):
         print("Shazam error:", e)
         return None
 
-APP_VERSION = "4.2.0"
+APP_VERSION = "4.2.1"
 SERVER_START_TIME = time.time()
 
 # --- Active Job & Auto-Shutdown Watchdog State ---
@@ -2456,7 +2456,7 @@ def render_scene_video_route():
         res = ai_video_engine.render_scene_video(image_path, motion_prompt, duration, audio_path, scene_num, model_id=model_id)
         res['url'] = f"/api/video-studio/videos/file/{res['filename']}"
         return jsonify(video=res, video_path=res['path'], video_url=res['url'])
-    except (FileNotFoundError, ValueError) as e:
+    except (FileNotFoundError, ValueError, RuntimeError) as e:
         return jsonify(error=str(e)), 400
     except Exception as e:
         return jsonify(error=str(e)), 500
@@ -2545,8 +2545,20 @@ def save_cloud_backend_config():
             cb['api_key'] = new_key
         elif not new_key:
             cb['api_key'] = ""
+
+    local_eng = cfg.setdefault('local_engine', {})
+    if 'facefusion_python' in req:
+        local_eng['facefusion_python'] = str(req['facefusion_python']).strip()
+    if 'facefusion_script' in req:
+        local_eng['facefusion_script'] = str(req['facefusion_script']).strip()
+
     ai_model_manager.save_config(cfg)
     return jsonify(status="ok", config=cfg)
+
+@app.route('/api/video-studio/detect-local-engines', methods=['GET'])
+def detect_video_studio_local_engines():
+    res = ai_model_manager.detect_local_engines()
+    return jsonify(res)
 
 @app.route('/api/video-studio/director/analyze', methods=['POST'])
 def video_studio_director_analyze_route():
@@ -2611,7 +2623,7 @@ def extract_frame_route():
         if 'url' not in res:
             res['url'] = f"/api/motion/references/file/{res['filename']}"
         return jsonify(res)
-    except (FileNotFoundError, ValueError) as e:
+    except (FileNotFoundError, ValueError, RuntimeError) as e:
         return jsonify(error=str(e)), 400
     except Exception as e:
         return jsonify(error=str(e)), 500
@@ -2649,7 +2661,7 @@ def swap_character_identity_route():
             res['extracted_frame'] = t_name
             res['extracted_frame_url'] = f"/api/motion/references/file/{t_name}"
         return jsonify(res)
-    except (FileNotFoundError, ValueError) as e:
+    except (FileNotFoundError, ValueError, RuntimeError) as e:
         return jsonify(error=str(e)), 400
     except Exception as e:
         return jsonify(error=str(e)), 500
@@ -2720,7 +2732,7 @@ def render_motion_route():
     try:
         res = motion_studio.render_character_motion(driving_video, source_image, audio_path, model_id=model_id)
         return jsonify(res)
-    except (FileNotFoundError, ValueError) as e:
+    except (FileNotFoundError, ValueError, RuntimeError) as e:
         return jsonify(error=str(e)), 400
     except Exception as e:
         return jsonify(error=str(e)), 500

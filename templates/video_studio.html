@@ -440,19 +440,48 @@
           <!-- Populated dynamically -->
         </div>
       </div>
+
+      <div class="modelSection" style="margin-top:20px;">
+        <div class="modelSectionHeader">
+          <span>🎭 3. Persona Identity &amp; Face Swap (Self-Contained ONNX)</span>
+        </div>
+        <div class="modelCardsGrid" id="faceswapModelsGrid">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
     </div>
 
     <!-- Tab 2: Cloud & External Backends -->
     <div id="tabPanelCloudBackend" class="modalTabPanel" style="display:none;">
       <div class="cloudCard">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-          <strong style="color:#fff;font-size:13px;">Enable Cloud / External Inference</strong>
+          <div>
+            <strong style="color:#fff;font-size:13px;">Enable Cloud AI Inference</strong>
+            <div style="font-size:11px;color:#94a3b8;margin-top:2px;">Zero VRAM required — generates 60fps video &amp; neural swaps in 3–5 seconds on any laptop.</div>
+          </div>
           <label class="switch">
             <input type="checkbox" id="enableCloudToggle">
             <span class="slider round"></span>
           </label>
         </div>
-        <p style="font-size:11px;color:#94a3b8;margin:0 0 16px;">Generate images and videos instantly without downloading multi-gigabyte models to your hard drive.</p>
+
+        <!-- Cloud API Provider -->
+        <div class="inputGroup" style="margin-top:14px;">
+          <label for="cloudApiProvider">Cloud API Provider:</label>
+          <select id="cloudApiProvider" class="vsSelect">
+            <option value="fal">Fal.ai (Recommended: 3s Kling &amp; LivePortrait)</option>
+            <option value="replicate">Replicate (Multi-modal diffusion &amp; face swap)</option>
+            <option value="huggingface">Hugging Face Inference API</option>
+            <option value="together">Together AI</option>
+          </select>
+        </div>
+
+        <div class="inputGroup" style="margin-top:10px;">
+          <label for="cloudApiKeyInput">API Token / Secret Key:</label>
+          <input type="password" id="cloudApiKeyInput" placeholder="fal_... or r8_... or hf_..." class="vsInput">
+        </div>
+
+        <div style="margin:20px 0;height:1px;background:rgba(255,255,255,0.08);"></div>
 
         <!-- ComfyUI / Local WebUI Server -->
         <div class="inputGroup">
@@ -464,24 +493,26 @@
           <small style="color:#64748b;font-size:10px;">Connect directly to an existing local ComfyUI instance running Wan 2.1 or FLUX workflows.</small>
         </div>
 
-        <!-- Cloud API Provider -->
-        <div class="inputGroup" style="margin-top:14px;">
-          <label for="cloudApiProvider">Cloud API Provider:</label>
-          <select id="cloudApiProvider" class="vsSelect">
-            <option value="huggingface">Hugging Face Inference API</option>
-            <option value="replicate">Replicate</option>
-            <option value="fal">Fal.ai</option>
-            <option value="together">Together AI</option>
-          </select>
-        </div>
+        <div style="margin:20px 0;height:1px;background:rgba(255,255,255,0.08);"></div>
 
-        <div class="inputGroup" style="margin-top:10px;">
-          <label for="cloudApiKeyInput">API Token / Secret Key:</label>
-          <input type="password" id="cloudApiKeyInput" placeholder="hf_... or r8_..." class="vsInput">
+        <!-- Local FaceFusion Configuration -->
+        <div class="inputGroup">
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <label style="color:#e2e8f0;font-weight:600;font-size:12px;">Local FaceFusion Engine (Optional / Bring Your Own):</label>
+            <span id="facefusionStatusBadge" class="vsBadge" style="font-size:10px;">Checking...</span>
+          </div>
+          <p style="font-size:11px;color:#94a3b8;margin:2px 0 8px;">If you have FaceFusion installed on your machine, connect it below. If not, the app uses built-in ONNX InSwapper or Cloud.</p>
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            <input type="text" id="facefusionScriptInput" placeholder="Path to facefusion.py (e.g. C:\facefusion\facefusion.py)" class="vsInput">
+            <input type="text" id="facefusionPythonInput" placeholder="Path to Python exe (e.g. C:\miniconda3\envs\facefusion\python.exe)" class="vsInput">
+            <div style="display:flex;gap:8px;margin-top:4px;">
+              <button type="button" id="autoDetectEnginesBtn" class="vsActionBtn" style="font-size:11px;">🔍 Auto-Detect Local Engines</button>
+            </div>
+          </div>
         </div>
 
         <div style="margin-top:16px;display:flex;justify-content:flex-end;">
-          <button type="button" id="saveCloudSettingsBtn" class="vsActionBtn primaryGlow">Save Cloud Settings</button>
+          <button type="button" id="saveCloudSettingsBtn" class="vsActionBtn primaryGlow">Save Settings</button>
         </div>
       </div>
     </div>

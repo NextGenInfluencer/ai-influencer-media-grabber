@@ -119,6 +119,64 @@ class TestMotionStudio(unittest.TestCase):
         cancelled = motion_studio.cancel_motion_job(job_id)
         self.assertTrue(cancelled)
 
+    def test_detect_facefusion_dynamic_and_missing(self):
+        # 1. Configured valid files
+        fake_py = motion_studio.DATA_DIR / 'python.exe'
+        fake_py.write_bytes(b'fake')
+        fake_script = motion_studio.DATA_DIR / 'facefusion.py'
+        fake_script.write_bytes(b'fake')
+
+        cfg = {
+            "local_engine": {
+                "facefusion_python": str(fake_py),
+                "facefusion_script": str(fake_script)
+            }
+        }
+        py_p, s_p = motion_studio.detect_facefusion(cfg)
+        self.assertEqual(py_p, str(fake_py))
+        self.assertEqual(s_p, str(fake_script))
+
+        # 2. Configured invalid paths -> returns None or falls back
+        empty_cfg = {
+            "local_engine": {
+                "facefusion_python": "Z:\\nonexistent\\python.exe",
+                "facefusion_script": "Z:\\nonexistent\\facefusion.py"
+            }
+        }
+        with patch.dict(os.environ, {}, clear=True):
+            # If not installed on the system, returns (None, None)
+            res_py, res_s = motion_studio.detect_facefusion(empty_cfg)
+            if not Path(r"F:\new faceswap\facefusion-master\facefusion.py").is_file():
+                self.assertIsNone(res_py)
+                self.assertIsNone(res_s)
+
+    @patch('fal_client.upload_file', return_value='https://fal.media/files/mock.jpg')
+    @patch('fal_client.subscribe')
+    def test_cloud_swap_identity_fal(self, mock_sub, mock_up):
+        mock_sub.return_value = {"image": {"url": "https://fal.media/files/out.jpg"}}
+        target_f = motion_studio.DATA_DIR / 'target.png'
+        target_f.write_bytes(b'target')
+        src_f = motion_studio.DATA_DIR / 'src.png'
+        src_f.write_bytes(b'src')
+        out_f = motion_studio.DATA_DIR / 'cloud_out.png'
+
+        cfg = {
+            "cloud_backend": {
+                "enabled": True,
+                "api_provider": "fal",
+                "api_key": "fal_dummy_key"
+            }
+        }
+        with patch('urllib.request.urlopen') as mock_url:
+            mock_resp = MagicMock()
+            mock_resp.read.return_value = b'swapped-bytes'
+            mock_url.return_value.__enter__.return_value = mock_resp
+
+            ok = motion_studio.cloud_swap_identity(target_f, src_f, out_f, cfg)
+            self.assertTrue(ok)
+            self.assertTrue(out_f.is_file())
+            self.assertEqual(out_f.read_bytes(), b'swapped-bytes')
+
 
 if __name__ == '__main__':
     unittest.main()
