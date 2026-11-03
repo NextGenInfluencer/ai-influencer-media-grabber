@@ -1,181 +1,147 @@
-"""Unit tests for Motion Studio & Reference Snapper."""
-import os
-from pathlib import Path
+"""AI Studio services: media resolution, audio handling, real engine calls and the Director math."""
+import tests._isolation  # Must precede application imports
 import tempfile
 import unittest
-from unittest.mock import patch, MagicMock
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
-from assets import motion_studio
+from assets import ai_video_engine, motion_studio
+from ai_core.errors import AIUnavailable
 
-class TestMotionStudio(unittest.TestCase):
+
+class MotionStudioTests(unittest.TestCase):
     def setUp(self):
-        self.temp_dir = tempfile.TemporaryDirectory()
-        self.orig_data_dir = motion_studio.DATA_DIR
-        self.orig_ref_dir = motion_studio.REFERENCES_DIR
-        self.orig_out_dir = motion_studio.MOTION_OUTPUT_DIR
-
-        motion_studio.DATA_DIR = Path(self.temp_dir.name)
-        motion_studio.REFERENCES_DIR = motion_studio.DATA_DIR / 'References'
-        motion_studio.MOTION_OUTPUT_DIR = motion_studio.DATA_DIR / 'Motion Outputs'
+        self.temp = tempfile.TemporaryDirectory(dir=tests._isolation.DATA_ROOT)
+        self.addCleanup(self.temp.cleanup)
+        root = Path(self.temp.name)
+        patches = {'DATA_DIR': root, 'REFERENCES_DIR': root / 'References', 'MOTION_OUTPUT_DIR': root / 'Motion Outputs',
+                   'DRIVING_REF_DIR': root / 'Driving References'}
+        for name, value in patches.items():
+            patcher = patch.object(motion_studio, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.root = root
         motion_studio._ensure_dirs()
-        motion_studio._ffmpeg()
 
-    def tearDown(self):
-        motion_studio.DATA_DIR = self.orig_data_dir
-        motion_studio.REFERENCES_DIR = self.orig_ref_dir
-        motion_studio.MOTION_OUTPUT_DIR = self.orig_out_dir
-        self.temp_dir.cleanup()
-
-    def test_ensure_dirs_and_list_references(self):
-        self.assertTrue(motion_studio.REFERENCES_DIR.is_dir())
-        self.assertTrue(motion_studio.MOTION_OUTPUT_DIR.is_dir())
-        refs = motion_studio.list_references()
-        self.assertEqual(refs, [])
-
-        # create a dummy png
-        p = motion_studio.REFERENCES_DIR / 'sample_ref.png'
-        p.write_bytes(b'\x89PNG\r\n\x1a\n')
-        refs = motion_studio.list_references()
-        self.assertEqual(len(refs), 1)
-        self.assertEqual(refs[0]['name'], 'sample_ref.png')
-
-    def test_extract_reference_frame_file_not_found(self):
-        with self.assertRaises(FileNotFoundError):
-            motion_studio.extract_reference_frame('non_existent_video.mp4', 1.5)
-
-    @patch('assets.motion_studio.subprocess.run')
-    def test_extract_reference_frame_success(self, mock_run):
-        mock_run.return_value = MagicMock(returncode=0)
-        # Create dummy video file
-        dummy_vid = motion_studio.DATA_DIR / 'dummy.mp4'
-        dummy_vid.write_bytes(b'fake mp4 bytes')
-
-        # Dummy destination file so is_file() passes
-        def fake_ffmpeg(*args, **kwargs):
-            out_file = args[0][-1]
-            Path(out_file).write_bytes(b'\x89PNG\r\n\x1a\nfake')
-            return MagicMock(returncode=0)
-
-        mock_run.side_effect = fake_ffmpeg
-        res = motion_studio.extract_reference_frame(str(dummy_vid), timestamp_sec=2.5)
-        self.assertIn('ref_dummy_', res['filename'])
-        self.assertEqual(res['timestamp'], 2.5)
-        self.assertTrue(Path(res['path']).is_file())
-
-    def test_resolve_image_path(self):
-        # Direct file
-        p = motion_studio.REFERENCES_DIR / 'test.png'
-        p.write_bytes(b'data')
-        self.assertEqual(motion_studio.resolve_image_path(str(p)), p)
-
-        # URL path to references
-        resolved = motion_studio.resolve_image_path('/api/motion/references/file/test.png')
-        self.assertEqual(resolved, p)
-
-        # Non existent
+    def test_resolve_media_source_stays_inside_library(self):
+        pid = 'a' * 32
+        song = self.root / 'Caption Projects' / pid / 'song.mp3'
+        song.parent.mkdir(parents=True)
+        song.write_bytes(b'x')
+        self.assertEqual(motion_studio.resolve_media_source(f'/api/captions/{pid}/media/song.mp3'), song.resolve())
+        self.assertIsNone(motion_studio.resolve_media_source('/api/captions/not-a-project/media/song.mp3'))
+        self.assertIsNone(motion_studio.resolve_media_source('../../app_local.py'))
+        self.assertIsNone(motion_studio.resolve_media_source(str(Path(__file__).resolve())))
+        ref = motion_studio.REFERENCES_DIR / 'face.png'
+        ref.write_bytes(b'png')
+        self.assertEqual(motion_studio.resolve_image_path('/api/motion/references/file/face.png'), ref.resolve())
+        self.assertEqual(motion_studio.resolve_image_path('face.png'), ref.resolve())
         self.assertIsNone(motion_studio.resolve_image_path('missing.png'))
 
-    def test_render_character_motion_missing_image(self):
+    def test_extract_reference_frame(self):
         with self.assertRaises(FileNotFoundError):
-            motion_studio.render_character_motion('', 'missing_image.png')
+            motion_studio.extract_reference_frame('non_existent_video.mp4', 1.5)
+        video = self.root / 'clip.mp4'
+        video.write_bytes(b'video')
 
-    @patch('assets.motion_studio.subprocess.run')
-    def test_render_character_motion_success(self, mock_run):
-        # Create dummy image
-        p = motion_studio.REFERENCES_DIR / 'face.png'
-        p.write_bytes(b'image data')
+        def fake_run(command, capture_output=True):
+            Path(command[-1]).write_bytes(b'png')
+            return SimpleNamespace(returncode=0, stderr=b'')
+        with patch('assets.motion_studio.subprocess.run', side_effect=fake_run) as run:
+            result = motion_studio.extract_reference_frame(str(video), timestamp_sec=2.5)
+        self.assertIn('2.500', run.call_args.args[0])
+        self.assertTrue(result['url'].startswith('/api/motion/references/file/ref_clip_250_'))
 
-        def fake_ffmpeg(*args, **kwargs):
-            out_file = args[0][-1]
-            Path(out_file).write_bytes(b'fake mp4 video')
-            return MagicMock(returncode=0)
+    def test_apply_audio_modes(self):
+        video = motion_studio.MOTION_OUTPUT_DIR / 'out.mp4'
+        audio = self.root / 'song.mp3'
+        audio.write_bytes(b'a')
+        self.assertEqual(motion_studio.apply_audio(video, mode='original'), video)
+        with self.assertRaises(ValueError):
+            motion_studio.apply_audio(video, mode='louder')
+        with self.assertRaises(FileNotFoundError):
+            motion_studio.apply_audio(video, mode='project', audio=self.root / 'missing.mp3')
+        for mode, expected in (('mute', '-an'), ('project', str(audio))):
+            video.write_bytes(b'v')
 
-        mock_run.side_effect = fake_ffmpeg
-        res = motion_studio.render_character_motion('', str(p))
-        self.assertIn('motion_face_', res['filename'])
-        self.assertTrue(Path(res['path']).is_file())
+            def fake_run(command, capture_output=True):
+                Path(command[-1]).write_bytes(b'v2')
+                return SimpleNamespace(returncode=0, stderr=b'')
+            with patch('assets.motion_studio.subprocess.run', side_effect=fake_run) as run:
+                final = motion_studio.apply_audio(video, mode=mode, audio=audio)
+            self.assertIn(expected, run.call_args.args[0])
+            self.assertTrue(final.is_file())
+            self.assertFalse(video.exists())
+            final.unlink()
 
-    @patch('assets.motion_studio.subprocess.run')
-    def test_motion_job_lifecycle(self, mock_run):
-        # Create dummy image
-        p = motion_studio.REFERENCES_DIR / 'face.png'
-        p.write_bytes(b'image data')
+    def test_lip_sync_and_live_portrait_use_pinned_workflows(self):
+        produced = self.root / 'AI Studio' / 'mg.mp4'
+        produced.parent.mkdir()
 
-        def fake_ffmpeg(*args, **kwargs):
-            out_file = args[0][-1]
-            Path(out_file).write_bytes(b'fake mp4 video')
-            return MagicMock(returncode=0)
+        def fake_workflow(name, inputs, progress=None):
+            produced.write_bytes(b'mp4')
+            return [produced]
+        with patch('assets.motion_studio.comfy.run_workflow', side_effect=fake_workflow) as run:
+            result = motion_studio.lip_sync('face.mp4', 'song.mp3')
+            self.assertEqual(run.call_args.args, ('latentsync', {'video': 'face.mp4', 'audio': 'song.mp3'}))
+            self.assertTrue(result['url'].startswith('/api/motion/outputs/file/motion_lipsync_'))
+            motion_studio.live_portrait('face.png', 'drive.mp4')
+            self.assertEqual(run.call_args.args[0], 'liveportrait')
 
-        mock_run.side_effect = fake_ffmpeg
+    def test_missing_engines_raise_instead_of_faking(self):
+        with self.assertRaises(AIUnavailable):
+            motion_studio.lip_sync('face.mp4', 'song.mp3')  # LatentSync is not installed in a fresh profile
+        with self.assertRaises(AIUnavailable) as caught:
+            motion_studio.cloud_motion('face.png', 'drive.mp4')
+        self.assertEqual(caught.exception.setup_hint, 'cloud')  # cloud is opt-in and off by default
+        self.assertEqual(list(motion_studio.MOTION_OUTPUT_DIR.iterdir()), [])
 
-        job_id = motion_studio.start_motion_job('', str(p))
-        self.assertTrue(job_id.startswith('motion_'))
+    def test_face_swap_video_passes_audio_choice(self):
+        def fake_swap(target, source, output, **kwargs):
+            Path(output).write_bytes(b'v')
+            return {'provider': 'CUDAExecutionProvider'}
+        with patch('assets.motion_studio.face.swap_video', side_effect=fake_swap), \
+                patch('assets.motion_studio.apply_audio', side_effect=lambda path, **kw: Path(path)) as apply_audio:
+            result = motion_studio.face_swap_video('in.mp4', 'face.png', audio_mode='mute')
+        self.assertEqual(apply_audio.call_args.kwargs, {'mode': 'mute', 'audio': None})
+        self.assertEqual(result['provider'], 'CUDAExecutionProvider')
 
-        job = motion_studio.get_motion_job(job_id)
-        self.assertIsNotNone(job)
-        self.assertEqual(job['id'], job_id)
 
-        # Test cancellation
-        cancelled = motion_studio.cancel_motion_job(job_id)
-        self.assertTrue(cancelled)
+class DirectorMathTests(unittest.TestCase):
+    def test_beat_onsets_find_energy_jumps(self):
+        peaks = ([0.05] * 50 + [0.9] + [0.3] * 49) * 4  # four hits in 4 s
+        onsets = ai_video_engine.beat_onsets(peaks, 4.0)
+        self.assertEqual(len(onsets), 4)
+        self.assertAlmostEqual(onsets[1] - onsets[0], 1.0, places=1)
+        self.assertEqual(ai_video_engine.beat_onsets([], 4.0), [])
 
-    def test_detect_facefusion_dynamic_and_missing(self):
-        # 1. Configured valid files
-        fake_py = motion_studio.DATA_DIR / 'python.exe'
-        fake_py.write_bytes(b'fake')
-        fake_script = motion_studio.DATA_DIR / 'facefusion.py'
-        fake_script.write_bytes(b'fake')
+    def test_normalize_scenes_snaps_and_drops_slivers(self):
+        raw = [{'start': 0.2, 'end': 3.9, 'image_prompt': 'a'}, {'start': 3.9, 'end': 4.1, 'image_prompt': 'b'},
+               {'start': 4.0, 'end': 99, 'image_prompt': 'c', 'use_character': False}, {'start': 5, 'end': 6, 'image_prompt': ''}]
+        scenes = ai_video_engine.normalize_scenes(raw, 10.0, anchors=[0.0, 4.0])
+        self.assertEqual([(s['start'], s['end']) for s in scenes], [(0.0, 4.0), (4.0, 10.0)])
+        self.assertEqual([s['id'] for s in scenes], ['scene_001', 'scene_002'])
+        self.assertFalse(scenes[1]['use_character'])
 
-        cfg = {
-            "local_engine": {
-                "facefusion_python": str(fake_py),
-                "facefusion_script": str(fake_script)
-            }
-        }
-        py_p, s_p = motion_studio.detect_facefusion(cfg)
-        self.assertEqual(py_p, str(fake_py))
-        self.assertEqual(s_p, str(fake_script))
+    def test_frames_follow_model_limits(self):
+        self.assertEqual(ai_video_engine.frames_for(5, 'fast'), 121)
+        self.assertEqual(ai_video_engine.frames_for(5, 'quality'), 81)
+        self.assertEqual(ai_video_engine.frames_for(2, 'fast') % 4, 1)
 
-        # 2. Configured invalid paths -> returns None or falls back
-        empty_cfg = {
-            "local_engine": {
-                "facefusion_python": "Z:\\nonexistent\\python.exe",
-                "facefusion_script": "Z:\\nonexistent\\facefusion.py"
-            }
-        }
-        with patch.dict(os.environ, {}, clear=True):
-            # If not installed on the system, returns (None, None)
-            res_py, res_s = motion_studio.detect_facefusion(empty_cfg)
-            if not Path(r"F:\new faceswap\facefusion-master\facefusion.py").is_file():
-                self.assertIsNone(res_py)
-                self.assertIsNone(res_s)
+    def test_director_requires_real_model(self):
+        with patch('assets.ai_video_engine.llm.chat', side_effect=AIUnavailable('No helper.', setup_hint='qwen3:8b')):
+            with self.assertRaises(AIUnavailable):
+                ai_video_engine.direct_storyboard(concept='neon', duration=10)
+        with self.assertRaises(ValueError):
+            ai_video_engine.direct_storyboard(duration=10)
 
-    @patch('fal_client.upload_file', return_value='https://fal.media/files/mock.jpg')
-    @patch('fal_client.subscribe')
-    def test_cloud_swap_identity_fal(self, mock_sub, mock_up):
-        mock_sub.return_value = {"image": {"url": "https://fal.media/files/out.jpg"}}
-        target_f = motion_studio.DATA_DIR / 'target.png'
-        target_f.write_bytes(b'target')
-        src_f = motion_studio.DATA_DIR / 'src.png'
-        src_f.write_bytes(b'src')
-        out_f = motion_studio.DATA_DIR / 'cloud_out.png'
-
-        cfg = {
-            "cloud_backend": {
-                "enabled": True,
-                "api_provider": "fal",
-                "api_key": "fal_dummy_key"
-            }
-        }
-        with patch('urllib.request.urlopen') as mock_url:
-            mock_resp = MagicMock()
-            mock_resp.read.return_value = b'swapped-bytes'
-            mock_url.return_value.__enter__.return_value = mock_resp
-
-            ok = motion_studio.cloud_swap_identity(target_f, src_f, out_f, cfg)
-            self.assertTrue(ok)
-            self.assertTrue(out_f.is_file())
-            self.assertEqual(out_f.read_bytes(), b'swapped-bytes')
+    def test_no_procedural_generators_remain(self):
+        for name in ('infer_lyric_atmosphere', 'generate_storyboard', 'render_keyframe_image', 'render_scene_video',
+                     'analyze_song_and_suggest_styles', 'create_video_studio_project'):
+            self.assertFalse(hasattr(ai_video_engine, name), name)
+        for name in ('detect_facefusion', 'cloud_swap_identity', 'get_neural_swapper', 'render_character_motion'):
+            self.assertFalse(hasattr(motion_studio, name), name)
 
 
 if __name__ == '__main__':

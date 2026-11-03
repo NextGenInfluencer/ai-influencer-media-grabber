@@ -1,188 +1,200 @@
-"""Unit and regression tests for AI Copilot Engine."""
+"""Copilot agent: real tool loop, proposals, dedupe, SSE and no fabricated output."""
+import tests._isolation  # Must precede application imports
 import json
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
+import app_local
 import copilot
+from ai_core.errors import AIUnavailable
+
+PROJECT = {'id': 'p1', 'name': 'Song', 'duration': 12, 'style': {'translation_language': 'en'}, 'cues': [
+    {'id': 'c1', 'start': 0.0, 'end': 0.4, 'text': 'Καλή μέρα', 'translations': {}},
+    {'id': 'c2', 'start': 0.3, 'end': 3.0, 'text': 'Hello world',
+     'translations': {'en': {'text': 'Hello world', 'status': 'approved'}}},
+]}
+CONTEXT = {'page': 'captions', 'project': PROJECT}
+HELPER = {'available': True, 'local': True, 'model': 'qwen3:14b', 'backend': 'ollama', 'eta_seconds': 20, 'vram_gb': 9}
+SERVICES = {'gallery': lambda: [{'name': 'neon_dance.mp4', 'folder': 'TikTok', 'type': 'video', 'full_path': 'x'},
+                                {'name': 'beach.jpg', 'folder': 'Instagram', 'type': 'image', 'full_path': 'y'}],
+            'allowed_path': lambda path: False}
+FABRICATIONS = ('translation:', 'locked in', '🌙', 'Copilot active', '#fyp', 'aspect ratio 9:16')
 
 
-class CopilotEngineTests(unittest.TestCase):
-    def test_apply_style_preset_tool(self):
-        res = copilot.execute_tool('apply_style_preset', {'preset': 'cyberpunk_neon'})
-        self.assertEqual(res['action'], 'apply_style_preset')
-        self.assertEqual(res['preset'], 'cyberpunk_neon')
-        self.assertIn('Cyberpunk', res['message'])
+def answer(content='', calls=()):
+    return {'content': content, 'tool_calls': list(calls), 'model': 'qwen3:14b', 'backend': 'ollama'}
 
-    def test_shift_caption_timing_tool(self):
-        res = copilot.execute_tool('shift_caption_timing', {'seconds': 0.35})
-        self.assertEqual(res['action'], 'shift_caption_timing')
-        self.assertEqual(res['seconds'], 0.35)
-        self.assertIn('forward', res['message'])
 
-    def test_generate_social_post_tool(self):
-        proj = {'title': 'Late Night Vibe', 'cues': [{'text': 'Line one'}, {'text': 'Line two'}]}
-        res = copilot.execute_tool('generate_social_post', {'platform': 'tiktok'}, proj)
-        self.assertEqual(res['action'], 'social_metadata')
-        self.assertTrue(len(res['title_hooks']) >= 1)
-        self.assertIn('#', res['caption'])
+class CopilotAgentTests(unittest.TestCase):
+    def setUp(self):
+        patcher = patch.object(copilot, '_requirement_met', return_value=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
-    def test_generate_flow_prompt_tool_injects_character(self):
-        res = copilot.execute_tool('generate_flow_prompt', {
-            'character_tag': '@Airi',
-            'scene_mood': 'neon rainy rooftop overlooking Tokyo skyline'
-        })
-        self.assertEqual(res['action'], 'flow_prompt')
-        self.assertIn('Airi', res['prompt'])
-        self.assertIn('Tokyo skyline', res['prompt'])
-        self.assertIn('aspect ratio', res['prompt'])
+    def run_agent(self, responses, context=CONTEXT, events=None):
+        with patch.object(copilot.llm, 'chat', side_effect=list(responses)) as chat:
+            result = copilot.run_agent([{'role': 'user', 'content': 'help'}], dict(context), SERVICES,
+                                       emit=(lambda e, d: events.append((e, d))) if events is not None else None)
+        return result, chat
 
-    def test_models_list_includes_cpu_and_tiers(self):
-        with patch.object(copilot.lyric_translation, 'models', return_value=['qwen3-4b-local', 'qwen2.5:14b']):
-            models = copilot.available_models()
-            self.assertEqual(len(models), 2)
-            # GPU model prioritized before CPU
-            self.assertEqual(models[0]['tier'], 'gpu_high')
-            self.assertEqual(models[1]['tier'], 'cpu')
+    def test_final_answer_without_tools(self):
+        result, chat = self.run_agent([answer('Your captions look fine.')])
+        self.assertEqual(result['reply'], 'Your captions look fine.')
+        self.assertEqual(result['model'], 'qwen3:14b')
+        self.assertEqual(chat.call_args.args[0], 'helper')
+        self.assertTrue(chat.call_args.kwargs['tools'])
 
-    def test_fallback_intent_no_misfire(self):
-        # 'move to line 3' must not trigger timing shift
-        actions = copilot.detect_fallback_intent('can we move to line 3 please?')
-        self.assertEqual(actions, [])
+    def test_tool_loop_feeds_results_back(self):
+        result, chat = self.run_agent([answer('', [{'name': 'audit_subtitles', 'arguments': {'focus': 'all'}}]),
+                                       answer('Line 1 is too short and has no translation.')])
+        self.assertEqual(chat.call_count, 2)
+        second_messages = chat.call_args_list[1].args[1]
+        tool_messages = [m for m in second_messages if m['role'] == 'tool']
+        self.assertEqual(tool_messages[0]['tool_name'], 'audit_subtitles')
+        audit = json.loads(tool_messages[0]['content'])
+        types = {(i['line'], i['type']) for i in audit['issues']}
+        self.assertIn((1, 'missing_translation'), types)
+        self.assertIn((1, 'too_short'), types)
+        self.assertIn((1, 'overlap'), types)
+        self.assertEqual(result['tool_results'][0]['name'], 'audit_subtitles')
 
-        # 'vlog' in general chat must not trigger style preset
-        actions = copilot.detect_fallback_intent('should I start a travel vlog?')
-        self.assertEqual(actions, [])
+    def test_loop_stops_after_max_steps(self):
+        call = answer('', [{'name': 'list_capabilities', 'arguments': {}}])
+        with patch.object(copilot, 'capabilities', return_value={'tools': []}):
+            result, chat = self.run_agent([call] * copilot.MAX_STEPS)
+        self.assertEqual(chat.call_count, copilot.MAX_STEPS)
+        self.assertIn('stopped after', result['reply'])
 
-        # explicit shift with seconds unit works
-        actions = copilot.detect_fallback_intent('please shift all captions by 0.5s')
-        self.assertEqual(len(actions), 1)
-        self.assertEqual(actions[0]['action'], 'shift_caption_timing')
-        self.assertEqual(actions[0]['seconds'], 0.5)
+    def test_costly_tools_become_proposals_not_actions(self):
+        calls = [{'name': 'batch_fix_subtitles', 'arguments': {'updates': [{'line': 1, 'translation': 'Good morning'}]}},
+                 {'name': 'batch_fix_subtitles', 'arguments': {'updates': [{'line': 2, 'text': 'Hello, world'}]}},
+                 {'name': 'shift_timing', 'arguments': {'seconds': 0.2}},
+                 {'name': 'shift_timing', 'arguments': {'seconds': 0.25}}]
+        result, _ = self.run_agent([answer('', calls), answer('Review the proposals below.')])
+        proposals = {p['action']: p for p in result['proposals']}
+        self.assertEqual(set(proposals), {'batch_fix_subtitles', 'shift_timing'})  # deduped by tool name
+        self.assertEqual(proposals['shift_timing']['args'], {'seconds': 0.25})
+        fixes = proposals['batch_fix_subtitles']
+        self.assertEqual([u['line'] for u in fixes['args']['updates']], [1, 2])  # merged, not dropped
+        self.assertEqual(fixes['diff'][0], {'line': 1, 'field': 'translation (en)', 'before': '', 'after': 'Good morning'})
+        self.assertEqual(fixes['badge'], 'Local')
 
-        # explicit preset mention works
-        actions = copilot.detect_fallback_intent('apply the cyberpunk neon preset')
-        self.assertEqual(len(actions), 1)
-        self.assertEqual(actions[0]['action'], 'apply_style_preset')
+    def test_invalid_proposal_is_reported_to_the_model(self):
+        result, chat = self.run_agent([answer('', [{'name': 'batch_fix_subtitles', 'arguments': {'updates': [{'line': 9, 'text': 'x'}]}}]),
+                                       answer('Line 9 does not exist.')])
+        self.assertEqual(result['proposals'], [])
+        feedback = [m for m in chat.call_args_list[1].args[1] if m['role'] == 'tool'][0]
+        self.assertIn('does not exist', feedback['content'])
 
-    def test_beast_pop_preset_and_pop_in_validation(self):
-        import captions
-        # Beast pop fallback intent
-        actions = copilot.detect_fallback_intent('apply the beast pop style')
-        self.assertEqual(len(actions), 1)
-        self.assertEqual(actions[0]['preset'], 'mrbeast_bold')
+    def test_navigate_refused_with_unsaved_edits(self):
+        with self.assertRaisesRegex(ValueError, 'unsaved'):
+            copilot.build_proposal('navigate', {'target': 'downloader'}, {**CONTEXT, 'unsaved': True})
+        self.assertEqual(copilot.build_proposal('navigate', {'target': 'downloader'}, CONTEXT)['args'], {'target': 'downloader'})
 
-        # Test both 'pop' and 'pop_in' style validation
-        clean_pop = captions.validate_edit({
-            'cues': [{'start': 0.0, 'end': 1.0, 'text': 'Hello world'}],
-            'style': {'animation': 'pop', 'color': '#ffe600'}
-        }, 5.0)
-        self.assertEqual(clean_pop['style']['animation'], 'pop')
+    def test_gallery_search_and_page_tools(self):
+        self.assertEqual(copilot.search_gallery(SERVICES, 'neon', 'video')['matches'][0]['name'], 'neon_dance.mp4')
+        names = {s['name'] for s in copilot.tool_states('downloader')}
+        self.assertIn('download_url', names)
+        self.assertNotIn('batch_fix_subtitles', names)
 
-        clean_pop_in = captions.validate_edit({
-            'cues': [{'start': 0.0, 'end': 1.0, 'text': 'Hello world'}],
-            'style': {'animation': 'pop_in', 'color': '#ffe600'}
-        }, 5.0)
-        self.assertEqual(clean_pop_in['style']['animation'], 'pop')
+    def test_unavailable_tools_are_not_offered(self):
+        with patch.object(copilot, '_requirement_met', side_effect=lambda req: req != 'wan22_ti2v_5b'):
+            states = copilot.tool_states('studio')
+            specs = {s['function']['name'] for s in copilot.tool_specs(states)}
+            prompt = copilot.system_prompt({'page': 'studio'}, states)
+        self.assertNotIn('animate_keyframe', specs)
+        self.assertIn('Not installed on this PC', prompt)
+        self.assertIn('animate_keyframe', prompt)
 
-    def test_fix_translation_explicit(self):
-        proj = {
-            'cues': [
-                {'id': 'c1', 'text': 'Intro verse', 'translations': {'en': {'text': 'Old trans'}}},
-                {'id': 'c2', 'text': 'Chorus hook', 'translations': {'en': {'text': 'Previous chorus'}}}
-            ],
-            'style': {'translation_language': 'en'}
-        }
-        actions = copilot.detect_fallback_intent('change translation of line 2 to "Late night in Tokyo"', proj)
-        self.assertEqual(len(actions), 1)
-        self.assertEqual(actions[0]['action'], 'fix_translation')
-        self.assertEqual(actions[0]['line'], 2)
-        self.assertEqual(actions[0]['new_translation'], 'Late night in Tokyo')
-        self.assertEqual(actions[0]['original_text'], 'Chorus hook')
-        self.assertEqual(actions[0]['old_translation'], 'Previous chorus')
+    def test_all_cues_reach_the_model_or_a_chunk_tool(self):
+        cues = [{'id': f'c{i}', 'start': i, 'end': i + 1, 'text': f'line number {i} ' + 'x' * 120} for i in range(400)]
+        context = {'page': 'captions', 'project': {'name': 'Long', 'cues': cues, 'style': {}}}
+        text = copilot.context_text(context)
+        self.assertIn('#1 ', text)
+        self.assertIn('call read_caption_lines', text)
+        chunk = copilot.read_caption_lines(context, 390, 400)
+        self.assertEqual(len(chunk['lines']), 11)
+        self.assertIn('#400 ', chunk['lines'][-1])
 
-    def test_fix_translation_rephrase_options(self):
-        proj = {
-            'cues': [{'id': 'c1', 'text': 'Acoustic guitar melody', 'translations': {}}],
-            'style': {'translation_language': 'en'}
-        }
-        actions = copilot.detect_fallback_intent('make line 1 translation poetic', proj)
-        self.assertTrue(len(actions) >= 1)
-        opt_action = next((a for a in actions if a['action'] == 'translation_options'), None)
-        self.assertIsNotNone(opt_action)
-        self.assertEqual(opt_action['line'], 1)
-        self.assertTrue(len(opt_action['options']) >= 2)
+    def test_unavailable_raises_without_fabricated_text(self):
+        with patch.object(copilot.llm, 'chat', side_effect=AIUnavailable('No local model for the helper role is installed on this PC.',
+                                                                         setup_hint='qwen3:14b')):
+            with self.assertRaises(AIUnavailable) as caught:
+                copilot.run_agent([{'role': 'user', 'content': 'translate line 1 to greek'}], dict(CONTEXT), SERVICES)
+        self.assertEqual(caught.exception.setup_hint, 'qwen3:14b')
 
-    def test_fix_translation_target_language(self):
-        proj = {
-            'cues': [{'id': 'c1', 'text': 'Dancing in the dark', 'translations': {}}],
-            'style': {'translation_language': 'en'}
-        }
-        actions = copilot.detect_fallback_intent('translate line 1 to greek', proj)
-        self.assertEqual(len(actions), 1)
-        self.assertEqual(actions[0]['action'], 'fix_translation')
-        self.assertEqual(actions[0]['language'], 'el')
+    def test_removed_fabrication_paths(self):
+        for name in ('detect_fallback_intent', 'answer_from_knowledge_base', 'APP_KNOWLEDGE'):
+            self.assertFalse(hasattr(copilot, name))
+        self.assertNotIn('generate_social_post', copilot.TOOLS)
+        self.assertNotIn('generate_flow_prompt', copilot.TOOLS)
 
-    def test_edit_subtitle_original_text(self):
-        proj = {
-            'cues': [{'id': 'c1', 'text': 'Teh night is young', 'translations': {}}],
-            'style': {'translation_language': 'en'}
-        }
-        actions = copilot.detect_fallback_intent('fix typo in line 1: change text to "The night is young"', proj)
-        self.assertEqual(len(actions), 1)
-        self.assertEqual(actions[0]['action'], 'fix_subtitle_text')
-        self.assertEqual(actions[0]['line'], 1)
-        self.assertEqual(actions[0]['new_text'], 'The night is young')
 
-    def test_audit_subtitles(self):
-        proj = {
-            'cues': [
-                {'id': 'c1', 'start': 0.0, 'end': 0.5, 'text': 'Line 1', 'translations': {'en': {'text': 'This is a ridiculously long line that is impossible to read in half a second'}}},
-                {'id': 'c2', 'start': 0.6, 'end': 2.0, 'text': 'Line 2', 'translations': {}}
-            ],
-            'style': {'translation_language': 'en'}
-        }
-        actions = copilot.detect_fallback_intent('audit my subtitles for issues', proj)
-        self.assertEqual(len(actions), 1)
-        self.assertEqual(actions[0]['action'], 'subtitle_audit')
-        self.assertEqual(actions[0]['total_cues'], 2)
-        # Should detect reading speed on line 1 and missing translation on line 2
-        issue_types = [i['type'] for i in actions[0]['issues']]
-        self.assertIn('reading_speed', issue_types)
-        self.assertIn('missing_translation', issue_types)
+class CopilotRouteTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.client = app_local.app.test_client()
+        cls.client.get('/')
+        with cls.client.session_transaction() as session:
+            cls.headers = {'X-Media-Token': session['api_token']}
 
-    def test_navigation_and_folder_intents(self):
-        # AI Studio assets in gallery
-        act1 = copilot.detect_fallback_intent('show ai studio pictures and videos')
-        self.assertEqual(act1[0]['action'], 'navigate_app')
-        self.assertEqual(act1[0]['target'], 'gallery_studio')
+    def post(self, path, payload):
+        return self.client.post(path, json=payload, headers=self.headers)
 
-        # Video Studio
-        act2 = copilot.detect_fallback_intent('open video studio')
-        self.assertEqual(act2[0]['action'], 'navigate_app')
-        self.assertEqual(act2[0]['target'], 'video_studio')
+    def test_offline_returns_424_with_setup_hint_and_no_reply(self):
+        error = AIUnavailable('No local model for the helper role is installed on this PC.', setup_hint='qwen3:8b')
+        with patch.object(copilot.llm, 'chat', side_effect=error), patch.object(copilot, '_requirement_met', return_value=False):
+            res = self.post('/api/copilot/chat', {'messages': [{'role': 'user', 'content': 'Translate line 1 to Greek'}],
+                                                  'context': CONTEXT})
+        self.assertEqual(res.status_code, 424)
+        self.assertEqual(res.json, {'error': error.message, 'setup_hint': 'qwen3:8b'})
+        body = res.get_data(as_text=True)
+        for marker in FABRICATIONS:
+            self.assertNotIn(marker, body)
 
-        # Caption Studio
-        act3 = copilot.detect_fallback_intent('go to captions')
-        self.assertEqual(act3[0]['action'], 'navigate_app')
-        self.assertEqual(act3[0]['target'], 'captions')
+    def test_chat_requires_token_and_message(self):
+        self.assertEqual(self.client.post('/api/copilot/chat', json={}).status_code, 403)
+        self.assertEqual(self.post('/api/copilot/chat', {'messages': []}).status_code, 400)
 
-        # Open File Explorer
-        act4 = copilot.detect_fallback_intent('open downloads folder in explorer')
-        self.assertEqual(act4[0]['action'], 'open_downloads_folder')
+    def test_non_stream_chat_returns_proposals(self):
+        responses = [answer('', [{'name': 'apply_preset', 'arguments': {'preset': 'cyberpunk_neon'}}]),
+                     answer('I prepared the Cyberpunk preset. Press Apply to use it.')]
+        with patch.object(copilot.llm, 'chat', side_effect=responses), patch.object(copilot, '_requirement_met', return_value=True):
+            res = self.post('/api/copilot/chat', {'messages': [{'role': 'user', 'content': 'cyberpunk style'}], 'project': PROJECT})
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json['proposals'][0]['action'], 'apply_preset')
+        self.assertEqual(res.json['model'], 'qwen3:14b')
 
-        # Change font
-        act5 = copilot.detect_fallback_intent('change font to Montserrat')
-        self.assertEqual(act5[0]['action'], 'change_font')
-        self.assertEqual(act5[0]['font'], 'Montserrat')
+    def test_stream_event_format(self):
+        def fake_chat(role, messages, **kwargs):
+            if not any(m['role'] == 'tool' for m in messages):
+                return answer('', [{'name': 'shift_timing', 'arguments': {'seconds': -0.2}}])
+            kwargs['on_token']('Done')
+            return answer('Done')
+        with patch.object(copilot.llm, 'chat', side_effect=fake_chat), patch.object(copilot, '_requirement_met', return_value=True):
+            res = self.post('/api/copilot/chat/stream', {'messages': [{'role': 'user', 'content': 'earlier'}], 'context': CONTEXT})
+            body = res.get_data(as_text=True)
+        self.assertEqual(res.mimetype, 'text/event-stream')
+        events = [block.split('\n')[0][len('event: '):] for block in body.strip().split('\n\n')]
+        self.assertEqual(events, ['tool_call', 'proposal', 'token', 'done'])
+        done = json.loads(body.strip().split('\n\n')[-1].split('\ndata: ', 1)[1])
+        self.assertEqual(done['proposals'][0]['action'], 'shift_timing')
 
-    def test_knowledge_base_qa_and_offline_chat(self):
-        res = copilot.chat([{'role': 'user', 'content': 'what can you do on this app?'}], model='offline')
-        self.assertIn('Copilot', res['reply'])
-        self.assertTrue(any(a['action'] == 'show_capabilities' for a in res['actions']))
+    def test_stream_error_event_when_offline(self):
+        with patch.object(copilot.llm, 'chat', side_effect=AIUnavailable('Ollama stopped responding.', setup_hint='engines')), \
+                patch.object(copilot, '_requirement_met', return_value=False):
+            body = self.post('/api/copilot/chat/stream', {'messages': [{'role': 'user', 'content': 'hi'}]}).get_data(as_text=True)
+        self.assertTrue(body.startswith('event: error\n'))
+        self.assertIn('"setup_hint": "engines"', body)
 
-        res_ig = copilot.chat([{'role': 'user', 'content': 'how do I download an Instagram profile?'}], model='offline')
-        self.assertIn('Instagram', res_ig['reply'])
-        self.assertTrue(any(a['action'] == 'navigate_app' for a in res_ig['actions']))
+    def test_capabilities_reflect_installed_models(self):
+        with patch.object(copilot.llm, 'cost', return_value={'available': False, 'error': 'none', 'setup_hint': 'qwen3:8b'}), \
+                patch.object(copilot, '_requirement_met', side_effect=lambda req: req is None):
+            data = self.client.get('/api/copilot/capabilities?page=studio').json
+        tools = {t['name']: t['available'] for t in data['tools']}
+        self.assertFalse(data['helper']['available'])
+        self.assertFalse(tools['generate_keyframe'])
+        self.assertTrue(tools['navigate'])
 
 
 if __name__ == '__main__':
