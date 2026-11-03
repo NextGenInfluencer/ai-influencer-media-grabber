@@ -280,7 +280,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         else if (body !== undefined) { options.headers['Content-Type']='application/json'; options.body=JSON.stringify(body); }
         const response = await fetch(url, options);
         const data = await response.json().catch(() => ({error:'The app could not complete this request. Restart it if the connection was lost.'}));
-        if (!response.ok) throw new Error(data.error || 'Request failed');
+        if (!response.ok) throw Object.assign(new Error(data.error || 'Request failed'), {status: response.status, setupHint: data.setup_hint});
         return data;
     }
     const act = fn => async event => { try { await fn(event); } catch (e) { say(e.message, true); } };
@@ -1785,6 +1785,19 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
     if ($('seqAiBackdropBtn')) $('seqAiBackdropBtn').onclick = () => switchDock('ai-backdrop');
     if ($('compAiBackdropBtn')) $('compAiBackdropBtn').onclick = () => switchDock('ai-backdrop');
 
+    function showBackdropUnavailable(statusEl, message, hint) {
+        const setup = document.createElement('button');
+        setup.type = 'button';
+        setup.className = 'primary';
+        setup.textContent = 'Set up AI';
+        setup.onclick = () => (typeof window.openAISetup === 'function' ? window.openAISetup(hint) : (window.location.href = '/#ai-setup'));
+        const title = document.createElement('strong');
+        title.textContent = 'Not available on this PC';
+        const text = document.createElement('span');
+        text.textContent = ` ${message} `;
+        statusEl.hidden = false;
+        statusEl.replaceChildren(title, text, setup);
+    }
     if ($('generateAiBackdropBtn')) {
         $('generateAiBackdropBtn').onclick = act(async () => {
             const prompt = ($('aiBackdropPrompt')?.value || '').trim();
@@ -1798,19 +1811,21 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
 
             const origText = btn.innerHTML;
             btn.disabled = true;
-            btn.innerHTML = `<span>⏳ Synthesizing AI ${isMotion ? 'Animated Loop' : 'Backdrop'}…</span>`;
+            btn.innerHTML = `<span>⏳ Generating with FLUX on this PC…</span>`;
             if (statusEl) {
                 statusEl.hidden = false;
-                statusEl.textContent = `Generating 1080x1920 ${isMotion ? 'motion video loop' : 'atmospheric image'}…`;
+                statusEl.textContent = isMotion ? 'Generating the image, then adding a camera push-in (no AI motion)…' : 'Generating the image locally…';
             }
 
             try {
-                const res = await api('/api/captions/generate-backdrop', 'POST', {
-                    prompt,
-                    style,
-                    motion: isMotion,
-                    duration: 10.0
-                });
+                let res;
+                try {
+                    res = await api('/api/captions/generate-backdrop', 'POST', {prompt, style, motion: isMotion, duration: 10.0, use_character: false});
+                } catch (error) {
+                    if (error.status !== 424 || !statusEl) throw error;
+                    showBackdropUnavailable(statusEl, error.message, error.setupHint);
+                    return;
+                }
 
                 latestGeneratedBackdrop = res;
                 await refreshLibraries();
@@ -1838,7 +1853,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
                 if (statusEl) {
                     statusEl.textContent = `✓ Generated ${res.name} • Ready to apply or add to sequence!`;
                 }
-                say(`✓ AI ${isMotion ? 'Motion Loop' : 'Backdrop'} generated successfully!`);
+                say(isMotion ? '✓ Backdrop generated (camera push-in added, no AI motion).' : '✓ Backdrop generated with FLUX.');
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = origText;
@@ -2556,6 +2571,52 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
 
     if(typeof window !== 'undefined'){
         window.currentProjectData = () => project;
+        window.copilotHasUnsavedChanges = () => Boolean(dirty);
+        window.copilotContext = () => ({page: 'captions', project: project ? {
+            id: project.id, name: project.name, duration: project.duration,
+            style: {translation_language: project.style?.translation_language || 'en', font: project.style?.font},
+            cues: project.cues.map(c => ({id: c.id, start: c.start, end: c.end, text: c.text, translations: c.translations || {}})),
+        } : null});
+        const setSelect = (id, value) => {
+            const option = [...($(id)?.options || [])].find(o => o.value.toLowerCase() === String(value).toLowerCase());
+            if (!option) return null;
+            $(id).value = option.value;
+            $(id).dispatchEvent(new Event('change'));
+            return option.value;
+        };
+        // Proposal handlers for the Copilot drawer: each runs the editor's own action, only after Apply.
+        window.copilotActions = {
+            transcribe_project: ({language} = {}) => {
+                if (!project) throw Error('Open a project first.');
+                if (language) setSelect('language', language);
+                $('transcribe').click();
+                return 'Transcription started — progress is shown in the editor.';
+            },
+            sync_lyrics: () => {
+                if (!project) throw Error('Open a project first.');
+                $('paste').click();
+                return 'Paste the lyrics in the dialog, then choose how to sync them.';
+            },
+            translate_project: async ({language}) => {
+                if (!project) throw Error('Open a project first.');
+                if (!setSelect('translation_language', language)) throw Error(`The language "${language}" is not offered for translation.`);
+                await job('translate', {language: project.style.translation_language, ids: null, resume: false});
+                return 'Translation job started — results arrive marked for review.';
+            },
+            batch_fix_subtitles: ({updates}) => window.fixSubtitlesBatch(updates),
+            shift_timing: ({seconds}) => window.shiftTimingBySeconds(seconds),
+            apply_preset: ({preset}) => window.applyPresetByName(preset),
+            set_font: ({font}) => {
+                const applied = setSelect('font', font);
+                if (!applied) throw Error(`The font "${font}" is not installed. Upload it under Style → Font first.`);
+                return `Font set to ${applied}.`;
+            },
+            render_export: () => {
+                if (!project) throw Error('Open a project first.');
+                $('export').click();
+                return 'Export started.';
+            },
+        };
         window.applyPresetByName = (name) => {
             if(presets && presets[name]){
                 edit(()=>Object.assign(project.style, presets[name]));

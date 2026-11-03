@@ -2,9 +2,7 @@
 import tests._isolation  # Must precede application imports
 import io
 import json
-import os
 from pathlib import Path
-import shutil
 import tempfile
 import threading
 import time
