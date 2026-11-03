@@ -495,8 +495,11 @@ class CaptionWorkflowTests(unittest.TestCase):
         with patch('captions.detect_caption_language',return_value='fr') as detect, patch('captions.align_caption_words',side_effect=align):
             self.client.post(f'/api/captions/{pid}/karaoke',json=dict(revision=data['revision'],language='en-fr-ko'))
             after=self.wait(pid)
-            self.assertEqual(languages,['fr','ko'])
-            self.assertEqual(detect.call_args.args[2],('en','fr','ko'))
+            # The mixed Korean/Latin line is aligned as Korean, then its Latin run in the detected Latin language.
+            self.assertEqual(languages,['fr','ko','fr'])
+            self.assertEqual(detect.call_args_list[0].args[2],('en','fr','ko'))
+            self.assertEqual(detect.call_args.args[2],('en','fr'))
+            self.assertIn('Aligned per language (ko + fr)',after['cues'][1]['karaoke']['note'])
             self.assertTrue(all(c['karaoke']['state']=='review' for c in after['cues']))
             self.client.post(f'/api/captions/{pid}/karaoke',json=dict(revision=after['revision'],language='ko',index=1))
             self.wait(pid)
