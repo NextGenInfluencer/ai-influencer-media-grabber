@@ -201,3 +201,10 @@ def get_image_path(character_id, filename):
     if CHARACTERS_DIR.resolve() not in path.parents:
         return None
     return path if path.is_file() else None
+
+
+def portrait_path(character):
+    """Local portrait file of a character profile, or None when no portrait was uploaded."""
+    if not character or not character.get('id') or not character.get('portrait_file'):
+        return None
+    return get_image_path(character['id'], character['portrait_file'])

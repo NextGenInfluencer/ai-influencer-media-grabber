@@ -35,8 +35,8 @@
   }
 
   let characterList = [];
-  let selectedCid = 'airi';
-  let lockedActiveCid = 'airi';
+  let selectedCid = null;
+  let lockedActiveCid = null;
 
   function createCharacterModalHTML() {
     if (document.getElementById('characterModal')) return;
@@ -54,7 +54,7 @@
             <span class="modalIcon">👤</span>
             <div>
               <h3>AI Influencer & Character Library</h3>
-              <p class="modalSubtitle">Manage consistent creator personas, portrait references, and Google Flow Nano Banana prompts</p>
+              <p class="modalSubtitle">Creator personas: portrait reference and appearance prompt used by AI Studio keyframes and face swap</p>
             </div>
           </div>
           <button class="modalCloseBtn" id="closeCharModalBtn" aria-label="Close">✕</button>
@@ -118,12 +118,12 @@
                 <div class="charImagePreview" id="triptychPreview">
                   <span class="imagePlaceholder">No turnaround sheet uploaded</span>
                 </div>
-                <span class="imageCaption">Used by Google Flow Nano Banana for full-body consistency</span>
+                <span class="imageCaption">Optional full-body reference sheet</span>
               </div>
             </div>
 
             <div class="formGroup" style="margin-top:10px;">
-              <label for="charTriggerInput">Nano Banana Trigger Prompt</label>
+              <label for="charTriggerInput">Appearance prompt (used for keyframes)</label>
               <textarea id="charTriggerInput" rows="2" placeholder="e.g. Airi, 22yo Japanese virtual singer, dark purple bob haircut, amber eyes, oversized cropped hoodie…"></textarea>
             </div>
 
