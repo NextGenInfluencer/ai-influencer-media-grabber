@@ -1,0 +1,2346 @@
+{
+ "schema_version": 1,
+ "catalog_version": "2026.11.03",
+ "verified_at": "2026-11-03",
+ "recommendations": {
+  "essentials": {
+   "helper": [],
+   "translator": [],
+   "speech": [],
+   "vision": []
+  },
+  "laptop": {
+   "helper": [
+    "qwen3-4b",
+    "qwen3-1.7b"
+   ],
+   "translator": [
+    "translategemma-4b-gguf",
+    "qwen3-4b",
+    "qwen3-1.7b"
+   ],
+   "speech": [
+    "whisper-small",
+    "whisper-base"
+   ],
+   "vision": [
+    "blip-base"
+   ]
+  },
+  "gpu_mid": {
+   "helper": [
+    "qwen3:8b"
+   ],
+   "translator": [
+    "translategemma:4b",
+    "gemma3:4b",
+    "qwen3:8b"
+   ],
+   "speech": [
+    "whisper-large-v3-turbo"
+   ],
+   "vision": [
+    "qwen2.5vl:3b",
+    "gemma3:4b"
+   ]
+  },
+  "gpu_high": {
+   "helper": [
+    "qwen3:14b"
+   ],
+   "translator": [
+    "translategemma:12b",
+    "gemma3:12b",
+    "qwen3:14b"
+   ],
+   "speech": [
+    "whisper-large-v3-turbo"
+   ],
+   "vision": [
+    "qwen2.5vl:7b",
+    "gemma3:12b"
+   ]
+  },
+  "gpu_ultra": {
+   "helper": [
+    "qwen3:32b"
+   ],
+   "translator": [
+    "translategemma:27b",
+    "gemma3:27b",
+    "qwen3:32b"
+   ],
+   "speech": [
+    "whisper-large-v3"
+   ],
+   "vision": [
+    "qwen2.5vl:32b",
+    "gemma3:27b"
+   ]
+  }
+ },
+ "bundles": {
+  "laptop": [
+   "qwen3-4b",
+   "whisper-small",
+   "blip-base",
+   "insightface-buffalo-l",
+   "inswapper-128",
+   "gfpgan-1.4"
+  ],
+  "gpu_mid": [
+   "engine-ollama",
+   "qwen3:8b",
+   "translategemma:4b",
+   "whisper-large-v3-turbo",
+   "qwen2.5vl:3b",
+   "insightface-buffalo-l",
+   "inswapper-128",
+   "gfpgan-1.4",
+   "engine-comfyui",
+   "flux-schnell-q4"
+  ],
+  "gpu_high": [
+   "engine-ollama",
+   "qwen3:14b",
+   "translategemma:12b",
+   "whisper-large-v3-turbo",
+   "uvr-kim-vocal-2",
+   "qwen2.5vl:7b",
+   "insightface-buffalo-l",
+   "inswapper-128",
+   "gfpgan-1.4",
+   "engine-comfyui",
+   "flux-schnell-q4",
+   "flux-kontext-dev-q4",
+   "wan22-ti2v-5b",
+   "latentsync-1.5",
+   "liveportrait"
+  ],
+  "gpu_ultra": [
+   "engine-ollama",
+   "qwen3:32b",
+   "translategemma:27b",
+   "whisper-large-v3",
+   "uvr-kim-vocal-2",
+   "qwen2.5vl:32b",
+   "insightface-buffalo-l",
+   "inswapper-128",
+   "gfpgan-1.4",
+   "engine-comfyui",
+   "flux-schnell-q4",
+   "flux-kontext-dev-q4",
+   "wan22-ti2v-5b",
+   "wan21-i2v-14b-q4",
+   "latentsync-1.5",
+   "liveportrait"
+  ]
+ },
+ "obsolete_files": [
+  {
+   "path": "@app/ai_models/Llama-3.2-1B-Instruct-Q4_K_M.gguf",
+   "reason": "Old Llama 3.2 1B prompt model; v5 uses the role router instead."
+  },
+  {
+   "path": "@app/ai_models/Meta-Llama-3-8B-Instruct.Q4_K_M.gguf",
+   "reason": "Old Llama 3 8B prompt model; v5 uses the role router instead."
+  }
+ ],
+ "workflows": {
+  "flux_schnell_t2i": {
+   "file": "flux_schnell_t2i.json",
+   "requires": [
+    "flux-schnell-q4"
+   ],
+   "custom_nodes": [
+    "node-comfyui-gguf"
+   ]
+  },
+  "flux_kontext_edit": {
+   "file": "flux_kontext_edit.json",
+   "requires": [
+    "flux-kontext-dev-q4"
+   ],
+   "custom_nodes": [
+    "node-comfyui-gguf"
+   ]
+  },
+  "wan22_ti2v_5b": {
+   "file": "wan22_ti2v_5b.json",
+   "requires": [
+    "wan22-ti2v-5b"
+   ],
+   "custom_nodes": [
+    "node-comfyui-gguf"
+   ]
+  },
+  "wan21_i2v_14b_gguf": {
+   "file": "wan21_i2v_14b_gguf.json",
+   "requires": [
+    "wan21-i2v-14b-q4"
+   ],
+   "custom_nodes": [
+    "node-comfyui-gguf"
+   ]
+  },
+  "latentsync": {
+   "file": "latentsync.json",
+   "requires": [
+    "latentsync-1.5"
+   ],
+   "custom_nodes": [
+    "node-latentsync"
+   ]
+  },
+  "liveportrait": {
+   "file": "liveportrait.json",
+   "requires": [
+    "liveportrait"
+   ],
+   "custom_nodes": [
+    "node-liveportrait"
+   ]
+  }
+ },
+ "cloud_endpoints": {
+  "fal": {
+   "kling_motion_control": {
+    "endpoint": "fal-ai/kling-video/v2.6/standard/motion-control",
+    "pro_endpoint": "fal-ai/kling-video/v2.6/pro/motion-control",
+    "image_arg": "image_url",
+    "video_arg": "video_url",
+    "options": {
+     "character_orientation": [
+      "video",
+      "image"
+     ],
+     "prompt": "string",
+     "keep_original_sound": "boolean"
+    },
+    "docs": "https://fal.ai/models/fal-ai/kling-video/v2.6/standard/motion-control/api"
+   },
+   "live_portrait": {
+    "endpoint": "fal-ai/live-portrait",
+    "image_arg": "image_url",
+    "video_arg": "video_url",
+    "docs": "https://fal.ai/models/fal-ai/live-portrait/api"
+   }
+  },
+  "gemini": {
+   "nano_banana": {
+    "model": "gemini-2.5-flash-image",
+    "docs": "https://ai.google.dev/gemini-api/docs/image-generation"
+   }
+  }
+ },
+ "items": [
+  {
+   "id": "qwen3-1.7b",
+   "kind": "llm",
+   "backend": "builtin",
+   "roles": [
+    "helper",
+    "translator"
+   ],
+   "profiles": [
+    "laptop"
+   ],
+   "name": "Qwen3 1.7B (built-in)",
+   "purpose": "Small offline helper and translator for PCs without a capable GPU.",
+   "features": [
+    "Copilot",
+    "Lyric translation",
+    "Director",
+    "Social copy"
+   ],
+   "source": {
+    "publisher": "Qwen (Alibaba Cloud)",
+    "url": "https://huggingface.co/Qwen/Qwen3-1.7B-GGUF",
+    "repo": "Qwen/Qwen3-1.7B-GGUF",
+    "revision": "90862c4b9d2787eaed51d12237eafdfe7c5f6077",
+    "filename": "Qwen3-1.7B-Q8_0.gguf"
+   },
+   "files": [
+    {
+     "path": "llm/Qwen3-1.7B-Q8_0.gguf",
+     "url": "https://huggingface.co/Qwen/Qwen3-1.7B-GGUF/resolve/90862c4b9d2787eaed51d12237eafdfe7c5f6077/Qwen3-1.7B-Q8_0.gguf",
+     "size_bytes": 1834426016,
+     "sha256": "061b54daade076b5d3362dac252678d17da8c68f07560be70818cace6590cb1a"
+    }
+   ],
+   "license": {
+    "name": "Apache-2.0",
+    "url": "https://www.apache.org/licenses/LICENSE-2.0",
+    "non_commercial": false
+   },
+   "ram_gb": 3,
+   "capabilities": [
+    "tools",
+    "json",
+    "thinking"
+   ],
+   "chat_format": null,
+   "local": true,
+   "companions": [],
+   "vram_gb": 0,
+   "size_bytes": 1834426016,
+   "sha256": "061b54daade076b5d3362dac252678d17da8c68f07560be70818cace6590cb1a"
+  },
+  {
+   "id": "qwen3-4b",
+   "kind": "llm",
+   "backend": "builtin",
+   "roles": [
+    "helper",
+    "translator"
+   ],
+   "profiles": [
+    "laptop"
+   ],
+   "name": "Qwen3 4B (built-in)",
+   "purpose": "Offline helper and lyric translator for laptops with 16 GB RAM or more.",
+   "features": [
+    "Copilot",
+    "Lyric translation",
+    "Director",
+    "Social copy"
+   ],
+   "source": {
+    "publisher": "Qwen (Alibaba Cloud)",
+    "url": "https://huggingface.co/Qwen/Qwen3-4B-GGUF",
+    "repo": "Qwen/Qwen3-4B-GGUF",
+    "revision": "bc640142c66e1fdd12af0bd68f40445458f3869b",
+    "filename": "Qwen3-4B-Q4_K_M.gguf"
+   },
+   "files": [
+    {
+     "path": "llm/Qwen3-4B-Q4_K_M.gguf",
+     "url": "https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/bc640142c66e1fdd12af0bd68f40445458f3869b/Qwen3-4B-Q4_K_M.gguf",
+     "size_bytes": 2497280256,
+     "sha256": "7485fe6f11af29433bc51cab58009521f205840f5b4ae3a32fa7f92e8534fdf5",
+     "legacy": [
+      "@app/ai_models/Qwen3-4B-Q4_K_M.gguf"
+     ]
+    }
+   ],
+   "license": {
+    "name": "Apache-2.0",
+    "url": "https://www.apache.org/licenses/LICENSE-2.0",
+    "non_commercial": false
+   },
+   "ram_gb": 5,
+   "min_system_ram_gb": 16,
+   "capabilities": [
+    "tools",
+    "json",
+    "thinking"
+   ],
+   "chat_format": null,
+   "local": true,
+   "companions": [],
+   "vram_gb": 0,
+   "size_bytes": 2497280256,
+   "sha256": "7485fe6f11af29433bc51cab58009521f205840f5b4ae3a32fa7f92e8534fdf5"
+  },
+  {
+   "id": "translategemma-4b-gguf",
+   "kind": "llm",
+   "backend": "builtin",
+   "roles": [
+    "translator"
+   ],
+   "profiles": [
+    "laptop"
+   ],
+   "name": "TranslateGemma 4B (built-in)",
+   "purpose": "Optional dedicated offline translator (55 languages, one source language per request).",
+   "features": [
+    "Lyric translation"
+   ],
+   "source": {
+    "publisher": "Google (GGUF conversion by bullerwins)",
+    "url": "https://huggingface.co/bullerwins/translategemma-4b-it-GGUF",
+    "repo": "bullerwins/translategemma-4b-it-GGUF",
+    "revision": "7c938465a870d8624bcfa98a8e4a3510053c19a8",
+    "filename": "translategemma-4b-it-Q4_K_M.gguf"
+   },
+   "files": [
+    {
+     "path": "llm/translategemma-4b-it-Q4_K_M.gguf",
+     "url": "https://huggingface.co/bullerwins/translategemma-4b-it-GGUF/resolve/7c938465a870d8624bcfa98a8e4a3510053c19a8/translategemma-4b-it-Q4_K_M.gguf",
+     "size_bytes": 2489909312,
+     "sha256": "7f7357c14abd9da4eb200b38b05da502cd6e10d7e1d403fbc9f78c19f3209b72"
+    }
+   ],
+   "license": {
+    "name": "Gemma Terms of Use",
+    "url": "https://ai.google.dev/gemma/terms",
+    "non_commercial": false
+   },
+   "ram_gb": 5,
+   "min_system_ram_gb": 16,
+   "capabilities": [
+    "translation"
+   ],
+   "prompt_format": "translategemma",
+   "chat_format": "gemma",
+   "local": true,
+   "companions": [],
+   "vram_gb": 0,
+   "size_bytes": 2489909312,
+   "sha256": "7f7357c14abd9da4eb200b38b05da502cd6e10d7e1d403fbc9f78c19f3209b72"
+  },
+  {
+   "id": "qwen3:8b",
+   "kind": "llm",
+   "backend": "ollama",
+   "roles": [
+    "helper",
+    "translator"
+   ],
+   "profiles": [
+    "gpu_mid"
+   ],
+   "name": "Qwen3 8B",
+   "purpose": "Helper and Copilot for 6–10 GB GPUs.",
+   "features": [
+    "Copilot",
+    "Mixed-language lines",
+    "Director",
+    "Social copy",
+    "Lyric translation"
+   ],
+   "source": {
+    "publisher": "Ollama library",
+    "url": "https://ollama.com/library/qwen3:8b",
+    "ollama_tag": "qwen3:8b"
+   },
+   "files": [],
+   "size_bytes": 5225387677,
+   "sha256": null,
+   "license": {
+    "name": "Apache-2.0",
+    "url": "https://www.apache.org/licenses/LICENSE-2.0",
+    "non_commercial": false
+   },
+   "vram_gb": 6.5,
+   "ram_gb": 8,
+   "capabilities": [
+    "tools",
+    "thinking",
+    "completion"
+   ],
+   "companions": [
+    "engine-ollama"
+   ],
+   "prompt_format": null,
+   "local": true
+  },
+  {
+   "id": "qwen3:14b",
+   "kind": "llm",
+   "backend": "ollama",
+   "roles": [
+    "helper",
+    "translator"
+   ],
+   "profiles": [
+    "gpu_high"
+   ],
+   "name": "Qwen3 14B",
+   "purpose": "Helper and Copilot for 10–20 GB GPUs.",
+   "features": [
+    "Copilot",
+    "Mixed-language lines",
+    "Director",
+    "Social copy",
+    "Lyric translation"
+   ],
+   "source": {
+    "publisher": "Ollama library",
+    "url": "https://ollama.com/library/qwen3:14b",
+    "ollama_tag": "qwen3:14b"
+   },
+   "files": [],
+   "size_bytes": 9276198077,
+   "sha256": null,
+   "license": {
+    "name": "Apache-2.0",
+    "url": "https://www.apache.org/licenses/LICENSE-2.0",
+    "non_commercial": false
+   },
+   "vram_gb": 10.5,
+   "ram_gb": 8,
+   "capabilities": [
+    "tools",
+    "thinking",
+    "completion"
+   ],
+   "companions": [
+    "engine-ollama"
+   ],
+   "prompt_format": null,
+   "local": true
+  },
+  {
+   "id": "qwen3:32b",
+   "kind": "llm",
+   "backend": "ollama",
+   "roles": [
+    "helper",
+    "translator"
+   ],
+   "profiles": [
+    "gpu_ultra"
+   ],
+   "name": "Qwen3 32B",
+   "purpose": "Helper and Copilot for 24 GB GPUs.",
+   "features": [
+    "Copilot",
+    "Mixed-language lines",
+    "Director",
+    "Social copy",
+    "Lyric translation"
+   ],
+   "source": {
+    "publisher": "Ollama library",
+    "url": "https://ollama.com/library/qwen3:32b",
+    "ollama_tag": "qwen3:32b"
+   },
+   "files": [],
+   "size_bytes": 20201253341,
+   "sha256": null,
+   "license": {
+    "name": "Apache-2.0",
+    "url": "https://www.apache.org/licenses/LICENSE-2.0",
+    "non_commercial": false
+   },
+   "vram_gb": 21.0,
+   "ram_gb": 8,
+   "capabilities": [
+    "tools",
+    "thinking",
+    "completion"
+   ],
+   "companions": [
+    "engine-ollama"
+   ],
+   "prompt_format": null,
+   "local": true
+  },
+  {
+   "id": "translategemma:4b",
+   "kind": "llm",
+   "backend": "ollama",
+   "roles": [
+    "translator"
+   ],
+   "profiles": [
+    "gpu_mid",
+    "laptop"
+   ],
+   "name": "TranslateGemma 4B",
+   "purpose": "Dedicated lyric translator (one source language per request).",
+   "features": [
+    "Lyric translation"
+   ],
+   "source": {
+    "publisher": "Ollama library",
+    "url": "https://ollama.com/library/translategemma:4b",
+    "ollama_tag": "translategemma:4b"
+   },
+   "files": [],
+   "size_bytes": 3298875218,
+   "sha256": null,
+   "license": {
+    "name": "Gemma Terms of Use",
+    "url": "https://ai.google.dev/gemma/terms",
+    "non_commercial": false
+   },
+   "vram_gb": 4.0,
+   "ram_gb": 8,
+   "capabilities": [
+    "completion",
+    "translation"
+   ],
+   "companions": [
+    "engine-ollama"
+   ],
+   "prompt_format": "translategemma",
+   "local": true
+  },
+  {
+   "id": "translategemma:12b",
+   "kind": "llm",
+   "backend": "ollama",
+   "roles": [
+    "translator"
+   ],
+   "profiles": [
+    "gpu_high"
+   ],
+   "name": "TranslateGemma 12B",
+   "purpose": "Dedicated lyric translator for 10–20 GB GPUs.",
+   "features": [
+    "Lyric translation"
+   ],
+   "source": {
+    "publisher": "Ollama library",
+    "url": "https://ollama.com/library/translategemma:12b",
+    "ollama_tag": "translategemma:12b"
+   },
+   "files": [],
+   "size_bytes": 8109827122,
+   "sha256": null,
+   "license": {
+    "name": "Gemma Terms of Use",
+    "url": "https://ai.google.dev/gemma/terms",
+    "non_commercial": false
+   },
+   "vram_gb": 9.0,
+   "ram_gb": 8,
+   "capabilities": [
+    "completion",
+    "translation"
+   ],
+   "companions": [
+    "engine-ollama"
+   ],
+   "prompt_format": "translategemma",
+   "local": true
+  },
+  {
+   "id": "translategemma:27b",
+   "kind": "llm",
+   "backend": "ollama",
+   "roles": [
+    "translator"
+   ],
+   "profiles": [
+    "gpu_ultra"
+   ],
+   "name": "TranslateGemma 27B",
+   "purpose": "Dedicated lyric translator for 24 GB GPUs.",
+   "features": [
+    "Lyric translation"
+   ],
+   "source": {
+    "publisher": "Ollama library",
+    "url": "https://ollama.com/library/translategemma:27b",
+    "ollama_tag": "translategemma:27b"
+   },
+   "files": [],
+   "size_bytes": 17358649778,
+   "sha256": null,
+   "license": {
+    "name": "Gemma Terms of Use",
+    "url": "https://ai.google.dev/gemma/terms",
+    "non_commercial": false
+   },
+   "vram_gb": 18.5,
+   "ram_gb": 8,
+   "capabilities": [
+    "completion",
+    "translation"
+   ],
+   "companions": [
+    "engine-ollama"
+   ],
+   "prompt_format": "translategemma",
+   "local": true
+  },
+  {
+   "id": "qwen2.5vl:3b",
+   "kind": "llm",
+   "backend": "ollama",
+   "roles": [
+    "vision"
+   ],
+   "profiles": [
+    "gpu_mid"
+   ],
+   "name": "Qwen2.5-VL 3B",
+   "purpose": "Scene descriptions, portrait profiles and frame ranking.",
+   "features": [
+    "Describe scene",
+    "Portrait profile",
+    "Best first frame"
+   ],
+   "source": {
+    "publisher": "Ollama library",
+    "url": "https://ollama.com/library/qwen2.5vl:3b",
+    "ollama_tag": "qwen2.5vl:3b"
+   },
+   "files": [],
+   "size_bytes": 3200626601,
+   "sha256": null,
+   "license": {
+    "name": "Qwen Research License (non-commercial)",
+    "url": "https://huggingface.co/Qwen/Qwen2.5-VL-3B-Instruct/blob/main/LICENSE",
+    "non_commercial": true
+   },
+   "vram_gb": 5.0,
+   "ram_gb": 8,
+   "capabilities": [
+    "vision",
+    "completion"
+   ],
+   "companions": [
+    "engine-ollama"
+   ],
+   "prompt_format": null,
+   "local": true
+  },
+  {
+   "id": "qwen2.5vl:7b",
+   "kind": "llm",
+   "backend": "ollama",
+   "roles": [
+    "vision"
+   ],
+   "profiles": [
+    "gpu_high"
+   ],
+   "name": "Qwen2.5-VL 7B",
+   "purpose": "Scene descriptions, portrait profiles and frame ranking.",
+   "features": [
+    "Describe scene",
+    "Portrait profile",
+    "Best first frame"
+   ],
+   "source": {
+    "publisher": "Ollama library",
+    "url": "https://ollama.com/library/qwen2.5vl:7b",
+    "ollama_tag": "qwen2.5vl:7b"
+   },
+   "files": [],
+   "size_bytes": 5969245289,
+   "sha256": null,
+   "license": {
+    "name": "Apache-2.0",
+    "url": "https://www.apache.org/licenses/LICENSE-2.0",
+    "non_commercial": false
+   },
+   "vram_gb": 7.5,
+   "ram_gb": 8,
+   "capabilities": [
+    "vision",
+    "completion"
+   ],
+   "companions": [
+    "engine-ollama"
+   ],
+   "prompt_format": null,
+   "local": true
+  },
+  {
+   "id": "qwen2.5vl:32b",
+   "kind": "llm",
+   "backend": "ollama",
+   "roles": [
+    "vision"
+   ],
+   "profiles": [
+    "gpu_ultra"
+   ],
+   "name": "Qwen2.5-VL 32B",
+   "purpose": "Scene descriptions, portrait profiles and frame ranking.",
+   "features": [
+    "Describe scene",
+    "Portrait profile",
+    "Best first frame"
+   ],
+   "source": {
+    "publisher": "Ollama library",
+    "url": "https://ollama.com/library/qwen2.5vl:32b",
+    "ollama_tag": "qwen2.5vl:32b"
+   },
+   "files": [],
+   "size_bytes": 21159310089,
+   "sha256": null,
+   "license": {
+    "name": "Apache-2.0",
+    "url": "https://www.apache.org/licenses/LICENSE-2.0",
+    "non_commercial": false
+   },
+   "vram_gb": 22.0,
+   "ram_gb": 8,
+   "capabilities": [
+    "vision",
+    "completion"
+   ],
+   "companions": [
+    "engine-ollama"
+   ],
+   "prompt_format": null,
+   "local": true
+  },
+  {
+   "id": "gemma3:4b",
+   "kind": "llm",
+   "backend": "ollama",
+   "roles": [
+    "vision",
+    "translator"
+   ],
+   "profiles": [
+    "gpu_mid"
+   ],
+   "name": "Gemma 3 4B",
+   "purpose": "Commercial-friendly vision and translation fallback.",
+   "features": [
+    "Describe scene",
+    "Portrait profile",
+    "Best first frame",
+    "Lyric translation"
+   ],
+   "source": {
+    "publisher": "Ollama library",
+    "url": "https://ollama.com/library/gemma3:4b",
+    "ollama_tag": "gemma3:4b"
+   },
+   "files": [],
+   "size_bytes": 3350272259,
+   "sha256": null,
+   "license": {
+    "name": "Gemma Terms of Use",
+    "url": "https://ai.google.dev/gemma/terms",
+    "non_commercial": false
+   },
+   "vram_gb": 4.5,
+   "ram_gb": 8,
+   "capabilities": [
+    "vision",
+    "completion"
+   ],
+   "companions": [
+    "engine-ollama"
+   ],
+   "prompt_format": null,
+   "local": true
+  },
+  {
+   "id": "gemma3:12b",
+   "kind": "llm",
+   "backend": "ollama",
+   "roles": [
+    "vision",
+    "translator"
+   ],
+   "profiles": [
+    "gpu_high"
+   ],
+   "name": "Gemma 3 12B",
+   "purpose": "Vision and translation fallback.",
+   "features": [
+    "Describe scene",
+    "Portrait profile",
+    "Best first frame",
+    "Lyric translation"
+   ],
+   "source": {
+    "publisher": "Ollama library",
+    "url": "https://ollama.com/library/gemma3:12b",
+    "ollama_tag": "gemma3:12b"
+   },
+   "files": [],
+   "size_bytes": 8164039587,
+   "sha256": null,
+   "license": {
+    "name": "Gemma Terms of Use",
+    "url": "https://ai.google.dev/gemma/terms",
+    "non_commercial": false
+   },
+   "vram_gb": 9.0,
+   "ram_gb": 8,
+   "capabilities": [
+    "vision",
+    "completion"
+   ],
+   "companions": [
+    "engine-ollama"
+   ],
+   "prompt_format": null,
+   "local": true
+  },
+  {
+   "id": "gemma3:27b",
+   "kind": "llm",
+   "backend": "ollama",
+   "roles": [
+    "vision",
+    "translator"
+   ],
+   "profiles": [
+    "gpu_ultra"
+   ],
+   "name": "Gemma 3 27B",
+   "purpose": "Vision and translation fallback.",
+   "features": [
+    "Describe scene",
+    "Portrait profile",
+    "Best first frame",
+    "Lyric translation"
+   ],
+   "source": {
+    "publisher": "Ollama library",
+    "url": "https://ollama.com/library/gemma3:27b",
+    "ollama_tag": "gemma3:27b"
+   },
+   "files": [],
+   "size_bytes": 17413409507,
+   "sha256": null,
+   "license": {
+    "name": "Gemma Terms of Use",
+    "url": "https://ai.google.dev/gemma/terms",
+    "non_commercial": false
+   },
+   "vram_gb": 18.5,
+   "ram_gb": 8,
+   "capabilities": [
+    "vision",
+    "completion"
+   ],
+   "companions": [
+    "engine-ollama"
+   ],
+   "prompt_format": null,
+   "local": true
+  },
+  {
+   "id": "whisper-base",
+   "kind": "asr",
+   "backend": "whisper",
+   "roles": [
+    "speech"
+   ],
+   "profiles": [
+    "laptop"
+   ],
+   "name": "Whisper base",
+   "purpose": "Speech recognition, lyric timing and karaoke word alignment.",
+   "features": [
+    "Transcribe",
+    "Sync lyrics",
+    "Karaoke timing",
+    "Language detection"
+   ],
+   "source": {
+    "publisher": "OpenAI",
+    "url": "https://github.com/openai/whisper",
+    "model_name": "base"
+   },
+   "files": [
+    {
+     "path": "whisper/base.pt",
+     "url": "https://openaipublic.azureedge.net/main/whisper/models/ed3a0b6b1c0edf879ad9b11b1af5a0e6ab5db9205f891f668f8b0e6c6326e34e/base.pt",
+     "size_bytes": 145262807,
+     "sha256": "ed3a0b6b1c0edf879ad9b11b1af5a0e6ab5db9205f891f668f8b0e6c6326e34e",
+     "legacy": [
+      "@home/.cache/whisper/base.pt"
+     ]
+    }
+   ],
+   "license": {
+    "name": "MIT",
+    "url": "https://github.com/openai/whisper/blob/main/LICENSE",
+    "non_commercial": false
+   },
+   "vram_gb": 0,
+   "ram_gb": 2,
+   "local": true,
+   "companions": [],
+   "capabilities": [],
+   "size_bytes": 145262807,
+   "sha256": "ed3a0b6b1c0edf879ad9b11b1af5a0e6ab5db9205f891f668f8b0e6c6326e34e"
+  },
+  {
+   "id": "whisper-small",
+   "kind": "asr",
+   "backend": "whisper",
+   "roles": [
+    "speech"
+   ],
+   "profiles": [
+    "laptop"
+   ],
+   "name": "Whisper small",
+   "purpose": "Speech recognition, lyric timing and karaoke word alignment.",
+   "features": [
+    "Transcribe",
+    "Sync lyrics",
+    "Karaoke timing",
+    "Language detection"
+   ],
+   "source": {
+    "publisher": "OpenAI",
+    "url": "https://github.com/openai/whisper",
+    "model_name": "small"
+   },
+   "files": [
+    {
+     "path": "whisper/small.pt",
+     "url": "https://openaipublic.azureedge.net/main/whisper/models/9ecf779972d90ba49c06d968637d720dd632c55bbf19d441fb42bf17a411e794/small.pt",
+     "size_bytes": 483617219,
+     "sha256": "9ecf779972d90ba49c06d968637d720dd632c55bbf19d441fb42bf17a411e794",
+     "legacy": [
+      "@home/.cache/whisper/small.pt"
+     ]
+    }
+   ],
+   "license": {
+    "name": "MIT",
+    "url": "https://github.com/openai/whisper/blob/main/LICENSE",
+    "non_commercial": false
+   },
+   "vram_gb": 0,
+   "ram_gb": 3,
+   "min_system_ram_gb": 16,
+   "local": true,
+   "companions": [],
+   "capabilities": [],
+   "size_bytes": 483617219,
+   "sha256": "9ecf779972d90ba49c06d968637d720dd632c55bbf19d441fb42bf17a411e794"
+  },
+  {
+   "id": "whisper-large-v3-turbo",
+   "kind": "asr",
+   "backend": "whisper",
+   "roles": [
+    "speech"
+   ],
+   "profiles": [
+    "gpu_mid",
+    "gpu_high"
+   ],
+   "name": "Whisper large-v3-turbo",
+   "purpose": "Speech recognition, lyric timing and karaoke word alignment.",
+   "features": [
+    "Transcribe",
+    "Sync lyrics",
+    "Karaoke timing",
+    "Language detection"
+   ],
+   "source": {
+    "publisher": "OpenAI",
+    "url": "https://github.com/openai/whisper",
+    "model_name": "large-v3-turbo"
+   },
+   "files": [
+    {
+     "path": "whisper/large-v3-turbo.pt",
+     "url": "https://openaipublic.azureedge.net/main/whisper/models/aff26ae408abcba5fbf8813c21e62b0941638c5f6eebfb145be0c9839262a19a/large-v3-turbo.pt",
+     "size_bytes": 1617941637,
+     "sha256": "aff26ae408abcba5fbf8813c21e62b0941638c5f6eebfb145be0c9839262a19a",
+     "legacy": [
+      "@home/.cache/whisper/large-v3-turbo.pt"
+     ]
+    }
+   ],
+   "license": {
+    "name": "MIT",
+    "url": "https://github.com/openai/whisper/blob/main/LICENSE",
+    "non_commercial": false
+   },
+   "vram_gb": 6,
+   "ram_gb": 6,
+   "local": true,
+   "companions": [],
+   "capabilities": [],
+   "size_bytes": 1617941637,
+   "sha256": "aff26ae408abcba5fbf8813c21e62b0941638c5f6eebfb145be0c9839262a19a"
+  },
+  {
+   "id": "whisper-large-v3",
+   "kind": "asr",
+   "backend": "whisper",
+   "roles": [
+    "speech"
+   ],
+   "profiles": [
+    "gpu_ultra"
+   ],
+   "name": "Whisper large-v3",
+   "purpose": "Speech recognition, lyric timing and karaoke word alignment.",
+   "features": [
+    "Transcribe",
+    "Sync lyrics",
+    "Karaoke timing",
+    "Language detection"
+   ],
+   "source": {
+    "publisher": "OpenAI",
+    "url": "https://github.com/openai/whisper",
+    "model_name": "large-v3"
+   },
+   "files": [
+    {
+     "path": "whisper/large-v3.pt",
+     "url": "https://openaipublic.azureedge.net/main/whisper/models/e5b1a55b89c1367dacf97e3e19bfd829a01529dbfdeefa8caeb59b3f1b81dadb/large-v3.pt",
+     "size_bytes": 3087371615,
+     "sha256": "e5b1a55b89c1367dacf97e3e19bfd829a01529dbfdeefa8caeb59b3f1b81dadb",
+     "legacy": [
+      "@home/.cache/whisper/large-v3.pt"
+     ]
+    }
+   ],
+   "license": {
+    "name": "MIT",
+    "url": "https://github.com/openai/whisper/blob/main/LICENSE",
+    "non_commercial": false
+   },
+   "vram_gb": 10,
+   "ram_gb": 10,
+   "local": true,
+   "companions": [],
+   "capabilities": [],
+   "size_bytes": 3087371615,
+   "sha256": "e5b1a55b89c1367dacf97e3e19bfd829a01529dbfdeefa8caeb59b3f1b81dadb"
+  },
+  {
+   "id": "blip-base",
+   "kind": "vision",
+   "backend": "transformers",
+   "roles": [
+    "vision"
+   ],
+   "profiles": [
+    "laptop"
+   ],
+   "name": "BLIP base captioner",
+   "purpose": "Short image captions on CPU when no vision-language model can run.",
+   "features": [
+    "AI Prompt caption",
+    "Gallery tags"
+   ],
+   "source": {
+    "publisher": "Salesforce",
+    "url": "https://huggingface.co/Salesforce/blip-image-captioning-base",
+    "repo": "Salesforce/blip-image-captioning-base",
+    "revision": "9cfcdbcaccbcadb2b53b36d4b50042c4eeaa0c25"
+   },
+   "files": [
+    {
+     "path": "vision/blip-image-captioning-base/model.safetensors",
+     "url": "https://huggingface.co/Salesforce/blip-image-captioning-base/resolve/9cfcdbcaccbcadb2b53b36d4b50042c4eeaa0c25/model.safetensors",
+     "size_bytes": 989721256,
+     "sha256": "d5fe21105c145477889dde75d86d0c0460f7679871ca73cc0f265edf9cfdf996"
+    },
+    {
+     "path": "vision/blip-image-captioning-base/config.json",
+     "url": "https://huggingface.co/Salesforce/blip-image-captioning-base/resolve/9cfcdbcaccbcadb2b53b36d4b50042c4eeaa0c25/config.json",
+     "size_bytes": 4563,
+     "sha256": "f7846f82f4e2c4a2ccbab9ae8b0e44873540a271a76a1288effd078180c13a82"
+    },
+    {
+     "path": "vision/blip-image-captioning-base/preprocessor_config.json",
+     "url": "https://huggingface.co/Salesforce/blip-image-captioning-base/resolve/9cfcdbcaccbcadb2b53b36d4b50042c4eeaa0c25/preprocessor_config.json",
+     "size_bytes": 287,
+     "sha256": "065c10ec97edc5081fbd9655b3d9d25e2647ea6d5dab873325e88eed12d80a7d"
+    },
+    {
+     "path": "vision/blip-image-captioning-base/special_tokens_map.json",
+     "url": "https://huggingface.co/Salesforce/blip-image-captioning-base/resolve/9cfcdbcaccbcadb2b53b36d4b50042c4eeaa0c25/special_tokens_map.json",
+     "size_bytes": 125,
+     "sha256": "b6d346be366a7d1d48332dbc9fdf3bf8960b5d879522b7799ddba59e76237ee3"
+    },
+    {
+     "path": "vision/blip-image-captioning-base/tokenizer.json",
+     "url": "https://huggingface.co/Salesforce/blip-image-captioning-base/resolve/9cfcdbcaccbcadb2b53b36d4b50042c4eeaa0c25/tokenizer.json",
+     "size_bytes": 711396,
+     "sha256": "d241a60d5e8f04cc1b2b3e9ef7a4921b27bf526d9f6050ab90f9267a1f9e5c66"
+    },
+    {
+     "path": "vision/blip-image-captioning-base/tokenizer_config.json",
+     "url": "https://huggingface.co/Salesforce/blip-image-captioning-base/resolve/9cfcdbcaccbcadb2b53b36d4b50042c4eeaa0c25/tokenizer_config.json",
+     "size_bytes": 506,
+     "sha256": "5c7f96096284c55e539eff95f4451c19efc34258ddb975a4400d052b77301e5e"
+    },
+    {
+     "path": "vision/blip-image-captioning-base/vocab.txt",
+     "url": "https://huggingface.co/Salesforce/blip-image-captioning-base/resolve/9cfcdbcaccbcadb2b53b36d4b50042c4eeaa0c25/vocab.txt",
+     "size_bytes": 231508,
+     "sha256": "07eced375cec144d27c900241f3e339478dec958f92fddbc551f295c992038a3"
+    }
+   ],
+   "license": {
+    "name": "BSD-3-Clause",
+    "url": "https://huggingface.co/Salesforce/blip-image-captioning-base",
+    "non_commercial": false
+   },
+   "ram_gb": 2,
+   "capabilities": [
+    "caption"
+   ],
+   "local": true,
+   "companions": [],
+   "vram_gb": 0,
+   "size_bytes": 990669641,
+   "sha256": "d5fe21105c145477889dde75d86d0c0460f7679871ca73cc0f265edf9cfdf996"
+  },
+  {
+   "id": "insightface-buffalo-l",
+   "kind": "face",
+   "backend": "onnx",
+   "roles": [],
+   "profiles": [
+    "laptop",
+    "gpu_mid",
+    "gpu_high",
+    "gpu_ultra"
+   ],
+   "name": "InsightFace buffalo_l (detection + recognition)",
+   "purpose": "Finds faces and keeps the chosen identity across frames.",
+   "features": [
+    "Face swap",
+    "Face swap video"
+   ],
+   "source": {
+    "publisher": "InsightFace (mirror: public-data)",
+    "url": "https://github.com/deepinsight/insightface/tree/master/python-package",
+    "repo": "public-data/insightface",
+    "revision": "33c1063c49c785b7652d3fd529f86fa4f149392b"
+   },
+   "files": [
+    {
+     "path": "insightface/models/buffalo_l/det_10g.onnx",
+     "url": "https://huggingface.co/public-data/insightface/resolve/33c1063c49c785b7652d3fd529f86fa4f149392b/models/buffalo_l/det_10g.onnx",
+     "size_bytes": 16923827,
+     "sha256": "5838f7fe053675b1c7a08b633df49e7af5495cee0493c7dcf6697200b85b5b91",
+     "legacy": [
+      "@home/.insightface/models/buffalo_l/det_10g.onnx"
+     ]
+    },
+    {
+     "path": "insightface/models/buffalo_l/w600k_r50.onnx",
+     "url": "https://huggingface.co/public-data/insightface/resolve/33c1063c49c785b7652d3fd529f86fa4f149392b/models/buffalo_l/w600k_r50.onnx",
+     "size_bytes": 174383860,
+     "sha256": "4c06341c33c2ca1f86781dab0e829f88ad5b64be9fba56e56bc9ebdefc619e43",
+     "legacy": [
+      "@home/.insightface/models/buffalo_l/w600k_r50.onnx"
+     ]
+    }
+   ],
+   "license": {
+    "name": "InsightFace models: non-commercial research use only",
+    "url": "https://github.com/deepinsight/insightface#license",
+    "non_commercial": true
+   },
+   "vram_gb": 1,
+   "ram_gb": 2,
+   "local": true,
+   "companions": [],
+   "capabilities": [],
+   "size_bytes": 191307687,
+   "sha256": "5838f7fe053675b1c7a08b633df49e7af5495cee0493c7dcf6697200b85b5b91"
+  },
+  {
+   "id": "inswapper-128",
+   "kind": "face",
+   "backend": "onnx",
+   "roles": [],
+   "profiles": [
+    "laptop",
+    "gpu_mid",
+    "gpu_high",
+    "gpu_ultra"
+   ],
+   "name": "InSwapper 128",
+   "purpose": "Replaces a face in images and videos with a reference identity.",
+   "features": [
+    "Face swap",
+    "Face swap video"
+   ],
+   "source": {
+    "publisher": "InsightFace (mirror: ezioruan)",
+    "url": "https://github.com/deepinsight/insightface/tree/master/examples/in_swapper",
+    "repo": "ezioruan/inswapper_128.onnx",
+    "revision": "6ffdf0e83c5996cc425e77b59913fc48d79441be",
+    "filename": "inswapper_128.onnx"
+   },
+   "files": [
+    {
+     "path": "faceswap/inswapper_128.onnx",
+     "url": "https://huggingface.co/ezioruan/inswapper_128.onnx/resolve/6ffdf0e83c5996cc425e77b59913fc48d79441be/inswapper_128.onnx",
+     "size_bytes": 554253681,
+     "sha256": "e4a3f08c753cb72d04e10aa0f7dbe3deebbf39567d4ead6dce08e98aa49e16af"
+    }
+   ],
+   "license": {
+    "name": "InsightFace models: non-commercial research use only",
+    "url": "https://github.com/deepinsight/insightface#license",
+    "non_commercial": true
+   },
+   "vram_gb": 1.5,
+   "ram_gb": 2,
+   "companions": [
+    "insightface-buffalo-l"
+   ],
+   "local": true,
+   "capabilities": [],
+   "size_bytes": 554253681,
+   "sha256": "e4a3f08c753cb72d04e10aa0f7dbe3deebbf39567d4ead6dce08e98aa49e16af"
+  },
+  {
+   "id": "gfpgan-1.4",
+   "kind": "restore",
+   "backend": "onnx",
+   "roles": [],
+   "profiles": [
+    "laptop",
+    "gpu_mid",
+    "gpu_high",
+    "gpu_ultra"
+   ],
+   "name": "GFPGAN 1.4 face restoration",
+   "purpose": "Restores swapped faces (default restorer, commercial-friendly).",
+   "features": [
+    "Face swap",
+    "Face swap video"
+   ],
+   "source": {
+    "publisher": "TencentARC (ONNX export: FaceFusion)",
+    "url": "https://github.com/TencentARC/GFPGAN",
+    "repo": "facefusion/models-3.0.0",
+    "revision": "728b9659bd9691bf32cbf7f61af478d94b7ba81e",
+    "filename": "gfpgan_1.4.onnx"
+   },
+   "files": [
+    {
+     "path": "restore/gfpgan_1.4.onnx",
+     "url": "https://huggingface.co/facefusion/models-3.0.0/resolve/728b9659bd9691bf32cbf7f61af478d94b7ba81e/gfpgan_1.4.onnx",
+     "size_bytes": 340299087,
+     "sha256": "accc4757b26bdb89b32b4d3500d4f79c9dff97c1dd7c7104bf9dcb95e3311385"
+    }
+   ],
+   "license": {
+    "name": "Apache-2.0",
+    "url": "https://github.com/TencentARC/GFPGAN/blob/master/LICENSE",
+    "non_commercial": false
+   },
+   "vram_gb": 1.5,
+   "ram_gb": 2,
+   "local": true,
+   "companions": [],
+   "capabilities": [],
+   "size_bytes": 340299087,
+   "sha256": "accc4757b26bdb89b32b4d3500d4f79c9dff97c1dd7c7104bf9dcb95e3311385"
+  },
+  {
+   "id": "codeformer",
+   "kind": "restore",
+   "backend": "onnx",
+   "roles": [],
+   "profiles": [
+    "gpu_mid",
+    "gpu_high",
+    "gpu_ultra"
+   ],
+   "name": "CodeFormer face restoration",
+   "purpose": "Optional alternative restorer (non-commercial license).",
+   "features": [
+    "Face swap",
+    "Face swap video"
+   ],
+   "source": {
+    "publisher": "S-Lab, NTU (ONNX export: FaceFusion)",
+    "url": "https://github.com/sczhou/CodeFormer",
+    "repo": "facefusion/models-3.0.0",
+    "revision": "728b9659bd9691bf32cbf7f61af478d94b7ba81e",
+    "filename": "codeformer.onnx"
+   },
+   "files": [
+    {
+     "path": "restore/codeformer.onnx",
+     "url": "https://huggingface.co/facefusion/models-3.0.0/resolve/728b9659bd9691bf32cbf7f61af478d94b7ba81e/codeformer.onnx",
+     "size_bytes": 376951650,
+     "sha256": "21710e7ab61c82683576c428e9c1b6fe1ed419586b7b39e394c3449c294b550f"
+    }
+   ],
+   "license": {
+    "name": "S-Lab License 1.0 (non-commercial)",
+    "url": "https://github.com/sczhou/CodeFormer/blob/master/LICENSE",
+    "non_commercial": true
+   },
+   "vram_gb": 1.5,
+   "ram_gb": 2,
+   "local": true,
+   "companions": [],
+   "capabilities": [],
+   "size_bytes": 376951650,
+   "sha256": "21710e7ab61c82683576c428e9c1b6fe1ed419586b7b39e394c3449c294b550f"
+  },
+  {
+   "id": "uvr-kim-vocal-2",
+   "kind": "separator",
+   "backend": "audio_separator",
+   "roles": [
+    "speech"
+   ],
+   "profiles": [
+    "gpu_mid",
+    "gpu_high",
+    "gpu_ultra"
+   ],
+   "name": "UVR MDX-Net Kim Vocal 2",
+   "purpose": "Isolates vocals before lyric timing for tighter karaoke alignment.",
+   "features": [
+    "Vocal isolation",
+    "Sync lyrics"
+   ],
+   "source": {
+    "publisher": "KimberleyJSN / Ultimate Vocal Remover (mirror: Acapellas)",
+    "url": "https://github.com/Anjok07/ultimatevocalremovergui",
+    "repo": "Acapellas/Kim_Vocal_2.onnx",
+    "revision": "0a329baacdd9dec4f9ebb56fbc9f49515f92c5db",
+    "filename": "Kim_Vocal_2.onnx"
+   },
+   "files": [
+    {
+     "path": "separator/Kim_Vocal_2.onnx",
+     "url": "https://huggingface.co/Acapellas/Kim_Vocal_2.onnx/resolve/0a329baacdd9dec4f9ebb56fbc9f49515f92c5db/Kim_Vocal_2.onnx",
+     "size_bytes": 66759214,
+     "sha256": "ce74ef3b6a6024ce44211a07be9cf8bc6d87728cc852a68ab34eb8e58cde9c8b"
+    }
+   ],
+   "license": {
+    "name": "MIT",
+    "url": "https://github.com/Anjok07/ultimatevocalremovergui/blob/master/LICENSE",
+    "non_commercial": false
+   },
+   "vram_gb": 2,
+   "ram_gb": 3,
+   "local": true,
+   "companions": [],
+   "capabilities": [],
+   "size_bytes": 66759214,
+   "sha256": "ce74ef3b6a6024ce44211a07be9cf8bc6d87728cc852a68ab34eb8e58cde9c8b"
+  },
+  {
+   "id": "engine-ollama",
+   "kind": "engine",
+   "backend": "engine",
+   "roles": [],
+   "profiles": [
+    "gpu_mid",
+    "gpu_high",
+    "gpu_ultra"
+   ],
+   "install_root": "engines",
+   "name": "Ollama (portable)",
+   "purpose": "Local model server for helper, translator and vision models on GPU PCs.",
+   "features": [
+    "Copilot",
+    "Lyric translation",
+    "Vision"
+   ],
+   "source": {
+    "publisher": "Ollama",
+    "url": "https://github.com/ollama/ollama/releases/tag/v0.40.14",
+    "release": "v0.40.14"
+   },
+   "files": [
+    {
+     "path": "downloads/ollama-windows-amd64.zip",
+     "url": "https://github.com/ollama/ollama/releases/download/v0.40.14/ollama-windows-amd64.zip",
+     "size_bytes": 1601954968,
+     "sha256": "65d68cade6cf6375f398b518224f8c8a15e062387f38cf477abfc848de7e7e29"
+    }
+   ],
+   "extract": {
+    "format": "zip",
+    "to": "ollama"
+   },
+   "license": {
+    "name": "MIT",
+    "url": "https://github.com/ollama/ollama/blob/main/LICENSE",
+    "non_commercial": false
+   },
+   "ram_gb": 1,
+   "local": true,
+   "companions": [],
+   "vram_gb": 0,
+   "capabilities": [],
+   "size_bytes": 1601954968,
+   "sha256": "65d68cade6cf6375f398b518224f8c8a15e062387f38cf477abfc848de7e7e29"
+  },
+  {
+   "id": "engine-comfyui",
+   "kind": "engine",
+   "backend": "engine",
+   "roles": [],
+   "profiles": [
+    "gpu_mid",
+    "gpu_high",
+    "gpu_ultra"
+   ],
+   "install_root": "engines",
+   "name": "ComfyUI creative engine (portable, NVIDIA)",
+   "purpose": "Headless image, video, lip-sync and portrait engine with its own Python.",
+   "features": [
+    "Keyframes",
+    "Identity edit",
+    "Animate",
+    "Lip-sync",
+    "Performance"
+   ],
+   "source": {
+    "publisher": "Comfy Org",
+    "url": "https://github.com/Comfy-Org/ComfyUI/releases/tag/v0.43.0",
+    "release": "v0.43.0"
+   },
+   "files": [
+    {
+     "path": "downloads/ComfyUI_windows_portable_nvidia.7z",
+     "url": "https://github.com/Comfy-Org/ComfyUI/releases/download/v0.43.0/ComfyUI_windows_portable_nvidia.7z",
+     "size_bytes": 2039673203,
+     "sha256": "4928f88e6a8407c4574d4f7d92cfeba020d782edba4a076b7d107ecc98955e50"
+    }
+   ],
+   "extract": {
+    "format": "7z",
+    "to": "comfyui"
+   },
+   "license": {
+    "name": "GPL-3.0",
+    "url": "https://github.com/Comfy-Org/ComfyUI/blob/master/LICENSE",
+    "non_commercial": false
+   },
+   "vram_gb": 8,
+   "ram_gb": 16,
+   "local": true,
+   "companions": [],
+   "capabilities": [],
+   "size_bytes": 2039673203,
+   "sha256": "4928f88e6a8407c4574d4f7d92cfeba020d782edba4a076b7d107ecc98955e50"
+  },
+  {
+   "id": "node-comfyui-gguf",
+   "kind": "comfy_node",
+   "backend": "comfy",
+   "roles": [],
+   "profiles": [
+    "gpu_mid",
+    "gpu_high",
+    "gpu_ultra"
+   ],
+   "install_root": "engines",
+   "name": "ComfyUI-GGUF (ComfyUI node)",
+   "purpose": "Loads quantized GGUF image/video models (FLUX, Wan).",
+   "features": [
+    "Creative engine"
+   ],
+   "source": {
+    "publisher": "city96",
+    "url": "https://github.com/city96/ComfyUI-GGUF",
+    "repo": "city96/ComfyUI-GGUF",
+    "revision": "6ea2651e7df66d7585f6ffee804b20e92fb38b8a"
+   },
+   "files": [
+    {
+     "path": "downloads/ComfyUI-GGUF-6ea2651e7df6.zip",
+     "url": "https://github.com/city96/ComfyUI-GGUF/archive/6ea2651e7df66d7585f6ffee804b20e92fb38b8a.zip",
+     "size_bytes": 38051,
+     "sha256": "aad273a0b774684285b4496f6edff7e2293bd29d71ef89926d6861bfdf4947ac"
+    }
+   ],
+   "extract": {
+    "format": "zip",
+    "to": "@comfy/custom_nodes/ComfyUI-GGUF",
+    "strip_components": 1
+   },
+   "node_folder": "ComfyUI-GGUF",
+   "license": {
+    "name": "Apache-2.0",
+    "url": "https://github.com/city96/ComfyUI-GGUF/blob/main/LICENSE",
+    "non_commercial": false
+   },
+   "companions": [
+    "engine-comfyui"
+   ],
+   "local": true,
+   "vram_gb": 0,
+   "ram_gb": 0,
+   "capabilities": [],
+   "size_bytes": 38051,
+   "sha256": "aad273a0b774684285b4496f6edff7e2293bd29d71ef89926d6861bfdf4947ac"
+  },
+  {
+   "id": "node-latentsync",
+   "kind": "comfy_node",
+   "backend": "comfy",
+   "roles": [],
+   "profiles": [
+    "gpu_mid",
+    "gpu_high",
+    "gpu_ultra"
+   ],
+   "install_root": "engines",
+   "name": "ComfyUI-LatentSyncWrapper (ComfyUI node)",
+   "purpose": "Runs LatentSync lip-sync inside ComfyUI.",
+   "features": [
+    "Creative engine"
+   ],
+   "source": {
+    "publisher": "ShmuelRonen",
+    "url": "https://github.com/ShmuelRonen/ComfyUI-LatentSyncWrapper",
+    "repo": "ShmuelRonen/ComfyUI-LatentSyncWrapper",
+    "revision": "360d5283d7276aee68b4237b1387e594e4ce640e"
+   },
+   "files": [
+    {
+     "path": "downloads/ComfyUI-LatentSyncWrapper-360d5283d727.zip",
+     "url": "https://github.com/ShmuelRonen/ComfyUI-LatentSyncWrapper/archive/360d5283d7276aee68b4237b1387e594e4ce640e.zip",
+     "size_bytes": 1358041,
+     "sha256": "98a32d7616d582e70f1ea02a7c550b02a22afddbb634dd11ea7a0b5d882b4d2b"
+    }
+   ],
+   "extract": {
+    "format": "zip",
+    "to": "@comfy/custom_nodes/ComfyUI-LatentSyncWrapper",
+    "strip_components": 1
+   },
+   "node_folder": "ComfyUI-LatentSyncWrapper",
+   "license": {
+    "name": "No license file in wrapper repository; LatentSync code Apache-2.0",
+    "url": "https://github.com/ShmuelRonen/ComfyUI-LatentSyncWrapper",
+    "non_commercial": false,
+    "review_required": true
+   },
+   "companions": [
+    "engine-comfyui"
+   ],
+   "post_install_remove": [
+    "configs/unet/stage2_512.yaml"
+   ],
+   "local": true,
+   "vram_gb": 0,
+   "ram_gb": 0,
+   "capabilities": [],
+   "size_bytes": 1358041,
+   "sha256": "98a32d7616d582e70f1ea02a7c550b02a22afddbb634dd11ea7a0b5d882b4d2b"
+  },
+  {
+   "id": "node-liveportrait",
+   "kind": "comfy_node",
+   "backend": "comfy",
+   "roles": [],
+   "profiles": [
+    "gpu_mid",
+    "gpu_high",
+    "gpu_ultra"
+   ],
+   "install_root": "engines",
+   "name": "ComfyUI-LivePortraitKJ (ComfyUI node)",
+   "purpose": "Runs LivePortrait expression/head retargeting inside ComfyUI (MediaPipe cropper, no InsightFace).",
+   "features": [
+    "Creative engine"
+   ],
+   "source": {
+    "publisher": "kijai",
+    "url": "https://github.com/kijai/ComfyUI-LivePortraitKJ",
+    "repo": "kijai/ComfyUI-LivePortraitKJ",
+    "revision": "4d9dc6205b793ffd0fb319816136d9b8c0dbfdff"
+   },
+   "files": [
+    {
+     "path": "downloads/ComfyUI-LivePortraitKJ-4d9dc6205b79.zip",
+     "url": "https://github.com/kijai/ComfyUI-LivePortraitKJ/archive/4d9dc6205b793ffd0fb319816136d9b8c0dbfdff.zip",
+     "size_bytes": 15648368,
+     "sha256": "94f7c479f2ceb2d36792319d06487b0bd785d7481b4a82f30eee51c31ef4f41a"
+    }
+   ],
+   "extract": {
+    "format": "zip",
+    "to": "@comfy/custom_nodes/ComfyUI-LivePortraitKJ",
+    "strip_components": 1
+   },
+   "node_folder": "ComfyUI-LivePortraitKJ",
+   "license": {
+    "name": "MIT",
+    "url": "https://github.com/kijai/ComfyUI-LivePortraitKJ/blob/main/LICENSE",
+    "non_commercial": false
+   },
+   "companions": [
+    "engine-comfyui"
+   ],
+   "local": true,
+   "vram_gb": 0,
+   "ram_gb": 0,
+   "capabilities": [],
+   "size_bytes": 15648368,
+   "sha256": "94f7c479f2ceb2d36792319d06487b0bd785d7481b4a82f30eee51c31ef4f41a"
+  },
+  {
+   "id": "flux-schnell-q4",
+   "kind": "image",
+   "profiles": [
+    "gpu_mid",
+    "gpu_high",
+    "gpu_ultra"
+   ],
+   "name": "FLUX.1 schnell (GGUF Q4_0)",
+   "purpose": "Fast text-to-image keyframes and backdrops (4 steps).",
+   "features": [
+    "Keyframe",
+    "AI Backdrop"
+   ],
+   "source": {
+    "publisher": "Black Forest Labs (GGUF: city96)",
+    "url": "https://huggingface.co/city96/FLUX.1-schnell-gguf",
+    "repo": "city96/FLUX.1-schnell-gguf",
+    "revision": "f495746ed9c5efcf4661f53ef05401dceadc17d2",
+    "filename": "flux1-schnell-Q4_0.gguf"
+   },
+   "files": [
+    {
+     "path": "image/flux1-schnell-Q4_0.gguf",
+     "url": "https://huggingface.co/city96/FLUX.1-schnell-gguf/resolve/f495746ed9c5efcf4661f53ef05401dceadc17d2/flux1-schnell-Q4_0.gguf",
+     "size_bytes": 6770707360,
+     "sha256": "90a393d3a44bec691c707003f434fdde06064b870bb3c206eb7a4f109b25ff4e"
+    }
+   ],
+   "license": {
+    "name": "Apache-2.0",
+    "url": "https://huggingface.co/black-forest-labs/FLUX.1-schnell",
+    "non_commercial": false
+   },
+   "vram_gb": 8,
+   "ram_gb": 16,
+   "companions": [
+    "engine-comfyui",
+    "node-comfyui-gguf",
+    "flux-t5xxl-fp8",
+    "flux-clip-l",
+    "flux-ae"
+   ],
+   "backend": "comfy",
+   "roles": [],
+   "local": true,
+   "capabilities": [],
+   "size_bytes": 6770707360,
+   "sha256": "90a393d3a44bec691c707003f434fdde06064b870bb3c206eb7a4f109b25ff4e"
+  },
+  {
+   "id": "flux-t5xxl-fp8",
+   "kind": "companion",
+   "profiles": [
+    "gpu_mid",
+    "gpu_high",
+    "gpu_ultra"
+   ],
+   "name": "T5-XXL text encoder (fp8)",
+   "purpose": "Text encoder required by FLUX models.",
+   "features": [
+    "Keyframe",
+    "Identity edit"
+   ],
+   "source": {
+    "publisher": "Google T5 (repack: comfyanonymous)",
+    "url": "https://huggingface.co/comfyanonymous/flux_text_encoders",
+    "repo": "comfyanonymous/flux_text_encoders",
+    "revision": "6af2a98e3f615bdfa612fbd85da93d1ed5f69ef5",
+    "filename": "t5xxl_fp8_e4m3fn.safetensors"
+   },
+   "files": [
+    {
+     "path": "text_encoders/t5xxl_fp8_e4m3fn.safetensors",
+     "url": "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/6af2a98e3f615bdfa612fbd85da93d1ed5f69ef5/t5xxl_fp8_e4m3fn.safetensors",
+     "size_bytes": 4893934904,
+     "sha256": "7d330da4816157540d6bb7838bf63a0f02f573fc48ca4d8de34bb0cbfd514f09"
+    }
+   ],
+   "license": {
+    "name": "Apache-2.0",
+    "url": "https://www.apache.org/licenses/LICENSE-2.0",
+    "non_commercial": false
+   },
+   "ram_gb": 6,
+   "backend": "comfy",
+   "roles": [],
+   "local": true,
+   "companions": [],
+   "vram_gb": 0,
+   "capabilities": [],
+   "size_bytes": 4893934904,
+   "sha256": "7d330da4816157540d6bb7838bf63a0f02f573fc48ca4d8de34bb0cbfd514f09"
+  },
+  {
+   "id": "flux-clip-l",
+   "kind": "companion",
+   "profiles": [
+    "gpu_mid",
+    "gpu_high",
+    "gpu_ultra"
+   ],
+   "name": "CLIP-L text encoder",
+   "purpose": "Second text encoder required by FLUX models.",
+   "features": [
+    "Keyframe",
+    "Identity edit"
+   ],
+   "source": {
+    "publisher": "OpenAI CLIP (repack: comfyanonymous)",
+    "url": "https://huggingface.co/comfyanonymous/flux_text_encoders",
+    "repo": "comfyanonymous/flux_text_encoders",
+    "revision": "6af2a98e3f615bdfa612fbd85da93d1ed5f69ef5",
+    "filename": "clip_l.safetensors"
+   },
+   "files": [
+    {
+     "path": "text_encoders/clip_l.safetensors",
+     "url": "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/6af2a98e3f615bdfa612fbd85da93d1ed5f69ef5/clip_l.safetensors",
+     "size_bytes": 246144152,
+     "sha256": "660c6f5b1abae9dc498ac2d21e1347d2abdb0cf6c0c0c8576cd796491d9a6cdd"
+    }
+   ],
+   "license": {
+    "name": "MIT",
+    "url": "https://github.com/openai/CLIP/blob/main/LICENSE",
+    "non_commercial": false
+   },
+   "ram_gb": 1,
+   "backend": "comfy",
+   "roles": [],
+   "local": true,
+   "companions": [],
+   "vram_gb": 0,
+   "capabilities": [],
+   "size_bytes": 246144152,
+   "sha256": "660c6f5b1abae9dc498ac2d21e1347d2abdb0cf6c0c0c8576cd796491d9a6cdd"
+  },
+  {
+   "id": "flux-ae",
+   "kind": "companion",
+   "profiles": [
+    "gpu_mid",
+    "gpu_high",
+    "gpu_ultra"
+   ],
+   "name": "FLUX autoencoder (ae)",
+   "purpose": "Image decoder required by FLUX models.",
+   "features": [
+    "Keyframe",
+    "Identity edit"
+   ],
+   "source": {
+    "publisher": "Black Forest Labs (repack: Comfy-Org)",
+    "url": "https://huggingface.co/Comfy-Org/Lumina_Image_2.0_Repackaged",
+    "repo": "Comfy-Org/Lumina_Image_2.0_Repackaged",
+    "revision": "5b072540ef86570fecb8249c505f23d5bdeb88cd",
+    "filename": "split_files/vae/ae.safetensors"
+   },
+   "files": [
+    {
+     "path": "vae/ae.safetensors",
+     "url": "https://huggingface.co/Comfy-Org/Lumina_Image_2.0_Repackaged/resolve/5b072540ef86570fecb8249c505f23d5bdeb88cd/split_files/vae/ae.safetensors",
+     "size_bytes": 335304388,
+     "sha256": "afc8e28272cd15db3919bacdb6918ce9c1ed22e96cb12c4d5ed0fba823529e38"
+    }
+   ],
+   "license": {
+    "name": "Apache-2.0",
+    "url": "https://huggingface.co/black-forest-labs/FLUX.1-schnell",
+    "non_commercial": false
+   },
+   "ram_gb": 1,
+   "backend": "comfy",
+   "roles": [],
+   "local": true,
+   "companions": [],
+   "vram_gb": 0,
+   "capabilities": [],
+   "size_bytes": 335304388,
+   "sha256": "afc8e28272cd15db3919bacdb6918ce9c1ed22e96cb12c4d5ed0fba823529e38"
+  },
+  {
+   "id": "flux-kontext-dev-q4",
+   "kind": "image",
+   "profiles": [
+    "gpu_high",
+    "gpu_ultra"
+   ],
+   "name": "FLUX.1 Kontext dev (GGUF Q4_K_M)",
+   "purpose": "Identity-preserving image edits from a reference portrait.",
+   "features": [
+    "Identity edit",
+    "Keyframe"
+   ],
+   "source": {
+    "publisher": "Black Forest Labs (GGUF: QuantStack)",
+    "url": "https://huggingface.co/QuantStack/FLUX.1-Kontext-dev-GGUF",
+    "repo": "QuantStack/FLUX.1-Kontext-dev-GGUF",
+    "revision": "2d083027732f81e5548620b57ac47da22d30aa5a",
+    "filename": "flux1-kontext-dev-Q4_K_M.gguf"
+   },
+   "files": [
+    {
+     "path": "image/flux1-kontext-dev-Q4_K_M.gguf",
+     "url": "https://huggingface.co/QuantStack/FLUX.1-Kontext-dev-GGUF/resolve/2d083027732f81e5548620b57ac47da22d30aa5a/flux1-kontext-dev-Q4_K_M.gguf",
+     "size_bytes": 6931817760,
+     "sha256": "ebd4e92c44c47f104ad64e4353692f37addf06eb99420c9b459334d871c8b750"
+    }
+   ],
+   "license": {
+    "name": "FLUX.1 [dev] Non-Commercial License",
+    "url": "https://huggingface.co/black-forest-labs/FLUX.1-Kontext-dev/blob/main/LICENSE.md",
+    "non_commercial": true
+   },
+   "vram_gb": 10,
+   "ram_gb": 16,
+   "companions": [
+    "engine-comfyui",
+    "node-comfyui-gguf",
+    "flux-t5xxl-fp8",
+    "flux-clip-l",
+    "flux-ae"
+   ],
+   "backend": "comfy",
+   "roles": [],
+   "local": true,
+   "capabilities": [],
+   "size_bytes": 6931817760,
+   "sha256": "ebd4e92c44c47f104ad64e4353692f37addf06eb99420c9b459334d871c8b750"
+  },
+  {
+   "id": "wan22-ti2v-5b",
+   "kind": "video",
+   "profiles": [
+    "gpu_high",
+    "gpu_ultra"
+   ],
+   "name": "Wan 2.2 TI2V 5B (GGUF Q8_0)",
+   "purpose": "Fast image-to-video and text-to-video (720p, ~5 s clips).",
+   "features": [
+    "Animate"
+   ],
+   "source": {
+    "publisher": "Wan-AI (GGUF: QuantStack)",
+    "url": "https://huggingface.co/QuantStack/Wan2.2-TI2V-5B-GGUF",
+    "repo": "QuantStack/Wan2.2-TI2V-5B-GGUF",
+    "revision": "57437632ddd08bdcbd1508c866aa22e126ed51d2",
+    "filename": "Wan2.2-TI2V-5B-Q8_0.gguf"
+   },
+   "files": [
+    {
+     "path": "video/Wan2.2-TI2V-5B-Q8_0.gguf",
+     "url": "https://huggingface.co/QuantStack/Wan2.2-TI2V-5B-GGUF/resolve/57437632ddd08bdcbd1508c866aa22e126ed51d2/Wan2.2-TI2V-5B-Q8_0.gguf",
+     "size_bytes": 5400179040,
+     "sha256": "57bece983817ab2f957546683bb670f13be7d99022d45674840cd999a050ea8f"
+    }
+   ],
+   "license": {
+    "name": "Apache-2.0",
+    "url": "https://www.apache.org/licenses/LICENSE-2.0",
+    "non_commercial": false
+   },
+   "vram_gb": 8,
+   "ram_gb": 16,
+   "eta_seconds": 420,
+   "companions": [
+    "engine-comfyui",
+    "node-comfyui-gguf",
+    "umt5-xxl-fp8",
+    "wan22-vae"
+   ],
+   "backend": "comfy",
+   "roles": [],
+   "local": true,
+   "capabilities": [],
+   "size_bytes": 5400179040,
+   "sha256": "57bece983817ab2f957546683bb670f13be7d99022d45674840cd999a050ea8f"
+  },
+  {
+   "id": "umt5-xxl-fp8",
+   "kind": "companion",
+   "profiles": [
+    "gpu_high",
+    "gpu_ultra"
+   ],
+   "name": "UMT5-XXL text encoder (fp8 scaled)",
+   "purpose": "Text encoder required by Wan video models.",
+   "features": [
+    "Animate"
+   ],
+   "source": {
+    "publisher": "Wan-AI (repack: Comfy-Org)",
+    "url": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged",
+    "repo": "Comfy-Org/Wan_2.1_ComfyUI_repackaged",
+    "revision": "123acf1cc74bccbb9bfff8ac1ee72edc08c2341d",
+    "filename": "split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors"
+   },
+   "files": [
+    {
+     "path": "text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+     "url": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/123acf1cc74bccbb9bfff8ac1ee72edc08c2341d/split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+     "size_bytes": 6735906897,
+     "sha256": "c3355d30191f1f066b26d93fba017ae9809dce6c627dda5f6a66eaa651204f68"
+    }
+   ],
+   "license": {
+    "name": "Apache-2.0",
+    "url": "https://www.apache.org/licenses/LICENSE-2.0",
+    "non_commercial": false
+   },
+   "ram_gb": 8,
+   "backend": "comfy",
+   "roles": [],
+   "local": true,
+   "companions": [],
+   "vram_gb": 0,
+   "capabilities": [],
+   "size_bytes": 6735906897,
+   "sha256": "c3355d30191f1f066b26d93fba017ae9809dce6c627dda5f6a66eaa651204f68"
+  },
+  {
+   "id": "wan22-vae",
+   "kind": "companion",
+   "profiles": [
+    "gpu_high",
+    "gpu_ultra"
+   ],
+   "name": "Wan 2.2 VAE",
+   "purpose": "Video decoder required by Wan 2.2 5B.",
+   "features": [
+    "Animate"
+   ],
+   "source": {
+    "publisher": "Wan-AI (repack: Comfy-Org)",
+    "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged",
+    "repo": "Comfy-Org/Wan_2.2_ComfyUI_Repackaged",
+    "revision": "ee6f4a40737a995bf5818954cfce6d59443b0f04",
+    "filename": "split_files/vae/wan2.2_vae.safetensors"
+   },
+   "files": [
+    {
+     "path": "vae/wan2.2_vae.safetensors",
+     "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/ee6f4a40737a995bf5818954cfce6d59443b0f04/split_files/vae/wan2.2_vae.safetensors",
+     "size_bytes": 1409400960,
+     "sha256": "e40321bd36b9709991dae2530eb4ac303dd168276980d3e9bc4b6e2b75fed156"
+    }
+   ],
+   "license": {
+    "name": "Apache-2.0",
+    "url": "https://www.apache.org/licenses/LICENSE-2.0",
+    "non_commercial": false
+   },
+   "ram_gb": 2,
+   "backend": "comfy",
+   "roles": [],
+   "local": true,
+   "companions": [],
+   "vram_gb": 0,
+   "capabilities": [],
+   "size_bytes": 1409400960,
+   "sha256": "e40321bd36b9709991dae2530eb4ac303dd168276980d3e9bc4b6e2b75fed156"
+  },
+  {
+   "id": "wan21-i2v-14b-q4",
+   "kind": "video",
+   "profiles": [
+    "gpu_high",
+    "gpu_ultra"
+   ],
+   "name": "Wan 2.1 I2V 14B 480p (GGUF Q4_0)",
+   "purpose": "Higher-quality image-to-video (slow: ~15–30 min per 5 s on 12 GB).",
+   "features": [
+    "Animate (quality)"
+   ],
+   "source": {
+    "publisher": "Wan-AI (GGUF: city96)",
+    "url": "https://huggingface.co/city96/Wan2.1-I2V-14B-480P-gguf",
+    "repo": "city96/Wan2.1-I2V-14B-480P-gguf",
+    "revision": "b4b6b3b3f0f64975fb33b1d5d1a46ca24e065f03",
+    "filename": "wan2.1-i2v-14b-480p-Q4_0.gguf"
+   },
+   "files": [
+    {
+     "path": "video/wan2.1-i2v-14b-480p-Q4_0.gguf",
+     "url": "https://huggingface.co/city96/Wan2.1-I2V-14B-480P-gguf/resolve/b4b6b3b3f0f64975fb33b1d5d1a46ca24e065f03/wan2.1-i2v-14b-480p-Q4_0.gguf",
+     "size_bytes": 10247552384,
+     "sha256": "cc572fdf84417905550363f16c53f20fd8d5aee046e1562d2546fae7222c2a0a"
+    }
+   ],
+   "license": {
+    "name": "Apache-2.0",
+    "url": "https://www.apache.org/licenses/LICENSE-2.0",
+    "non_commercial": false
+   },
+   "vram_gb": 11,
+   "ram_gb": 32,
+   "eta_seconds": 1800,
+   "companions": [
+    "engine-comfyui",
+    "node-comfyui-gguf",
+    "umt5-xxl-fp8",
+    "wan21-vae",
+    "clip-vision-h"
+   ],
+   "backend": "comfy",
+   "roles": [],
+   "local": true,
+   "capabilities": [],
+   "size_bytes": 10247552384,
+   "sha256": "cc572fdf84417905550363f16c53f20fd8d5aee046e1562d2546fae7222c2a0a"
+  },
+  {
+   "id": "wan21-vae",
+   "kind": "companion",
+   "profiles": [
+    "gpu_high",
+    "gpu_ultra"
+   ],
+   "name": "Wan 2.1 VAE",
+   "purpose": "Video decoder required by Wan 2.1 14B.",
+   "features": [
+    "Animate (quality)"
+   ],
+   "source": {
+    "publisher": "Wan-AI (repack: Comfy-Org)",
+    "url": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged",
+    "repo": "Comfy-Org/Wan_2.1_ComfyUI_repackaged",
+    "revision": "123acf1cc74bccbb9bfff8ac1ee72edc08c2341d",
+    "filename": "split_files/vae/wan_2.1_vae.safetensors"
+   },
+   "files": [
+    {
+     "path": "vae/wan_2.1_vae.safetensors",
+     "url": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/123acf1cc74bccbb9bfff8ac1ee72edc08c2341d/split_files/vae/wan_2.1_vae.safetensors",
+     "size_bytes": 253815318,
+     "sha256": "2fc39d31359a4b0a64f55876d8ff7fa8d780956ae2cb13463b0223e15148976b"
+    }
+   ],
+   "license": {
+    "name": "Apache-2.0",
+    "url": "https://www.apache.org/licenses/LICENSE-2.0",
+    "non_commercial": false
+   },
+   "ram_gb": 1,
+   "backend": "comfy",
+   "roles": [],
+   "local": true,
+   "companions": [],
+   "vram_gb": 0,
+   "capabilities": [],
+   "size_bytes": 253815318,
+   "sha256": "2fc39d31359a4b0a64f55876d8ff7fa8d780956ae2cb13463b0223e15148976b"
+  },
+  {
+   "id": "clip-vision-h",
+   "kind": "companion",
+   "profiles": [
+    "gpu_high",
+    "gpu_ultra"
+   ],
+   "name": "CLIP Vision H",
+   "purpose": "Image encoder required by Wan 2.1 image-to-video.",
+   "features": [
+    "Animate (quality)"
+   ],
+   "source": {
+    "publisher": "OpenCLIP (repack: Comfy-Org)",
+    "url": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged",
+    "repo": "Comfy-Org/Wan_2.1_ComfyUI_repackaged",
+    "revision": "123acf1cc74bccbb9bfff8ac1ee72edc08c2341d",
+    "filename": "split_files/clip_vision/clip_vision_h.safetensors"
+   },
+   "files": [
+    {
+     "path": "clip_vision/clip_vision_h.safetensors",
+     "url": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/123acf1cc74bccbb9bfff8ac1ee72edc08c2341d/split_files/clip_vision/clip_vision_h.safetensors",
+     "size_bytes": 1264219396,
+     "sha256": "64a7ef761bfccbadbaa3da77366aac4185a6c58fa5de5f589b42a65bcc21f161"
+    }
+   ],
+   "license": {
+    "name": "MIT",
+    "url": "https://github.com/mlfoundations/open_clip/blob/main/LICENSE",
+    "non_commercial": false
+   },
+   "ram_gb": 2,
+   "backend": "comfy",
+   "roles": [],
+   "local": true,
+   "companions": [],
+   "vram_gb": 0,
+   "capabilities": [],
+   "size_bytes": 1264219396,
+   "sha256": "64a7ef761bfccbadbaa3da77366aac4185a6c58fa5de5f589b42a65bcc21f161"
+  },
+  {
+   "id": "latentsync-1.5",
+   "kind": "lipsync",
+   "profiles": [
+    "gpu_high",
+    "gpu_ultra"
+   ],
+   "name": "LatentSync 1.5 lip-sync",
+   "purpose": "Re-syncs lips in a video to a new audio track (8 GB VRAM variant).",
+   "features": [
+    "Lip-sync",
+    "Performance"
+   ],
+   "source": {
+    "publisher": "ByteDance",
+    "url": "https://huggingface.co/ByteDance/LatentSync-1.5",
+    "repo": "ByteDance/LatentSync-1.5",
+    "revision": "32a20d29aead0498e3e885e90dbbe8027da1b61b"
+   },
+   "files": [
+    {
+     "path": "latentsync/latentsync_unet.pt",
+     "url": "https://huggingface.co/ByteDance/LatentSync-1.5/resolve/32a20d29aead0498e3e885e90dbbe8027da1b61b/latentsync_unet.pt",
+     "size_bytes": 5072348184,
+     "sha256": "6440b49a7ccceff56cdc001f5f17605216337f5bbd66fa360139768926e23f51"
+    },
+    {
+     "path": "latentsync/whisper/tiny.pt",
+     "url": "https://huggingface.co/ByteDance/LatentSync-1.5/resolve/32a20d29aead0498e3e885e90dbbe8027da1b61b/whisper/tiny.pt",
+     "size_bytes": 75572083,
+     "sha256": "65147644a518d12f04e32d6f3b26facc3f8dd46e5390956a9424a650c0ce22b9"
+    },
+    {
+     "path": "latentsync/auxiliary/s3fd-619a316812.pth",
+     "url": "https://huggingface.co/ByteDance/LatentSync-1.5/resolve/32a20d29aead0498e3e885e90dbbe8027da1b61b/auxiliary/s3fd-619a316812.pth",
+     "size_bytes": 89843225,
+     "sha256": "619a31681264d3f7f7fc7a16a42cbbe8b23f31a256f75a366e5a1bcd59b33543"
+    }
+   ],
+   "comfy_links": [
+    {
+     "from": "latentsync/latentsync_unet.pt",
+     "to": "custom_nodes/ComfyUI-LatentSyncWrapper/checkpoints/latentsync_unet.pt"
+    },
+    {
+     "from": "latentsync/whisper/tiny.pt",
+     "to": "custom_nodes/ComfyUI-LatentSyncWrapper/checkpoints/whisper/tiny.pt"
+    },
+    {
+     "from": "latentsync/auxiliary/s3fd-619a316812.pth",
+     "to": "@home/.latentsync16_models/s3fd-e19a316812.pth"
+    }
+   ],
+   "license": {
+    "name": "OpenRAIL++-M (model card); code Apache-2.0",
+    "url": "https://huggingface.co/ByteDance/LatentSync-1.5",
+    "non_commercial": false
+   },
+   "vram_gb": 8,
+   "ram_gb": 16,
+   "eta_seconds": 600,
+   "companions": [
+    "engine-comfyui",
+    "node-latentsync"
+   ],
+   "backend": "comfy",
+   "roles": [],
+   "local": true,
+   "capabilities": [],
+   "size_bytes": 5237763492,
+   "sha256": "6440b49a7ccceff56cdc001f5f17605216337f5bbd66fa360139768926e23f51"
+  },
+  {
+   "id": "liveportrait",
+   "kind": "portrait",
+   "profiles": [
+    "gpu_mid",
+    "gpu_high",
+    "gpu_ultra"
+   ],
+   "name": "LivePortrait",
+   "purpose": "Transfers expressions and head motion from a driving video onto a portrait.",
+   "features": [
+    "Performance",
+    "Expression retarget"
+   ],
+   "source": {
+    "publisher": "Kuaishou KwaiVGI (safetensors: Kijai)",
+    "url": "https://github.com/KwaiVGI/LivePortrait",
+    "repo": "Kijai/LivePortrait_safetensors",
+    "revision": "59f30f36d7b791929c25437df7461d5b0e0010b1"
+   },
+   "files": [
+    {
+     "path": "liveportrait/appearance_feature_extractor.safetensors",
+     "url": "https://huggingface.co/Kijai/LivePortrait_safetensors/resolve/59f30f36d7b791929c25437df7461d5b0e0010b1/appearance_feature_extractor.safetensors",
+     "size_bytes": 3361936,
+     "sha256": "38bef5de50a92bf1fc66e8c511051a19dfacdf80c37f8713425ec15dc9ca7d34"
+    },
+    {
+     "path": "liveportrait/motion_extractor.safetensors",
+     "url": "https://huggingface.co/Kijai/LivePortrait_safetensors/resolve/59f30f36d7b791929c25437df7461d5b0e0010b1/motion_extractor.safetensors",
+     "size_bytes": 112496256,
+     "sha256": "3568cd410e29d046771acb55ecfdfe4c7c197d345bd8b7f95942ef63130b6c9e"
+    },
+    {
+     "path": "liveportrait/spade_generator.safetensors",
+     "url": "https://huggingface.co/Kijai/LivePortrait_safetensors/resolve/59f30f36d7b791929c25437df7461d5b0e0010b1/spade_generator.safetensors",
+     "size_bytes": 221771768,
+     "sha256": "ca04fbec765745e9eae836d2d7522c274647b277ce5f25104fa1705b75222212"
+    },
+    {
+     "path": "liveportrait/warping_module.safetensors",
+     "url": "https://huggingface.co/Kijai/LivePortrait_safetensors/resolve/59f30f36d7b791929c25437df7461d5b0e0010b1/warping_module.safetensors",
+     "size_bytes": 182158564,
+     "sha256": "f7b7834bd6039b4088f72e5161e60ad366f68a3763df8a3eac0bc0f9d46fdbbf"
+    },
+    {
+     "path": "liveportrait/stitching_retargeting_module.safetensors",
+     "url": "https://huggingface.co/Kijai/LivePortrait_safetensors/resolve/59f30f36d7b791929c25437df7461d5b0e0010b1/stitching_retargeting_module.safetensors",
+     "size_bytes": 911836,
+     "sha256": "60725cf3523ae413880da28ed583c9e84c5c25695a0cef1b77210ea31cc424ea"
+    },
+    {
+     "path": "liveportrait/landmark.onnx",
+     "url": "https://huggingface.co/Kijai/LivePortrait_safetensors/resolve/59f30f36d7b791929c25437df7461d5b0e0010b1/landmark.onnx",
+     "size_bytes": 114666491,
+     "sha256": "31d22a5041326c31f19b78886939a634a5aedcaa5ab8b9b951a1167595d147db"
+    }
+   ],
+   "comfy_links": [
+    {
+     "from": "liveportrait/appearance_feature_extractor.safetensors",
+     "to": "models/liveportrait/appearance_feature_extractor.safetensors"
+    },
+    {
+     "from": "liveportrait/motion_extractor.safetensors",
+     "to": "models/liveportrait/motion_extractor.safetensors"
+    },
+    {
+     "from": "liveportrait/spade_generator.safetensors",
+     "to": "models/liveportrait/spade_generator.safetensors"
+    },
+    {
+     "from": "liveportrait/warping_module.safetensors",
+     "to": "models/liveportrait/warping_module.safetensors"
+    },
+    {
+     "from": "liveportrait/stitching_retargeting_module.safetensors",
+     "to": "models/liveportrait/stitching_retargeting_module.safetensors"
+    },
+    {
+     "from": "liveportrait/landmark.onnx",
+     "to": "models/liveportrait/landmark.onnx"
+    }
+   ],
+   "license": {
+    "name": "MIT",
+    "url": "https://github.com/KwaiVGI/LivePortrait/blob/main/LICENSE",
+    "non_commercial": false
+   },
+   "vram_gb": 4,
+   "ram_gb": 8,
+   "eta_seconds": 120,
+   "companions": [
+    "engine-comfyui",
+    "node-liveportrait"
+   ],
+   "backend": "comfy",
+   "roles": [],
+   "local": true,
+   "capabilities": [],
+   "size_bytes": 635366851,
+   "sha256": "38bef5de50a92bf1fc66e8c511051a19dfacdf80c37f8713425ec15dc9ca7d34"
+  }
+ ]
+}

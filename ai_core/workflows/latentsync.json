@@ -1,0 +1,20 @@
+{
+ "name": "latentsync",
+ "description": "LatentSync 1.5 lip-sync: re-times the lips of 'video' to 'audio'. Requires ComfyUI-LatentSyncWrapper (pinned in the catalog). 'video' and 'audio' are local file paths uploaded to ComfyUI's input folder.",
+ "inputs": {
+  "video": {"node": "1", "field": "file", "type": "file", "required": true},
+  "audio": {"node": "3", "field": "audio", "type": "file", "required": true},
+  "seed": {"node": "4", "field": "seed", "type": "int", "default": 1247},
+  "lips_expression": {"node": "4", "field": "lips_expression", "type": "float", "default": 1.5},
+  "inference_steps": {"node": "4", "field": "inference_steps", "type": "int", "default": 20}
+ },
+ "outputs": ["6"],
+ "prompt": {
+  "1": {"class_type": "LoadVideo", "inputs": {"file": "{{video}}"}},
+  "2": {"class_type": "GetVideoComponents", "inputs": {"video": ["1", 0]}},
+  "3": {"class_type": "LoadAudio", "inputs": {"audio": "{{audio}}"}},
+  "4": {"class_type": "LatentSyncNode", "inputs": {"images": ["2", 0], "audio": ["3", 0], "seed": "{{seed}}", "lips_expression": "{{lips_expression}}", "inference_steps": "{{inference_steps}}"}},
+  "5": {"class_type": "CreateVideo", "inputs": {"images": ["4", 0], "audio": ["4", 1], "fps": ["2", 2]}},
+  "6": {"class_type": "SaveVideo", "inputs": {"video": ["5", 0], "filename_prefix": "mg_latentsync", "format": "mp4", "codec": "h264"}}
+ }
+}

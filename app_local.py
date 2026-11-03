@@ -729,6 +729,8 @@ app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = MAX_UPLOAD_BYTES
 app.secret_key = os.urandom(32)
 app.config.update(SESSION_COOKIE_NAME='media_grabber_session', SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Strict')
+from routes_ai import register_ai_routes
+register_ai_routes(app)
 MEDIA_ROOTS_FILE = os.path.join(DEFAULT_SAVE_DIR, 'media_roots.json')
 GALLERY_MAX_DEPTH = 4
 GALLERY_MAX_FILES = 20000
