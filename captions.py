@@ -209,6 +209,34 @@ def validate_edit(data, duration):
     return dict(cues=clean, style=style)
 
 
+GENERATED_RENDER = re.compile(r'(?:composition|preview|check)_[0-9a-f]{12}\.mp4')
+
+
+def prune_renders(project, folder, keep_checks=3):
+    """Delete generated renders a project no longer references.
+
+    Only app-generated ``composition_*``/``preview_*``/``check_*`` files are candidates;
+    the user's original media, assets and captioned exports are never touched. The
+    newest ``keep_checks`` five-second check renders are kept.
+    """
+    exports = list(project.get('exports', []))
+    checks = [name for name in exports if name.startswith('check_')]
+    dropped = set(checks[:-keep_checks] if keep_checks else checks)
+    project['exports'] = [name for name in exports if name not in dropped]
+    backup = project.get('composition_backup') or {}
+    keep = {project.get('source'), project.get('preview'), project.get('last_render'),
+            backup.get('source'), backup.get('preview'), *project['exports']}
+    removed = []
+    for path in Path(folder).iterdir():
+        if GENERATED_RENDER.fullmatch(path.name) and path.name not in keep and path.is_file():
+            try:
+                path.unlink()
+                removed.append(path.name)
+            except OSError:
+                pass  # A player may still hold the file; the next prune retries.
+    return removed
+
+
 def font_scale(name):
     """ASS sizes the font's ascender+descender; CSS sizes its em square."""
     files = {'Arial':'arial.ttf', 'Verdana':'verdana.ttf', 'Georgia':'georgia.ttf',
@@ -1485,6 +1513,64 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
         keys = ('studio','source','preview','duration','width','height','peaks','cues','style','timing','karaoke_backup','composition')
         return {key:copy.deepcopy(d[key]) for key in keys if key in d}
 
+    def composition_work(pid, assets, settings, added):
+        """Render the draft composition preview; shared by Apply and the storyboard bridge."""
+        def work(d, f):
+            token = uuid.uuid4().hex[:12]
+            output, preview = 'composition_'+token+'.mp4','preview_'+token+'.mp4'
+            audio_probe = 'duration_'+token+'.wav'
+            success = False
+            try:
+                # Bounded decode verifies the real replacement duration, not its filename or metadata.
+                ffmpeg(['-i',assets['audio']['file'],'-t','1200.1','-vn','-ac','1','-ar','1000','-c:a','pcm_s16le',audio_probe], f)
+                with wave.open(str(f/audio_probe),'rb') as audio:
+                    source_duration = audio.getnframes()/audio.getframerate()
+                number(source_duration,.1,1200)
+                if 0 < float(settings.get('end',0))-source_duration <= .05:
+                    settings['end'] = source_duration  # Legacy video frame rounding.
+                clean = composition_model.validate(settings,source_duration)
+                assets['audio']['duration'] = source_duration
+                has_audio = False
+                if clean['background_volume']:
+                    video_assets = [a for a in assets.values() if isinstance(a, dict) and a.get('kind') == 'video' and a.get('file')]
+                    for va in video_assets:
+                        v_file = f / va['file']
+                        if v_file.is_file():
+                            probe = process.run([imageio_ffmpeg.get_ffmpeg_exe(), '-i', str(v_file)], capture_output=True)
+                            va['has_audio'] = b'Audio:' in probe.stderr
+                            has_audio = has_audio or va['has_audio']
+                studio = composition_model.schema(assets,clean,d['style'])
+                d['status'] = 'Applying background and audio settings…'
+                write(d)
+                ffmpeg(composition_model.render_args(studio,f,output,has_audio,False,include_sticker=False,quality='draft'),f)
+                preview_and_peaks(d,f,output,preview)
+                process.check_cancelled()
+                old_settings = d['studio']['settings']
+                duration = clean['end']-clean['start']+clean['offset']
+                delta = old_settings['start']-clean['start']+clean['offset']-old_settings['offset']
+                cues = composition_model.shift_cues(d['cues'],delta,duration)
+                for fx_key in ('video_filter', 'vignette', 'film_grain', 'sharpen', 'chromatic',
+                               'noise_cancel', 'voice_isolation', 'audio_effect'):
+                    d['style'][fx_key] = clean[fx_key]
+                validate_edit(dict(cues=cues,style=d['style']),duration)
+                # Read the saved pre-job peaks: preview generation only modified the worker copy.
+                backup = composition_snapshot(read(pid))
+                d.update(studio=studio,source=output,preview=preview,duration=duration,
+                         width=composition_model.SHAPES[clean['shape']][0],height=composition_model.SHAPES[clean['shape']][1],
+                         cues=cues,composition={**clean, 'fx_baked': False, 'sticker_baked': False},composition_backup=backup,missing_assets=[])
+                if delta or duration != backup['duration']:
+                    d.pop('karaoke_backup',None)
+                if any(p.name == assets['audio']['file'] for p in added):
+                    for cue in d['cues']:
+                        cue['karaoke'] = dict(state='review',note='Audio replaced or relinked. Check lyric synchronization.')
+                success = True
+                prune_renders(d, f)
+            finally:
+                (f/audio_probe).unlink(missing_ok=True)
+                if not success:
+                    for path in [f/output,f/preview,*added]: path.unlink(missing_ok=True)
+        return work
+
     @bp.post('/api/captions/<pid>/composition')
     def update_composition(pid):
         with lock:
@@ -1604,61 +1690,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             except Exception:
                 for path in added: path.unlink(missing_ok=True)
                 raise
-            def work(d, f):
-                token = uuid.uuid4().hex[:12]
-                output, preview = 'composition_'+token+'.mp4','preview_'+token+'.mp4'
-                audio_probe = 'duration_'+token+'.wav'
-                success = False
-                try:
-                    # Bounded decode verifies the real replacement duration, not its filename or metadata.
-                    ffmpeg(['-i',assets['audio']['file'],'-t','1200.1','-vn','-ac','1','-ar','1000','-c:a','pcm_s16le',audio_probe], f)
-                    with wave.open(str(f/audio_probe),'rb') as audio:
-                        source_duration = audio.getnframes()/audio.getframerate()
-                    number(source_duration,.1,1200)
-                    if 0 < float(settings.get('end',0))-source_duration <= .05:
-                        settings['end'] = source_duration  # Legacy video frame rounding.
-                    clean = composition_model.validate(settings,source_duration)
-                    assets['audio']['duration'] = source_duration
-                    bg = assets.get('background')
-                    has_audio = False
-                    if clean['background_volume']:
-                        video_assets = [a for a in assets.values() if isinstance(a, dict) and a.get('kind') == 'video' and a.get('file')]
-                        for va in video_assets:
-                            v_file = f / va['file']
-                            if v_file.is_file():
-                                probe = process.run([imageio_ffmpeg.get_ffmpeg_exe(), '-i', str(v_file)], capture_output=True)
-                                va['has_audio'] = b'Audio:' in probe.stderr
-                                has_audio = has_audio or va['has_audio']
-                    studio = composition_model.schema(assets,clean,d['style'])
-                    d['status'] = 'Applying background and audio settings…'
-                    write(d)
-                    ffmpeg(composition_model.render_args(studio,f,output,has_audio,False,include_sticker=False,quality='draft'),f)
-                    preview_and_peaks(d,f,output,preview)
-                    process.check_cancelled()
-                    old_settings = d['studio']['settings']
-                    duration = clean['end']-clean['start']+clean['offset']
-                    delta = old_settings['start']-clean['start']+clean['offset']-old_settings['offset']
-                    cues = composition_model.shift_cues(d['cues'],delta,duration)
-                    for fx_key in ('video_filter', 'vignette', 'film_grain', 'sharpen', 'chromatic',
-                                   'noise_cancel', 'voice_isolation', 'audio_effect'):
-                        d['style'][fx_key] = clean[fx_key]
-                    validate_edit(dict(cues=cues,style=d['style']),duration)
-                    # Read the saved pre-job peaks: preview generation only modified the worker copy.
-                    backup = composition_snapshot(read(pid))
-                    d.update(studio=studio,source=output,preview=preview,duration=duration,
-                             width=composition_model.SHAPES[clean['shape']][0],height=composition_model.SHAPES[clean['shape']][1],
-                             cues=cues,composition={**clean, 'fx_baked': False, 'sticker_baked': False},composition_backup=backup,missing_assets=[])
-                    if delta or duration != backup['duration']:
-                        d.pop('karaoke_backup',None)
-                    if any(p.name == assets['audio']['file'] for p in added):
-                        for cue in d['cues']:
-                            cue['karaoke'] = dict(state='review',note='Audio replaced or relinked. Check lyric synchronization.')
-                    success = True
-                finally:
-                    (f/audio_probe).unlink(missing_ok=True)
-                    if not success:
-                        for path in [f/output,f/preview,*added]: path.unlink(missing_ok=True)
-            return launch(data,'Preparing editable composition…',work)
+            return launch(data,'Preparing editable composition…',composition_work(pid,assets,settings,added))
 
     @bp.post('/api/captions/<pid>/restore-composition')
     def restore_composition(pid):
@@ -1749,69 +1781,81 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             write(data)
         return jsonify(data)
 
+    def clean_storyboard(storyboard):
+        if not isinstance(storyboard, list):
+            raise ValueError('Invalid storyboard list.')
+        if any(not isinstance(scene, dict) for scene in storyboard):
+            raise ValueError('Each storyboard scene must be an object.')
+        return copy.deepcopy(storyboard[:60])
+
     @bp.post('/api/captions/<pid>/storyboard')
     def save_storyboard(pid):
+        """Store storyboard metadata. It is not caption or composition content, so the
+        project revision is unchanged and open caption editors keep saving normally."""
         incoming = request.get_json() or {}
         with lock:
             data = read(pid)
             if data['state'] == 'busy':
                 return jsonify(error='Project is busy processing.'), 409
-            storyboard = incoming.get('storyboard', [])
-            if not isinstance(storyboard, list):
-                return jsonify(error='Invalid storyboard list'), 400
-            data['storyboard'] = storyboard[:60]
-            data['revision'] += 1
+            data['storyboard'] = clean_storyboard(incoming.get('storyboard', []))
             write(data)
             return jsonify(storyboard=data['storyboard'], revision=data['revision'])
 
     @bp.post('/api/captions/<pid>/bridge-storyboard')
     def bridge_storyboard(pid):
-        """Assembles rendered storyboard scene clips into the project sequence timeline."""
+        """Register rendered storyboard scenes as clip assets and render them as the timeline sequence."""
+        incoming = request.get_json(silent=True) or {}
         with lock:
             data = read(pid)
-            if data['state'] == 'busy':
-                return jsonify(error='Project is busy processing.'), 409
-            storyboard = data.get('storyboard', [])
-            if not storyboard:
-                return jsonify(error='No storyboard scenes found in project.'), 400
-
+            if data['state'] == 'busy' or incoming.get('revision') != data['revision']:
+                return jsonify(error='Project changed or is processing. Reload it, then send the storyboard again.'), 409
+            if not data.get('studio') or 'audio' not in data['studio'].get('assets', {}):
+                raise ValueError('Finish preparing the caption project before adding storyboard scenes.')
+            if 'storyboard' in incoming:
+                data['storyboard'] = clean_storyboard(incoming['storyboard'])
+            scenes = [scene for scene in data.get('storyboard', []) if scene.get('video_path') or scene.get('video_file')]
+            if not scenes:
+                raise ValueError('No rendered scene videos found in the storyboard. Animate scenes first.')
+            if len(scenes) > 30:
+                raise ValueError('A video sequence can contain at most 30 clips.')
             f = folder(pid)
-            assets = copy.deepcopy(data.get('studio', {}).get('assets', {}))
-            settings = copy.deepcopy(data.get('studio', {}).get('settings', {}))
-
-            seq = []
-            for scene in storyboard:
-                vid_path = scene.get('video_path') or scene.get('video_file')
-                if not vid_path:
-                    continue
-                p = Path(vid_path)
-                if not p.is_file():
-                    continue
-                dest_name = f"scene_{uuid.uuid4().hex[:8]}.mp4"
-                shutil.copy2(p, f / dest_name)
-                duration = float(scene.get('duration') or (scene.get('end_time', 0) - scene.get('start_time', 0)) or 5.0)
-                seq.append({
-                    'file': dest_name,
-                    'name': f"Scene #{scene.get('number', len(seq)+1)}",
-                    'duration': duration,
-                    'start': float(scene.get('start_time', 0.0)),
-                    'scene_id': scene.get('id') or scene.get('scene_id') or f"scene_{len(seq)+1:03d}"
-                })
-
-            if not seq:
-                return jsonify(error='No rendered video files found in storyboard scenes. Animate scenes first.'), 400
-
-            settings['sequence'] = seq
-            if not data.get('studio'):
-                data['studio'] = composition_model.schema(assets, settings, data.get('style', {}))
-            else:
-                data['studio']['settings']['sequence'] = seq
-
-            data['has_composition'] = True
-            data['composition_sequence'] = seq
-            data['revision'] += 1
-            write(data)
-            return jsonify(project=data, sequence=seq)
+            assets = copy.deepcopy(data['studio']['assets'])
+            settings = copy.deepcopy(data['studio']['settings'])
+            entries, added = [], []
+            try:
+                for number_, scene in enumerate(scenes, 1):
+                    source = str(scene.get('video_path') or scene.get('video_file'))
+                    if not is_allowed_media(source) or not Path(source).is_file():
+                        raise ValueError(f'Scene {number_} video is outside your library or missing. Render it again.')
+                    ext = Path(source).suffix.lower()
+                    if ext not in composition_model.VIDEOS:
+                        raise ValueError(f'Scene {number_} is not a supported video file.')
+                    start = scene.get('start', scene.get('start_time', 0)) or 0
+                    end = scene.get('end', scene.get('end_time', 0)) or 0
+                    duration = composition_model.finite(scene.get('duration') or max(0.0, float(end) - float(start)), 0, 1200)
+                    name = re.sub(r'[\r\n\t]+', ' ', str(scene.get('lyric') or scene.get('name') or f'Scene {number_}')).strip()[:120]
+                    key = 'clip_' + uuid.uuid4().hex[:8]
+                    target = f / ('asset_' + uuid.uuid4().hex + ext)
+                    shutil.copy2(source, target)
+                    added.append(target)
+                    assets[key] = dict(file=target.name, kind='video', name=name)
+                    scene_id = str(scene.get('id') or scene.get('scene_id') or '')[:80]
+                    if scene_id:
+                        assets[key]['scene_id'] = scene_id
+                    entries.append(dict(asset=key, name=name, duration=duration, speed=1, source_start=0))
+                settings['sequence'] = composition_model.validate_sequence(entries)
+                if not composition_model.schedule_sequence(settings['sequence'], assets, settings['end'] - settings['start'] + settings['offset'], settings['loop']):
+                    raise ValueError('The storyboard clips could not be scheduled on the timeline.')
+                assets['background'] = copy.deepcopy(assets[entries[0]['asset']])
+                used = {item['asset'] for item in settings['sequence']}
+                for key in [k for k in assets if k.startswith('clip_') and k not in used]:
+                    assets.pop(key)
+                composition_model.validate(settings, 7200)
+            except Exception:
+                for path in added:
+                    path.unlink(missing_ok=True)
+                raise
+            return launch(data, 'Adding storyboard scenes to the timeline…', composition_work(pid, assets, settings, added))
 
     @bp.post('/api/captions/<pid>/import')
     def import_file(pid):
@@ -2273,6 +2317,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                     os.replace(temporary, f / output)
                     d['exports'].append(output)
                     d['last_render'] = output
+                    prune_renders(d, f)
                     d['_completion_notice'] = f'Export ready ({completed_encoder or "CPU"}).'
                 finally:
                     ass.unlink(missing_ok=True)

@@ -242,17 +242,17 @@ class TestV4Routes(unittest.TestCase):
             'video_path': vid_res.json['video_path']
         }]
 
-        # 3. Save storyboard
+        # 3. Save storyboard: metadata only, so open caption editors keep their revision.
         res = self.client.post(f'/api/captions/{pid}/storyboard', json={'storyboard': storyboard}, headers=self.headers)
         self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json['revision'], 1)
 
-        # 4. Bridge storyboard to timeline
-        res = self.client.post(f'/api/captions/{pid}/bridge-storyboard', headers=self.headers)
-        self.assertEqual(res.status_code, 200)
-        bridged = res.json['project']
-        self.assertTrue(bridged.get('has_composition', False))
-        self.assertTrue(len(bridged.get('composition_sequence', [])) >= 1)
-        self.assertEqual(bridged['composition_sequence'][0]['scene_id'], 's1')
+        # 4. The bridge requires the current revision and never bumps it silently.
+        res = self.client.post(f'/api/captions/{pid}/bridge-storyboard', json={}, headers=self.headers)
+        self.assertEqual(res.status_code, 409)
+        res = self.client.post(f'/api/captions/{pid}/bridge-storyboard', json={'revision': 1}, headers=self.headers)
+        self.assertEqual(res.status_code, 400)  # This stub project has no prepared song/audio asset.
+        self.assertIn('Finish preparing', res.json['error'])
 
     def test_video_studio_models_api(self):
         # 1. Test listing models & GPU detection
