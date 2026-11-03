@@ -105,6 +105,7 @@ class RuntimeChecks(unittest.TestCase):
             manual = ai_setup.notice(ROOT, 'cpu')
         self.assertEqual(info['pack'], 'gpu')
         self.assertIn('RTX 3080', info['reason'])
+        self.assertNotIn('NVIDIA NVIDIA', info['reason'])
         ids = {item['id'] for item in info['items']}
         self.assertIn('torch-cuda', ids)
         self.assertNotIn('torch-cpu', ids)

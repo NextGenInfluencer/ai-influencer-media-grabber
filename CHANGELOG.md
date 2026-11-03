@@ -1,5 +1,9 @@
 # Changelog
 
+## [v5.0.3] - 2026-11-03
+- Downloads & Storage: `ai_core.models.storage()` now verifies pre-existing installed model files against their catalog SHA-256 and records them in `.verified.json` so existing models (FLUX.1 schnell, Wan 2.1 I2V 14B, InSwapper 128, InsightFace buffalo_l, Whisper base, Qwen3 4B) display as `Verified` instead of `Not verified`.
+- AI Engine Pack notice: avoided repeating "NVIDIA NVIDIA ..." in the recommendation reason when the GPU name reported by `nvidia-smi` already starts with `NVIDIA`.
+
 ## [v5.0.2] - 2026-11-03
 - Hardware detection: added standard-library OS RAM fallback (`GlobalMemoryStatusEx` on Windows, `sysconf` on POSIX) when `psutil` is not installed (Essentials / core environment), and fixed `HardwareProfileTests` so tests do not require `psutil` in base environments.
 - Model & engine installer: use `storage_utils.replace_with_retry` when swapping downloaded files, extracted engine directories and `.verified.json` into place on Windows to tolerate transient antivirus/indexer file locks (`[WinError 5] Access is denied`).

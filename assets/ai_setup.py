@@ -130,9 +130,11 @@ def choose_pack(gpu=None, *, platform=sys.platform, min_vram_gb=6):
     """Recommend a pack for ``gpu`` (from ``detect_gpu``) and explain why."""
     if gpu and gpu.get('vendor') == 'nvidia':
         vram = gpu.get('vram_gb') or 0
+        name = (gpu.get('name') or 'GPU').strip()
+        label = name if name.lower().startswith('nvidia') else f'NVIDIA {name}'
         if vram >= min_vram_gb:
-            return 'gpu', f"NVIDIA {gpu.get('name') or 'GPU'} with {vram:g} GB of video memory detected."
-        reason = (f"NVIDIA {gpu.get('name') or 'GPU'} has {vram:g} GB of video memory; "
+            return 'gpu', f"{label} with {vram:g} GB of video memory detected."
+        reason = (f"{label} has {vram:g} GB of video memory; "
                   f"the GPU pack needs at least {min_vram_gb} GB.")
         if platform == 'win32':
             return 'directml', reason + ' Face tools will use DirectML.'

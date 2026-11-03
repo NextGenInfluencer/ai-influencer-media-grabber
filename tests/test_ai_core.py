@@ -562,6 +562,18 @@ class ReclaimTests(IsolatedAIMixin, unittest.TestCase):
         self.assertIn('reclaimable', storage)
         self.assertEqual(storage['models_dir'], str(paths.MODELS_DIR))
 
+    def test_storage_verifies_preexisting_catalog_file(self):
+        data = b'preexisting-weights'
+        self.use_catalog([_fake_item('existing', data)])
+        dest = paths.MODELS_DIR / 'test' / 'existing.bin'
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(data)
+        self.assertFalse(models.status()['existing']['verified'])
+        storage = models.storage()
+        installed_by_id = {entry['id']: entry for entry in storage['installed']}
+        self.assertTrue(installed_by_id['existing']['verified'])
+        self.assertTrue(models.status()['existing']['verified'])
+
 
 class GpuBrokerTests(unittest.TestCase):
     def setUp(self):

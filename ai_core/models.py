@@ -684,16 +684,23 @@ def remove_reclaimable(path_or_id):
 
 
 def storage():
+    reclaim = reclaimable()
     states = status()
     installed = []
     for item in catalog.items():
         state = states[item['id']]
         if state['installed']:
+            verified = state['verified']
+            if not verified and not item.get('extract') and item.get('backend') != 'ollama':
+                found = [_present(item, entry) for entry in item.get('files', [])]
+                if found and all(path is not None for path in found):
+                    verified = all(not entry.get('sha256') or _file_sha(path) == entry['sha256']
+                                   for entry, path in zip(item['files'], found))
             installed.append({'id': item['id'], 'name': item['name'], 'kind': item['kind'], 'path': state['path'],
                               'size_bytes': item.get('size_bytes'), 'features': item.get('features', []),
-                              'verified': state['verified'], 'non_commercial': item['license'].get('non_commercial', False),
+                              'verified': verified, 'non_commercial': item['license'].get('non_commercial', False),
                               'missing_companions': [c for c in item.get('companions', []) if not states[c]['installed']]})
-    return {'installed': installed, 'reclaimable': reclaimable(), 'models_dir': str(paths.MODELS_DIR),
+    return {'installed': installed, 'reclaimable': reclaim, 'models_dir': str(paths.MODELS_DIR),
             'engines_dir': str(paths.ENGINES_DIR), 'disk_free_bytes': _disk_free(paths.MODELS_DIR)}
 
 
