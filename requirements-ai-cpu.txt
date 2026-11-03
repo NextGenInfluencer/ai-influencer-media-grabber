@@ -1,0 +1,15 @@
+# AI Engine Pack - CPU build (laptops and PCs without an NVIDIA GPU with at least 6 GB VRAM).
+# Install with the in-app installer or install_ai.bat, which show the download notice first
+# and also install requirements-ai-nodeps.txt.
+-r requirements-ai-common.txt
+--extra-index-url https://download.pytorch.org/whl/cpu
+--only-binary=torch,torchvision,torchaudio,onnxruntime
+
+# Keep the torch pins identical in requirements-ai-directml.txt.
+torch==2.11.0+cpu; sys_platform != "darwin"
+torch==2.11.0; sys_platform == "darwin"
+torchvision==0.26.0+cpu; sys_platform != "darwin"
+torchvision==0.26.0; sys_platform == "darwin"
+torchaudio==2.11.0+cpu; sys_platform != "darwin"
+torchaudio==2.11.0; sys_platform == "darwin"
+onnxruntime==1.31.1

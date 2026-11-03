@@ -1,16 +1,6 @@
-# Optional AI Engine Dependencies (Whisper, BLIP Vision Prompter, LLaMA)
-# Keep shared packages compatible with the installed core application.
--c requirements.txt
-openai-whisper>=20231117
-stable-ts==2.19.1
-torch>=2.0.0
-torchvision>=0.15.0
-transformers>=4.30.0
-huggingface-hub>=0.23.0
-onnx>=1.13.0
-scikit-image>=0.20.0
-insightface>=2.1
-
---extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
---only-binary=llama-cpp-python
-llama-cpp-python>=0.2.77
+# Compatibility entry point for older installers and scripts that reference
+# requirements-ai.txt: it installs the CPU AI Engine Pack libraries.
+# The in-app installer and install_ai.bat (python -m assets.ai_setup --install) instead
+# choose requirements-ai-cpu.txt, -directml.txt or -gpu.txt for this PC and then add
+# requirements-ai-nodeps.txt (InsightFace) - see ai_packs.json.
+-r requirements-ai-cpu.txt

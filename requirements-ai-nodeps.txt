@@ -1,0 +1,10 @@
+# AI Engine Pack - packages installed WITHOUT their declared dependencies (pip --no-deps),
+# after the pack file for this PC.
+#
+# InsightFace declares opencv-python and onnxruntime. Installing them would overwrite the
+# core app's opencv-python-headless and the GPU/DirectML ONNX Runtime, because those
+# packages ship the same "cv2" / "onnxruntime" modules. Its real runtime dependencies
+# (numpy, onnx, scipy, scikit-image, tqdm, requests and an ONNX Runtime) are provided by
+# requirements.txt and requirements-ai-common.txt.
+--only-binary=:all:
+insightface==2.1
