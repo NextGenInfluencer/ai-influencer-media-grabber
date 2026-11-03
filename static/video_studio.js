@@ -60,7 +60,76 @@
 
   function openSetup(hint) {
     if (typeof window.openAISetup === 'function') window.openAISetup(hint);
+    else if (hint && !['ai_setup', 'ai_pack', 'cloud', 'engines'].includes(hint)) openInstallSheet(hint);
     else window.location.href = '/#ai-setup';
+  }
+
+  const formatBytes = (bytes) => (bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} GB` : `${Math.max(1, Math.round((bytes || 0) / 1e6))} MB`);
+
+  /** Download notice for one catalog item (size, source, license) with explicit acceptance, then install. */
+  async function openInstallSheet(itemId) {
+    const dialog = $('installDialog');
+    let notice;
+    try {
+      notice = await api(`/api/ai/notice/${encodeURIComponent(itemId)}`);
+    } catch (_) {
+      window.location.href = '/#ai-setup';
+      return;
+    }
+    $('installTitle').textContent = `Install ${notice.name}`;
+    $('installPurpose').textContent = notice.purpose || '';
+    const missing = notice.companions.filter((c) => !c.installed);
+    const facts = [
+      ['Download', `${formatBytes(notice.download_bytes)}${missing.length ? ` (includes ${missing.map((c) => c.name).join(', ')})` : ''}`],
+      ['Runs', notice.local ? 'On this PC' : 'In the cloud'],
+      ['Needs', `${notice.vram_gb || 0} GB GPU memory · ${notice.ram_gb || 0} GB RAM`],
+      ['Source', notice.source?.publisher || notice.source?.url || ''],
+      ['Disk', notice.disk_ok ? `${formatBytes(notice.disk_free_bytes)} free` : `Not enough space (${formatBytes(notice.disk_free_bytes)} free)`],
+    ];
+    $('installFacts').replaceChildren(...facts.flatMap(([k, v]) => [el('dt', { text: k }), el('dd', { text: v })]));
+    const licenses = [notice.license, ...missing.map((c) => c.license)].filter(Boolean);
+    $('installLicense').replaceChildren(...licenses.map((license) => el('p', {},
+      license.non_commercial ? el('span', { class: 'badge warn', text: 'Personal / non-commercial use only' }) : null, ' ',
+      el('a', { href: license.url, target: '_blank', rel: 'noopener noreferrer', text: license.name }))));
+    $('installAccept').checked = false;
+    $('installProgress').replaceChildren();
+    const start = $('installStartBtn');
+    start.disabled = notice.installed || !notice.disk_ok;
+    start.textContent = notice.installed ? 'Installed' : `Download ${formatBytes(notice.download_bytes)}`;
+    start.onclick = async () => {
+      if (!$('installAccept').checked) {
+        toast('Read and accept the license first.', true);
+        return;
+      }
+      start.disabled = true;
+      try {
+        const data = await api('/api/ai/install', { method: 'POST', body: { item_id: itemId, accept_license: true } });
+        await followInstall(data.job_id);
+      } catch (e) {
+        $('installProgress').replaceChildren(el('p', { class: 'error', text: e.message }));
+        start.disabled = false;
+      }
+    };
+    $('installMoreBtn').onclick = () => { window.location.href = '/#ai-setup'; };
+    $('installCloseBtn').onclick = () => dialog.close();
+    dialog.showModal();
+  }
+
+  async function followInstall(jobId) {
+    const ui = jobView($('installProgress'), 'Downloading');
+    ui.cancel.onclick = () => api(`/api/ai/jobs/${jobId}/cancel`, { method: 'POST' }).catch((e) => toast(e.message, true));
+    for (;;) {
+      await new Promise((r) => setTimeout(r, 1000));
+      const job = await api(`/api/ai/jobs/${jobId}`);
+      ui.bar.value = job.progress || 0;
+      ui.message.textContent = job.message || '';
+      if (job.state === 'queued' || job.state === 'running') continue;
+      $('installProgress').replaceChildren(el('p', { class: job.state === 'done' ? 'hint' : 'error',
+        text: job.state === 'done' ? 'Installed and verified.' : job.message || job.error || 'The download stopped.' }));
+      await loadStatus();
+      renderScenes();
+      return;
+    }
   }
 
   function toast(message, isError = false) {

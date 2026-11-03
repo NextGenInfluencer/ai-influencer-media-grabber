@@ -160,7 +160,8 @@ def _requirements(feature):
                 'cost': cost, 'setup_hint': cost.get('setup_hint')}
     if 'workflow' in spec:
         meta = catalog.workflow(spec['workflow'])
-        items = ['engine-comfyui', *meta.get('requires', []), *meta.get('custom_nodes', [])]
+        # Primary model first: its install notice brings the engine and companions along.
+        items = [*meta.get('requires', []), *meta.get('custom_nodes', []), 'engine-comfyui']
         cost = video_engine.workflow_cost(spec['workflow'])
     else:
         items = list(spec['items'])

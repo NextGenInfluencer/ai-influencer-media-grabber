@@ -124,6 +124,10 @@ main { padding: 20px 24px 40px; max-width: 1600px; margin: 0 auto; }
   color: var(--muted); background: rgba(255, 255, 255, 0.08); vertical-align: middle;
 }
 .badge.cloud { color: var(--cloud); background: rgba(191, 90, 242, 0.14); }
+.badge.warn { color: var(--warn); background: rgba(255, 214, 10, 0.12); }
+.facts { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 14px 0; font-size: 12px; }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; }
 .unavailable {
   margin: 12px 0; padding: 14px; border-radius: 12px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));

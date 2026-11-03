@@ -187,5 +187,19 @@
   </form>
 </dialog>
 
+<dialog id="installDialog" class="sheet" aria-labelledby="installTitle">
+  <h2 id="installTitle">Install</h2>
+  <p id="installPurpose" class="hint"></p>
+  <dl id="installFacts" class="facts"></dl>
+  <p id="installLicense"></p>
+  <label class="check" id="installAcceptRow"><input type="checkbox" id="installAccept"> I have read the license and accept it</label>
+  <div id="installProgress" class="jobSlot"></div>
+  <div class="buttonRow end">
+    <button type="button" id="installMoreBtn" class="ghost">All AI settings…</button>
+    <button type="button" id="installCloseBtn">Close</button>
+    <button type="button" id="installStartBtn" class="primary">Download</button>
+  </div>
+</dialog>
+
 </body>
 </html>
