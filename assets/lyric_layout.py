@@ -4,7 +4,7 @@ import os
 import re
 from pathlib import Path
 from PIL import ImageFont
-from .lyric_tracks import clean_translations
+from .lyric_tracks import clean_translations, shows_duplicate
 
 
 def font_file(name, bundled, custom_dir, custom):
@@ -17,7 +17,7 @@ def font_file(name, bundled, custom_dir, custom):
     return Path(os.environ.get('WINDIR','C:/Windows'))/'Fonts'/system.get(name,'arial.ttf')
 
 
-def rows(cue, style, width, height, font_path, resolve_runs=None, locate_font=None):
+def rows(cue, style, width, height, font_path, resolve_runs=None, locate_font=None, editor_preview=False):
     max_width = width*style['box_width']/100 - 2*height*style['box_padding']/100
     if max_width < 1:
         raise ValueError('Reduce background padding or increase text box width to leave room for captions.')
@@ -48,12 +48,17 @@ def rows(cue, style, width, height, font_path, resolve_runs=None, locate_font=No
         return lines
     entry=clean_translations(cue).get(style['translation_language'])
     translation=entry['text'] if entry and entry['status']=='approved' else ''
+    # The editor preview shows unapproved translations (flagged pending) so they never vanish;
+    # exports call rows() without editor_preview and keep rendering approved text only.
+    pending=bool(editor_preview and not translation and entry and entry['text'])
+    if pending:
+        translation=entry['text']
     mode=style['track_mode']
     if mode=='translation' and not translation:
         raise ValueError('Approve a translation for this line before using translation-only display.')
     groups=[]
     if mode!='translation': groups.append(('original',cue['text'],style['size'],style['color']))
-    if mode!='original' and translation and (mode=='translation' or not style['hide_duplicate_translation'] or translation!=cue['text']):
+    if mode!='original' and translation and (mode=='translation' or shows_duplicate(cue,translation,style['hide_duplicate_translation'])):
         groups.append(('translation',translation,style['translation_size'],style['translation_color']))
     result=[]
     for index,(kind,text,percent,color) in enumerate(groups):
@@ -75,10 +80,13 @@ def rows(cue, style, width, height, font_path, resolve_runs=None, locate_font=No
                 factor = low
                 if factor <= 0 or measure(line, size*factor, spacing*factor) > max_width:
                     raise ValueError('This text box is too narrow. Increase its width or shorten the caption.')
-            result.append(dict(text=line,track=kind,size=percent*factor,color=color,
-                               letter_spacing=style['letter_spacing']*factor,fitted=factor<1,
-                               advance=size*factor*style['line_spacing'],
-                               gap=height*style['translation_gap']/100 if index and line_index==0 else 0))
+            row=dict(text=line,track=kind,size=percent*factor,color=color,
+                     letter_spacing=style['letter_spacing']*factor,fitted=factor<1,
+                     advance=size*factor*style['line_spacing'],
+                     gap=height*style['translation_gap']/100 if index and line_index==0 else 0)
+            if kind=='translation' and pending:
+                row.update(pending=True,status=entry['status'])
+            result.append(row)
     # Anchor the bottom of the whole block; rows have explicit line breaks in both renderers.
     y=height*style['position']/100
     for row in reversed(result):

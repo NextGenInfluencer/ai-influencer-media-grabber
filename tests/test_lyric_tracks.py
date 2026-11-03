@@ -121,7 +121,12 @@ class TrackTests(unittest.TestCase):
         events=[line for line in ass_text(project).splitlines() if line.startswith('Dialogue: 0,')]
         self.assertIn(r'\fscx92.5\fscy92.5\t(0,80,\fscx100\fscy100)',events[1])
         self.assertIn(r'{\r\pos(',events[1])
-        self.assertIn(r'\blur2.0',events[1])
+        # Glow is a blurred highlight halo on its own layer, like the preview's text-shadow; text stays sharp.
+        self.assertNotIn(r'\blur',events[1])
+        halos=[line for line in ass_text(project).splitlines() if line.startswith('Dialogue: -1,') and ',Glow,' in line]
+        self.assertEqual(len(halos),len(events))
+        self.assertIn(r'\1a&HFF&\blur12.67',halos[1])
+        self.assertIn(r'\fscx92.5\fscy92.5',halos[1])
         project['style']['animation']='slide_up'
         events=[line for line in ass_text(project).splitlines() if line.startswith('Dialogue: 0,')]
         self.assertIn(r'\move(',events[1])

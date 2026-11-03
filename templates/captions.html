@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="media-token" content="{{ api_token }}">
 <title>Captions & Video Studio — Media Grabber</title>
-<link rel="stylesheet" href="/static/captions.css?v=capcut4">
+<link rel="stylesheet" href="/static/captions.css?v=v5captions1">
 <link rel="stylesheet" href="/static/copilot.css?v=v4">
-<script src="/static/captions.js?v=capcut4" defer></script>
+<script src="/static/captions.js?v=v5captions1" defer></script>
 <script src="/static/copilot.js?v=v4" defer></script>
 </head>
 <body class="capcutStudio">
@@ -45,7 +45,7 @@
     <label><input type="checkbox" id="renderCpu"> Use CPU</label>
     <button id="renderCheck" title="Render a 5-second MP4 check at the playhead">5s Check</button>
     <button id="srt" title="Download SRT subtitles">SRT</button>
-    <button id="stop" title="Stop active processing job">Stop</button>
+    <button id="stop" title="Stop this project's current task (other app jobs keep running)">Stop</button>
     <button id="export" class="primary">Export MP4</button>
   </div>
 </header>
@@ -452,7 +452,7 @@
             <label><input id="visualizer" type="checkbox"> Show audio visualizer on video</label>
             <label>Style
               <select id="visualizer_style">
-                <option value="spectrum">Spectrum EQ Bars</option>
+                <option value="spectrum">Animated bars</option>
                 <option value="waveform">Waveform Line</option>
               </select>
             </label>
@@ -621,7 +621,7 @@
             </div>
           </div>
 
-          <!-- Hidden synced composition mirrors for live FX & visualizer -->
+          <!-- Hidden synced composition mirrors for live FX (the visualizer is a caption style only) -->
           <div hidden>
             <select id="comp_video_filter"><option value="none">None</option><option value="beauty">beauty</option><option value="vhs">vhs</option><option value="teal_orange">teal_orange</option><option value="vaporwave">vaporwave</option><option value="bling">bling</option><option value="fisheye">fisheye</option><option value="noir">noir</option><option value="bw">bw</option><option value="sepia">sepia</option><option value="vintage">vintage</option><option value="cyberpunk">cyberpunk</option><option value="warm">warm</option><option value="cool">cool</option><option value="dramatic">dramatic</option><option value="dreamy">dreamy</option></select>
             <input id="comp_vignette" type="checkbox">
@@ -631,12 +631,6 @@
             <input id="comp_noise_cancel" type="checkbox">
             <input id="comp_voice_isolation" type="checkbox">
             <select id="comp_audio_effect"><option value="none">none</option><option value="slowed_reverb">slowed_reverb</option><option value="nightcore">nightcore</option><option value="vocal_remover">vocal_remover</option><option value="echo">echo</option><option value="concert_hall">concert_hall</option><option value="studio_vocal">studio_vocal</option><option value="lofi_radio">lofi_radio</option><option value="bass_boost">bass_boost</option><option value="chorus">chorus</option></select>
-            <input id="comp_visualizer" type="checkbox">
-            <select id="comp_visualizer_style"><option value="waveform">waveform</option><option value="spectrum">spectrum</option></select>
-            <select id="comp_visualizer_position"><option value="bottom">bottom</option><option value="center">center</option><option value="top">top</option></select>
-            <input id="comp_visualizer_height" type="number" value="18">
-            <input id="comp_visualizer_sensitivity" type="number" value="1">
-            <input id="comp_visualizer_color" type="color" value="#bba6ff">
           </div>
 
           <div class="row" style="margin-top:10px;">
@@ -869,6 +863,18 @@
                 <span style="font-size:10px;color:#a78bfa;opacity:0.85;">Synced to video</span>
               </div>
               <textarea id="sideTranslationText" rows="2" maxlength="2000" placeholder="Translated text for this line…"></textarea>
+              <div id="translationReviewBox" class="trReview" role="status" hidden>
+                <div class="trReviewHead"><span class="trBadge">⚠ Needs review</span><span class="trReviewHint">Not included in exports yet</span></div>
+                <p id="translationReviewText" class="trReviewText"></p>
+                <div class="trReviewActions">
+                  <button id="retranslateLine" type="button" title="Create a new reviewable translation for this line">Retranslate</button>
+                  <button id="keepTranslation" type="button" class="primary" title="Approve this translation for the current line">Keep</button>
+                </div>
+              </div>
+              <div id="duplicateNote" class="trDuplicate" hidden>
+                <span title="Hide duplicate translations is on, and this translation matches the original line">Same as original (hidden)</span>
+                <label><input id="showDuplicateTranslation" type="checkbox"> Show on this line</label>
+              </div>
             </div>
             <div class="row">
               <label>Start (s)<input id="start" type="number" min="0" step=".01"></label>
@@ -1055,6 +1061,18 @@
     <button id="closeLyricReview" type="button">Review later</button>
     <button id="discardLyricReview" type="button">Keep current captions</button>
     <button id="applyLyricReview" type="button" class="primary">Apply proposed lyrics</button>
+  </div>
+</dialog>
+<dialog id="exportGuardDialog" class="apple-modal exportGuard" aria-labelledby="exportGuardTitle">
+  <div class="exportGuardIcon" aria-hidden="true">⚠</div>
+  <h2 id="exportGuardTitle">Lines need review</h2>
+  <p id="exportGuardSummary" class="exportGuardSummary"></p>
+  <ul id="exportGuardRows" class="exportGuardRows"></ul>
+  <div class="exportGuardActions">
+    <button id="exportGuardCancel" type="button">Cancel</button>
+    <button id="exportGuardReview" type="button">Review</button>
+    <button id="exportGuardSkip" type="button">Export without them</button>
+    <button id="exportGuardKeep" type="button" class="primary">Keep all</button>
   </div>
 </dialog>
 <dialog id="translationReviewDialog" class="lyricReviewDialog" aria-labelledby="translationReviewTitle">

@@ -315,10 +315,13 @@ class CaptionWorkflowTests(unittest.TestCase):
         with patch('captions.align_caption_words',return_value=result) as align:
             self.client.post(f'/api/captions/{pid}/karaoke',json={'revision':data['revision'],'index':0,'language':'auto'})
             after=self.wait(pid)
-            self.assertEqual(align.call_args.args[-1],'el')
+            # Whole line as Greek first, then the Latin run in its own language; the mocked
+            # Latin result does not match its text, so the whole-line timing is kept.
+            self.assertEqual([call.args[-1] for call in align.call_args_list],['el','en'])
         self.assertEqual(after['cues'][0]['text'],'Γεια\nhello')
         self.assertEqual(after['cues'][0]['karaoke']['state'],'review')
         self.assertIn('Mixed',after['cues'][0]['karaoke']['note'])
+        self.assertIn('kept the whole-line el timing',after['cues'][0]['karaoke']['note'])
         self.assertEqual(after['cues'][1],data['cues'][1])
         after['style']['karaoke']=True
         self.client.put('/api/captions/'+pid,json=after)
@@ -339,7 +342,12 @@ class CaptionWorkflowTests(unittest.TestCase):
             data = self.wait(pid)
             self.assertEqual((data['width'],data['height']),(1080,1080))
             self.assertAlmostEqual(data['duration'],2,delta=.1)
-            self.assertTrue(data['composition']['visualizer'])
+            # One visualizer: the song option enables the caption-style visualizer (live preview + ASS),
+            # never a second FFmpeg waveform baked into the composition.
+            self.assertTrue(data['style']['visualizer'])
+            self.assertEqual(data['style']['visualizer_style'],'waveform')
+            self.assertFalse(data['composition'].get('visualizer'))
+            self.assertFalse(data['studio']['settings']['visualizer'])
             folder=self.root/'library'/'Caption Projects'/pid
             self.assertEqual((folder/'song.wav').read_bytes(),audio.read_bytes())
         self.assertEqual(self.client.post(f'/api/captions/{pid}/render',json={'preview':True}).status_code,202)
@@ -492,8 +500,11 @@ class CaptionWorkflowTests(unittest.TestCase):
         with patch('captions.detect_caption_language',return_value='fr') as detect, patch('captions.align_caption_words',side_effect=align):
             self.client.post(f'/api/captions/{pid}/karaoke',json=dict(revision=data['revision'],language='en-fr-ko'))
             after=self.wait(pid)
-            self.assertEqual(languages,['fr','ko'])
-            self.assertEqual(detect.call_args.args[2],('en','fr','ko'))
+            # The mixed Korean/Latin line is aligned as Korean, then its Latin run in the detected Latin language.
+            self.assertEqual(languages,['fr','ko','fr'])
+            self.assertEqual(detect.call_args_list[0].args[2],('en','fr','ko'))
+            self.assertEqual(detect.call_args.args[2],('en','fr'))
+            self.assertIn('Aligned per language (ko + fr)',after['cues'][1]['karaoke']['note'])
             self.assertTrue(all(c['karaoke']['state']=='review' for c in after['cues']))
             self.client.post(f'/api/captions/{pid}/karaoke',json=dict(revision=after['revision'],language='ko',index=1))
             self.wait(pid)
@@ -884,7 +895,10 @@ class CaptionWorkflowTests(unittest.TestCase):
         self.assertEqual(saved['style']['audio_effect'], 'slowed_reverb')
         ass_out = ass_text(saved)
         self.assertIn(r'\move(', ass_out)
-        self.assertIn(r'\blur4.0', ass_out)
+        self.assertIn('Style: Glow,', ass_out)
+        halo = next(line for line in ass_out.splitlines() if line.startswith('Dialogue: -1,') and ',Glow,' in line)
+        self.assertIn(r'\move(', halo)
+        self.assertIn(r'\blur', halo)
 
         r_fx = self.client.post(f'/api/captions/{pid}/render', json={'preview': True, 'quality': 'draft'})
         self.assertEqual(r_fx.status_code, 202, r_fx.json)
