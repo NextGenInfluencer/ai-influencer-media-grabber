@@ -411,7 +411,13 @@ def _install_item(item, job_ref, cancelled):
             _extract(item, destination, cancelled)
     if item.get('kind') == 'comfy_node':
         from . import engines
-        engines.comfy.install_requirements(item['node_folder'])
+        try:
+            engines.comfy.install_requirements(item['node_folder'])
+        except Exception:
+            target = _extract_target(item)
+            if target:
+                (target / MARKER).unlink(missing_ok=True)
+            raise
     if item.get('comfy_links'):
         from . import engines
         if engines.comfy.installed():

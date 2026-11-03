@@ -749,6 +749,99 @@ class EngineTests(IsolatedAIMixin, unittest.TestCase):
         self.assertEqual(set(status), {'ollama', 'builtin', 'comfy'})
         self.assertEqual(status['ollama']['setup_hint'], 'engine-ollama')
 
+    def test_comfy_install_requirements_skips_core_packages_and_clears_marker_on_failure(self):
+        import job_process
+        root = paths.ENGINES_DIR / 'comfyui' / 'ComfyUI_windows_portable'
+        node_dir = root / 'ComfyUI' / 'custom_nodes' / 'ComfyUI-LivePortraitKJ'
+        node_dir.mkdir(parents=True)
+        (root / 'ComfyUI' / 'main.py').write_text('')
+        (root / 'python_embeded').mkdir()
+        py = root / 'python_embeded' / 'python.exe'
+        py.write_bytes(b'')
+        (node_dir / 'requirements.txt').write_text(
+            'pyyaml\nnumpy<=1.26.4\ntorch>=2.0\nopencv-python\nonnxruntime-gpu\npykalman # comment\n',
+            encoding='utf-8',
+        )
+        with patch.object(job_process, 'run', return_value=MagicMock(returncode=0)) as run_mock:
+            engines.comfy.install_requirements('ComfyUI-LivePortraitKJ')
+        cmd = run_mock.call_args.args[0]
+        self.assertIn('pykalman', cmd)
+        self.assertIn('onnxruntime-gpu', cmd)
+        self.assertFalse(any(arg.startswith('numpy') or arg.startswith('torch') for arg in cmd))
+
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, 'w') as bundle:
+            bundle.writestr('top/requirements.txt', b'pykalman\n')
+        data = buffer.getvalue()
+        item = _fake_item(
+            'node-test', data, kind='comfy_node', backend='comfy', install_root='engines',
+            path='downloads/node-test.zip', node_folder='ComfyUI-TestNode',
+            extract={'format': 'zip', 'to': '@comfy/custom_nodes/ComfyUI-TestNode', 'strip_components': 1}
+        )
+        self.use_catalog([item])
+        with patch.object(models.requests, 'get', return_value=response([data])), \
+                patch.object(engines.comfy, 'install_requirements', side_effect=AIUnavailable('pip failed')):
+            job_id = models.start_install('node-test', accept_license=True)
+            self.assertTrue(wait_for(lambda: models.job(job_id)['state'] not in ('queued', 'running')))
+        self.assertEqual(models.job(job_id)['state'], 'error')
+        self.assertFalse(models.status()['node-test']['verified'])
+
+    def test_comfy_prepare_home_env_and_idle_stop_respects_active_gpu_lease(self):
+        env = engines.comfy._prepare_home_env()
+        self.assertEqual(env['PYTHONIOENCODING'], 'utf-8')
+        self.assertEqual(env['PYTHONUTF8'], '1')
+        self.assertTrue((engines.comfy.home() / '.latentsync16_dependencies_installed').is_file())
+        with patch.object(engines.comfy, 'stop') as stop_mock, patch.object(engines.comfy, 'touch') as touch_mock:
+            with gpu.lease('comfy', 8):
+                engines.comfy._idle_stop()
+            stop_mock.assert_not_called()
+            touch_mock.assert_called_once()
+            engines.comfy._idle_stop()
+            stop_mock.assert_called_once()
+
+    def test_comfy_patch_custom_nodes_is_idempotent(self):
+        root = paths.ENGINES_DIR / 'comfyui' / 'ComfyUI'
+        custom = root / 'custom_nodes'
+        (root / 'main.py').parent.mkdir(parents=True, exist_ok=True)
+        (root / 'main.py').write_text('')
+        mp_utils = custom / 'ComfyUI-LivePortraitKJ' / 'media_pipe' / 'mp_utils.py'
+        mp_utils.parent.mkdir(parents=True, exist_ok=True)
+        mp_utils.write_text(
+            'from . import face_landmark\n'
+            'self.detector = face_landmark.FaceLandmarker.create_from_options(options)\n'
+            'detection_result, _ = self.detector.detect(image)\n',
+            encoding='utf-8',
+        )
+        ls_nodes = custom / 'ComfyUI-LatentSyncWrapper' / 'nodes.py'
+        ls_nodes.parent.mkdir(parents=True, exist_ok=True)
+        ls_nodes.write_text(
+            'torchaudio.save(audio_path, waveform_cpu, sample_rate)\n'
+            'except TypeError as e:\n'
+            "processed_frames = io.read_video(output_video_path, pts_unit='sec')[0]\n"
+            'torch.cuda.set_per_process_memory_fraction(0.8)\n',
+            encoding='utf-8',
+        )
+        ls_util = custom / 'ComfyUI-LatentSyncWrapper' / 'latentsync' / 'utils' / 'util.py'
+        ls_util.parent.mkdir(parents=True, exist_ok=True)
+        ls_util.write_text(
+            'def write_video(video_output_path: str, video_frames: np.ndarray, fps: int):\n'
+            '    with imageio.get_writer(\n',
+            encoding='utf-8',
+        )
+        engines.comfy._patch_custom_nodes()
+        first_mp = mp_utils.read_text(encoding='utf-8')
+        first_nodes = ls_nodes.read_text(encoding='utf-8')
+        first_util = ls_util.read_text(encoding='utf-8')
+        self.assertIn('vision.FaceLandmarker.create_from_options', first_mp)
+        self.assertIn('soundfile', first_nodes)
+        self.assertIn('VideoReader', first_nodes)
+        self.assertNotIn('set_per_process_memory_fraction(0.8)', first_nodes)
+        self.assertIn('return write_video_cv2', first_util)
+        engines.comfy._patch_custom_nodes()
+        self.assertEqual(mp_utils.read_text(encoding='utf-8'), first_mp)
+        self.assertEqual(ls_nodes.read_text(encoding='utf-8'), first_nodes)
+        self.assertEqual(ls_util.read_text(encoding='utf-8'), first_util)
+
 
 if __name__ == '__main__':
     unittest.main()

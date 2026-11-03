@@ -1,5 +1,14 @@
 # Changelog
 
+## [v5.0.6] - 2026-11-04
+- Creative engine custom nodes (`ai_core/engines.py`, `ai_core/models.py`, `ai_core/catalog.json`):
+  - Filtered `_CORE_PACKAGES` (`numpy`, `torch`, `torchvision`, `torchaudio`, `opencv-python`, `mediapipe`, `insightface`, `onnxruntime`, `onnxruntime-gpu`) out of custom-node `requirements.txt` installs so `ComfyUI-LivePortraitKJ`'s `numpy<=1.26.4` pin cannot downgrade NumPy 2 / PyTorch 2.11+cu130; unlinked `.ready` marker if custom-node dependency installation fails.
+  - Patched `ComfyUI-LivePortraitKJ` for `mediapipe>=0.10.30` (`vision.FaceLandmarker` fallback when `mp.solutions` / `mediapipe.framework` is absent) and preloaded CUDA/cuDNN DLLs in `landmark_runner.py`.
+  - Added `2d106det.onnx` and `comfy_links` to `insightface-buffalo-l` in `ai_core/catalog.json` and patched `ComfyUI-LatentSyncWrapper` (`nodes.py`, `scripts/inference.py`, `latentsync/utils/face_detector.py`, `latentsync/pipelines/lipsync_pipeline.py`, `latentsync/utils/util.py`) for Python 3.13, TorchAudio 2.11, TorchVision 0.29, PyAV `macro_block_size` removal (`write_video_cv2` fallback), and offline local Whisper/InsightFace loading.
+  - Set `PYTHONIOENCODING=utf-8` and `PYTHONUTF8=1` in `ComfyEngine._prepare_home_env()` so custom-node subprocesses printing Unicode banners do not fail under Windows `cp1252`.
+- Creative engine lifecycle (`ai_core/engines.py`, `ai_core/comfy.py`): kept the 15-minute `ComfyEngine` idle timer alive while `gpu.status()['comfy']['active']` is non-zero or `ComfyClient.wait()` is polling a running workflow so long video renders (>15 min) are never killed mid-job.
+- GPU Face Swap (`ai_core/face.py`): added `_find_cuda_dll_dir(ort)` to locate and preload matching CUDA major-version DLLs (e.g. CUDA 13 `cublasLt64_13.dll` from the Creative engine runtime when `onnxruntime-gpu` targets CUDA 13 while `.venv`'s `torch` ships CUDA 12), accelerating 15 s GFPGAN video face swaps by 10.6× on `CUDAExecutionProvider`.
+
 ## [v5.0.5] - 2026-11-03
 - Downloader (`requirements.txt`): added `curl-cffi==0.16.3`, `cffi==2.1.1` and `pycparser==3.12` so `yt-dlp` has native Chrome TLS impersonation for TikTok and X extraction.
 - Downloader UI (`templates/index.html`): clear cached `processedUrls` when a URL preview fails, when the login session (`#browser`) changes, or when the download form is submitted so re-previewing after importing cookies or switching to Firefox works immediately.

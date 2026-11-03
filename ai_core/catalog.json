@@ -400,7 +400,7 @@
     "gpu_mid"
    ],
    "name": "Qwen3 8B",
-   "purpose": "Helper and Copilot for 6–10 GB GPUs.",
+   "purpose": "Helper and Copilot for 6\u201310 GB GPUs.",
    "features": [
     "Copilot",
     "Mixed-language lines",
@@ -446,7 +446,7 @@
     "gpu_high"
    ],
    "name": "Qwen3 14B",
-   "purpose": "Helper and Copilot for 10–20 GB GPUs.",
+   "purpose": "Helper and Copilot for 10\u201320 GB GPUs.",
    "features": [
     "Copilot",
     "Mixed-language lines",
@@ -578,7 +578,7 @@
     "gpu_high"
    ],
    "name": "TranslateGemma 12B",
-   "purpose": "Dedicated lyric translator for 10–20 GB GPUs.",
+   "purpose": "Dedicated lyric translator for 10\u201320 GB GPUs.",
    "features": [
     "Lyric translation"
    ],
@@ -1217,6 +1217,15 @@
      "legacy": [
       "@home/.insightface/models/buffalo_l/w600k_r50.onnx"
      ]
+    },
+    {
+     "path": "insightface/models/buffalo_l/2d106det.onnx",
+     "url": "https://huggingface.co/public-data/insightface/resolve/33c1063c49c785b7652d3fd529f86fa4f149392b/models/buffalo_l/2d106det.onnx",
+     "size_bytes": 5030888,
+     "sha256": "f001b856447c413801ef5c42091ed0cd516fcd21f2d6b79635b1e733a7109dbf",
+     "legacy": [
+      "@home/.insightface/models/buffalo_l/2d106det.onnx"
+     ]
     }
    ],
    "license": {
@@ -1229,8 +1238,18 @@
    "local": true,
    "companions": [],
    "capabilities": [],
-   "size_bytes": 191307687,
-   "sha256": "5838f7fe053675b1c7a08b633df49e7af5495cee0493c7dcf6697200b85b5b91"
+   "size_bytes": 196338575,
+   "sha256": "5838f7fe053675b1c7a08b633df49e7af5495cee0493c7dcf6697200b85b5b91",
+   "comfy_links": [
+    {
+     "from": "insightface/models/buffalo_l/det_10g.onnx",
+     "to": "custom_nodes/ComfyUI-LatentSyncWrapper/checkpoints/auxiliary/models/buffalo_l/det_10g.onnx"
+    },
+    {
+     "from": "insightface/models/buffalo_l/2d106det.onnx",
+     "to": "custom_nodes/ComfyUI-LatentSyncWrapper/checkpoints/auxiliary/models/buffalo_l/2d106det.onnx"
+    }
+   ]
   },
   {
    "id": "inswapper-128",
@@ -2040,7 +2059,7 @@
     "gpu_ultra"
    ],
    "name": "Wan 2.1 I2V 14B 480p (GGUF Q4_0)",
-   "purpose": "Higher-quality image-to-video (slow: ~15–30 min per 5 s on 12 GB).",
+   "purpose": "Higher-quality image-to-video (slow: ~15\u201330 min per 5 s on 12 GB).",
    "features": [
     "Animate (quality)"
    ],

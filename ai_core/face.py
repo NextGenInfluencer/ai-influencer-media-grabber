@@ -26,6 +26,21 @@ _state = {'providers': None, 'analyzer': None, 'swapper': None, 'restorer': None
 _lock = threading.RLock()
 
 
+def _find_cuda_dll_dir(ort):
+    """Directory with matching CUDA major-version DLLs when PyTorch and ONNX Runtime differ."""
+    major = str(getattr(ort, 'cuda_version', '') or '').split('.', 1)[0]
+    if not major.isdigit():
+        return None
+    target_dll = f'cublasLt64_{major}.dll'
+    from . import engines
+    comfy_py = engines.comfy.python()
+    if comfy_py:
+        candidate = comfy_py.parent / 'Lib' / 'site-packages' / 'torch' / 'lib'
+        if (candidate / target_dll).is_file():
+            return str(candidate)
+    return None
+
+
 def select_providers():
     """CUDA (after torch loads its DLLs) → DirectML → CPU, based on the installed onnxruntime build."""
     try:
@@ -34,13 +49,15 @@ def select_providers():
         raise AIUnavailable('Face swap needs the AI pack (onnxruntime). Install it from AI Setup.', setup_hint='ai_pack') from exc
     available = set(ort.get_available_providers())
     if 'CUDAExecutionProvider' in available:
-        try:
-            import torch  # noqa: F401  (loads the CUDA/cuDNN DLLs onnxruntime-gpu links against)
-        except ImportError:
-            pass
+        dll_dir = _find_cuda_dll_dir(ort)
+        if not dll_dir:
+            try:
+                import torch  # noqa: F401  (loads the CUDA/cuDNN DLLs onnxruntime-gpu links against)
+            except ImportError:
+                pass
         if hasattr(ort, 'preload_dlls'):
             try:
-                ort.preload_dlls()
+                ort.preload_dlls(directory=dll_dir) if dll_dir else ort.preload_dlls()
             except Exception as exc:  # missing optional DLLs must not block CPU fallback
                 log.warning('onnxruntime.preload_dlls failed: %s', exc)
         return ['CUDAExecutionProvider', 'CPUExecutionProvider']

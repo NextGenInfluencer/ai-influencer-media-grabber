@@ -68,6 +68,17 @@ class FaceTests(IsolatedAIMixin, unittest.TestCase):
         with patch.dict(sys.modules, {'onnxruntime': None}):
             with self.assertRaises(AIUnavailable):
                 face.select_providers()
+        # When onnxruntime-gpu is built for CUDA 13 and ComfyUI's Python has cublasLt64_13.dll, preload_dlls gets directory=...
+        comfy_py = self.root / 'comfy' / 'python_embeded' / 'python.exe'
+        torch_lib = comfy_py.parent / 'Lib' / 'site-packages' / 'torch' / 'lib'
+        torch_lib.mkdir(parents=True)
+        (torch_lib / 'cublasLt64_13.dll').write_bytes(b'dll')
+        cuda13 = fake_ort(['CUDAExecutionProvider', 'CPUExecutionProvider'])
+        cuda13.cuda_version = '13.0'
+        with patch.object(engines.comfy, 'python', return_value=comfy_py), \
+                patch.dict(sys.modules, {'onnxruntime': cuda13}):
+            self.assertEqual(face.select_providers(), ['CUDAExecutionProvider', 'CPUExecutionProvider'])
+        cuda13.preload_dlls.assert_called_once_with(directory=str(torch_lib))
 
     def test_restore_requested_without_gfpgan_raises_model_missing(self):
         with patch.object(models, 'installed', return_value=False):

@@ -280,9 +280,11 @@ class ComfyEngine:
 
     def link_models(self, item):
         """Hard-link model files where custom nodes expect them (same volume, no copy)."""
+        legacy_by_path = {entry['path']: entry.get('legacy') or [] for entry in item.get('files') or []}
         for link in item.get('comfy_links') or []:
-            source = paths.resolve_item_path(link['from'])
-            if not source.is_file():
+            candidates = [link['from'], *legacy_by_path.get(link['from'], [])]
+            source = next((p for c in candidates if (p := paths.resolve_item_path(c)).is_file()), None)
+            if source is None:
                 continue
             target = self.link_destination(link['to'])
             if target.exists():
@@ -293,6 +295,154 @@ class ComfyEngine:
             except OSError:
                 shutil.copy2(source, target)
 
+    _CORE_PACKAGES = {'numpy', 'torch', 'torchvision', 'torchaudio'}
+    _EXTRA_NODE_PACKAGES = {
+        'ComfyUI-LatentSyncWrapper': ['accelerate', 'pytorch-lightning', 'scikit-image'],
+        'ComfyUI-LivePortraitKJ': ['onnxruntime-gpu'],
+    }
+    _NO_DEPS_NODE_PACKAGES = {
+        'ComfyUI-LatentSyncWrapper': ['insightface==2.1'],
+    }
+
+    @classmethod
+    def _filter_requirements(cls, text):
+        import re
+        specs = []
+        for raw in (text or '').splitlines():
+            line = raw.split('#', 1)[0].strip()
+            if not line or line.startswith('-'):
+                continue
+            pkg = re.split(r'[<>=!~\[\s;]', line, maxsplit=1)[0].strip().lower().replace('_', '-')
+            if pkg and pkg not in cls._CORE_PACKAGES:
+                specs.append(line)
+        return specs
+
+    def _patch_custom_nodes(self):
+        """Apply idempotent Python 3.13 / PyTorch 2.14 / MediaPipe compatibility patches to custom nodes."""
+        root = self.root()
+        if not root:
+            return
+        custom = root / 'custom_nodes'
+        # 1. ComfyUI-LivePortraitKJ: MediaPipe >= 0.10.14 removed internal mediapipe.framework; use vision.FaceLandmarker
+        mp_utils = custom / 'ComfyUI-LivePortraitKJ' / 'media_pipe' / 'mp_utils.py'
+        if mp_utils.is_file():
+            text = mp_utils.read_text(encoding='utf-8', errors='replace')
+            updated = text.replace('from . import face_landmark', '# face_landmark unused on modern mediapipe')
+            updated = updated.replace(
+                'self.detector = face_landmark.FaceLandmarker.create_from_options(options)',
+                'self.detector = vision.FaceLandmarker.create_from_options(options)',
+            )
+            updated = updated.replace(
+                'detection_result, _ = self.detector.detect(image)',
+                '_res = self.detector.detect(image); detection_result = _res[0] if isinstance(_res, tuple) else _res',
+            )
+            if updated != text:
+                mp_utils.write_text(updated, encoding='utf-8')
+        lmk_runner = custom / 'ComfyUI-LivePortraitKJ' / 'liveportrait' / 'utils' / 'landmark_runner.py'
+        if lmk_runner.is_file():
+            text = lmk_runner.read_text(encoding='utf-8', errors='replace')
+            target_block = (
+                "        if onnx_provider.lower() == 'cuda':\n"
+                "            self.session = onnxruntime.InferenceSession(\n"
+                "                ckpt_path, providers=[\n"
+                "                    ('CUDAExecutionProvider', {'device_id': device_id})\n"
+                "                ]\n"
+                "            )"
+            )
+            replacement_block = (
+                "        if onnx_provider.lower() == 'cuda':\n"
+                "            getattr(onnxruntime, 'preload_dlls', lambda: None)()\n"
+                "            self.session = onnxruntime.InferenceSession(\n"
+                "                ckpt_path, providers=[\n"
+                "                    ('CUDAExecutionProvider', {'device_id': device_id}),\n"
+                "                    'CPUExecutionProvider',\n"
+                "                ]\n"
+                "            )"
+            )
+            updated = text.replace(target_block, replacement_block)
+            if updated != text:
+                lmk_runner.write_text(updated, encoding='utf-8')
+        # 2. ComfyUI-LatentSyncWrapper: TorchAudio 2.11+ / TorchVision 0.29+ / offline Whisper & InsightFace
+        ls_dir = custom / 'ComfyUI-LatentSyncWrapper'
+        ls_nodes = ls_dir / 'nodes.py'
+        if ls_nodes.is_file():
+            text = ls_nodes.read_text(encoding='utf-8', errors='replace')
+            updated = text.replace(
+                'torchaudio.save(audio_path, waveform_cpu, sample_rate)',
+                'import soundfile as _sf; _sf.write(audio_path, waveform_cpu.t().cpu().numpy(), sample_rate)',
+            )
+            updated = updated.replace('except TypeError as e:', 'except (TypeError, AttributeError) as e:')
+            updated = updated.replace(
+                "processed_frames = io.read_video(output_video_path, pts_unit='sec')[0]",
+                'from decord import VideoReader as _VR; _vr = _VR(output_video_path); '
+                'processed_frames = torch.from_numpy(_vr[:].asnumpy()); del _vr',
+            )
+            updated = updated.replace(
+                'torch.cuda.set_per_process_memory_fraction(0.8)',
+                '# memory fraction cap removed to avoid throttling shared ComfyUI process',
+            )
+            if updated != text:
+                ls_nodes.write_text(updated, encoding='utf-8')
+        ls_inf = ls_dir / 'scripts' / 'inference.py'
+        if ls_inf.is_file():
+            text = ls_inf.read_text(encoding='utf-8', errors='replace')
+            updated = text.replace(
+                '        model_path=whisper_model_name,',
+                '        model_path=args.whisper_ckpt_path if getattr(args, "whisper_ckpt_path", None) '
+                'and os.path.isfile(args.whisper_ckpt_path) else whisper_model_name,',
+            )
+            if updated != text:
+                ls_inf.write_text(updated, encoding='utf-8')
+        ls_fd = ls_dir / 'latentsync' / 'utils' / 'face_detector.py'
+        if ls_fd.is_file():
+            text = ls_fd.read_text(encoding='utf-8', errors='replace')
+            target_fd = (
+                '        self.app = FaceAnalysis(\n'
+                '            allowed_modules=["detection", "landmark_2d_106"],\n'
+                '            root="checkpoints/auxiliary",\n'
+                '            providers=["CUDAExecutionProvider"],\n'
+                '        )'
+            )
+            replacement_fd = (
+                '        import os as _os, onnxruntime as _ort\n'
+                '        getattr(_ort, "preload_dlls", lambda: None)()\n'
+                '        _aux_root = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.dirname('
+                '_os.path.abspath(__file__)))), "checkpoints", "auxiliary")\n'
+                '        self.app = FaceAnalysis(\n'
+                '            allowed_modules=["detection", "landmark_2d_106"],\n'
+                '            root=_aux_root,\n'
+                '            providers=["CUDAExecutionProvider", "CPUExecutionProvider"],\n'
+                '        )'
+            )
+            updated = text.replace(target_fd, replacement_fd)
+            if updated != text:
+                ls_fd.write_text(updated, encoding='utf-8')
+        ls_pipe = ls_dir / 'latentsync' / 'pipelines' / 'lipsync_pipeline.py'
+        if ls_pipe.is_file():
+            text = ls_pipe.read_text(encoding='utf-8', errors='replace')
+            updated = text.replace(
+                '-q:v 0 -q:a 0 {video_out_path}"',
+                '-q:v 0 -q:a 0 \\"{video_out_path}\\""',
+            )
+            if updated != text:
+                ls_pipe.write_text(updated, encoding='utf-8')
+        ls_util = ls_dir / 'latentsync' / 'utils' / 'util.py'
+        if ls_util.is_file():
+            text = ls_util.read_text(encoding='utf-8', errors='replace')
+            updated = text.replace(
+                '-nostdin -i {video_path} -r 25',
+                '-nostdin -i \\"{video_path}\\" -r 25',
+            )
+            updated = updated.replace(
+                'def write_video(video_output_path: str, video_frames: np.ndarray, fps: int):\n'
+                '    with imageio.get_writer(',
+                'def write_video(video_output_path: str, video_frames: np.ndarray, fps: int):\n'
+                '    return write_video_cv2(video_output_path, video_frames, fps)\n'
+                '    with imageio.get_writer(',
+            )
+            if updated != text:
+                ls_util.write_text(updated, encoding='utf-8')
+
     def install_requirements(self, folder):
         """Install a custom node's pinned requirements into the engine's own Python."""
         import job_process
@@ -302,11 +452,53 @@ class ComfyEngine:
         requirements = root / 'custom_nodes' / folder / 'requirements.txt'
         if not requirements.is_file():
             return
+        specs = self._filter_requirements(requirements.read_text(encoding='utf-8', errors='replace'))
+        for extra in self._EXTRA_NODE_PACKAGES.get(folder, ()):
+            if extra not in specs:
+                specs.append(extra)
+        if not specs:
+            return
         result = job_process.run([str(python), '-s', '-m', 'pip', 'install', '--disable-pip-version-check',
-                                  '-r', str(requirements)], capture_output=True, timeout=3600)
+                                  *specs], capture_output=True, timeout=3600)
         if result.returncode:
             tail = (result.stderr or b'')[-400:].decode('utf-8', 'replace') if isinstance(result.stderr, bytes) else str(result.stderr)[-400:]
             raise AIUnavailable(f'Installing requirements for {folder} failed: {tail.strip()}', setup_hint='engines')
+        for no_deps_pkg in self._NO_DEPS_NODE_PACKAGES.get(folder, ()):
+            res2 = job_process.run([str(python), '-s', '-m', 'pip', 'install', '--disable-pip-version-check',
+                                    '--no-deps', no_deps_pkg], capture_output=True, timeout=1800)
+            if res2.returncode:
+                tail = (res2.stderr or b'')[-400:].decode('utf-8', 'replace') if isinstance(res2.stderr, bytes) else str(res2.stderr)[-400:]
+                raise AIUnavailable(f'Installing {no_deps_pkg} for {folder} failed: {tail.strip()}', setup_hint='engines')
+        self._patch_custom_nodes()
+
+    def _prepare_home_env(self):
+        home = self.home()
+        home.mkdir(parents=True, exist_ok=True)
+        (home / '.latentsync16_dependencies_installed').write_text('ok\n', encoding='utf-8')
+        env = dict(
+            os.environ,
+            USERPROFILE=str(home),
+            HOME=str(home),
+            PYTHONNOUSERSITE='1',
+            PYTHONIOENCODING='utf-8',
+            PYTHONUTF8='1',
+        )
+        try:
+            import imageio_ffmpeg
+            ffmpeg_src = Path(imageio_ffmpeg.get_ffmpeg_exe())
+            if ffmpeg_src.is_file():
+                bin_dir = home / 'bin'
+                bin_dir.mkdir(parents=True, exist_ok=True)
+                ffmpeg_dst = bin_dir / ('ffmpeg.exe' if os.name == 'nt' else 'ffmpeg')
+                if not ffmpeg_dst.is_file():
+                    try:
+                        os.link(ffmpeg_src, ffmpeg_dst)
+                    except OSError:
+                        shutil.copy2(ffmpeg_src, ffmpeg_dst)
+                env['PATH'] = str(bin_dir) + os.pathsep + env.get('PATH', '')
+        except Exception as exc:
+            log.debug('Could not link imageio_ffmpeg into ComfyUI home: %s', exc)
+        return env
 
     def ensure_running(self, timeout=180):
         if self.running():
@@ -322,10 +514,9 @@ class ComfyEngine:
             for item in catalog.items():
                 if item.get('comfy_links'):
                     self.link_models(item)
+            self._patch_custom_nodes()
             config = self.write_model_paths()
-            home = self.home()
-            home.mkdir(parents=True, exist_ok=True)
-            env = dict(os.environ, USERPROFILE=str(home), HOME=str(home), PYTHONNOUSERSITE='1')
+            env = self._prepare_home_env()
             self._process = _spawn([str(self.python()), '-s', str(self.root() / 'main.py'),
                                     '--listen', '127.0.0.1', '--port', str(self.port), '--disable-auto-launch',
                                     '--extra-model-paths-config', str(config)], cwd=str(self.root()), env=env)
@@ -342,11 +533,17 @@ class ComfyEngine:
         except requests.RequestException as exc:
             log.warning('ComfyUI /free failed: %s', exc)
 
+    def _idle_stop(self):
+        if gpu.status().get('comfy', {}).get('active'):
+            self.touch()
+            return
+        self.stop()
+
     def touch(self):
         """Restart the idle-stop timer after the last use."""
         if self._idle_timer:
             self._idle_timer.cancel()
-        self._idle_timer = threading.Timer(settings.idle_release_seconds() * 3, self.stop)
+        self._idle_timer = threading.Timer(settings.idle_release_seconds() * 3, self._idle_stop)
         self._idle_timer.daemon = True
         self._idle_timer.start()
 

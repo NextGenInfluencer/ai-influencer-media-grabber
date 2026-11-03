@@ -110,6 +110,7 @@ class ComfyClient:
                         return entry.get('outputs') or {}
                 if time.monotonic() - started > timeout:
                     raise AIUnavailable('The creative engine job timed out.')
+                engines.comfy.touch()
                 if progress:
                     position = self.queue_position(prompt_id)
                     progress({'state': 'running' if position == 0 else 'queued', 'position': position,
