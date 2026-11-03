@@ -7,6 +7,7 @@ import unittest
 from unittest.mock import patch
 import zipfile
 
+import safe_update
 from safe_update import stage_archive, apply_pending
 from ai_runtime import translate_srt
 
@@ -91,13 +92,103 @@ class UpdateTests(unittest.TestCase):
         self.assertTrue(apply_pending(self.root))
         self.assertIn('old', (self.root / 'app_local.py').read_text())
 
+    def manifest(self, **overrides):
+        data = {'version': 1, 'patterns': ['*.py'], 'files': ['requirements.txt', 'release_manifest.json'],
+                'directories': ['templates', 'static'], 'exclude': []}
+        data.update(overrides)
+        return json.dumps(data)
+
+    def test_manifest_from_archive_installs_new_top_level_module(self):
+        archive = self.archive({'app_local.py': 'import routes_new\nassert routes_new.READY',
+                                'routes_new.py': 'READY = True', 'release_manifest.json': self.manifest()})
+        stage_archive(self.root, archive, 'v5')
+        self.assertTrue(apply_pending(self.root))
+        self.assertEqual((self.root / 'routes_new.py').read_text(), 'READY = True')
+        self.assertTrue((self.root / 'release_manifest.json').is_file())
+
+    def test_manifest_is_authoritative_for_selection(self):
+        archive = self.archive({'extra.py': 'X = 1', 'notes.txt': 'unlisted', 'templates/extra.html': 'x',
+                                'release_manifest.json': self.manifest(patterns=[], files=[
+                                    'app_local.py', 'safe_update.py', 'requirements.txt'])})
+        stage_archive(self.root, archive, 'v5')
+        files = json.loads((self.root / '.updates/pending.json').read_text(encoding='utf-8'))['files']
+        self.assertNotIn('extra.py', files)
+        self.assertNotIn('notes.txt', files)
+        self.assertIn('templates/extra.html', files)
+
+    def test_unsafe_manifest_entries_are_rejected(self):
+        unsafe = [dict(files=['../escape.py']), dict(files=['/etc/passwd.txt']), dict(files=['C:/Windows/x.py']),
+                  dict(files=['docs\\..\\x.md']), dict(files=['history.json']), dict(files=['tests/x.py']),
+                  dict(files=['.updates/pending.json']), dict(directories=['..']), dict(directories=['tests']),
+                  dict(directories=['static/../..']), dict(patterns=['../*.py']), dict(patterns=['*']),
+                  dict(patterns=['*.exe']), dict(files='app_local.py'), dict(exclude=['../x'])]
+        for overrides in unsafe:
+            with self.subTest(overrides=overrides):
+                with self.assertRaises(ValueError):
+                    stage_archive(self.root, self.archive({'release_manifest.json': self.manifest(**overrides)}), 'v5')
+                self.assertFalse((self.root / '.updates/pending.json').exists())
+                self.assertEqual([p.name for p in (self.root / '.updates').iterdir()], [])
+        with self.assertRaisesRegex(ValueError, 'JSON'):
+            stage_archive(self.root, self.archive({'release_manifest.json': '{not json'}), 'v5')
+
+    def test_old_archive_without_manifest_uses_built_in_list(self):
+        archive = self.archive({'new_module.py': 'X = 1', 'static/app.js': 'x', 'payload.exe': 'MZ',
+                                'history.json': '[]', 'static/fonts/custom/user.ttf': 'mine',
+                                'carousel_studio.py': 'X = 1'})
+        stage_archive(self.root, archive, 'v5')
+        files = json.loads((self.root / '.updates/pending.json').read_text(encoding='utf-8'))['files']
+        self.assertIn('new_module.py', files)
+        self.assertIn('static/app.js', files)
+        self.assertNotIn('payload.exe', files)
+        self.assertNotIn('history.json', files)
+        self.assertNotIn('static/fonts/custom/user.ttf', files)
+        self.assertNotIn('caption_fonts', safe_update.DEFAULT_MANIFEST['directories'])
+
+    def test_successful_updates_keep_only_two_backups(self):
+        for version in range(4):
+            stage_archive(self.root, self.archive({'app_local.py': f'VERSION = {version}'}), str(version))
+            self.assertTrue(apply_pending(self.root))
+        self.assertEqual(len(list((self.root / '.updates').glob('backup-*'))), 2)
+        self.assertIn('VERSION = 3', (self.root / 'app_local.py').read_text())
+
+    def test_concurrent_staging_is_rejected(self):
+        self.assertTrue(safe_update._STAGE_LOCK.acquire(blocking=False))
+        try:
+            with self.assertRaises(safe_update.UpdateInProgress):
+                stage_archive(self.root, self.archive(), 'v5')
+        finally:
+            safe_update._STAGE_LOCK.release()
+        stage_archive(self.root, self.archive(), 'v5')
+        self.assertTrue((self.root / '.updates/pending.json').exists())
+
+    def test_ai_pack_dependency_files_are_compared(self):
+        (self.root / 'requirements-ai-gpu.txt').write_text('torch==2.11.0+cu126\n')
+        with self.assertRaisesRegex(ValueError, 'installer'):
+            stage_archive(self.root, self.archive({'requirements-ai-gpu.txt': 'torch==2.12.0+cu126\n'}), 'v5')
+        (self.root / 'requirements-ai-nodeps.txt').write_text('insightface==2.1\n')
+        with self.assertRaisesRegex(ValueError, 'installer'):
+            stage_archive(self.root, self.archive({'requirements-ai-nodeps.txt': 'insightface==2.2\n'}), 'v5')
+        # Line endings alone are not a dependency change.
+        stage_archive(self.root, self.archive({'requirements-ai-gpu.txt': 'torch==2.11.0+cu126\r\n'}), 'v5')
+
+    def test_release_files_follow_repository_manifest(self):
+        repo = Path(__file__).resolve().parents[1]
+        files = safe_update.release_files(repo)
+        for expected in ('app_local.py', 'storage_utils.py', 'safe_update.py', 'run.bat', 'install_ai.bat',
+                         'launch-silent.vbs', 'ai_packs.json', 'release_manifest.json', 'templates/index.html',
+                         *safe_update.DEPENDENCY_FILES):
+            self.assertIn(expected, files)
+        self.assertFalse(any(f.startswith(('tests/', '.git', 'static/fonts/custom/')) for f in files))
+        self.assertFalse(any('__pycache__' in f for f in files))
+
     def test_translation_keeps_timing(self):
         source = '1\n00:00:01,000 --> 00:00:02,000\nBonjour\n\n2\n00:00:03,000 --> 00:00:04,000\nSalut\n'
         calls = []
-        def generate(text, prompt, model):
-            calls.append(text)
-            return 'Hello'
-        result = translate_srt(source, generate, 'test')
+        def translate(lines, target, **options):
+            calls.extend(line['text'] for line in lines)
+            return {line['id']: {'text': 'Hello', 'note': '', 'route': 'translator'} for line in lines}
+        with patch('ai_core.translate.translate_lines', side_effect=translate):
+            result = translate_srt(source, 'English')
         self.assertEqual(calls, ['Bonjour', 'Salut'])
         self.assertIn('00:00:03,000 --> 00:00:04,000', result)
         self.assertEqual(result.count('Hello'), 2)

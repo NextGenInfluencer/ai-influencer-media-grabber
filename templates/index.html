@@ -8,7 +8,9 @@
     <title>AI Influencer Media Grabber</title>
     <script src="/static/vendor/tailwind-3.4.17.js"></script>
     <link href="/static/vendor/css/fontawesome-6.4.0.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="/static/copilot.css?v=v4">
+    <link rel="stylesheet" href="/static/copilot.css?v=5.0">
+    <link rel="stylesheet" href="/static/ai_setup.css?v=5.0">
+    <script src="/static/ai_setup.js?v=5.0" defer></script>
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -232,10 +234,10 @@
                 </button>
                 <div class="absolute right-0 mt-1.5 hidden group-hover:block group-focus-within:block w-44 p-1.5 rounded-xl bg-[#12131a]/95 backdrop-blur-2xl border border-white/10 shadow-2xl z-50">
                     <button onclick="window.characterStudio&amp;&amp;window.characterStudio.open()" class="w-full text-left px-3 py-2 rounded-lg text-xs text-zinc-300 hover:text-white hover:bg-white/10 flex items-center gap-2 transition">
-                        <i class="fa-solid fa-user-astronaut text-purple-400 text-xs"></i> Characters (@Airi)
+                        <i class="fa-solid fa-user-astronaut text-purple-400 text-xs"></i> Characters
                     </button>
                     <button onclick="window.motionStudio&amp;&amp;window.motionStudio.open()" class="w-full text-left px-3 py-2 rounded-lg text-xs text-zinc-300 hover:text-white hover:bg-white/10 flex items-center gap-2 transition">
-                        <i class="fa-solid fa-wand-magic-sparkles text-pink-400 text-xs"></i> Motion Studio
+                        <i class="fa-solid fa-wand-magic-sparkles text-pink-400 text-xs"></i> Face Swap Video
                     </button>
                     <a href="/video-studio" class="w-full text-left px-3 py-2 rounded-lg text-xs text-zinc-300 hover:text-white hover:bg-white/10 flex items-center gap-2 transition">
                         <i class="fa-solid fa-clapperboard text-purple-400 text-xs"></i> AI Video Studio
@@ -245,6 +247,19 @@
                     </button>
                     <button onclick="openCarouselStudio()" class="w-full text-left px-3 py-2 rounded-lg text-xs text-zinc-300 hover:text-white hover:bg-white/10 flex items-center gap-2 transition">
                         <i class="fa-solid fa-images text-blue-400 text-xs"></i> Carousel Studio
+                    </button>
+                    <div class="my-1 border-t border-white/10"></div>
+                    <button onclick="window.openAISetup()" class="w-full text-left px-3 py-2 rounded-lg text-xs text-zinc-300 hover:text-white hover:bg-white/10 flex items-center gap-2 transition">
+                        <i class="fa-solid fa-wand-magic-sparkles text-[#2997ff] text-xs"></i> Set up AI…
+                    </button>
+                    <button onclick="window.openAIEngines()" class="w-full text-left px-3 py-2 rounded-lg text-xs text-zinc-300 hover:text-white hover:bg-white/10 flex items-center gap-2 transition">
+                        <i class="fa-solid fa-microchip text-[#2997ff] text-xs"></i> AI Engines
+                    </button>
+                    <button onclick="window.openAIStorage()" class="w-full text-left px-3 py-2 rounded-lg text-xs text-zinc-300 hover:text-white hover:bg-white/10 flex items-center gap-2 transition">
+                        <i class="fa-solid fa-hard-drive text-[#2997ff] text-xs"></i> Downloads &amp; Storage
+                    </button>
+                    <button onclick="document.getElementById('shortcutsDialog').showModal()" class="w-full text-left px-3 py-2 rounded-lg text-xs text-zinc-300 hover:text-white hover:bg-white/10 flex items-center gap-2 transition">
+                        <i class="fa-solid fa-keyboard text-zinc-400 text-xs"></i> Keyboard Shortcuts
                     </button>
                 </div>
             </div>
@@ -370,25 +385,35 @@ https://www.youtube.com/watch?v=..."></textarea>
                             </div>
                         </div>
 
-                        <!-- Browser Session -->
-                        <div class="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] flex items-center justify-between gap-2.5">
-                            <div class="min-w-0">
-                                <label class="block text-xs font-semibold text-zinc-200">Browser Session</label>
-                                <span class="text-[10px] text-zinc-500 block truncate">Auth &amp; cookies</span>
-                            </div>
-                            <div class="relative shrink-0 w-44">
-                                <select id="browser" name="browser" class="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-700/80 rounded-lg text-xs font-medium text-zinc-300 focus:outline-none focus:border-blue-500 appearance-none cursor-pointer pr-7 truncate">
-                                    <option value="none">Anonymous (Public)</option>
-                                    <option value="chrome">Chrome Profile</option>
-                                    <option value="firefox">Firefox Profile</option>
-                                    <option value="edge">Edge Profile</option>
-                                    <option value="safari">Safari Profile</option>
-                                    <option value="cookies.txt">Custom cookies.txt</option>
-                                </select>
-                                <div class="absolute inset-y-0 right-0 pr-2 flex items-center pointer-events-none text-zinc-500">
-                                    <i class="fa-solid fa-chevron-down text-[9px]"></i>
+                        <!-- Login Session (options served per platform by /api/cookies/options) -->
+                        <div class="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] flex flex-col gap-2">
+                            <div class="flex items-center justify-between gap-2.5">
+                                <div class="min-w-0">
+                                    <label for="browser" class="block text-xs font-semibold text-zinc-200">Login Session</label>
+                                    <span class="text-[10px] text-zinc-500 block truncate">For login-only &amp; private posts</span>
+                                </div>
+                                <div class="relative shrink-0 w-44">
+                                    <select id="browser" name="browser" class="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-700/80 rounded-lg text-xs font-medium text-zinc-300 focus:outline-none focus:border-blue-500 appearance-none cursor-pointer pr-7 truncate">
+                                        <option value="none">Anonymous (public posts)</option>
+                                    </select>
+                                    <div class="absolute inset-y-0 right-0 pr-2 flex items-center pointer-events-none text-zinc-500">
+                                        <i class="fa-solid fa-chevron-down text-[9px]"></i>
+                                    </div>
                                 </div>
                             </div>
+                            <div id="cookieImportRow" class="hidden items-center justify-between gap-2">
+                                <span id="cookieStatusChip" class="min-w-0 truncate px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/[0.04] border border-white/[0.08] text-zinc-400">No cookies.txt imported yet</span>
+                                <div class="flex items-center gap-1.5 shrink-0">
+                                    <button type="button" onclick="document.getElementById('cookieFileInput').click()" class="px-2.5 py-1 rounded-lg bg-[#0071e3] hover:bg-[#0077ed] text-white text-[11px] font-semibold shadow-sm transition active:scale-95 flex items-center gap-1.5" title="Import a Netscape cookies.txt file">
+                                        <i class="fa-solid fa-file-import text-[10px]"></i><span>Import…</span>
+                                    </button>
+                                    <button type="button" id="cookieRemoveBtn" onclick="removeImportedCookies()" class="hidden w-6 h-6 rounded-lg bg-white/[0.05] hover:bg-red-500/15 border border-white/[0.08] text-zinc-400 hover:text-red-300 items-center justify-center transition" title="Remove imported cookies">
+                                        <i class="fa-solid fa-trash-can text-[10px]"></i>
+                                    </button>
+                                </div>
+                                <input type="file" id="cookieFileInput" accept=".txt,text/plain" class="hidden" onchange="importCookiesFile(this)">
+                            </div>
+                            <p id="cookieHelpNote" class="hidden text-[10px] leading-snug text-zinc-500"></p>
                         </div>
 
                         <!-- Save Directory -->
@@ -532,25 +557,16 @@ https://www.youtube.com/watch?v=..."></textarea>
                             </label>
                         </div>
 
-                        <!-- Integrated LLM Model Selector -->
+                        <!-- Local AI model in use (read-only; change it in AI Engines) -->
                         <div class="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] mt-2">
                             <div class="flex items-center space-x-2.5">
                                 <i class="fa-solid fa-microchip text-blue-400 text-xs"></i>
                                 <div>
-                                    <span class="text-xs text-zinc-200 font-medium block">Local LLM Engine</span>
-                                    <span class="text-[10px] text-zinc-500">Powers scene descriptions &amp; summarization</span>
+                                    <span class="text-xs text-zinc-200 font-medium block">Local AI</span>
+                                    <span class="text-[10px] text-zinc-500">Scene Prompt uses the vision model; Smart SEO uses the helper model</span>
                                 </div>
                             </div>
-                            <div class="relative w-52 shrink-0">
-                                <select id="llmModelDownloader" class="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-700/80 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-blue-500 appearance-none pr-7">
-                                    <option value="none" selected>None (Disabled)</option>
-                                    <option value="llama-3.2-1b">Llama 3.2 1B (Fast CPU)</option>
-                                    <option value="llama-3-8b">Llama 3 8B (High Reasoning)</option>
-                                </select>
-                                <div class="absolute inset-y-0 right-0 pr-2 flex items-center pointer-events-none text-zinc-500">
-                                    <i class="fa-solid fa-chevron-down text-[9px]"></i>
-                                </div>
-                            </div>
+                            <button type="button" class="ai-model-chip" data-ai-chip="helper" onclick="window.openAIEngines()" title="Open AI Engines">AI: checking…</button>
                         </div>
                     </div>
 
@@ -954,17 +970,8 @@ https://www.youtube.com/watch?v=..."></textarea>
                             </div>
 
                             <div class="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.06]">
-                                <span class="text-xs text-zinc-300 font-medium shrink-0">Local LLM:</span>
-                                <div class="relative w-48 shrink-0">
-                                    <select id="llmModelConverter" class="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-700/80 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-purple-500 appearance-none pr-7">
-                                        <option value="none">None (Disabled)</option>
-                                        <option value="llama-3.2-1b" selected>Llama 3.2 1B (Fast)</option>
-                                        <option value="llama-3-8b">Llama 3 8B (Heavy)</option>
-                                    </select>
-                                    <div class="absolute inset-y-0 right-0 pr-2 flex items-center pointer-events-none text-zinc-500">
-                                        <i class="fa-solid fa-chevron-down text-[9px]"></i>
-                                    </div>
-                                </div>
+                                <span class="text-xs text-zinc-300 font-medium shrink-0">Translator:</span>
+                                <button type="button" class="ai-model-chip" data-ai-chip="translator" onclick="window.openAIEngines()" title="Open AI Engines">AI: checking…</button>
                             </div>
                         </div>
                     </div>
@@ -1760,11 +1767,7 @@ https://www.youtube.com/watch?v=..."></textarea>
         }
 
         async function extractPromptForItem(safePath) {
-            if (currentAiStatus && !currentAiStatus.all_installed && !currentAiStatus.torch) {
-                openAiInstallModal('BLIP Scene Description');
-                return;
-            }
-            showToast('AI Prompter', 'Extracting prompt with BLIP...');
+            showToast('AI Prompter', 'Describing the frame with your local vision model…');
             try {
                 const res = await fetch('/api/extract_prompt', {
                     method: 'POST',
@@ -1774,8 +1777,9 @@ https://www.youtube.com/watch?v=..."></textarea>
                 const result = await res.json();
                 if (result.prompt) {
                     promptModal(result.prompt);
-                } else if (result.error === 'ai_pack_required') {
-                    openAiInstallModal('BLIP Scene Description');
+                } else if (res.status === 424) {
+                    showToast('Vision model needed', result.error || 'Install a local vision model first.');
+                    window.openAISetup(result.setup_hint);
                 } else {
                     alert('Extraction failed: ' + (result.error || 'Unknown error'));
                 }
@@ -2376,7 +2380,7 @@ https://www.youtube.com/watch?v=..."></textarea>
                         const res = await fetch('/api/preview', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ url })
+                            body: JSON.stringify({ url, browser: document.getElementById('browser').value })
                         });
                         const data = await res.json();
                         
@@ -2388,23 +2392,28 @@ https://www.youtube.com/watch?v=..."></textarea>
                             let domainIcon = 'fa-solid fa-link';
                             let domainColor = 'text-blue-400';
                             let platformName = 'Media Link';
-                            if (url.includes('instagram.com')) {
+                            const host = urlHostname(url);
+                            if (hostMatches(host, 'instagram.com')) {
                                 domainIcon = 'fa-brands fa-instagram';
                                 domainColor = 'text-pink-400';
                                 platformName = 'Instagram Reel';
-                            } else if (url.includes('tiktok.com')) {
+                            } else if (hostMatches(host, 'tiktok.com')) {
                                 domainIcon = 'fa-brands fa-tiktok';
                                 domainColor = 'text-cyan-400';
                                 platformName = 'TikTok Video';
-                            } else if (url.includes('youtube.com') || url.includes('youtu.be')) {
+                            } else if (hostMatches(host, 'youtube.com', 'youtu.be')) {
                                 domainIcon = 'fa-brands fa-youtube';
                                 domainColor = 'text-red-400';
                                 platformName = 'YouTube Video';
-                            } else if (url.includes('twitter.com') || url.includes('x.com')) {
+                            } else if (hostMatches(host, 'twitter.com', 'x.com')) {
                                 domainIcon = 'fa-brands fa-x-twitter';
                                 domainColor = 'text-zinc-300';
                                 platformName = 'X Media';
                             }
+                            const statusBadge = data.login_required
+                                ? '<span class="px-1.5 py-0.5 rounded text-[9px] font-medium bg-amber-500/10 text-amber-300 border border-amber-500/20">Login required</span>'
+                                : '<span class="px-1.5 py-0.5 rounded text-[9px] font-medium bg-blue-500/10 text-blue-300 border border-blue-500/20">Queued</span>';
+                            const detail = data.login_required ? escapeHtml(data.error) : escapeHtml(url);
 
                             actualCard.className = 'px-4 py-3 rounded-2xl bg-white/[0.02] border border-white/10 hover:border-white/15 transition-all flex items-center space-x-3.5';
                             actualCard.innerHTML = `
@@ -2414,9 +2423,10 @@ https://www.youtube.com/watch?v=..."></textarea>
                                 <div class="flex-1 min-w-0 pr-2">
                                     <div class="flex items-center space-x-2">
                                         <span class="text-xs font-semibold text-zinc-200 truncate">${platformName}</span>
-                                        <span class="px-1.5 py-0.5 rounded text-[9px] font-medium bg-blue-500/10 text-blue-300 border border-blue-500/20">Queued</span>
+                                        ${statusBadge}
                                     </div>
-                                    <div class="text-[10px] text-zinc-400 truncate mt-0.5 font-mono">${escapeHtml(url)}</div>
+                                    <div class="text-[10px] text-zinc-400 truncate mt-0.5 ${data.login_required ? '' : 'font-mono'}">${detail}</div>
+                                    ${data.login_required ? loginActionsHtml() : ''}
                                 </div>
                                 <div class="shrink-0 flex items-center space-x-1.5">
                                     <button onclick="document.getElementById('${previewId}').remove()" class="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-white/5 transition cursor-pointer" title="Dismiss">
@@ -2620,8 +2630,142 @@ https://www.youtube.com/watch?v=..."></textarea>
         }
 
         function generateUUID() {
+            if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
             return Math.random().toString(36).substring(2) + Date.now().toString(36);
         }
+
+        function urlHostname(url) {
+            try {
+                return new URL(url).hostname.toLowerCase();
+            } catch (e) {
+                return '';
+            }
+        }
+
+        function hostMatches(host, ...domains) {
+            return domains.some(domain => host === domain || host.endsWith('.' + domain));
+        }
+
+        // --- Login Session: platform-aware options, cookies.txt import & status ---
+        let cookieOptionsInfo = { options: [], note: '' };
+
+        function loginActionsHtml() {
+            const hasFirefox = cookieOptionsInfo.options.some(o => o.value === 'firefox');
+            return `
+                <div class="mt-2 flex items-center gap-1.5 flex-wrap">
+                    ${hasFirefox ? `<button type="button" onclick="chooseLoginSession('firefox')" class="px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.08] text-[11px] font-semibold text-zinc-200 hover:text-white flex items-center gap-1.5 transition"><i class="fa-brands fa-firefox-browser text-orange-400 text-[10px]"></i><span>Use Firefox</span></button>` : ''}
+                    <button type="button" onclick="chooseLoginSession('cookies.txt', true)" class="px-2.5 py-1 rounded-lg bg-[#0071e3] hover:bg-[#0077ed] text-white text-[11px] font-semibold flex items-center gap-1.5 transition active:scale-95"><i class="fa-solid fa-file-import text-[10px]"></i><span>Import cookies.txt</span></button>
+                </div>`;
+        }
+
+        function chooseLoginSession(value, openImport = false) {
+            const select = document.getElementById('browser');
+            if (!select || !Array.from(select.options).some(o => o.value === value)) return;
+            select.value = value;
+            select.dispatchEvent(new Event('change'));
+            showToast('Login Session', value === 'firefox' ? 'Using your Firefox login. Retry the download.' : 'Import your cookies.txt, then retry.');
+            if (openImport) document.getElementById('cookieFileInput')?.click();
+        }
+
+        function describeCookieStatus(status) {
+            if (!status || !status.exists) return 'No cookies.txt imported yet';
+            if (status.valid === false) return 'cookies.txt is unreadable · import it again';
+            const age = status.age_days === 0 ? 'today' : `${status.age_days} day${status.age_days === 1 ? '' : 's'} old`;
+            return `cookies.txt imported · ${status.domains} domain${status.domains === 1 ? '' : 's'} · ${age}`;
+        }
+
+        async function refreshCookieStatus() {
+            const chip = document.getElementById('cookieStatusChip');
+            const removeBtn = document.getElementById('cookieRemoveBtn');
+            try {
+                const status = await (await fetch('/api/cookies/status')).json();
+                if (chip) {
+                    chip.textContent = describeCookieStatus(status);
+                    chip.className = 'min-w-0 truncate px-2 py-0.5 rounded-full text-[10px] font-medium border ' +
+                        (status.exists && status.valid !== false ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-300' : 'bg-white/[0.04] border-white/[0.08] text-zinc-400');
+                }
+                if (removeBtn) {
+                    removeBtn.classList.toggle('hidden', !status.exists);
+                    removeBtn.classList.toggle('flex', !!status.exists);
+                }
+            } catch (e) {
+                if (chip) chip.textContent = 'Cookie status unavailable';
+            }
+        }
+
+        function updateCookieUi() {
+            const select = document.getElementById('browser');
+            const row = document.getElementById('cookieImportRow');
+            const note = document.getElementById('cookieHelpNote');
+            const usesFile = select && select.value === 'cookies.txt';
+            if (row) {
+                row.classList.toggle('hidden', !usesFile);
+                row.classList.toggle('flex', usesFile);
+            }
+            if (note) {
+                note.textContent = cookieOptionsInfo.note || '';
+                note.classList.toggle('hidden', !cookieOptionsInfo.note);
+            }
+        }
+
+        async function loadCookieOptions() {
+            const select = document.getElementById('browser');
+            if (!select) return;
+            try {
+                cookieOptionsInfo = await (await fetch('/api/cookies/options')).json();
+                const saved = localStorage.getItem('setting_browser');
+                select.innerHTML = '';
+                cookieOptionsInfo.options.forEach(option => {
+                    const el = document.createElement('option');
+                    el.value = option.value;
+                    el.textContent = option.label;
+                    select.appendChild(el);
+                });
+                select.value = cookieOptionsInfo.options.some(o => o.value === saved) ? saved : 'none';
+            } catch (e) {
+                console.error('Could not load login session options', e);
+            }
+            select.addEventListener('change', () => {
+                localStorage.setItem('setting_browser', select.value);
+                updateCookieUi();
+            });
+            updateCookieUi();
+            refreshCookieStatus();
+        }
+
+        async function importCookiesFile(input) {
+            const file = input.files && input.files[0];
+            input.value = '';
+            if (!file) return;
+            const body = new FormData();
+            body.append('file', file);
+            try {
+                const res = await fetch('/api/cookies/import', { method: 'POST', body });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || data.error) {
+                    showToast('Import Failed', data.error || `Server returned ${res.status}`);
+                    return;
+                }
+                chooseLoginSession('cookies.txt');
+                showToast('cookies.txt Imported', describeCookieStatus(data.status));
+            } catch (e) {
+                showToast('Import Failed', 'Could not reach the app server');
+            }
+            refreshCookieStatus();
+        }
+
+        async function removeImportedCookies() {
+            try {
+                const res = await fetch('/api/cookies', { method: 'DELETE' });
+                const data = await res.json().catch(() => ({}));
+                showToast('cookies.txt Removed', data.deleted ? 'Imported cookies were deleted from this PC' : 'Nothing to remove');
+            } catch (e) {
+                showToast('Remove Failed', 'Could not reach the app server');
+            }
+            refreshCookieStatus();
+        }
+
+        document.addEventListener('DOMContentLoaded', loadCookieOptions);
         
         // --- UX Polish: Clipboard, URL Detection & Folder Shortcuts ---
         async function pasteFromClipboard() {
@@ -2712,11 +2856,11 @@ https://www.youtube.com/watch?v=..."></textarea>
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ path: p })
                 });
-                const data = await res.json();
-                if (data.status === 'success' || data.success) {
+                const data = await res.json().catch(() => ({}));
+                if (res.ok && (data.status === 'success' || data.success)) {
                     showToast('Folder Opened', 'Showing directory in File Explorer');
                 } else {
-                    showToast('Explorer Notice', data.message || 'Could not open folder');
+                    showToast('Explorer Notice', data.error || data.message || 'Could not open folder');
                 }
             } catch (e) {
                 showToast('Explorer Error', 'Unable to open folder');
@@ -2760,8 +2904,9 @@ https://www.youtube.com/watch?v=..."></textarea>
         function retryDownloadTask(taskData, oldRow) {
             if (!taskData || !taskData.payload) return;
             if (oldRow) oldRow.remove();
-            const newTaskId = uuidv4();
-            const singleUrl = taskData.payload.url || 'Download';
+            const newTaskId = generateUUID();
+            const retryPayload = { ...taskData.payload, task_id: newTaskId };
+            const singleUrl = retryPayload.url || 'Download';
             const queueContainer = document.getElementById('queueContainer');
             const row = document.createElement('div');
             row.id = `task-${newTaskId}`;
@@ -2782,7 +2927,7 @@ https://www.youtube.com/watch?v=..."></textarea>
                 <span class="task-status text-[10px] font-bold uppercase tracking-widest text-zinc-500 block">Queued (Retry)</span>
             `;
             queueContainer.prepend(row);
-            downloadQueue.push({ taskId: newTaskId, payload: taskData.payload, cancelled: false });
+            downloadQueue.push({ taskId: newTaskId, payload: retryPayload, cancelled: false });
             updateQueueCount();
             processQueue();
         }
@@ -2901,6 +3046,12 @@ https://www.youtube.com/watch?v=..."></textarea>
                                     retryBtn.innerHTML = '<i class="fa-solid fa-rotate-right text-[10px]"></i> <span>Retry</span>';
                                     retryBtn.onclick = () => retryDownloadTask(taskData, row);
                                     row.appendChild(retryBtn);
+                                }
+                                if (data.login_required && !row.querySelector('.task-login-actions')) {
+                                    const loginActions = document.createElement('div');
+                                    loginActions.className = 'task-login-actions';
+                                    loginActions.innerHTML = loginActionsHtml();
+                                    row.appendChild(loginActions);
                                 }
                                 finished = true;
                                 break;
@@ -3091,6 +3242,8 @@ https://www.youtube.com/watch?v=..."></textarea>
             const urls = urlText.split('\n').map(u => u.trim()).filter(u => u && u.startsWith('http'));
             
             if (urls.length === 0) return;
+            // First download only: the download & copyright notice (stored after acceptance).
+            if (!(await window.ensureNoticeAccepted('download_copyright'))) return;
 
             // Automatically open task inspector drawer on download trigger
             toggleRightSidebar(true);
@@ -3128,8 +3281,7 @@ https://www.youtube.com/watch?v=..."></textarea>
                         burn_subtitles: document.getElementById('burnSubtitles').checked,
                         export_subtitles: document.getElementById('exportSubtitlesDownloader').checked,
                         autoExtractPrompt: document.getElementById('autoExtractPrompt').checked,
-                        aiSummarize: document.getElementById('aiSummarize').checked,
-                        llmModel: document.getElementById('llmModelDownloader').value
+                        aiSummarize: document.getElementById('aiSummarize').checked
                     }
                 };
 
@@ -3168,6 +3320,9 @@ https://www.youtube.com/watch?v=..."></textarea>
         const trimmerContainer = document.getElementById('trimmerContainer');
         const videoPreview = document.getElementById('videoPreview');
 
+        // Face-tracking UI sync; replaced with the real renderer once the converter controls are wired (DOMContentLoaded).
+        let syncTrackingUI = () => {};
+
         function handleFileSelect(file) {
             if (!file) return;
             const nameSpan = selectedFileName.querySelector('span.truncate') || selectedFileName;
@@ -3178,11 +3333,11 @@ https://www.youtube.com/watch?v=..."></textarea>
                 const url = URL.createObjectURL(file);
                 videoPreview.src = url;
                 trimmerContainer.classList.remove('hidden');
-                setTimeout(() => { if (typeof syncTrackingUI === 'function') syncTrackingUI(); }, 100);
+                setTimeout(() => syncTrackingUI(), 100);
             } else {
                 trimmerContainer.classList.add('hidden');
                 videoPreview.src = '';
-                if (typeof syncTrackingUI === 'function') syncTrackingUI();
+                syncTrackingUI();
             }
         }
 
@@ -3342,7 +3497,6 @@ https://www.youtube.com/watch?v=..."></textarea>
             formData.set('burn_subtitles', document.getElementById('convBurnSubtitles').checked);
             formData.set('export_subtitles', document.getElementById('convExportSubtitles').checked);
             formData.set('translate_lang', document.getElementById('convTranslateLang').value);
-            formData.set('llmModel', document.getElementById('llmModelConverter').value);
             formData.set('video_filter', document.getElementById('convVideoFilter')?.value || 'none');
             formData.set('audio_effect', document.getElementById('convAudioEffect')?.value || 'none');
             formData.set('film_grain', document.getElementById('convFilmGrain')?.value || '0');
@@ -3566,10 +3720,10 @@ https://www.youtube.com/watch?v=..."></textarea>
         window.addEventListener('DOMContentLoaded', () => {
             // Restore settings
             const settingsIds = [
-                'browser', 'convResize', 'convCompress', 'convFormat', 
+                'convResize', 'convCompress', 'convFormat', 
                 'convAutoCrop', 'convTrackingMode', 'convBurnSubtitles', 'convExportSubtitles', 
                 'burnSubtitles', 'exportSubtitlesDownloader', 'injectExif',
-                'autoExtractPrompt', 'aiSummarize', 'llmModelDownloader', 'convTranslateLang', 'llmModelConverter'
+                'autoExtractPrompt', 'aiSummarize', 'convTranslateLang'
             ];
             settingsIds.forEach(id => {
                 const el = document.getElementById(id);
@@ -3621,7 +3775,7 @@ https://www.youtube.com/watch?v=..."></textarea>
                     : '<i class="fa-solid fa-pause text-purple-400"></i><span id="btnToggleOverlayText">Pause Video</span>';
             }
 
-            function syncTrackingUI() {
+            syncTrackingUI = function renderTrackingUI() {
                 const isAutoCrop = convAutoCropEl && convAutoCropEl.checked;
                 if (convTrackingOptionsEl) {
                     if (isAutoCrop) {
@@ -3659,7 +3813,7 @@ https://www.youtube.com/watch?v=..."></textarea>
                         clickTrackInfoBar.classList.add('hidden');
                     }
                 }
-            }
+            };
 
             // HTML5 Video Play / Pause / Seek listeners to keep UI seamlessly in sync
             if (videoPreviewEl) {
@@ -3924,154 +4078,25 @@ https://www.youtube.com/watch?v=..."></textarea>
         }
 
         // ─── AI Engine Pack Management ───
-        let currentAiStatus = {
-            all_installed: false,
-            whisper: false,
-            torch: false,
-            transformers: false,
-            llama: false,
-            is_installing: false
-        };
-        let _aiPollInterval = null;
+        // Python AI packages (status only). Installs and the header profile badge live in
+        // static/ai_setup.js, which always shows the itemized notice before anything downloads.
+        let currentAiStatus = {all_installed: false, whisper: false, torch: false, transformers: false, is_installing: false};
 
         async function fetchAiStatus() {
             try {
                 const res = await fetch('/api/ai_status');
                 currentAiStatus = await res.json();
-                renderAiBadge();
-                if (currentAiStatus.is_installing) {
-                    renderInstallProgress();
-                    startAiStatusPolling();
-                } else if (_aiPollInterval && !currentAiStatus.is_installing) {
-                    stopAiStatusPolling();
-                    renderInstallProgress();
-                }
             } catch(e) {
                 console.error("Failed to fetch AI status", e);
             }
         }
 
-        function renderAiBadge() {
-            const container = document.getElementById('aiEngineBadgeContainer');
-            if (!container) return;
-
-            if (currentAiStatus.is_installing) {
-                container.innerHTML = `
-                    <button onclick="openAiInstallModal()" class="px-3 py-1.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 font-bold text-[11px] flex items-center space-x-1.5 animate-pulse cursor-pointer">
-                        <i class="fa-solid fa-spinner fa-spin text-xs"></i>
-                        <span>Installing AI Pack (${currentAiStatus.install_progress || 0}%)</span>
-                    </button>
-                `;
-            } else if (currentAiStatus.all_installed) {
-                container.innerHTML = `
-                    <div class="flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-purple-500/10 border border-purple-500/30 text-purple-300 font-bold text-[11px] shadow-[0_0_12px_rgba(168,85,247,0.15)]" title="AI Vision, Whisper & LLaMA Pack is Active">
-                        <span class="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse"></span>
-                        <span>AI Pack: Active</span>
-                    </div>
-                `;
-            } else {
-                container.innerHTML = `
-                    <button onclick="openAiInstallModal()" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-300 font-bold text-[11px] transition cursor-pointer group" title="Click to Enable Offline AI Subtitles, Vision & LLaMA">
-                        <i class="fa-solid fa-wand-magic-sparkles text-xs text-purple-400 group-hover:scale-110 transition-transform"></i>
-                        <span>Enable AI Pack</span>
-                    </button>
-                `;
-            }
+        function openAiInstallModal() {
+            window.openAISetup();
         }
 
-        function openAiInstallModal(featureName = null) {
-            const modal = document.getElementById('aiInstallModal');
-            const notice = document.getElementById('aiModalNotice');
-            const noticeText = document.getElementById('aiModalNoticeText');
-            
-            if (featureName) {
-                noticeText.textContent = `"${featureName}" requires the AI Engine Pack.`;
-                notice.classList.remove('hidden');
-            } else {
-                notice.classList.add('hidden');
-            }
-            
-            modal.classList.remove('hidden');
-            renderInstallProgress();
-        }
-
-        function closeAiInstallModal() {
-            const modal = document.getElementById('aiInstallModal');
-            modal.classList.add('hidden');
-        }
-
-        async function triggerAiInstall() {
-            const btn = document.getElementById('aiInstallActionBtn');
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>Starting...</span>';
-            
-            try {
-                const res = await fetch('/api/install_ai', { method: 'POST' });
-                const data = await res.json();
-                startAiStatusPolling();
-                await fetchAiStatus();
-            } catch (err) {
-                alert('Failed to launch installer: ' + err.message);
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-down"></i> <span>Download & Install AI Pack</span>';
-            }
-        }
-
-        function renderInstallProgress() {
-            const progressBox = document.getElementById('aiInstallProgressBox');
-            const statusText = document.getElementById('aiInstallStatusText');
-            const percentText = document.getElementById('aiInstallPercentText');
-            const bar = document.getElementById('aiInstallProgressBar');
-            const logBox = document.getElementById('aiInstallLogBox');
-            const btn = document.getElementById('aiInstallActionBtn');
-
-            if (!progressBox) return;
-
-            if (currentAiStatus.is_installing) {
-                progressBox.classList.remove('hidden');
-                statusText.textContent = currentAiStatus.install_status || 'Installing AI Engine Pack...';
-                const p = currentAiStatus.install_progress || 10;
-                percentText.textContent = p + '%';
-                bar.style.width = p + '%';
-                btn.disabled = true;
-                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>Installing in Background...</span>';
-
-                if (currentAiStatus.install_log && currentAiStatus.install_log.length > 0) {
-                    logBox.innerHTML = currentAiStatus.install_log.map(l => `<div class="truncate">${escapeHtml(l)}</div>`).join('');
-                    logBox.scrollTop = logBox.scrollHeight;
-                }
-            } else if (currentAiStatus.all_installed) {
-                progressBox.classList.remove('hidden');
-                statusText.textContent = 'AI Engine Pack Installed & Ready!';
-                percentText.textContent = '100%';
-                bar.style.width = '100%';
-                btn.disabled = true;
-                btn.className = 'px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider text-white bg-emerald-600 flex items-center space-x-2';
-                btn.innerHTML = '<i class="fa-solid fa-check"></i> <span>AI Pack Ready</span>';
-            } else {
-                progressBox.classList.add('hidden');
-                btn.disabled = false;
-                btn.className = 'px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider text-white bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 shadow-[0_0_20px_rgba(168,85,247,0.3)] transition-all flex items-center space-x-2';
-                btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-down"></i> <span>Download & Install AI Pack</span>';
-            }
-        }
-
-        function startAiStatusPolling() {
-            if (_aiPollInterval) return;
-            _aiPollInterval = setInterval(async () => {
-                await fetchAiStatus();
-                if (!currentAiStatus.is_installing && currentAiStatus.all_installed) {
-                    stopAiStatusPolling();
-                    showToast('AI Pack Ready', 'AI features (Whisper, Vision, LLaMA) are now fully unlocked!');
-                }
-            }, 1800);
-        }
-
-        function stopAiStatusPolling() {
-            if (_aiPollInterval) {
-                clearInterval(_aiPollInterval);
-                _aiPollInterval = null;
-            }
+        function triggerAiInstall() {
+            window.openAISetup();
         }
 
         function safeWebUrl(value) {
@@ -4355,95 +4380,19 @@ https://www.youtube.com/watch?v=..."></textarea>
 
     {% include 'reference_prep.html' %}
 
-    <!-- AI Engine Pack Modal (Apple macOS Acrylic Standard) -->
-    <div id="aiInstallModal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-2xl hidden flex items-center justify-center p-4">
-        <div class="bg-[#12131a]/95 backdrop-blur-3xl border border-white/10 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl transition-all">
-            <!-- Modal Header -->
-            <div class="px-6 py-4 border-b border-white/[0.08] flex items-center justify-between bg-white/[0.02]">
-                <div class="flex items-center space-x-3">
-                    <div class="w-10 h-10 rounded-xl bg-purple-500/15 border border-purple-500/25 flex items-center justify-center shadow-md">
-                        <i class="fa-solid fa-wand-magic-sparkles text-purple-400 text-sm"></i>
-                    </div>
-                    <div>
-                        <h3 class="text-xs font-semibold text-zinc-100 tracking-wide uppercase">AI Engine Pack</h3>
-                        <p class="text-[11px] text-zinc-400">Whisper, Vision Prompter & Offline LLaMA</p>
-                    </div>
-                </div>
-                <button onclick="closeAiInstallModal()" class="w-7 h-7 rounded-full bg-white/[0.06] hover:bg-white/[0.12] text-zinc-400 hover:text-white flex items-center justify-center transition">
-                    <i class="fa-solid fa-xmark text-xs"></i>
-                </button>
-            </div>
-
-            <!-- Modal Body -->
-            <div class="p-6 space-y-4">
-                <div id="aiModalNotice" class="hidden px-4 py-2.5 rounded-xl bg-purple-500/10 border border-purple-500/30 text-purple-300 text-xs flex items-center space-x-2">
-                    <i class="fa-solid fa-circle-info text-purple-400"></i>
-                    <span id="aiModalNoticeText">This feature requires the AI Engine Pack.</span>
-                </div>
-
-                <div class="grid grid-cols-1 gap-2.5">
-                    <div class="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] flex items-start space-x-3">
-                        <div class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0 mt-0.5">
-                            <i class="fa-solid fa-microphone-lines text-xs"></i>
-                        </div>
-                        <div class="flex-1 min-w-0">
-                            <div class="text-xs font-semibold text-zinc-200">Local Whisper Speech AI</div>
-                            <div class="text-[10px] text-zinc-400">Local audio transcription (model download required) & auto-burned video subtitles (.srt export)</div>
-                        </div>
-                    </div>
-
-                    <div class="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] flex items-start space-x-3">
-                        <div class="w-8 h-8 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center shrink-0 mt-0.5">
-                            <i class="fa-solid fa-eye text-xs"></i>
-                        </div>
-                        <div class="flex-1 min-w-0">
-                            <div class="text-xs font-semibold text-zinc-200">BLIP Scene Description</div>
-                            <div class="text-[10px] text-zinc-400">Extracts photorealistic prompts formatted for Nano Banana 2/Pro & GPT Image 2</div>
-                        </div>
-                    </div>
-
-                    <div class="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] flex items-start space-x-3">
-                        <div class="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center shrink-0 mt-0.5">
-                            <i class="fa-solid fa-brain text-xs"></i>
-                        </div>
-                        <div class="flex-1 min-w-0">
-                            <div class="text-xs font-semibold text-zinc-200">Offline LLaMA Intelligence</div>
-                            <div class="text-[10px] text-zinc-400">Generates video summaries, viral captions, and hashtags without sending data to the cloud</div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="flex items-center justify-between text-[11px] text-zinc-400 px-1">
-                    <span><i class="fa-solid fa-hard-drive mr-1.5 text-zinc-500"></i>Download Size: <strong class="text-zinc-200">~1.2 GB - 1.8 GB</strong></span>
-                    <span><i class="fa-solid fa-shield-check mr-1.5 text-emerald-400"></i>Media processing is local</span>
-                </div>
-
-                <!-- Live Installation Progress (Hidden when idle) -->
-                <div id="aiInstallProgressBox" class="hidden space-y-2.5 pt-2">
-                    <div class="flex items-center justify-between text-xs">
-                        <span id="aiInstallStatusText" class="font-semibold text-purple-300 truncate max-w-[320px]">Downloading packages...</span>
-                        <span id="aiInstallPercentText" class="font-mono text-zinc-400">0%</span>
-                    </div>
-                    <div class="w-full h-1.5 rounded-full bg-white/[0.08] overflow-hidden">
-                        <div id="aiInstallProgressBar" class="h-full bg-[#0071e3] transition-all duration-300" style="width: 0%;"></div>
-                    </div>
-                    <!-- Live console snippet -->
-                    <div id="aiInstallLogBox" class="p-2.5 rounded-xl bg-black/50 border border-white/[0.08] font-mono text-[9.5px] text-zinc-400 max-h-24 overflow-y-auto space-y-1">
-                        <div>Ready.</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Modal Footer -->
-            <div class="px-6 py-3.5 bg-white/[0.02] border-t border-white/[0.08] flex items-center justify-end space-x-2.5">
-                <button onclick="closeAiInstallModal()" class="px-4 py-1.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-xs font-medium text-zinc-300 hover:text-white transition">Close</button>
-                <button id="aiInstallActionBtn" onclick="triggerAiInstall()" class="px-4 py-1.5 rounded-xl text-xs font-semibold text-white bg-[#0071e3] hover:bg-[#0077ed] shadow-md transition active:scale-95 flex items-center space-x-2">
-                    <i class="fa-solid fa-cloud-arrow-down text-xs"></i>
-                    <span>Download & Install AI Pack</span>
-                </button>
-            </div>
+    <!-- Keyboard Shortcuts reference -->
+    <dialog id="shortcutsDialog" class="rounded-2xl p-0 bg-[#16171f]/90 backdrop-blur-3xl border border-white/10 text-zinc-200 shadow-2xl w-[min(420px,92vw)] backdrop:bg-black/50 backdrop:backdrop-blur-sm">
+        <div class="px-5 py-4 border-b border-white/[0.08] flex items-center justify-between">
+            <h3 class="text-sm font-semibold text-white">Keyboard Shortcuts</h3>
+            <button type="button" onclick="this.closest('dialog').close()" class="w-7 h-7 rounded-full bg-white/[0.06] hover:bg-white/[0.12] text-zinc-400 hover:text-white" aria-label="Close">×</button>
         </div>
-    </div>
+        <dl class="px-5 py-4 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2.5 text-xs">
+            <dt><kbd class="px-1.5 py-0.5 rounded-md bg-white/10 border border-white/15 font-mono">Ctrl+K</kbd></dt><dd>Open or close the AI Copilot</dd>
+            <dt><kbd class="px-1.5 py-0.5 rounded-md bg-white/10 border border-white/15 font-mono">Ctrl+Enter</kbd></dt><dd>Start the form on the current tab</dd>
+            <dt><kbd class="px-1.5 py-0.5 rounded-md bg-white/10 border border-white/15 font-mono">Ctrl+V</kbd></dt><dd>Paste a link into the downloader</dd>
+            <dt><kbd class="px-1.5 py-0.5 rounded-md bg-white/10 border border-white/15 font-mono">Esc</kbd></dt><dd>Close the open sheet or dialog</dd>
+        </dl>
+    </dialog>
 
     <!-- Software Update Modal (Apple macOS Acrylic Standard) -->
     <div id="appUpdateModal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-2xl hidden flex items-center justify-center p-4">
@@ -4551,8 +4500,8 @@ https://www.youtube.com/watch?v=..."></textarea>
     </div>
 
     <!-- AI Influencer Studio Suite Scripts -->
-    <script src="/static/copilot.js?v=v4" defer></script>
-    <script src="/static/characters.js?v=v4" defer></script>
-    <script src="/static/motion_studio.js?v=v4" defer></script>
+    <script src="/static/copilot.js?v=5.0" defer></script>
+    <script src="/static/characters.js?v=5.0" defer></script>
+    <script src="/static/motion_studio.js?v=5.0" defer></script>
 </body>
 </html>

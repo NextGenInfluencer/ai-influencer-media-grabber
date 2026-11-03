@@ -4,12 +4,14 @@ echo ========================================================
 echo AI Influencer Media Grabber - AI Engine Pack Installer
 echo ========================================================
 echo.
-echo This script will install the optional AI Engine dependencies:
-echo  - PyTorch ^& Transformers (BLIP Vision Prompt Extractor)
-echo  - OpenAI Whisper (Local Audio Transcription ^& Subtitles)
-echo  - LLaMA GGUF (Local AI Assistant ^& Summarization)
-echo.
-echo Total download size: several GB, plus model files.
+echo This installs the optional AI Engine libraries (speech, lyric alignment,
+echo vision captions, face tools and the built-in offline assistant).
+echo The best pack for this PC is chosen automatically:
+echo  - NVIDIA GPU with 6 GB or more: CUDA build (about 2.9 GB download)
+echo  - Intel/AMD graphics: CPU build with DirectML (about 0.3 GB)
+echo  - Otherwise: CPU build (about 0.3 GB)
+echo The exact list, sizes and licenses are shown before anything downloads.
+echo Model files are separate and each one asks before downloading.
 echo.
 
 cd /d "%~dp0"
@@ -19,32 +21,23 @@ if not exist "%APP_PYTHON%" (
     echo Run the core setup first.
     exit /b 1
 )
-"%APP_PYTHON%" -m pip install --only-binary=:all: "setuptools>=77" wheel
+
+rem Optional: install_ai.bat cpu ^| directml ^| gpu  to override the recommended pack.
+if "%~1"=="" (
+    "%APP_PYTHON%" -m assets.ai_setup --install
+) else (
+    "%APP_PYTHON%" -m assets.ai_setup --install --pack %~1
+)
 if errorlevel 1 (
-    echo [ERROR] Could not prepare AI installation tools.
+    echo.
+    echo [ERROR] The AI Engine Pack was not installed. Review the messages above.
     pause
     exit /b 1
-)
-"%APP_PYTHON%" -m pip install --no-build-isolation -r requirements-ai.txt
-
-if %ERRORLEVEL% NEQ 0 (
-    echo.
-    echo [ERROR] Failed to install some AI dependencies.
-    echo Please check your internet connection and try again.
-    pause
-    exit /b %ERRORLEVEL%
 )
 
 echo.
 echo ========================================================
-"%APP_PYTHON%" -m assets.ai_setup
-if errorlevel 1 (
-    echo [ERROR] AI packages could not be loaded. Review the errors above.
-    pause
-    exit /b 1
-)
-echo [SUCCESS] AI Engine Pack verified!
-echo Restart the app before using AI features. Model files download separately.
+echo Restart the app before using AI features.
 echo ========================================================
 echo.
 pause

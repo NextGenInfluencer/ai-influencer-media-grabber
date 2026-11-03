@@ -1,5 +1,49 @@
 # Changelog
 
+## [v5.0.0] - 2026-11-03
+
+**Full installer required** (AI dependencies changed). User media, history, characters, caption projects and credentials are preserved; caption projects get a `pre-v5-project.json` backup before the one-time translation repair.
+
+### Honesty & public-release readiness
+- Removed every fabricated AI output: OpenCV-gradient "FLUX keyframes", zoompan "Wan 2.1" videos, keyword "AI Director", Copilot placeholder translations/options/templates, hardcoded "Wan Ready" badges and other false labels. Missing capabilities now show "Not available on this PC" with requirements and a Set up AI action (HTTP 424 + `setup_hint`).
+- No silent downloads: Whisper, BLIP, Llama and InsightFace auto-downloads replaced by a consent flow. Every item shows live size, source, license (non-commercial items require explicit acceptance), RAM/VRAM and Local/Cloud before installing; downloads are pinned and SHA-256 verified.
+- New AI Setup wizard (hardware-detected profiles: Essentials, Laptop/CPU, GPU 6–10 GB, GPU 12–16 GB, GPU 24 GB+), AI Engines sheet (Ollama / Built-in / Creative engine, model roles, cloud keys) and Downloads & Storage center with one-click reclaim of duplicates/obsolete models.
+- `THIRD_PARTY_NOTICES.md`, `docs/PRIVACY.md`, `docs/RESPONSIBLE_USE.md`; first-use download/copyright and responsible-use (face swap, lip-sync) notices.
+
+### Local AI
+- New `ai_core` package: hardware profiles, pinned model catalog, consent-gated verified installs, VRAM broker (one heavy model at a time), app-managed Ollama and ComfyUI engines, one role router (helper, translator, vision, speech) over Ollama (GPU) or the built-in llama.cpp engine (laptops).
+- Speech: profile-chosen Whisper (large-v3-turbo on 12 GB GPUs) with VAD, no context carry-over and language detection on the most-voiced window.
+- Translation routing: lines already in the target language are kept, single-language lines use the Translator model (TranslateGemma when installed), mixed-language lines use the Helper; A/B compare per line. Lyrics are never sent to the cloud.
+- Vision: structured scene descriptions feed the Kling/Nano prompt builder (BLIP-large removed).
+- Face swap on GPU (CUDA) / DirectML / CPU with GFPGAN restoration, identity tracking, no frame cap and original resolution.
+- AI Studio: real FLUX keyframes/edits, Wan 2.2 5B / Wan 2.1 14B animation, LatentSync lip-sync and LivePortrait via ComfyUI; opt-in cloud Kling motion-control, LivePortrait and Nano Banana with cost confirmation; async jobs with progress and cancel.
+- Copilot: streaming agent with real tools, proposals with diff/ETA before applying, full caption context, honest errors.
+
+### Captions Studio
+- Fixed translations disappearing after editing (inline editor stored raw text instead of the source hash; server marked them stale and hid them). Single translation writer, whitespace-normalized hashes, visible "Needs review" state with Keep/Retranslate, export guard, and automatic recovery of affected projects.
+- Per-script karaoke retry for mixed Greek/Latin/Hangul lines; lyric proposals keep line identity and translations.
+- Shared animation constants for preview/export, glow halo layer, title/box parity, single visualizer, storyboard bridge fix, render pruning, input-seeking check renders, progress, per-project Stop.
+
+### Downloader
+- Instagram: fixed fake "complete" on empty profile downloads, profile listing via gallery-dl, post vs profile detection, reels with audio, byte-exact photos, single extraction per post, fail-fast login message.
+- Cookies: platform-aware options (Windows: Anonymous, Firefox, Import cookies.txt; Chrome/Edge removed on Windows due to App-Bound Encryption), cookies.txt import/status/delete stored in user data.
+- Fixed Retry button, playlist URLs, cross-drive subtitle burn-in, first-frame failures, history corruption recovery, capped gallery scans.
+
+### Platform
+- Hardware-chosen CPU / DirectML / GPU AI packs with an itemized consent notice; staged OTA release manifest; shared atomic JSON writes with Windows retry; CI with coverage, ESLint on inline scripts and all JS checks; waitress 24 threads.
+
+## [v4.2.3] - 2026-11-02
+- Copilot conversational subtitle and translation editor, app knowledge base, reading-speed audit and app controller.
+
+## [v4.2.2] - 2026-11-02
+- Updater: safe Windows subprocess restart with spaces in path and active health-check polling.
+
+## [v4.2.1] - 2026-11-02
+- AI Studio engine detection and model hub changes (superseded by v5.0.0).
+
+## [v4.2.0] - 2026-11-01
+- Instagram profile downloader, AI Studio gallery tab and Motion Studio integration.
+
 ## [v4.1.1] - 2026-11-01
 
 - **Native Instagram Carousel & Photo Downloader**: Added direct native extraction for Instagram multi-item carousels, photo posts, and mixed photo/video posts. Bypasses anonymous access restrictions, downloading all high-resolution original images and video slides without login failures.

@@ -14,6 +14,8 @@ import shutil
 import uuid
 from PIL import Image
 
+from storage_utils import atomic_write_json, read_json_with_backup
+
 DATA_DIR = Path(os.environ.get('MEDIA_GRABBER_DATA_DIR') or Path.home() / 'Documents' / 'Media Grabber')
 CHARACTERS_DIR = DATA_DIR / 'Characters'
 CHARACTERS_FILE = CHARACTERS_DIR / 'characters.json'
@@ -35,7 +37,7 @@ def _ensure_storage():
                 "triptych_file": ""
             }
         ]
-        CHARACTERS_FILE.write_text(json.dumps(default_seed, indent=2, ensure_ascii=False), encoding='utf-8')
+        atomic_write_json(CHARACTERS_FILE, default_seed)
 
 
 def _active_file():
@@ -59,7 +61,7 @@ def get_active_character_id():
 def set_active_character_id(cid):
     _ensure_storage()
     clean_id = re.sub(r'[^a-zA-Z0-9_\-]', '', str(cid))
-    _active_file().write_text(json.dumps({'active_id': clean_id}, indent=2), encoding='utf-8')
+    atomic_write_json(_active_file(), {'active_id': clean_id})
     return clean_id
 
 
@@ -75,10 +77,14 @@ def get_active_character():
 def list_characters():
     _ensure_storage()
     try:
-        data = json.loads(CHARACTERS_FILE.read_text(encoding='utf-8'))
-        return data if isinstance(data, list) else []
-    except Exception:
+        # A damaged file is preserved and the last good backup restored.
+        return read_json_with_backup(CHARACTERS_FILE, [], validate=lambda data: isinstance(data, list))
+    except OSError:
         return []
+
+
+def _write_characters(chars):
+    atomic_write_json(CHARACTERS_FILE, chars, backup=True)
 
 
 def get_character(character_id):
@@ -127,7 +133,7 @@ def save_character(payload):
     if not updated:
         chars.append(record)
 
-    CHARACTERS_FILE.write_text(json.dumps(chars, indent=2, ensure_ascii=False), encoding='utf-8')
+    _write_characters(chars)
     return record
 
 
@@ -135,7 +141,7 @@ def delete_character(character_id):
     chars = list_characters()
     filtered = [c for c in chars if c.get('id') != character_id]
     if len(filtered) != len(chars):
-        CHARACTERS_FILE.write_text(json.dumps(filtered, indent=2, ensure_ascii=False), encoding='utf-8')
+        _write_characters(filtered)
         # delete folder if exists
         char_media = CHARACTERS_DIR / character_id
         if char_media.is_dir():
@@ -181,7 +187,7 @@ def save_character_image(character_id, image_type, filename, raw_bytes):
             elif image_type == 'triptych':
                 c['triptych_file'] = dest_name
             break
-    CHARACTERS_FILE.write_text(json.dumps(chars, indent=2, ensure_ascii=False), encoding='utf-8')
+    _write_characters(chars)
     return dest_name
 
 
@@ -195,3 +201,10 @@ def get_image_path(character_id, filename):
     if CHARACTERS_DIR.resolve() not in path.parents:
         return None
     return path if path.is_file() else None
+
+
+def portrait_path(character):
+    """Local portrait file of a character profile, or None when no portrait was uploaded."""
+    if not character or not character.get('id') or not character.get('portrait_file'):
+        return None
+    return get_image_path(character['id'], character['portrait_file'])

@@ -103,7 +103,7 @@ vm.createContext(ctx);vm.runInContext(fs.readFileSync(require.resolve('../static
     console.log('Upload draft project isolation and recovery passed.');
     project.translation_settings={model:'qwen3-4b-local',notes:'Song context',glossary:'Keep names'};
     element('projects').value=project.id;await element('projects').onchange();
-    assert.equal(element('translationModel').value,'qwen3-4b-local');
+    assert.equal(element('translationModel').value,'qwen3-4b','The legacy built-in translator id maps to its AI catalog id');
     project.translation_settings={};await element('projects').onchange();
     assert.equal(element('translationModel').value,'','Projects without a model must not inherit the previous selection');
     assert.equal(element('translationNotes').value,'');

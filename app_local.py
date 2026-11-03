@@ -22,10 +22,10 @@ from job_process import cancellation_scope, check_cancelled, media_entries
 import threading
 import traceback
 import uuid
+import urllib.parse
 from collections import deque
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify, Response, send_file, send_from_directory, abort, session
-from werkzeug.utils import secure_filename
 import queue
 import json
 import imageio_ffmpeg
@@ -37,20 +37,22 @@ import time
 import yt_dlp
 import math
 from media_safety import contained_path, safe_media_name, crop_filter, MEDIA_EXTENSIONS
-from ai_runtime import serialized, transcribe, translate_srt
+from download_support import (MAX_COOKIE_FILE_BYTES, CookieError, LoginRequiredError, atomic_write_json,
+                              browser_options, cookie_options, cookie_status, delete_cookies,
+                              extract_instagram_preview, ffmpeg_filter_path, friendly_download_error,
+                              gallery_download, host_matches, import_cookie_bytes, is_instagram_profile_url,
+                              is_instagram_url, migrate_legacy_cookies, platform_folder,
+                              read_json_with_recovery, wants_playlist, write_json_with_backup)
+from ai_runtime import segments_to_srt, translate_srt
+from ai_core import asr
+from ai_core.errors import AIUnavailable
 import creator_composition
 from assets import hwaccel
-import characters
-import copilot
-from assets import motion_studio
-from assets import ai_video_engine
-from assets import ai_model_manager
 from typing import Any, Optional, cast
 
 # --- Constants ---
 MAX_UPLOAD_BYTES = 500 * 1024 * 1024  # 500 MB
 UPDATE_CHECK_INTERVAL = 86400  # 24 hours in seconds
-MODEL_UNLOAD_TIMEOUT = 600  # 10 minutes before unloading AI models
 GALLERY_CACHE_TTL = 15  # seconds
 
 # --- Live Server Log Capture (Tee stdout & stderr for In-App Live Console) ---
@@ -147,74 +149,30 @@ def save_favorites(fav_set: set[str]):
     """Persist favorited / liked file paths to favorites.json."""
     with favorites_lock:
         try:
-            with open(FAVORITES_FILE, "w", encoding="utf-8") as f:
-                json.dump(sorted(list(fav_set)), f, indent=2)
+            atomic_write_json(FAVORITES_FILE, sorted(fav_set))
         except Exception as e:
             print(f"Error saving favorites: {e}")
 
-def reconcile_download_history(data):
-    """Scan download directories for any media files not yet recorded in history and add them."""
-    try:
-        known_paths = {os.path.normpath(x.get('file_path', '')).lower() for x in data if x.get('file_path')}
-        new_entries = []
-        scan_folders = ['YouTube', 'Instagram', 'TikTok', 'Twitter', 'Other']
-        for folder in scan_folders:
-            fdir = os.path.join(DEFAULT_SAVE_DIR, folder)
-            if not os.path.exists(fdir):
-                continue
-            for root, _, files in os.walk(fdir):
-                for file in files:
-                    ext = os.path.splitext(file)[1].lower()
-                    if ext in ['.mp4', '.mov', '.mkv', '.webm', '.avi', '.mp3']:
-                        fp = os.path.normpath(os.path.join(root, file))
-                        if fp.lower() not in known_paths:
-                            source_url, uploader = resolve_source_url(fp, data)
-                            if not uploader:
-                                rel = os.path.relpath(root, fdir)
-                                if rel != '.':
-                                    uploader = rel.replace('\\', '/')
-                                else:
-                                    uploader = 'Unknown'
-                            base_title = os.path.splitext(file)[0]
-                            clean_t = re.sub(r'_[a-zA-Z0-9_-]{11}$', '', base_title)
-                            new_entries.append({
-                                "id": str(uuid.uuid4()),
-                                "url": source_url or "",
-                                "title": clean_t,
-                                "uploader": uploader,
-                                "file_path": fp,
-                                "platform": folder,
-                                "timestamp": os.path.getmtime(fp)
-                            })
-                            known_paths.add(fp.lower())
-        if new_entries:
-            data.extend(new_entries)
-            save_history(data)
-    except Exception as e:
-        print(f"Reconcile history error: {e}")
-    return data
+def _is_history_list(data) -> bool:
+    return isinstance(data, list)
 
-def load_history(reconcile=False):
+def load_history():
+    """Return history newest-first. A corrupt file is preserved and recovered from its backup."""
     with history_lock:
-        # Migrate legacy history only once. Deleted rows must stay deleted.
-        path = HISTORY_FILE if os.path.exists(HISTORY_FILE) else os.path.join(os.path.dirname(__file__), 'history.json')
-        data = []
-        if os.path.exists(path):
-            with open(path, encoding='utf-8') as handle:
-                data = json.load(handle)
-            if not isinstance(data, list):
-                raise ValueError('History file must contain a list')
-        if not os.path.exists(HISTORY_FILE):
+        if os.path.exists(HISTORY_FILE):
+            data = read_json_with_recovery(HISTORY_FILE, list, _is_history_list)
+        else:
+            # Migrate legacy history only once. Deleted rows must stay deleted.
+            legacy = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'history.json')
+            data = read_json_with_recovery(legacy, list, _is_history_list) if os.path.exists(legacy) else []
             save_history(data)
-        if reconcile:
-            data = reconcile_download_history(data)
-        return sorted(data, key=lambda item: float(item.get('timestamp', 0)), reverse=True)
+        rows = [item for item in data if isinstance(item, dict)]
+        return sorted(rows, key=lambda item: float(item.get('timestamp') or 0), reverse=True)
 
 
 def save_history(data):
-    from safe_update import atomic_json
     with history_lock:
-        atomic_json(HISTORY_FILE, data)
+        write_json_with_backup(HISTORY_FILE, data, _is_history_list)
 
 
 def save_url_shortcut(file_path, url):
@@ -231,33 +189,83 @@ def save_url_shortcut(file_path, url):
         print(f"Failed to save .url shortcut: {e}")
 
 def add_history_entry(url, title, uploader, file_path, platform):
+    """Record a finished download; a history problem never fails the download itself."""
     with history_lock:
-        h = load_history(reconcile=False)
-        h.insert(0, {
-            "id": str(uuid.uuid4()),
-            "url": url,
-            "title": title,
-            "uploader": uploader,
-            "file_path": file_path,
-            "platform": platform,
-            "timestamp": time.time()
-        })
-        save_history(h)
+        try:
+            h = load_history()
+            h.insert(0, {
+                "id": str(uuid.uuid4()),
+                "url": url,
+                "title": title,
+                "uploader": uploader,
+                "file_path": file_path,
+                "platform": platform,
+                "timestamp": time.time()
+            })
+            save_history(h)
+        except Exception as e:
+            print(f"Could not update download history: {e}")
 
 
-def resolve_source_url(file_path, history_data=None):
-    """Attempt to find or infer the source post URL and influencer info for a media file."""
+_DERIVED_SUFFIXES = ("_first_frame", "_subbed", "_h264_temp", "_normalized", "_prompt", "_song", "_caption", "_transcript")
+
+
+def _source_stem(file_path):
+    """Lower-case file stem without the suffixes the app adds to derived files."""
+    stem = os.path.splitext(os.path.basename(file_path))[0].lower()
+    for suffix in _DERIVED_SUFFIXES:
+        if stem.endswith(suffix):
+            return stem[:-len(suffix)]
+    return stem
+
+
+def build_history_index(history_data):
+    """Index history once per gallery refresh: by exact path, by folder and by file stem."""
+    index = {"path": {}, "dir": {}, "stem": {}}
+    for item in history_data or []:
+        item_path = item.get("file_path") if isinstance(item, dict) else None
+        if not item_path:
+            continue
+        value = (item.get("url"), item.get("uploader"))
+        norm = os.path.normpath(item_path).lower()
+        index["path"].setdefault(norm, value)
+        if not os.path.splitext(norm)[1]:
+            index["dir"].setdefault(norm, value)
+        index["stem"].setdefault(_source_stem(item_path), value)
+    return index
+
+
+def _lookup_history_index(file_path, index):
+    norm = os.path.normpath(file_path).lower()
+    if norm in index["path"]:
+        return index["path"][norm]
+    match = index["stem"].get(_source_stem(file_path))
+    if match:
+        return match
+    parent = os.path.dirname(norm)
+    for _ in range(4):
+        if parent in index["dir"]:
+            return index["dir"][parent]
+        next_parent = os.path.dirname(parent)
+        if next_parent == parent:
+            break
+        parent = next_parent
+    return None
+
+
+def resolve_source_url(file_path, history_index=None):
+    """Attempt to find or infer the source post URL and influencer info for a media file.
+
+    ``history_index`` comes from ``build_history_index``; a raw history list is also accepted.
+    """
     if not file_path:
         return None, None
 
     base, _ = os.path.splitext(file_path)
     url_candidates = [base + ".url"]
-    if base.endswith("_first_frame"):
-        url_candidates.append(base[:-12] + ".url")
-    if base.endswith("_subbed"):
-        url_candidates.append(base[:-7] + ".url")
-    if base.endswith("_h264_temp"):
-        url_candidates.append(base[:-10] + ".url")
+    for suffix in ("_first_frame", "_subbed", "_h264_temp"):
+        if base.endswith(suffix):
+            url_candidates.append(base[:-len(suffix)] + ".url")
 
     for candidate in url_candidates:
         if os.path.exists(candidate):
@@ -271,23 +279,12 @@ def resolve_source_url(file_path, history_data=None):
                 pass
 
     file_name = os.path.basename(file_path)
-    clean_name = file_name.lower()
-    for sfx in ["_first_frame.jpg", "_first_frame.png", "_subbed.mp4", "_prompt.txt", "_song.txt"]:
-        if clean_name.endswith(sfx):
-            clean_name = clean_name[:-len(sfx)]
-            break
-
-    if history_data:
-        norm_path = os.path.normpath(file_path).lower()
-        for item in history_data:
-            item_path = item.get("file_path")
-            if item_path:
-                item_norm = os.path.normpath(item_path).lower()
-                item_name = os.path.basename(item_path).lower()
-                if item_norm == norm_path or item_norm.startswith(norm_path) or norm_path.startswith(item_norm):
-                    return item.get("url"), item.get("uploader")
-                if clean_name and (clean_name in item_name or item_name in clean_name):
-                    return item.get("url"), item.get("uploader")
+    if isinstance(history_index, list):
+        history_index = build_history_index(history_index)
+    if history_index:
+        match = _lookup_history_index(file_path, history_index)
+        if match:
+            return match
 
     # Regex Auto-inference from filename
     # 1. Instagram: "Video by <user>_<shortcode>" or filename with Instagram shortcode
@@ -323,119 +320,14 @@ def resolve_source_url(file_path, history_data=None):
 # Ensure ffmpeg is in PATH for whisper
 os.environ["PATH"] += os.pathsep + os.path.dirname(imageio_ffmpeg.get_ffmpeg_exe())
 
-import gc
-whisper_model = None
-_whisper_timer = None
 
-@serialized
-def unload_whisper():
-    global whisper_model, _whisper_timer
-    if whisper_model is not None:
-        print("Unloading Whisper model to free memory...")
-        whisper_model = None
-        try:
-            import torch
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-        except Exception: pass
-        gc.collect()
-    _whisper_timer = None
+def helper_generate(prompt, system_prompt):
+    """One local chat turn on the helper role (Ollama or built-in engine). Raises AIUnavailable."""
+    from ai_core import llm
+    answer = llm.chat('helper', [{'role': 'system', 'content': system_prompt},
+                                 {'role': 'user', 'content': prompt}], temperature=0.4, max_tokens=1024)
+    return answer['content'].strip()
 
-@serialized
-def get_whisper():
-    global whisper_model, _whisper_timer
-    if _whisper_timer is not None:
-        _whisper_timer.cancel()
-    if whisper_model is None:
-        try:
-            import whisper
-        except ImportError:
-            print("Whisper is not installed. AI Pack required.")
-            return None
-        print("Loading Whisper model (this may take a moment)...")
-        whisper_model = whisper.load_model("base")
-    _whisper_timer = threading.Timer(MODEL_UNLOAD_TIMEOUT, unload_whisper)
-    _whisper_timer.daemon = True
-    _whisper_timer.start()
-    return whisper_model
-
-llm_model = None
-_llm_timer = None
-_current_llm_id = None
-
-@serialized
-def unload_llm():
-    global llm_model, _llm_timer, _current_llm_id
-    if llm_model is not None:
-        del llm_model
-        llm_model = None
-        _current_llm_id = None
-        gc.collect()
-    _llm_timer = None
-
-@serialized
-def get_llm(model_id="llama-3.2-1b"):
-    global llm_model, _llm_timer, _current_llm_id
-    if _llm_timer is not None:
-        _llm_timer.cancel()
-
-    if llm_model is None or _current_llm_id != model_id:
-        if llm_model is not None: unload_llm()
-
-        try:
-            from llama_cpp import Llama
-            from huggingface_hub import hf_hub_download
-        except ImportError:
-            print("llama-cpp-python or huggingface_hub not installed. AI Pack required.")
-            return None
-
-        models_dir = os.path.join(app.root_path, "ai_models")
-        os.makedirs(models_dir, exist_ok=True)
-
-        print(f"Loading Local LLM ({model_id})...")
-        if model_id == "llama-3-8b":
-            repo_id = "QuantFactory/Meta-Llama-3-8B-Instruct-GGUF"
-            filename = "Meta-Llama-3-8B-Instruct.Q4_K_M.gguf"
-        else: # Default: Llama 3.2 1B
-            repo_id = "bartowski/Llama-3.2-1B-Instruct-GGUF"
-            filename = "Llama-3.2-1B-Instruct-Q4_K_M.gguf"
-
-        model_path = os.path.join(models_dir, filename)
-        if not os.path.exists(model_path):
-            print(f"Downloading {filename} from HuggingFace (First time only)...")
-            hf_hub_download(repo_id=repo_id, filename=filename, local_dir=models_dir)
-
-        # Initialize Llama model
-        llm_model = Llama(
-            model_path=model_path,
-            n_gpu_layers=-1, # Auto-detect GPU if possible
-            n_ctx=4096,
-            verbose=False
-        )
-        _current_llm_id = model_id
-
-    _llm_timer = threading.Timer(MODEL_UNLOAD_TIMEOUT, unload_llm)
-    _llm_timer.daemon = True
-    _llm_timer.start()
-    return llm_model
-
-@serialized
-def llm_generate(prompt, system_prompt="You are a helpful AI assistant.", model_id="llama-3.2-1b"):
-    llm = get_llm(model_id)
-    if not llm:
-        raise RuntimeError("AI Engine pack required for local LLM generation.")
-    response = llm.create_chat_completion(
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0.7,
-        max_tokens=1024
-    )
-    if isinstance(response, dict):
-        content = response.get('choices', [{}])[0].get('message', {}).get('content')
-        return (content or "").strip()
-    return ""
 
 # Cache the face detection cascade globally but initialize lazily and defensively
 _face_cascade = None
@@ -727,12 +619,43 @@ app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = MAX_UPLOAD_BYTES
 app.secret_key = os.urandom(32)
 app.config.update(SESSION_COOKIE_NAME='media_grabber_session', SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Strict')
+from routes_ai import register_ai_routes
+register_ai_routes(app)
 MEDIA_ROOTS_FILE = os.path.join(DEFAULT_SAVE_DIR, 'media_roots.json')
+GALLERY_MAX_DEPTH = 4
+GALLERY_MAX_FILES = 20000
+
+
+def _is_filesystem_root(path):
+    """Drive roots (C:\\) and '/' are never approved as media folders."""
+    real = os.path.realpath(path)
+    return os.path.dirname(real) == real
+
+
+def _load_approved_roots():
+    try:
+        with open(MEDIA_ROOTS_FILE, encoding='utf-8') as roots_file:
+            roots = json.load(roots_file)
+    except (FileNotFoundError, ValueError):
+        return set()
+    return {root for root in roots if isinstance(root, str) and root and not _is_filesystem_root(root)}
+
+
+def approve_media_root(folder):
+    """Approve exactly one platform folder created for a download so the gallery can show it."""
+    real = os.path.realpath(folder)
+    if _is_filesystem_root(real) or contained_path(real, DEFAULT_SAVE_DIR) or real in _approved_media_roots:
+        return
+    _approved_media_roots.add(real)
+    with history_lock:
+        atomic_write_json(MEDIA_ROOTS_FILE, sorted(_approved_media_roots))
+
+
+_approved_media_roots = _load_approved_roots()
 try:
-    with open(MEDIA_ROOTS_FILE, encoding='utf-8') as _roots_file:
-        _approved_media_roots = set(json.load(_roots_file))
-except FileNotFoundError:
-    _approved_media_roots = set()
+    migrate_legacy_cookies()
+except OSError as _cookie_migration_error:
+    print(f"Legacy cookies.txt was not migrated: {_cookie_migration_error}")
 
 _approved_preview_files = set()
 
@@ -792,7 +715,7 @@ def shazam_file(audio_path):
         print("Shazam error:", e)
         return None
 
-APP_VERSION = "4.2.3"
+APP_VERSION = "5.0.0"
 SERVER_START_TIME = time.time()
 
 # --- Active Job & Auto-Shutdown Watchdog State ---
@@ -935,7 +858,6 @@ def convert_media():
     burn_subtitles = request.form.get('burn_subtitles') == 'true'
     export_subtitles = request.form.get('export_subtitles') == 'true'
     translate_lang = request.form.get('translate_lang', 'none')
-    llm_model = request.form.get('llmModel', 'none')
     trim_start = request.form.get('trimStart')
     trim_end = request.form.get('trimEnd')
     compress_opt = request.form.get('compress')
@@ -972,8 +894,6 @@ def convert_media():
     if len(files) > 1 and (trim_start or trim_end):
         return jsonify({'error': 'Trim one video at a time.'}), 400
     if translate_lang != 'none':
-        if llm_model == 'none':
-            return jsonify({'error': 'Select a translation model first.'}), 400
         export_subtitles = True
 
     if not files or files[0].filename == '':
@@ -1168,27 +1088,16 @@ def convert_media():
 
                             if os.path.exists(temp_audio):
                                 try:
-                                    model = get_whisper()
-                                    if not model:
-                                        raise RuntimeError('Whisper is unavailable. Install the AI Pack or turn off subtitles.')
-                                    else:
-                                        result = transcribe(model, temp_audio, verbose=False)
+                                    result = asr.transcribe(temp_audio, word_timestamps=False)
+                                    with open(temp_srt, 'w', encoding='utf-8') as f:
+                                        f.write(segments_to_srt(result.get('segments', []), format_srt_timestamp))
 
-
-
-                                        with open(temp_srt, 'w', encoding='utf-8') as f:
-                                            for i, segment in enumerate(result.get('segments', [])):
-                                                f.write(f"{i + 1}\n")
-                                                f.write(f"{format_srt_timestamp(segment['start'])} --> {format_srt_timestamp(segment['end'])}\n")
-                                                f.write(f"{segment['text'].strip()}\n\n")
-
-                                    if translate_lang and translate_lang != 'none' and llm_model and llm_model != 'none':
+                                    if translate_lang and translate_lang != 'none':
                                         q.put({"status": f"{prefix}Translating Subtitles to {translate_lang}..."})
                                         try:
                                             with open(temp_srt, 'r', encoding='utf-8') as tf:
                                                 srt_content = tf.read()
-                                            sys_p = f"You are a professional subtitle translator. Translate the following .srt file to {translate_lang}. Maintain the exact SRT formatting and timestamps. Output ONLY the translated SRT text."
-                                            translated_srt = translate_srt(srt_content, llm_generate, llm_model, translate_lang)
+                                            translated_srt = translate_srt(srt_content, translate_lang)
                                             with open(temp_srt, 'w', encoding='utf-8') as tf:
                                                 tf.write(translated_srt)
                                         except Exception as e:
@@ -1307,490 +1216,261 @@ def cancel_task(task_id):
         cancel_flags[task_id] = True
     return jsonify({"success": True})
 
+@app.route('/api/cookies/options', methods=['GET'])
+def api_cookie_options():
+    """Login-session choices that work on this operating system."""
+    return jsonify(browser_options())
+
+
+@app.route('/api/cookies/status', methods=['GET'])
+def api_cookie_status():
+    """Metadata about the imported cookies.txt (never names or values)."""
+    return jsonify(cookie_status())
+
+
+@app.route('/api/cookies/import', methods=['POST'])
+def api_cookie_import():
+    upload = request.files.get('file')
+    if upload is None or not upload.filename:
+        return jsonify(error='Choose a cookies.txt file to import.'), 400
+    try:
+        raw = upload.stream.read(MAX_COOKIE_FILE_BYTES + 1)
+    finally:
+        upload.close()
+    try:
+        status = import_cookie_bytes(raw)
+    except CookieError as e:
+        return jsonify(error=str(e)), 400
+    return jsonify(success=True, status=status)
+
+
+@app.route('/api/cookies', methods=['DELETE'])
+def api_cookie_delete():
+    return jsonify(success=True, deleted=delete_cookies())
+
+
 @app.route('/api/preview', methods=['POST'])
 def preview_url():
-    data = request.json or {}
-    url = data.get('url')
+    data = request.get_json(silent=True) or {}
+    url = str(data.get('url') or '').strip()
     browser = data.get('browser')
     if not url:
         return jsonify({"error": "No URL provided"}), 400
-    url = url.strip()
-    if not url.startswith(('http://', 'https://')):
+    if not url.startswith(('http://', 'https://')) and not url.startswith('@'):
         return jsonify({"error": "Invalid URL scheme"}), 400
 
     try:
+        ydl_patch, _ = cookie_options(browser)
+    except CookieError as e:
+        return jsonify({"error": str(e)}), 400
+
+    try:
+        if is_instagram_profile_url(url):
+            return jsonify(extract_instagram_preview(url, browser=browser))
+        if is_instagram_url(url):
+            ig_info = extract_instagram_preview(url, browser=browser)
+            if not ig_info:
+                return jsonify({"error": "Instagram returned no data for this post"}), 502
+            return jsonify(ig_info)
         ydl_opts: dict[str, Any] = {
             'quiet': True,
             'no_warnings': True,
             'extract_flat': True,
-            'dump_single_json': True,
-            'skip_download': True
+            'skip_download': True,
+            'noplaylist': not wants_playlist(url),
+            **ydl_patch,
         }
         with yt_dlp.YoutubeDL(cast(Any, ydl_opts)) as ydl:
-            info = ydl.extract_info(url, download=False)
-
-            return jsonify({
-                "title": info.get('title', 'Unknown Title'),
-                "uploader": info.get('uploader', 'Unknown Creator'),
-                "thumbnail": info.get('thumbnail', ''),
-                "duration": info.get('duration', 0)
-            })
+            info = ydl.extract_info(url, download=False) or {}
+        return jsonify({
+            "title": info.get('title', 'Unknown Title'),
+            "uploader": info.get('uploader', 'Unknown Creator'),
+            "thumbnail": info.get('thumbnail', ''),
+            "duration": info.get('duration', 0)
+        })
+    except LoginRequiredError as e:
+        return jsonify({"error": str(e), "login_required": True}), 401
     except Exception as e:
-        if 'instagram.com' in url.lower() or url.strip().startswith('@'):
-            try:
-                from download_support import extract_instagram_preview
-                ig_info = extract_instagram_preview(url, browser=browser)
-                if ig_info:
-                    return jsonify(ig_info)
-            except Exception:
-                pass
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": friendly_download_error(strip_ansi(e), url)}), 500
 
 @app.route('/api/download', methods=['POST'])
 def download_video():
-    data = request.json
-    urls_raw = data.get('url', '')
-    output_path = data.get('path')
+    data = request.get_json(silent=True) or {}
+    urls_raw = str(data.get('url') or '')
+    output_root = str(data.get('path') or '').strip() or DEFAULT_SAVE_DIR
     custom_name = data.get('filename')
     browser = data.get('browser')
-    task_id = data.get('task_id', 'unknown')
-    processing_options = data.get('processing_options', {})
+    task_id = str(data.get('task_id') or uuid.uuid4().hex)
+    processing_options = data.get('processing_options')
+    if not isinstance(processing_options, dict):
+        processing_options = {}
 
     if task_id in cancel_flags:
         return jsonify(error='This task is already running.'), 409
 
     urls = [u.strip() for u in urls_raw.split('\n') if u.strip().startswith(('http://', 'https://'))]
-
     if not urls:
         return jsonify({"error": "Valid URL(s) required"}), 400
+    try:
+        cookie_patch, _ = cookie_options(browser)
+    except CookieError as e:
+        return jsonify({"error": str(e)}), 400
 
     cancel_flags[task_id] = False
-    url = urls[0] # keeping url for downstream variable references, but loop uses urls
-    if not output_path or not output_path.strip():
-        output_path = DEFAULT_SAVE_DIR
-    _approved_media_roots.add(os.path.realpath(output_path))
-    from safe_update import atomic_json
-    with history_lock:
-        atomic_json(MEDIA_ROOTS_FILE, sorted(_approved_media_roots))
+    quality = processing_options.get('quality', 'max')
+    profile_mode = processing_options.get('profile_mode') or data.get('profile_mode', 'all')
+    selected_urls = processing_options.get('selected_urls') or data.get('selected_urls')
 
-    url_lower = url.lower()
-    if 'youtube.com' in url_lower or 'youtu.be' in url_lower:
-        output_path = os.path.join(output_path, 'YouTube')
-    elif 'instagram.com' in url_lower:
-        output_path = os.path.join(output_path, 'Instagram')
-    elif 'tiktok.com' in url_lower:
-        output_path = os.path.join(output_path, 'TikTok')
-    elif 'twitter.com' in url_lower or 'x.com' in url_lower:
-        output_path = os.path.join(output_path, 'Twitter')
-    else:
-        output_path = os.path.join(output_path, 'Other')
+    # Build format selector based on user preference
+    if quality == 'audio_only':
+        fmt_str = 'bestaudio/best'
+    elif quality in ['2160', '1440', '1080', '720', '480']:
+        h = quality
+        fmt_str = f'bestvideo[height<={h}]+bestaudio[ext=m4a]/bestvideo[height<={h}]+bestaudio/best[height<={h}]/best'
+    else:  # 'max' / default: True maximum resolution available (4K, 1440p, 1080p60)
+        fmt_str = 'bestvideo+bestaudio[ext=m4a]/bestvideo+bestaudio/best'
 
-    os.makedirs(output_path, exist_ok=True)
+    postprocessors = []
+    if quality == 'audio_only':
+        postprocessors = [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '320'}]
+    elif processing_options.get('forceH264', False):
+        postprocessors = [{'key': 'FFmpegVideoConvertor', 'preferedformat': 'mp4'}]
+
+    clean_name = sanitize_filename(custom_name) if custom_name else ''
+    name_template = f'{clean_name}_%(id)s.%(ext)s' if clean_name else '%(title)s_%(id)s.%(ext)s'
+    node_exe = os.path.join(app.root_path, 'node_runtime', 'node.exe')
 
     def generate():
         yield f"data: {json.dumps({'status': 'Fetching metadata...'})}\n\n"
+        q = queue.Queue()
 
-        quality = processing_options.get('quality', 'max')
-        force_h264 = processing_options.get('forceH264', False)
+        def hook(d):
+            if cancel_flags.get(task_id):
+                raise Exception("Cancelled by user")
+            if d['status'] == 'downloading':
+                percent = strip_ansi(d.get('_percent_str', '0%').strip())
+                speed = strip_ansi(d.get('_speed_str', '').strip())
+                speed_text = f" at {speed}" if speed else ""
+                q.put({"status": f"Downloading: {percent}{speed_text}"})
+            elif d['status'] == 'finished':
+                q.put({"status": "Merging files..."})
+            elif d['status'] == 'error':
+                # The worker receives the exception and reports the final outcome; keep the stream open.
+                q.put({"status": "A download step failed; finishing up..."})
 
-        # Build format selector based on user preference
-        if quality == 'audio_only':
-            fmt_str = 'bestaudio/best'
-        elif quality in ['2160', '1440', '1080', '720', '480']:
-            h = quality
-            fmt_str = f'bestvideo[height<={h}]+bestaudio[ext=m4a]/bestvideo[height<={h}]+bestaudio/best[height<={h}]/best'
-        else: # 'max' / default: True maximum resolution available (4K, 1440p, 1080p60)
-            fmt_str = 'bestvideo+bestaudio[ext=m4a]/bestvideo+bestaudio/best'
-
-        ydl_opts: dict[str, Any] = {
+        common_opts: dict[str, Any] = {
             'format': fmt_str,
             'merge_output_format': 'mp4',
-            'outtmpl': os.path.join(output_path, '%(playlist_title,uploader)s', '%(playlist_index|)s%(playlist_index& - |)s%(title)s_%(id)s.%(ext)s'),
             'quiet': True,
             'no_warnings': True,
             'ffmpeg_location': imageio_ffmpeg.get_ffmpeg_exe(),
             'retries': 10,
             'fragment_retries': 10,
             'socket_timeout': 30,
-            'js_runtimes': {'node': {'path': os.path.join(app.root_path, 'node_runtime', 'node.exe')}} if os.path.isfile(os.path.join(app.root_path, 'node_runtime', 'node.exe')) else {'node': {}}
+            'progress_hooks': [hook],
         }
+        if postprocessors:
+            common_opts['postprocessors'] = postprocessors
 
-        if quality == 'audio_only':
-            ydl_opts['postprocessors'] = [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '320'
-            }]
-        elif force_h264:
-            ydl_opts['postprocessors'] = [{
-                'key': 'FFmpegVideoConvertor',
-                'preferedformat': 'mp4'
-            }]
+        def ydl_options(target_dir, url):
+            opts: dict[str, Any] = {
+                **common_opts,
+                **cookie_patch,
+                'outtmpl': os.path.join(target_dir, '%(playlist_title,uploader)s', '%(playlist_index|)s%(playlist_index& - |)s' + name_template),
+                'noplaylist': not wants_playlist(url),
+                'js_runtimes': {'node': {'path': node_exe}} if os.path.isfile(node_exe) else {'node': {}},
+            }
+            if cookie_patch:
+                # A random 5 to 15 second delay between requests avoids account bans when logged in.
+                opts['sleep_interval'] = 5
+                opts['max_sleep_interval'] = 15
+            return opts
 
-        if custom_name:
-            clean_name = sanitize_filename(custom_name)
-            if clean_name:
-                ydl_opts['outtmpl'] = os.path.join(output_path, '%(playlist_title,uploader)s', f'%(playlist_index|)s%(playlist_index& - |)s{clean_name}_%(id)s.%(ext)s')
-
-        if browser and browser != 'none':
-            if browser == 'cookies.txt':
-                ydl_opts['cookiefile'] = 'cookies.txt'
-            else:
-                ydl_opts['cookiesfrombrowser'] = (browser, None, None, None)
-
-            # Add a random 5 to 15 second delay between downloads to simulate human behavior and prevent bans
-            ydl_opts['sleep_interval'] = 5
-            ydl_opts['max_sleep_interval'] = 15
-
-        q = queue.Queue()
-
-        def hook(d):
-            if cancel_flags.get(task_id):
-                raise Exception("Cancelled by user")
-
-            if d['status'] == 'downloading':
-                percent = d.get('_percent_str', '0%').strip()
-                percent = re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', percent)
-                speed = d.get('_speed_str', '').strip()
-                speed = re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', speed)
-                speed_text = f" at {speed}" if speed else ""
-                q.put({"status": f"Downloading: {percent}{speed_text}"})
-            elif d['status'] == 'finished':
-                q.put({"status": "Merging files..."})
-            elif d['status'] == 'error':
-                q.put({"error": "Download failed inside hook"})
-
-        ydl_opts['progress_hooks'] = [hook]
-
-        profile_mode = processing_options.get('profile_mode') or data.get('profile_mode', 'all')
-        selected_urls = processing_options.get('selected_urls') or data.get('selected_urls')
+        def download_with_ytdlp(url, target_dir, prefix):
+            """One extraction per URL; a name collision gets a ' (n)' suffix without re-extracting."""
+            opts = ydl_options(target_dir, url)
+            try:
+                with yt_dlp.YoutubeDL(cast(Any, opts)) as ydl:
+                    info = ydl.extract_info(url, download=False)
+                    if not info:
+                        raise RuntimeError('No downloadable media found at this URL')
+                    unique_base = None
+                    if info.get('_type', 'video') == 'video':
+                        base, ext = os.path.splitext(ydl.prepare_filename(cast(Any, info)))
+                        if os.path.exists(base + ext) or os.path.exists(base + '.mp4'):
+                            c = 1
+                            while os.path.exists(f"{base} ({c}){ext}") or os.path.exists(f"{base} ({c}).mp4"):
+                                c += 1
+                            unique_base = f"{base} ({c})"
+                    if unique_base:
+                        with yt_dlp.YoutubeDL(cast(Any, {**opts, 'outtmpl': unique_base + '.%(ext)s'})) as unique_ydl:
+                            return unique_ydl.process_ie_result(info, download=True), unique_ydl
+                    return ydl.process_ie_result(info, download=True), ydl
+            except Exception as e:
+                err_msg = strip_ansi(e)
+                check_cancelled()
+                unsupported = any(message in err_msg for message in UNSUPPORTED_BY_YTDLP)
+                if unsupported or host_matches(url, 'pinterest.com', 'pin.it'):
+                    q.put({"status": f"{prefix}Unsupported by yt-dlp. Downloading via gallery-dl..."})
+                    return gallery_download(url, target_dir, browser, q.put, custom_name=custom_name), None
+                raise RuntimeError(friendly_download_error(err_msg, url)) from e
 
         def _run_dl_worker():
             total = len(urls)
             failed_count = 0
+            failure_messages = []
+            login_required = False
             last_final_path = None
+            last_target_dir = None
             for idx, url in enumerate(urls, 1):
                 check_cancelled()
                 prefix = f"[{idx}/{total}] " if total > 1 else ""
                 q.put({"status": f"{prefix}Starting download..."})
+                target_dir = os.path.join(output_root, platform_folder(url))
                 try:
-                    from download_support import is_instagram_profile_url, gallery_download
-                    if is_instagram_profile_url(url):
-                        q.put({"status": f"{prefix}Instagram Profile detected. Downloading {profile_mode} media..."})
-                        info = gallery_download(url, output_path, browser, q.put, custom_name=custom_name, profile_mode=profile_mode, selected_urls=selected_urls)
+                    os.makedirs(target_dir, exist_ok=True)
+                    approve_media_root(target_dir)
+                    last_target_dir = target_dir
+                    namer = None
+                    if is_instagram_url(url):
+                        if is_instagram_profile_url(url):
+                            q.put({"status": f"{prefix}Instagram Profile detected. Downloading {profile_mode} media..."})
+                        info = gallery_download(url, target_dir, browser, q.put, custom_name=custom_name,
+                                                profile_mode=profile_mode, selected_urls=selected_urls,
+                                                download_opts=common_opts)
                     else:
-                        with yt_dlp.YoutubeDL(cast(Any, ydl_opts)) as ydl:
-                            try:
-                                # Pre-flight check for file collisions to add (1) to filename
-                                actual_download_path = None
-                                info_dict = ydl.extract_info(url, download=False)
-                                if info_dict:
-                                    temp_final = ydl.prepare_filename(cast(Any, info_dict))
-                                    base, ext = os.path.splitext(temp_final)
-                                    if os.path.exists(temp_final) or os.path.exists(base + ".mp4"):
-                                        orig_base = base
-                                        c = 1
-                                        while os.path.exists(f"{orig_base} ({c}){ext}") or os.path.exists(f"{orig_base} ({c}).mp4"):
-                                            c += 1
+                        info, namer = download_with_ytdlp(url, target_dir, prefix)
 
-                                        local_opts: dict[str, Any] = ydl_opts.copy()
-                                        local_opts['outtmpl'] = f"{orig_base} ({c}).%(ext)s"
-                                        actual_download_path = f"{orig_base} ({c}).mp4"
-                                        with yt_dlp.YoutubeDL(cast(Any, local_opts)) as local_ydl:
-                                            info: Any = local_ydl.extract_info(url, download=True)
-                                    else:
-                                        info: Any = ydl.extract_info(url, download=True)
-                                else:
-                                    info: Any = ydl.extract_info(url, download=True)
-                            except Exception as e:
-                                err_msg = str(e)
-                                err_msg = re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', err_msg)
-
-                                check_cancelled()
-                                if "Could not copy Chrome cookie database" in err_msg or "database is locked" in err_msg:
-                                    raise RuntimeError('Close Chrome completely before using its cookies.')
-                                if any(message in err_msg for message in ('No video formats found', 'Unable to extract data', 'HTTP Error 400', 'Video info extraction failed', 'There is no video in this post', "There's no video", 'no video', 'empty media response', 'does not contain any video', 'only images')) or any(dom in url.lower() for dom in ('instagram.com', 'pin.it', 'pinterest.com')):
-                                    q.put({"status": f"{prefix}Unsupported by yt-dlp. Downloading via gallery-dl..."})
-                                    from download_support import gallery_download
-                                    info = gallery_download(url, output_path, browser, q.put, custom_name=custom_name, profile_mode=profile_mode, selected_urls=selected_urls)
-                                else:
-                                    raise
-
-                        if not info:
-                            q.put({"status": f"{prefix}Failed. No video found."})
-                            failed_count += 1
-                            time.sleep(4)
-                            continue
-
-                        for info in media_entries(info):
-                            check_cancelled()
-                            # Determine the final file path
-                            final_path: Optional[str] = None
-                            if isinstance(info, dict) and 'requested_downloads' in info and info['requested_downloads']:
-                                req_dl = info['requested_downloads'][0]
-                                if isinstance(req_dl, dict) and req_dl.get('filepath'):
-                                    final_path = str(req_dl['filepath'])
-                            if not final_path and isinstance(info, dict):
-                                fn = info.get('filepath') or info.get('_filename') or (actual_download_path if actual_download_path and os.path.exists(actual_download_path) else None) or ydl.prepare_filename(cast(Any, info))
-                                if fn:
-                                    final_path = str(fn)
-
-                            # Handle edge case where file was merged to .mp4 but info holds original extension
-                            if final_path:
-                                base, _ = os.path.splitext(final_path)
-                                if not os.path.exists(final_path) and os.path.exists(base + ".mp4"):
-                                    final_path = base + ".mp4"
-                            elif actual_download_path and os.path.exists(actual_download_path):
-                                final_path = actual_download_path
-
-                            if final_path and os.path.exists(final_path):
-                                last_final_path = final_path
-
-                            if not final_path or not os.path.isfile(final_path):
-                                raise RuntimeError('Downloaded media file could not be located')
-                            media_extension = os.path.splitext(final_path)[1].lower()
-                            is_video = media_extension in {'.mp4', '.mov', '.mkv', '.webm', '.avi', '.m4v'}
-                            has_audio_media = is_video or media_extension in {'.mp3', '.m4a', '.wav', '.ogg'}
-
-                            # Add to history & save URL shortcut IMMEDIATELY (never skipped!)
-                            title = info.get('title', 'Unknown Title') if isinstance(info, dict) else 'Unknown Title'
-                            uploader = info.get('uploader', 'Unknown') if isinstance(info, dict) else 'Unknown'
-                            platform = info.get('extractor_key', 'Other') if isinstance(info, dict) else 'Other'
-                            add_history_entry(url, title, uploader, final_path or output_path, platform)
-                            if final_path and os.path.exists(final_path):
-                                save_url_shortcut(final_path, url)
-                            invalidate_gallery_cache()
-
-                            if final_path and os.path.exists(final_path):
-                                base, _ = os.path.splitext(final_path)
-                                frame_path = None
-                                # Extract first frame
-                                if is_video and (processing_options.get('extractFrame', True) or processing_options.get('autoExtractPrompt')):
-                                    q.put({"status": f"{prefix}Extracting frame..."})
-                                    frame_path = base + "_first_frame.png"
-                                    ffmpeg_cmd = [
-                                        imageio_ffmpeg.get_ffmpeg_exe(),
-                                        "-y",
-                                        "-i", final_path,
-                                        "-vframes", "1",
-                                        "-q:v", "2",
-                                        frame_path
-                                    ]
-                                    subprocess.run(ffmpeg_cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-
-                                if processing_options.get('autoExtractPrompt'):
-                                    q.put({"status": f"{prefix}Extracting AI Prompt (BLIP)..."})
-                                    try:
-                                        from ai_prompter import extract_prompt_from_image
-                                        target_image = frame_path if frame_path and os.path.exists(frame_path) else final_path
-                                        if os.path.exists(target_image):
-                                            prompt_text = extract_prompt_from_image(target_image)
-                                            if prompt_text.startswith("Error:"):
-                                                raise RuntimeError(prompt_text)
-
-                                            llm_model_choice = processing_options.get('llmModel', 'none')
-                                            if llm_model_choice and llm_model_choice != 'none':
-                                                q.put({"status": f"{prefix}Enhancing prompt with Local LLM..."})
-                                                sys_p = "Polish this image-editing instruction for clarity only. It is a character identity replacement in an existing first frame for Kling motion control, not new scene generation. Preserve every constraint and the Image 1 / Image 2 reference roles, including original pose, proportions, clothing, composition, dimensions, background, lighting, and other people. Keep the instruction to clarify an ambiguous target. Keep the automatic caption explicitly uncertain and subordinate to the actual images. Do not invent visual details or add cinematic, beauty, quality, resolution, or camera keywords. Output ONLY the complete editing prompt."
-                                                try:
-                                                    prompt_text = llm_generate(prompt_text, sys_p, llm_model_choice)
-                                                except Exception as e:
-                                                    print(f"LLM Enhancement Error: {e}")
-
-                                            prompt_txt_path = base + "_prompt.txt"
-                                            with open(prompt_txt_path, "w", encoding="utf-8") as f:
-                                                f.write(prompt_text)
-                                    except Exception as e:
-                                        failed_count += 1
-                                        q.put({"status": f"{prefix}Prompt Extraction Error: {str(e)}"})
-
-                                # Audio Recognition & Metadata
-                                if processing_options.get('identifySong', True) and has_audio_media:
-                                    q.put({"status": f"{prefix}Identifying song & metadata..."})
-                                    song_txt_path = base + "_song.txt"
-                                    temp_audio = base + "_temp_audio.mp3"
-
-                                    # Extract 15 seconds of audio
-                                    ffmpeg_audio_cmd = [
-                                        imageio_ffmpeg.get_ffmpeg_exe(),
-                                        "-y",
-                                        "-i", final_path,
-                                        "-t", "15",
-                                        "-vn",
-                                        "-acodec", "libmp3lame",
-                                        temp_audio
-                                    ]
-                                    subprocess.run(ffmpeg_audio_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-                                    shazam_track = None
-                                    shazam_artist = None
-
-                                    if os.path.exists(temp_audio):
-                                        shazam_res = shazam_file(temp_audio)
-                                        if shazam_res and 'track' in shazam_res:
-                                            shazam_track = shazam_res['track'].get('title')
-                                            shazam_artist = shazam_res['track'].get('subtitle')
-                                        try:
-                                            os.remove(temp_audio)
-                                        except Exception:
-                                            pass
-
-                                    # Write metadata to files
-                                    yt_track = info.get('track') or info.get('alt_title')
-                                    yt_artist = info.get('artist') or info.get('creator')
-                                    yt_desc = info.get('description', '')
-
-                                    with open(song_txt_path, "w", encoding="utf-8") as f:
-                                        f.write("--- VIDEO AUDIO INFO ---\n\n")
-                                        if shazam_track:
-                                            f.write(f" Shazam Match:\n")
-                                            f.write(f"Song: {shazam_track}\n")
-                                            f.write(f"Artist: {shazam_artist}\n\n")
-                                        else:
-                                            f.write(f" Shazam Match: No match found.\n\n")
-
-                                        f.write(f" Original Upload Metadata (yt-dlp):\n")
-                                        f.write(f"Track: {yt_track or 'Unknown'}\n")
-                                        f.write(f"Artist/Creator: {yt_artist or 'Unknown'}\n")
-
-                                    if yt_desc:
-                                        caption_txt_path = base + "_caption.txt"
-                                        with open(caption_txt_path, "w", encoding="utf-8") as f:
-                                            f.write(yt_desc)
-
-                                # Transcribe Video (Whisper) if transcript, summary, or subtitles are requested
-                                want_transcribe = processing_options.get('transcribeAudio')
-                                want_summarize = processing_options.get('aiSummarize')
-                                want_burn = processing_options.get('burn_subtitles')
-                                want_export = processing_options.get('export_subtitles')
-
-                                if has_audio_media and (want_transcribe or want_summarize or want_burn or want_export):
-                                    q.put({"status": f"{prefix}Transcribing speech..."})
-                                    transcript_path = base + "_transcript.txt"
-                                    full_audio = base + "_full_audio.mp3"
-
-                                    ffmpeg_full_audio = [
-                                        imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-i", final_path,
-                                        "-vn", "-acodec", "libmp3lame", full_audio
-                                    ]
-                                    subprocess.run(ffmpeg_full_audio, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-                                    if os.path.exists(full_audio):
-                                        try:
-                                            model = get_whisper()
-                                            transcript_text = ""
-                                            result: dict[str, Any] = {}
-                                            if not model:
-                                                raise RuntimeError("Whisper AI Pack is required for transcription/subtitles.")
-                                            else:
-                                                result = transcribe(model, full_audio, verbose=False)
-                                                transcript_text = result.get("text", "").strip()
-                                            if want_transcribe and transcript_text:
-                                                with open(transcript_path, "w", encoding="utf-8") as f:
-                                                    f.write(transcript_text)
-
-                                            if want_summarize and transcript_text:
-                                                llm_model_choice = processing_options.get('llmModel', 'none')
-                                                if llm_model_choice and llm_model_choice != 'none':
-                                                    q.put({"status": f"{prefix}Generating AI Summary & SEO Tags..."})
-                                                    sys_p = "You are an expert social media manager. Read the video transcript and output: 1) A clean, bulleted summary of key points. 2) 3 viral TikTok/Reels captions. 3) SEO-optimized hashtags."
-                                                    try:
-                                                        summary_text = llm_generate(transcript_text, sys_p, llm_model_choice)
-                                                        summary_path = base + "_AI_Summary.txt"
-                                                        with open(summary_path, "w", encoding="utf-8") as sf:
-                                                            sf.write(summary_text)
-                                                    except Exception as e:
-                                                        print(f"LLM Summarize Error: {e}")
-
-
-                                            if (want_burn or want_export) and final_path and final_path.endswith(('.mp4', '.mkv', '.mov')) and result:
-                                                srt_path = base + "_subtitles.srt"
-
-
-                                                with open(srt_path, "w", encoding="utf-8") as srt_f:
-                                                    raw_segs = result.get("segments", [])
-                                                    segments = raw_segs if isinstance(raw_segs, list) else []
-                                                    for i, segment in enumerate(segments, start=1):
-                                                        if not isinstance(segment, dict):
-                                                            continue
-                                                        seg_start = float(segment.get('start', 0.0))
-                                                        seg_end = float(segment.get('end', 0.0))
-                                                        seg_text = str(segment.get('text', '')).strip()
-                                                        srt_f.write(f"{i}\n")
-                                                        srt_f.write(f"{format_srt_timestamp(seg_start)} --> {format_srt_timestamp(seg_end)}\n")
-                                                        srt_f.write(f"{seg_text}\n\n")
-
-                                                if want_burn:
-                                                    q.put({"status": f"{prefix}Burning subtitles into video..."})
-                                                    temp_sub = base + "_subbed" + os.path.splitext(final_path)[1]
-                                                    rel_srt = os.path.relpath(srt_path).replace('\\', '/')
-                                                    rel_srt = rel_srt.replace(':', '\\:').replace(',', '\\,').replace("'", "\\'")
-
-                                                    sub_enc = hwaccel.get_video_encoder_args(codec="h264", quality="high")
-                                                    ffmpeg_sub = [
-                                                        imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-i", final_path,
-                                                        "-vf", f"subtitles='{rel_srt}'", *sub_enc, "-c:a", "aac", temp_sub
-                                                    ]
-                                                    subprocess.run(ffmpeg_sub, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-                                                    if os.path.exists(temp_sub):
-                                                        os.replace(temp_sub, final_path)
-
-                                                if not want_export and os.path.exists(srt_path):
-                                                    try: os.remove(srt_path)
-                                                    except Exception: pass
-
-                                        except Exception as e:
-                                            failed_count += 1
-                                            q.put({"status": f"Transcription failed: {e}"})
-                                        try:
-                                            os.remove(full_audio)
-                                        except Exception:
-                                            pass
-
-                                # Force H.264 Encoding (Fixes AI tool compatibility)
-                                if processing_options.get('forceH264') and final_path and final_path.endswith('.mp4'):
-                                    q.put({"status": f"{prefix}Forcing Standard Encoding (H.264)..."})
-                                    temp_h264 = base + "_h264_temp.mp4"
-                                    force_enc = hwaccel.get_video_encoder_args(codec="h264", quality="standard")
-                                    ffmpeg_h264_cmd = [
-                                        imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-i", final_path,
-                                        *force_enc,
-                                        "-c:a", "aac", "-pix_fmt", "yuv420p", "-movflags", "+faststart", temp_h264
-                                    ]
-                                    subprocess.run(ffmpeg_h264_cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-                                    if os.path.exists(temp_h264) and os.path.getsize(temp_h264) > 0:
-                                        os.replace(temp_h264, final_path)
-
-                                # AI Bypass (Clean & Scramble)
-                                if processing_options.get('aiBypass') and final_path:
-                                    q.put({"status": f"{prefix}Applying AI Bypass (Scramble & Clean)..."})
-                                    from cleaner import clean_video, clean_photo, backup_file
-
-                                    # Backup first
-                                    backup_file(final_path, DEFAULT_SAVE_DIR)
-
-                                    ext = final_path.split('.')[-1].lower()
-                                    is_vid = ext in ['mp4', 'mov', 'm4v', 'webm', 'avi', 'mkv']
-
-                                    if is_vid:
-                                        success, msg = clean_video(final_path, imageio_ffmpeg.get_ffmpeg_exe())
-                                    else:
-                                        success, msg = clean_photo(final_path)
-
-                                    if not success:
-                                        failed_count += 1
-                                        q.put({"status": f"{prefix}Metadata cleanup failed: {msg}"})
+                    entries = list(media_entries(info))
+                    if not entries:
+                        raise RuntimeError('Nothing was downloaded from this URL')
+                    if isinstance(info, dict) and info.get('failed_items'):
+                        failed_count += int(info['failed_items'])
+                        failure_messages.append(f"{prefix}{info['failed_items']} post(s) could not be downloaded")
+                    for entry in entries:
+                        check_cancelled()
+                        final_path, problems = postprocess_download(entry, url, processing_options, q.put, prefix, namer)
+                        last_final_path = final_path
+                        failed_count += len(problems)
+                        failure_messages.extend(problems)
+                except LoginRequiredError as e:
+                    login_required = True
+                    failed_count += 1
+                    failure_messages.append(f"{prefix}{e}")
+                    q.put({"status": f"{prefix}{e}"})
                 except Exception as e:
                     failed_count += 1
-                    error_msg = str(e)
-                    error_msg = re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', error_msg)
+                    error_msg = friendly_download_error(strip_ansi(e), url)
+                    failure_messages.append(f"{prefix}{error_msg[:300]}")
                     q.put({"status": f"{prefix}Error: {error_msg}"})
 
             invalidate_gallery_cache()
             if failed_count == 0:
-                q.put({"status": "All Downloads Complete!", "done": True, "file_path": last_final_path, "output_path": output_path})
+                q.put({"status": "All Downloads Complete!", "done": True, "file_path": last_final_path, "output_path": last_target_dir})
             else:
-                q.put({"error": f"Finished with {failed_count} failed item(s). Check the activity log.", "done": True, "file_path": last_final_path, "output_path": output_path})
+                summary = '; '.join(failure_messages[:5]) or 'Check the activity log.'
+                q.put({"error": f"Finished with {failed_count} failed item(s): {summary}", "done": True,
+                       "login_required": login_required, "file_path": last_final_path, "output_path": last_target_dir})
 
         def run_dl():
             increment_active_job()
@@ -1806,6 +1486,7 @@ def download_video():
         t = threading.Thread(target=run_dl, daemon=True)
         t.start()
 
+        finished = False
         try:
             while True:
                 try:
@@ -1814,18 +1495,282 @@ def download_video():
                     yield ': working\n\n'
                     continue
                 yield f"data: {json.dumps(msg)}\n\n"
-                if msg.get("done") or msg.get("error") or msg.get("action_required"):
+                if msg.get("done") or msg.get("error"):
+                    finished = True
                     break
+        except GeneratorExit:
+            # The client disconnected (tab closed / fetch aborted): stop the worker instead of orphaning it.
+            if t.is_alive():
+                cancel_flags[task_id] = True
+            raise
         finally:
-            if not t.is_alive():
+            if finished and not t.is_alive():
                 cancel_flags.pop(task_id, None)
 
     return Response(generate(), mimetype='text/event-stream')
 
 
+UNSUPPORTED_BY_YTDLP = ('Unsupported URL', 'No video formats found', 'Unable to extract data', 'HTTP Error 400',
+                        'Video info extraction failed', 'There is no video in this post', "There's no video",
+                        'no video', 'empty media response', 'does not contain any video', 'only images')
 
 
-_gallery_cache: dict[str, Any] = {"time": 0.0, "data": []}
+def strip_ansi(text):
+    return re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', str(text))
+
+
+def _resolve_final_path(entry, namer=None):
+    """Locate the file yt-dlp/gallery-dl produced for one entry."""
+    final_path = None
+    for item in entry.get('requested_downloads') or []:
+        if isinstance(item, dict) and item.get('filepath'):
+            final_path = str(item['filepath'])
+            break
+    if not final_path:
+        final_path = entry.get('filepath') or entry.get('_filename')
+        if not final_path and namer is not None:
+            final_path = namer.prepare_filename(cast(Any, entry))
+    if final_path and not os.path.exists(final_path):
+        merged = os.path.splitext(final_path)[0] + '.mp4'
+        if os.path.exists(merged):
+            final_path = merged
+    return str(final_path) if final_path else None
+
+
+def extract_first_frame(video_path, frame_path):
+    """Save the first frame as PNG. Returns False (never raises) when ffmpeg cannot decode it."""
+    try:
+        result = subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-i", video_path, "-vframes", "1", "-q:v", "2", frame_path],
+                                stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    except OSError as exc:
+        print(f"First frame extraction could not start: {exc}")
+        return False
+    return result.returncode == 0 and os.path.isfile(frame_path) and os.path.getsize(frame_path) > 0
+
+
+def postprocess_download(info, url, processing_options, report, prefix='', namer=None):
+    """History, sidecars and the optional AI/encoding steps for one downloaded file.
+
+    Returns ``(final_path, problems)`` where problems are failures of steps the user asked for.
+    Raises only when the downloaded file itself cannot be found.
+    """
+    problems = []
+    final_path = _resolve_final_path(info, namer)
+    if not final_path or not os.path.isfile(final_path):
+        raise RuntimeError('Downloaded media file could not be located')
+    media_extension = os.path.splitext(final_path)[1].lower()
+    is_video = media_extension in {'.mp4', '.mov', '.mkv', '.webm', '.avi', '.m4v'}
+    has_audio_media = is_video or media_extension in {'.mp3', '.m4a', '.wav', '.ogg'}
+
+    # Add to history & save URL shortcut IMMEDIATELY (never skipped!)
+    title = info.get('title') or 'Unknown Title'
+    uploader = info.get('uploader') or 'Unknown'
+    platform = info.get('extractor_key') or 'Other'
+    add_history_entry(url, title, uploader, final_path, platform)
+    save_url_shortcut(final_path, url)
+    invalidate_gallery_cache()
+
+    base, _ = os.path.splitext(final_path)
+    frame_path = None
+    # Extract first frame (a convenience: failure is a warning, never a failed download)
+    if is_video and (processing_options.get('extractFrame', True) or processing_options.get('autoExtractPrompt')):
+        report({"status": f"{prefix}Extracting frame..."})
+        frame_path = base + "_first_frame.png"
+        if not extract_first_frame(final_path, frame_path):
+            frame_path = None
+            report({"status": f"{prefix}Warning: could not extract the first frame; the video itself was saved."})
+
+    if processing_options.get('autoExtractPrompt'):
+        report({"status": f"{prefix}Describing the first frame with the local vision model..."})
+        try:
+            from ai_prompter import extract_prompt_from_image
+            target_image = frame_path if frame_path and os.path.exists(frame_path) else final_path
+            if os.path.exists(target_image):
+                prompt_text = extract_prompt_from_image(target_image)
+                prompt_txt_path = base + "_prompt.txt"
+                with open(prompt_txt_path, "w", encoding="utf-8") as f:
+                    f.write(prompt_text)
+        except Exception as e:
+            problems.append(f"{prefix}Prompt extraction failed: {e}")
+            report({"status": f"{prefix}Prompt Extraction Error: {str(e)}"})
+
+    # Audio Recognition & Metadata
+    if processing_options.get('identifySong', True) and has_audio_media:
+        report({"status": f"{prefix}Identifying song & metadata..."})
+        song_txt_path = base + "_song.txt"
+        temp_audio = base + "_temp_audio.mp3"
+
+        # Extract 15 seconds of audio
+        ffmpeg_audio_cmd = [
+            imageio_ffmpeg.get_ffmpeg_exe(),
+            "-y",
+            "-i", final_path,
+            "-t", "15",
+            "-vn",
+            "-acodec", "libmp3lame",
+            temp_audio
+        ]
+        subprocess.run(ffmpeg_audio_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        shazam_track = None
+        shazam_artist = None
+
+        if os.path.exists(temp_audio):
+            shazam_res = shazam_file(temp_audio)
+            if shazam_res and 'track' in shazam_res:
+                shazam_track = shazam_res['track'].get('title')
+                shazam_artist = shazam_res['track'].get('subtitle')
+            try:
+                os.remove(temp_audio)
+            except Exception:
+                pass
+
+        # Write metadata to files
+        yt_track = info.get('track') or info.get('alt_title')
+        yt_artist = info.get('artist') or info.get('creator')
+        yt_desc = info.get('description', '')
+
+        with open(song_txt_path, "w", encoding="utf-8") as f:
+            f.write("--- VIDEO AUDIO INFO ---\n\n")
+            if shazam_track:
+                f.write(" Shazam Match:\n")
+                f.write(f"Song: {shazam_track}\n")
+                f.write(f"Artist: {shazam_artist}\n\n")
+            else:
+                f.write(" Shazam Match: No match found.\n\n")
+
+            f.write(" Original Upload Metadata (yt-dlp):\n")
+            f.write(f"Track: {yt_track or 'Unknown'}\n")
+            f.write(f"Artist/Creator: {yt_artist or 'Unknown'}\n")
+
+        if yt_desc:
+            caption_txt_path = base + "_caption.txt"
+            with open(caption_txt_path, "w", encoding="utf-8") as f:
+                f.write(yt_desc)
+
+    # Transcribe Video (Whisper) if transcript, summary, or subtitles are requested
+    want_transcribe = processing_options.get('transcribeAudio')
+    want_summarize = processing_options.get('aiSummarize')
+    want_burn = processing_options.get('burn_subtitles')
+    want_export = processing_options.get('export_subtitles')
+
+    if has_audio_media and (want_transcribe or want_summarize or want_burn or want_export):
+        report({"status": f"{prefix}Transcribing speech..."})
+        transcript_path = base + "_transcript.txt"
+        full_audio = base + "_full_audio.mp3"
+        try:
+            ffmpeg_full_audio = [
+                imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-i", final_path,
+                "-vn", "-acodec", "libmp3lame", full_audio
+            ]
+            subprocess.run(ffmpeg_full_audio, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            result: dict[str, Any] = asr.transcribe(full_audio, word_timestamps=False)
+            transcript_text = result.get("text", "").strip()
+            if want_transcribe and transcript_text:
+                with open(transcript_path, "w", encoding="utf-8") as f:
+                    f.write(transcript_text)
+
+            if want_summarize and transcript_text:
+                report({"status": f"{prefix}Generating AI Summary & SEO Tags (local helper model)..."})
+                sys_p = "You are an expert social media manager. Read the video transcript and output: 1) A clean, bulleted summary of key points. 2) 3 viral TikTok/Reels captions. 3) SEO-optimized hashtags."
+                try:
+                    summary_text = helper_generate(transcript_text[:12000], sys_p)
+                    summary_path = base + "_AI_Summary.txt"
+                    with open(summary_path, "w", encoding="utf-8") as sf:
+                        sf.write(summary_text)
+                except AIUnavailable as e:
+                    problems.append(f"{prefix}AI summary skipped: {e.message}")
+                    report({"status": f"{prefix}AI summary skipped: {e.message}"})
+
+            if (want_burn or want_export) and final_path.endswith(('.mp4', '.mkv', '.mov')) and result:
+                srt_path = base + "_subtitles.srt"
+                with open(srt_path, "w", encoding="utf-8") as srt_f:
+                    srt_f.write(segments_to_srt(result.get("segments", []), format_srt_timestamp))
+
+                if want_burn:
+                    report({"status": f"{prefix}Burning subtitles into video..."})
+                    temp_sub = base + "_subbed" + os.path.splitext(final_path)[1]
+                    sub_enc = hwaccel.get_video_encoder_args(codec="h264", quality="high")
+                    ffmpeg_sub = [
+                        imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-i", final_path,
+                        "-vf", f"subtitles={ffmpeg_filter_path(srt_path)}", *sub_enc, "-c:a", "aac", temp_sub
+                    ]
+                    subprocess.run(ffmpeg_sub, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+                    if os.path.exists(temp_sub):
+                        os.replace(temp_sub, final_path)
+
+                if not want_export and os.path.exists(srt_path):
+                    try: os.remove(srt_path)
+                    except Exception: pass
+        except Exception as e:
+            problems.append(f"{prefix}Transcription failed: {e}")
+            report({"status": f"{prefix}Transcription failed: {e}"})
+        finally:
+            try:
+                os.remove(full_audio)
+            except OSError:
+                pass
+
+    # Force H.264 Encoding (Fixes AI tool compatibility)
+    if processing_options.get('forceH264') and final_path.endswith('.mp4'):
+        report({"status": f"{prefix}Forcing Standard Encoding (H.264)..."})
+        temp_h264 = base + "_h264_temp.mp4"
+        force_enc = hwaccel.get_video_encoder_args(codec="h264", quality="standard")
+        ffmpeg_h264_cmd = [
+            imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-i", final_path,
+            *force_enc,
+            "-c:a", "aac", "-pix_fmt", "yuv420p", "-movflags", "+faststart", temp_h264
+        ]
+        subprocess.run(ffmpeg_h264_cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        if os.path.exists(temp_h264) and os.path.getsize(temp_h264) > 0:
+            os.replace(temp_h264, final_path)
+
+    # AI Bypass (Clean & Scramble)
+    if processing_options.get('aiBypass'):
+        report({"status": f"{prefix}Applying AI Bypass (Scramble & Clean)..."})
+        from cleaner import clean_video, clean_photo, backup_file
+
+        # Backup first
+        backup_file(final_path, DEFAULT_SAVE_DIR)
+
+        ext = final_path.split('.')[-1].lower()
+        is_vid = ext in ['mp4', 'mov', 'm4v', 'webm', 'avi', 'mkv']
+
+        if is_vid:
+            success, msg = clean_video(final_path, imageio_ffmpeg.get_ffmpeg_exe())
+        else:
+            success, msg = clean_photo(final_path)
+
+        if not success:
+            problems.append(f"{prefix}Metadata cleanup failed: {msg}")
+            report({"status": f"{prefix}Metadata cleanup failed: {msg}"})
+
+    return final_path, problems
+
+
+GALLERY_EXTENSIONS = {'.mp4', '.mov', '.mkv', '.webm', '.avi', '.jpg', '.jpeg', '.png', '.webp', '.gif', '.mp3'}
+GALLERY_SKIP_FOLDERS = {'cookies'}
+
+
+def iter_gallery_files(folder_path, budget, max_depth=GALLERY_MAX_DEPTH):
+    """Yield (directory, filename) for media under ``folder_path`` with depth and file-count caps.
+
+    ``budget`` is a one-element list holding the remaining number of files for the whole scan.
+    """
+    for root, dirs, files in os.walk(folder_path):
+        relative = os.path.relpath(root, folder_path)
+        depth = 0 if relative == '.' else relative.count(os.sep) + 1
+        if depth >= max_depth:
+            dirs[:] = []
+        else:
+            dirs[:] = [name for name in dirs if not name.startswith('.')]
+        for file in files:
+            if budget[0] <= 0:
+                return
+            if os.path.splitext(file)[1].lower() in GALLERY_EXTENSIONS:
+                budget[0] -= 1
+                yield root, file
+
 
 @app.route('/api/gallery', methods=['GET'])
 def list_gallery():
@@ -1839,78 +1784,86 @@ def list_gallery():
     # Dynamically find all subfolders in Media Grabber
     existing_dirs = []
     if os.path.exists(base_dir):
-        existing_dirs = [d for d in os.listdir(base_dir) if os.path.isdir(os.path.join(base_dir, d))]
+        existing_dirs = [d for d in os.listdir(base_dir)
+                         if os.path.isdir(os.path.join(base_dir, d)) and not d.startswith('.') and d not in GALLERY_SKIP_FOLDERS]
 
     folders = [f for f in known_order if f in existing_dirs] + [f for f in existing_dirs if f not in known_order]
     if not folders:
         folders = known_order
 
     media = []
-    history_data = load_history(reconcile=False)
+    try:
+        history_index = build_history_index(load_history())
+    except Exception as e:
+        print(f"Gallery: history unavailable ({e}); continuing without source links")
+        history_index = build_history_index([])
     fav_set = load_favorites()
+    budget = [GALLERY_MAX_FILES]
+    quote = urllib.parse.quote
 
     locations = [(folder, os.path.join(base_dir, folder)) for folder in folders]
-    locations.extend(('Other', root) for root in sorted(_approved_media_roots) if not contained_path(root, base_dir))
+    locations.extend(('Other', root) for root in sorted(_approved_media_roots)
+                     if not contained_path(root, base_dir) and not _is_filesystem_root(root))
     for folder, folder_path in locations:
-        if os.path.exists(folder_path):
-            for root, dirs, files in os.walk(folder_path):
-                dirs[:] = [name for name in dirs if not name.startswith('.')]
-                for file in files:
-                    file_path = os.path.join(root, file)
-                    if os.path.isfile(file_path):
-                        ext = os.path.splitext(file)[1].lower()
-                        if ext in ['.mp4', '.mov', '.mkv', '.webm', '.avi', '.jpg', '.jpeg', '.png', '.webp', '.gif', '.mp3']:
-                            rel_dir = os.path.relpath(root, folder_path)
-                            if rel_dir == '.':
-                                item_path = file
-                            else:
-                                item_path = f"{rel_dir}/{file}".replace('\\', '/')
+        if not os.path.isdir(folder_path):
+            continue
+        for root, file in iter_gallery_files(folder_path, budget):
+            file_path = os.path.join(root, file)
+            try:
+                stat = os.stat(file_path)
+            except OSError:
+                continue
+            ext = os.path.splitext(file)[1].lower()
+            rel_dir = os.path.relpath(root, folder_path)
+            if rel_dir == '.':
+                item_path = file
+            else:
+                item_path = f"{rel_dir}/{file}".replace('\\', '/')
 
-                            source_url, uploader = resolve_source_url(file_path, history_data)
-                            norm_fp = os.path.normpath(file_path).lower()
+            source_url, uploader = resolve_source_url(file_path, history_index)
+            norm_fp = os.path.normpath(file_path).lower()
 
-                            is_studio = (
-                                folder in ['Storyboard Images', 'Storyboard Videos', 'Motion Outputs', 'AI Creations'] or
-                                file.startswith(('keyframe_scene_', 'video_scene_', 'motion_')) or
-                                'storyboard' in folder.lower()
-                            )
-                            section = "studio" if is_studio else "downloads"
-                            studio_type = "other"
-                            scene_num = None
-                            if is_studio:
-                                if folder == 'Storyboard Images' or file.startswith('keyframe_scene_'):
-                                    studio_type = "keyframe"
-                                elif folder == 'Storyboard Videos' or file.startswith('video_scene_'):
-                                    studio_type = "scene_video"
-                                elif folder == 'Motion Outputs' or file.startswith('motion_'):
-                                    studio_type = "motion_swap"
-                                else:
-                                    studio_type = "studio_asset"
+            is_studio = (
+                folder in ['Storyboard Images', 'Storyboard Videos', 'Motion Outputs', 'AI Creations'] or
+                file.startswith(('keyframe_scene_', 'video_scene_', 'motion_')) or
+                'storyboard' in folder.lower()
+            )
+            section = "studio" if is_studio else "downloads"
+            studio_type = "other"
+            scene_num = None
+            if is_studio:
+                if folder == 'Storyboard Images' or file.startswith('keyframe_scene_'):
+                    studio_type = "keyframe"
+                elif folder == 'Storyboard Videos' or file.startswith('video_scene_'):
+                    studio_type = "scene_video"
+                elif folder == 'Motion Outputs' or file.startswith('motion_'):
+                    studio_type = "motion_swap"
+                else:
+                    studio_type = "studio_asset"
 
-                                scene_match = re.search(r'scene_(\d+)', file, re.IGNORECASE)
-                                if scene_match:
-                                    try:
-                                        scene_num = int(scene_match.group(1))
-                                    except Exception:
-                                        pass
+                scene_match = re.search(r'scene_(\d+)', file, re.IGNORECASE)
+                if scene_match:
+                    scene_num = int(scene_match.group(1))
 
-                            media.append({
-                                "name": file,
-                                "url": '/api/preview_file?path=' + __import__('urllib.parse', fromlist=['quote']).quote(file_path),
-                                "folder": folder,
-                                "path": f"{folder}/{item_path}",
-                                "full_path": file_path,
-                                "type": "video" if ext in ['.mp4', '.mov', '.mkv', '.webm', '.avi'] else "audio" if ext == ".mp3" else "image",
-                                "section": section,
-                                "studio_type": studio_type,
-                                "scene_number": scene_num,
-                                "timestamp": os.path.getmtime(file_path),
-                                "size": os.path.getsize(file_path),
-                                "source_url": source_url,
-                                "uploader": uploader,
-                                "liked": norm_fp in fav_set
-                            })
+            media.append({
+                "name": file,
+                "url": '/api/preview_file?path=' + quote(file_path),
+                "folder": folder,
+                "path": f"{folder}/{item_path}",
+                "full_path": file_path,
+                "type": "video" if ext in ['.mp4', '.mov', '.mkv', '.webm', '.avi'] else "audio" if ext == ".mp3" else "image",
+                "section": section,
+                "studio_type": studio_type,
+                "scene_number": scene_num,
+                "timestamp": stat.st_mtime,
+                "size": stat.st_size,
+                "source_url": source_url,
+                "uploader": uploader,
+                "liked": norm_fp in fav_set
+            })
 
+    if budget[0] <= 0:
+        print(f"Gallery scan stopped at {GALLERY_MAX_FILES} files")
     media.sort(key=lambda x: x['timestamp'], reverse=True)
     _gallery_cache["time"] = time.time()
     _gallery_cache["data"] = media
@@ -1931,7 +1884,7 @@ def serve_media(filename):
 
 @app.route('/api/open_folder', methods=['POST'])
 def open_folder():
-    path = request.json.get('path') if request.json else None
+    path = (request.get_json(silent=True) or {}).get('path')
     if not path:
         path = DEFAULT_SAVE_DIR
         try:
@@ -1953,7 +1906,7 @@ def open_folder():
     try:
         if sys.platform == 'win32':
             if os.path.isfile(abs_path):
-                subprocess.Popen(f'explorer /select,"{abs_path}"')
+                subprocess.Popen(['explorer', '/select,', abs_path])
             else:
                 os.startfile(abs_path)
         elif sys.platform == 'darwin':
@@ -2014,7 +1967,7 @@ def api_hwaccel():
 
 @app.route('/api/extract_prompt', methods=['POST'])
 def extract_prompt():
-    data = request.json
+    data = request.get_json(silent=True) or {}
     path = data.get('path')
     if not path or not os.path.exists(path) or not is_safe_path(path):
         return jsonify({"error": "File not found or forbidden"}), 404
@@ -2042,20 +1995,15 @@ def extract_prompt():
             return jsonify({"error": f"Video extraction error: {str(e)}"}), 500
 
     try:
-        from ai_prompter import extract_prompt_from_image, is_ai_vision_available
-        if not is_ai_vision_available():
-            return jsonify({
-                "error": "ai_pack_required",
-                "message": "AI Vision Engine pack is required for prompt extraction."
-            }), 400
+        from ai_prompter import extract_prompt_from_image
         increment_active_job()
         try:
             prompt = extract_prompt_from_image(target_image)
-            if prompt.startswith('Error:'):
-                raise RuntimeError(prompt)
         finally:
             decrement_active_job()
         return jsonify({"prompt": prompt})
+    except AIUnavailable as e:
+        return jsonify({"error": e.message, "setup_hint": e.setup_hint}), 424
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
@@ -2248,70 +2196,90 @@ ai_installer_state: dict[str, Any] = {
     "progress": 0,
     "status": "idle",
     "error": None,
+    "pack": None,
     "log": []
 }
 
+# One maintenance job (AI pack install or app update) at a time; double clicks get a 409.
+_maintenance_lock = threading.Lock()
+_MAINTENANCE_BUSY = 'Another installation or update is already running. Wait for it to finish.'
+
+
+def _run_maintenance(worker, *args):
+    try:
+        worker(*args)
+    finally:
+        _maintenance_lock.release()
+
+
 def get_ai_status():
-    from assets.ai_setup import inspect_runtime
-    checks = inspect_runtime()
-    st = {name: error is None for name, error in checks.items()}
+    # find_spec only: AI libraries are never imported into the server process.
+    from assets.ai_setup import installed_features
+    st = installed_features()
     st['all_installed'] = all(st.values())
     return st
 
-def run_ai_install_worker():
+
+def _run_pip(cmd):
+    """Stream one pip command into the installer log; returns its exit code."""
+    flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+    process = subprocess.Popen(
+        cmd,
+        cwd=app.root_path,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+        creationflags=flags
+    )
+    if process.stdout:
+        for line in iter(process.stdout.readline, ''):
+            line_clean = line.strip()
+            if line_clean:
+                ai_installer_state["log"].append(line_clean)
+                if len(ai_installer_state["log"]) > 40:
+                    ai_installer_state["log"].pop(0)
+                if "Downloading" in line_clean:
+                    ai_installer_state["progress"] = min(85, ai_installer_state["progress"] + 2)
+                    ai_installer_state["status"] = f"Downloading AI packages: {line_clean[:55]}..."
+                elif "Installing collected packages" in line_clean:
+                    ai_installer_state["progress"] = max(ai_installer_state["progress"], 90)
+                    ai_installer_state["status"] = "Unpacking and configuring AI packages..."
+                elif "Successfully installed" in line_clean:
+                    ai_installer_state["progress"] = max(ai_installer_state["progress"], 95)
+        process.stdout.close()
+    return process.wait()
+
+
+def run_ai_install_worker(pack=None):
     global ai_installer_state
+    from assets import ai_setup
     ai_installer_state["is_installing"] = True
     ai_installer_state["status"] = "Installing AI Engine pack..."
     ai_installer_state["progress"] = 10
     ai_installer_state["error"] = None
     ai_installer_state["log"] = ["Starting AI Engine installation via pip..."]
 
-    req_file = os.path.join(app.root_path, "requirements-ai.txt")
-    if not os.path.exists(req_file):
-        ai_installer_state["error"] = "requirements-ai.txt not found!"
-        ai_installer_state["status"] = "failed"
-        ai_installer_state["is_installing"] = False
-        return
-
-    cmd = [sys.executable, "-m", "pip", "install", "--no-build-isolation", "-r", req_file]
     try:
-        from assets.ai_setup import prepare_build_tools
+        pack = pack or ai_setup.recommended_pack(app.root_path)[0]
+        commands = ai_setup.install_commands(sys.executable, app.root_path, pack)
+        missing = [cmd[-1] for cmd in commands if not os.path.exists(os.path.join(app.root_path, cmd[-1]))]
+        if missing:
+            raise FileNotFoundError(f"{', '.join(missing)} not found. Reinstall the app with the release installer.")
+        ai_installer_state["pack"] = pack
+        ai_installer_state["log"].append(f"Selected pack: {pack}")
         ai_installer_state['status'] = 'Preparing AI installation tools...'
-        prepare_build_tools(sys.executable, app.root_path)
-        flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
-            creationflags=flags
-        )
-
-        if process.stdout:
-            for line in iter(process.stdout.readline, ''):
-                line_clean = line.strip()
-                if line_clean:
-                    ai_installer_state["log"].append(line_clean)
-                    if len(ai_installer_state["log"]) > 40:
-                        ai_installer_state["log"].pop(0)
-                    if "Downloading" in line_clean:
-                        ai_installer_state["progress"] = min(85, ai_installer_state["progress"] + 2)
-                        ai_installer_state["status"] = f"Downloading AI packages: {line_clean[:55]}..."
-                    elif "Installing collected packages" in line_clean:
-                        ai_installer_state["progress"] = 90
-                        ai_installer_state["status"] = "Unpacking and configuring AI packages..."
-                    elif "Successfully installed" in line_clean:
-                        ai_installer_state["progress"] = 98
-
-            process.stdout.close()
-        code = process.wait()
+        ai_setup.prepare_build_tools(sys.executable, app.root_path)
+        code = 0
+        for cmd in commands:
+            code = _run_pip(cmd)
+            if code:
+                break
 
         if code == 0:
             ai_installer_state["status"] = "Verifying AI libraries..."
             ai_installer_state["progress"] = 99
-            from assets.ai_setup import verify_runtime
-            verify_runtime(sys.executable, app.root_path)
+            ai_setup.verify_runtime(sys.executable, app.root_path, pack)
             ai_installer_state["is_installing"] = False
             ai_installer_state["status"] = "complete"
             ai_installer_state["progress"] = 100
@@ -2327,448 +2295,6 @@ def run_ai_install_worker():
         ai_installer_state["error"] = str(e)
         ai_installer_state["log"].append(f"Error: {str(e)}")
 
-# --- AI Copilot, Character Library & Motion Studio APIs ---
-@app.route('/api/copilot/models', methods=['GET'])
-def copilot_models():
-    return jsonify(models=copilot.available_models())
-
-@app.route('/api/copilot/chat', methods=['POST'])
-def copilot_chat():
-    data = request.get_json() or {}
-    messages = data.get('messages', [])
-    model = data.get('model', 'qwen2.5:14b')
-    project = data.get('project')
-    res = copilot.chat(messages=messages, model=model, project_data=project)
-    return jsonify(res)
-
-@app.route('/api/characters', methods=['GET'])
-def list_characters_route():
-    return jsonify(characters=characters.list_characters())
-
-@app.route('/api/characters/<cid>', methods=['GET'])
-def get_character_route(cid):
-    c = characters.get_character(cid)
-    if not c:
-        return jsonify(error="Character not found"), 404
-    return jsonify(c)
-
-@app.route('/api/characters', methods=['POST'])
-@app.route('/api/characters/<cid>', methods=['POST'])
-def save_character_route(cid=None):
-    data = request.get_json() or {}
-    if cid and not data.get('id'):
-        data['id'] = cid
-    c = characters.save_character(data)
-    res = dict(c)
-    res['character'] = c
-    return jsonify(res)
-
-@app.route('/api/characters/active', methods=['GET'])
-def get_active_character_route():
-    return jsonify(active=characters.get_active_character())
-
-@app.route('/api/characters/active', methods=['POST'])
-def set_active_character_route():
-    data = request.get_json() or {}
-    cid = data.get('id') or data.get('character_id')
-    if not cid:
-        return jsonify(error="id required"), 400
-    if not characters.get_character(cid):
-        return jsonify(error=f"Character '{cid}' not found"), 404
-    characters.set_active_character_id(cid)
-    return jsonify(active=characters.get_active_character())
-
-@app.route('/video-studio', methods=['GET'])
-def video_studio_page():
-    session['authorized'] = True
-    if not session.get('api_token'):
-        session['api_token'] = uuid.uuid4().hex
-    return render_template('video_studio.html', api_token=session['api_token'], version=APP_VERSION)
-
-@app.route('/api/video-studio/storyboard/generate', methods=['POST'])
-def generate_storyboard_route():
-    data = request.get_json() or {}
-    cues = data.get('cues', [])
-    duration = float(data.get('duration', 60.0))
-    cid = data.get('character_id')
-    base_mood = data.get('mood', '')
-    concept = data.get('concept', '')
-    num_scenes = data.get('num_scenes')
-    scenes = ai_video_engine.generate_storyboard(cues, duration, cid, base_mood, concept=concept, num_scenes=num_scenes)
-    return jsonify(storyboard=scenes)
-
-@app.route('/api/video-studio/projects/create', methods=['POST'])
-def create_video_studio_project_route():
-    if request.is_json:
-        data = request.get_json() or {}
-        title = data.get('title', '')
-        mode = data.get('mode', 'freeform')
-        duration = float(data.get('duration', 15.0))
-        scene_count = int(data.get('scene_count', 4))
-        concept = data.get('concept', '')
-        mood = data.get('mood', '')
-        cid = data.get('character_id')
-        audio_file = None
-    else:
-        title = request.form.get('title', '')
-        mode = request.form.get('mode', 'freeform')
-        duration = float(request.form.get('duration', 15.0))
-        scene_count = int(request.form.get('scene_count', 4))
-        concept = request.form.get('concept', '')
-        mood = request.form.get('mood', '')
-        cid = request.form.get('character_id')
-        audio_file = request.files.get('audio')
-    try:
-        res = ai_video_engine.create_video_studio_project(
-            title=title,
-            mode=mode,
-            duration=duration,
-            scene_count=scene_count,
-            concept=concept,
-            mood=mood,
-            character_id=cid,
-            audio_file=audio_file
-        )
-        return jsonify(res), 201
-    except Exception as e:
-        return jsonify(error=str(e)), 500
-
-@app.route('/api/video-studio/render-image', methods=['POST'])
-def render_keyframe_image_route():
-    data = request.get_json() or {}
-    prompt = data.get('prompt', '')
-    cid = data.get('character_id')
-    scene_num = int(data.get('scene_number', 1))
-    custom_ref = data.get('custom_reference')
-    model_id = data.get('model_id')
-    try:
-        res = ai_video_engine.render_keyframe_image(prompt, cid, scene_num, custom_ref, model_id=model_id)
-        res['url'] = f"/api/video-studio/images/file/{res['filename']}"
-        return jsonify(image=res, image_path=res['path'], image_url=res['url'])
-    except Exception as e:
-        return jsonify(error=str(e)), 500
-
-@app.route('/api/video-studio/render-video', methods=['POST'])
-def render_scene_video_route():
-    data = request.get_json() or {}
-    image_path = data.get('image_path')
-    motion_prompt = data.get('motion_prompt', '')
-    duration = float(data.get('duration', 5.0))
-    audio_path = data.get('audio_path')
-    scene_num = int(data.get('scene_number', 1))
-    model_id = data.get('model_id')
-    if not image_path:
-        return jsonify(error="image_path required"), 400
-    try:
-        res = ai_video_engine.render_scene_video(image_path, motion_prompt, duration, audio_path, scene_num, model_id=model_id)
-        res['url'] = f"/api/video-studio/videos/file/{res['filename']}"
-        return jsonify(video=res, video_path=res['path'], video_url=res['url'])
-    except (FileNotFoundError, ValueError, RuntimeError) as e:
-        return jsonify(error=str(e)), 400
-    except Exception as e:
-        return jsonify(error=str(e)), 500
-
-@app.route('/api/video-studio/images/file/<path:filename>', methods=['GET'])
-def get_storyboard_image_file(filename):
-    clean_name = Path(filename).name
-    p = (ai_video_engine.STORYBOARD_IMG_DIR / clean_name).resolve()
-    if ai_video_engine.STORYBOARD_IMG_DIR.resolve() not in p.parents or not p.is_file():
-        safe_name = secure_filename(filename)
-        p = (ai_video_engine.STORYBOARD_IMG_DIR / safe_name).resolve()
-        if ai_video_engine.STORYBOARD_IMG_DIR.resolve() not in p.parents or not p.is_file():
-            return jsonify(error="Image not found"), 404
-    return send_file(str(p))
-
-@app.route('/api/video-studio/videos/file/<path:filename>', methods=['GET'])
-def get_storyboard_video_file(filename):
-    clean_name = Path(filename).name
-    p = (ai_video_engine.STORYBOARD_VID_DIR / clean_name).resolve()
-    if ai_video_engine.STORYBOARD_VID_DIR.resolve() not in p.parents or not p.is_file():
-        safe_name = secure_filename(filename)
-        p = (ai_video_engine.STORYBOARD_VID_DIR / safe_name).resolve()
-        if ai_video_engine.STORYBOARD_VID_DIR.resolve() not in p.parents or not p.is_file():
-            return jsonify(error="Video not found"), 404
-    return send_file(str(p))
-
-@app.route('/api/video-studio/models', methods=['GET'])
-def get_video_studio_models():
-    data = ai_model_manager.list_models()
-    return jsonify(data)
-
-@app.route('/api/video-studio/models/download', methods=['POST'])
-def download_video_studio_model():
-    req = request.get_json() or {}
-    mid = req.get('model_id')
-    if not mid:
-        return jsonify(error="model_id required"), 400
-    res = ai_model_manager.start_download(mid)
-    if "error" in res:
-        return jsonify(res), 400
-    return jsonify(res)
-
-@app.route('/api/video-studio/models/cancel', methods=['POST'])
-def cancel_video_studio_model_download():
-    req = request.get_json() or {}
-    mid = req.get('model_id')
-    if not mid:
-        return jsonify(error="model_id required"), 400
-    res = ai_model_manager.cancel_download(mid)
-    return jsonify(res)
-
-@app.route('/api/video-studio/models/delete', methods=['POST'])
-def delete_video_studio_model():
-    req = request.get_json() or {}
-    mid = req.get('model_id')
-    if not mid:
-        return jsonify(error="model_id required"), 400
-    res = ai_model_manager.delete_model(mid)
-    return jsonify(res)
-
-@app.route('/api/video-studio/models/select', methods=['POST'])
-def select_video_studio_model():
-    req = request.get_json() or {}
-    cfg = ai_model_manager.load_config()
-    if 'active_image_model' in req:
-        cfg['active_image_model'] = req['active_image_model']
-    if 'active_video_model' in req:
-        cfg['active_video_model'] = req['active_video_model']
-    ai_model_manager.save_config(cfg)
-    return jsonify(status="ok", config=cfg)
-
-@app.route('/api/video-studio/models/cloud-config', methods=['POST'])
-def save_cloud_backend_config():
-    req = request.get_json() or {}
-    cfg = ai_model_manager.load_config()
-    cb = cfg.setdefault('cloud_backend', {})
-    if 'enabled' in req:
-        cb['enabled'] = bool(req['enabled'])
-    if 'comfy_url' in req:
-        cb['comfy_url'] = str(req['comfy_url']).strip()
-    if 'api_provider' in req:
-        cb['api_provider'] = str(req['api_provider']).strip()
-    if 'api_key' in req:
-        new_key = str(req['api_key']).strip()
-        if new_key and new_key != "••••••••":
-            cb['api_key'] = new_key
-        elif not new_key:
-            cb['api_key'] = ""
-
-    local_eng = cfg.setdefault('local_engine', {})
-    if 'facefusion_python' in req:
-        local_eng['facefusion_python'] = str(req['facefusion_python']).strip()
-    if 'facefusion_script' in req:
-        local_eng['facefusion_script'] = str(req['facefusion_script']).strip()
-
-    ai_model_manager.save_config(cfg)
-    return jsonify(status="ok", config=cfg)
-
-@app.route('/api/video-studio/detect-local-engines', methods=['GET'])
-def detect_video_studio_local_engines():
-    res = ai_model_manager.detect_local_engines()
-    return jsonify(res)
-
-@app.route('/api/video-studio/director/analyze', methods=['POST'])
-def video_studio_director_analyze_route():
-    data = request.get_json() or {}
-    lyrics = data.get('lyrics', '')
-    song_title = data.get('song_title', '')
-    concept = data.get('concept', '')
-    cid = data.get('character_id')
-    res = ai_video_engine.analyze_song_and_suggest_styles(lyrics, song_title, concept, cid)
-    return jsonify(res)
-
-@app.route('/api/video-studio/director/chat', methods=['POST'])
-def video_studio_director_chat_route():
-    data = request.get_json() or {}
-    message = data.get('message', '')
-    lyrics = data.get('lyrics', '')
-    song_title = data.get('song_title', '')
-    cid = data.get('character_id')
-    if not message:
-        return jsonify(error="message required"), 400
-    combined_lyrics = f"{song_title} {lyrics}".strip()
-    res = ai_video_engine.directorial_chat_and_invent_style(message, combined_lyrics, cid)
-    return jsonify(res)
-
-@app.route('/api/characters/<cid>', methods=['DELETE'])
-def delete_character_route(cid):
-    ok = characters.delete_character(cid)
-    return jsonify(success=ok)
-
-@app.route('/api/characters/<cid>/upload', methods=['POST'])
-def upload_character_image(cid):
-    image_type = request.form.get('type', 'portrait')
-    if image_type not in ('portrait', 'triptych'):
-        return jsonify(error="Invalid image type; must be 'portrait' or 'triptych'"), 400
-    if 'file' not in request.files:
-        return jsonify(error="No file provided"), 400
-    file = request.files['file']
-    filename = secure_filename(file.filename or 'image.png')
-    raw = file.read()
-    try:
-        dest = characters.save_character_image(cid, image_type, filename, raw)
-        return jsonify(success=True, filename=dest, url=f'/api/characters/{cid}/image/{dest}')
-    except Exception as e:
-        return jsonify(error=str(e)), 400
-
-@app.route('/api/characters/<cid>/image/<filename>', methods=['GET'])
-def get_character_image_file(cid, filename):
-    path = characters.get_image_path(cid, filename)
-    if not path or not path.is_file():
-        return jsonify(error="Image not found"), 404
-    return send_file(str(path))
-
-@app.route('/api/motion/extract-frame', methods=['POST'])
-def extract_frame_route():
-    data = request.get_json() or {}
-    video_path = data.get('video_path')
-    timestamp = float(data.get('timestamp', 0))
-    if not video_path:
-        return jsonify(error="video_path required"), 400
-    try:
-        res = motion_studio.extract_reference_frame(video_path, timestamp)
-        if 'url' not in res:
-            res['url'] = f"/api/motion/references/file/{res['filename']}"
-        return jsonify(res)
-    except (FileNotFoundError, ValueError, RuntimeError) as e:
-        return jsonify(error=str(e)), 400
-    except Exception as e:
-        return jsonify(error=str(e)), 500
-
-@app.route('/api/motion/swap-identity', methods=['POST'])
-def swap_character_identity_route():
-    data = request.get_json() or {}
-    target_frame = data.get('target_frame_path')
-    driving_video = data.get('driving_video_path')
-    cid = data.get('character_id')
-    custom_portrait = data.get('custom_portrait_path')
-
-    # If target_frame not provided but driving video is, extract frame 0 first
-    if not target_frame and driving_video:
-        try:
-            extracted = motion_studio.extract_reference_frame(driving_video, 0.0)
-            target_frame = extracted['filename']
-        except Exception as e:
-            return jsonify(error=f"Failed to extract frame from video: {e}"), 400
-
-    if not target_frame:
-        return jsonify(error="target_frame_path or driving_video_path required"), 400
-
-    engine = data.get('engine', 'neural')
-
-    try:
-        res = motion_studio.swap_character_identity(
-            target_frame_path=target_frame,
-            character_id=cid,
-            custom_portrait_path=custom_portrait,
-            engine=engine
-        )
-        if 'extracted_frame' not in res or not res['extracted_frame']:
-            t_name = Path(target_frame).name
-            res['extracted_frame'] = t_name
-            res['extracted_frame_url'] = f"/api/motion/references/file/{t_name}"
-        return jsonify(res)
-    except (FileNotFoundError, ValueError, RuntimeError) as e:
-        return jsonify(error=str(e)), 400
-    except Exception as e:
-        return jsonify(error=str(e)), 500
-
-@app.route('/api/motion/upload-swapped-frame', methods=['POST'])
-def upload_swapped_frame_route():
-    file_obj = request.files.get('image')
-    if not file_obj or not file_obj.filename:
-        return jsonify(error="No image file uploaded"), 400
-    try:
-        res = motion_studio.save_uploaded_swapped_frame(file_obj)
-        return jsonify(res), 201
-    except Exception as e:
-        return jsonify(error=str(e)), 500
-
-@app.route('/api/motion/references', methods=['GET'])
-def list_references_route():
-    return jsonify(references=motion_studio.list_references())
-
-@app.route('/api/motion/references/file/<path:filename>', methods=['GET'])
-def get_reference_file(filename):
-    clean_name = Path(filename).name
-    p = (motion_studio.REFERENCES_DIR / clean_name).resolve()
-    if motion_studio.REFERENCES_DIR.resolve() not in p.parents or not p.is_file():
-        safe_name = secure_filename(filename)
-        p = (motion_studio.REFERENCES_DIR / safe_name).resolve()
-        if motion_studio.REFERENCES_DIR.resolve() not in p.parents or not p.is_file():
-            return jsonify(error="Reference file not found"), 404
-    return send_file(str(p))
-
-@app.route('/api/motion/driving-videos', methods=['GET'])
-def list_driving_videos_route():
-    return jsonify(videos=motion_studio.list_driving_videos())
-
-@app.route('/api/motion/upload-driving-video', methods=['POST'])
-def upload_driving_video_route():
-    file_obj = request.files.get('video')
-    if not file_obj or not file_obj.filename:
-        return jsonify(error="No video file uploaded"), 400
-    try:
-        res = motion_studio.save_uploaded_driving_video(file_obj)
-        return jsonify(res), 201
-    except Exception as e:
-        return jsonify(error=str(e)), 500
-
-@app.route('/api/motion/render', methods=['POST'])
-def render_motion_route():
-    data = request.get_json() or {}
-    driving_video = data.get('driving_video', '')
-    source_image = data.get('source_image', '')
-    audio_path = data.get('audio_path')
-    model_id = data.get('model_id', 'wan-2.1-1.3b')
-    is_async = data.get('async', False) or request.args.get('async') == '1'
-    if not source_image:
-        return jsonify(error="source_image required"), 400
-
-    if is_async:
-        try:
-            job_id = motion_studio.start_motion_job(driving_video, source_image, audio_path, model_id=model_id)
-            return jsonify({
-                "job_id": job_id,
-                "status": "running",
-                "poll_url": f"/api/motion/jobs/{job_id}"
-            }), 202
-        except Exception as e:
-            return jsonify(error=str(e)), 500
-
-    try:
-        res = motion_studio.render_character_motion(driving_video, source_image, audio_path, model_id=model_id)
-        return jsonify(res)
-    except (FileNotFoundError, ValueError, RuntimeError) as e:
-        return jsonify(error=str(e)), 400
-    except Exception as e:
-        return jsonify(error=str(e)), 500
-
-@app.route('/api/motion/jobs/<job_id>', methods=['GET'])
-def get_motion_job_status(job_id):
-    clean_id = secure_filename(job_id)
-    job = motion_studio.get_motion_job(clean_id)
-    if not job:
-        return jsonify(error="Motion job not found"), 404
-    return jsonify(job)
-
-@app.route('/api/motion/jobs/<job_id>/cancel', methods=['POST'])
-def cancel_motion_job_route(job_id):
-    clean_id = secure_filename(job_id)
-    ok = motion_studio.cancel_motion_job(clean_id)
-    return jsonify(success=ok)
-
-@app.route('/api/motion/outputs/file/<path:filename>', methods=['GET'])
-def get_motion_output_file(filename):
-    clean_name = Path(filename).name
-    p = (motion_studio.MOTION_OUTPUT_DIR / clean_name).resolve()
-    if motion_studio.MOTION_OUTPUT_DIR.resolve() not in p.parents or not p.is_file():
-        safe_name = secure_filename(filename)
-        p = (motion_studio.MOTION_OUTPUT_DIR / safe_name).resolve()
-        if motion_studio.MOTION_OUTPUT_DIR.resolve() not in p.parents or not p.is_file():
-            return jsonify(error="Motion output file not found"), 404
-    return send_file(str(p))
-
 @app.route('/api/ai_status', methods=['GET'])
 def api_ai_status():
     st = get_ai_status()
@@ -2778,19 +2304,39 @@ def api_ai_status():
         "install_status": ai_installer_state["status"],
         "install_progress": ai_installer_state["progress"],
         "install_error": ai_installer_state["error"],
+        "install_pack": ai_installer_state.get("pack"),
         "install_log": ai_installer_state["log"][-8:]
     })
+
+@app.route('/api/install_ai/notice', methods=['GET'])
+def api_install_ai_notice():
+    """Itemized download notice (packages, sizes, licenses, chosen pack and why) shown before install."""
+    from assets.ai_setup import notice
+    try:
+        return jsonify(notice(app.root_path, request.args.get('pack') or None))
+    except ValueError as exc:
+        return jsonify(error=str(exc)), 400
 
 @app.route('/api/install_ai', methods=['POST'])
 def api_install_ai():
     global ai_installer_state
+    from assets.ai_setup import load_packs
+    data = request.get_json(silent=True) or {}
+    if data.get('accept') is not True:
+        return jsonify({"error": "Review the download notice (GET /api/install_ai/notice) and accept it first.",
+                        "requires_accept": True}), 400
+    pack = data.get('pack') or None
+    if pack is not None and pack not in load_packs(app.root_path)['packs']:
+        return jsonify({"error": f"Unknown AI pack: {pack}"}), 400
     if is_busy():
         return jsonify({"error": "Finish active jobs before installing AI packages."}), 409
+    if not _maintenance_lock.acquire(blocking=False):
+        return jsonify({"error": _MAINTENANCE_BUSY}), 409
     ai_installer_state["is_installing"] = True
 
-    t = threading.Thread(target=run_ai_install_worker, daemon=True)
+    t = threading.Thread(target=_run_maintenance, args=(run_ai_install_worker, pack), daemon=True)
     t.start()
-    return jsonify({"status": "started"})
+    return jsonify({"status": "started", "pack": pack})
 
 @app.route('/api/heartbeat', methods=['GET', 'POST'])
 def heartbeat():
@@ -3013,6 +2559,8 @@ def run_ota_update_worker():
                     out.write(chunk)
         app_updater_state.update(progress=70, status="Validating application files...")
         stage_archive(root, archive, rel['latest_version'])
+        # The cached release check would still offer the update that is now staged.
+        _update_check_cache.update(time=0.0, data=None)
         app_updater_state.update(progress=100, status='complete', has_update=False)
         app_updater_state['log'].append('Update staged. Restart to apply it. Recovery copies will be kept.')
     except Exception as exc:
@@ -3034,8 +2582,10 @@ def api_apply_update():
     global app_updater_state
     if is_busy():
         return jsonify({"error": "Finish active jobs before updating."}), 409
+    if not _maintenance_lock.acquire(blocking=False):
+        return jsonify({"error": _MAINTENANCE_BUSY}), 409
     app_updater_state["is_updating"] = True
-    threading.Thread(target=run_ota_update_worker, daemon=True).start()
+    threading.Thread(target=_run_maintenance, args=(run_ota_update_worker,), daemon=True).start()
     return jsonify({"status": "Update started"})
 
 @app.route('/api/update_status', methods=['GET'])
@@ -3076,7 +2626,12 @@ except ModuleNotFoundError as exc:
     if exc.name != 'captions':
         raise
     raise RuntimeError('Captions & Lyrics requires the new application component. Upgrade from v2.4.x using the Windows installer on the GitHub release page.') from None
-register_captions(app, DEFAULT_SAVE_DIR, increment_active_job, decrement_active_job, invalidate_gallery_cache, get_whisper, is_safe_path)
+register_captions(app, DEFAULT_SAVE_DIR, increment_active_job, decrement_active_job, invalidate_gallery_cache, is_safe_path)
+from routes_studio import register_studio_routes
+register_studio_routes(app, save_dir=DEFAULT_SAVE_DIR, allowed_path=is_safe_path, app_version=APP_VERSION,
+                       job_started=increment_active_job, job_finished=decrement_active_job)
+from copilot import register_copilot_routes
+register_copilot_routes(app, gallery=lambda: list_gallery().get_json(), allowed_path=is_safe_path)
 
 
 if __name__ == '__main__':
@@ -3086,4 +2641,5 @@ if __name__ == '__main__':
     print("="*50 + "\n", flush=True)
     if "--no-browser" not in sys.argv:
         threading.Timer(1.25, open_desktop_window).start()
-    serve(app, host='127.0.0.1', port=5000, threads=8)
+    # Long-lived SSE streams and polling each hold a worker thread.
+    serve(app, host='127.0.0.1', port=5000, threads=24)

@@ -15,10 +15,26 @@ if not exist ".venv" (
 echo Activating virtual environment...
 call .venv\Scripts\activate.bat
 
-if not exist ".venv\.core-ready" (
+rem Re-sync core packages whenever requirements.txt changes (hash stamp, not a one-time marker).
+set "REQ_STAMP=.venv\.core-requirements.sha256"
+set "REQ_HASH="
+set "OLD_HASH="
+for /f "usebackq delims=" %%H in (`python -c "import hashlib; print(hashlib.sha256(open('requirements.txt', 'rb').read()).hexdigest())"`) do set "REQ_HASH=%%H"
+if exist "%REQ_STAMP%" set /p OLD_HASH=<"%REQ_STAMP%"
+set "HAD_ENV="
+if exist ".venv\.core-ready" set "HAD_ENV=1"
+if defined OLD_HASH set "HAD_ENV=1"
+
+if not "!REQ_HASH!"=="!OLD_HASH!" (
+    echo Syncing core dependencies with requirements.txt...
     python -m pip install -r requirements.txt
-    if errorlevel 1 exit /b 1
-    echo ready> .venv\.core-ready
+    if errorlevel 1 (
+        if not defined HAD_ENV exit /b 1
+        echo [WARNING] Core dependencies could not be updated. Starting with the installed packages.
+    ) else (
+        >"%REQ_STAMP%" echo !REQ_HASH!
+        if exist ".venv\.core-ready" del /q ".venv\.core-ready"
+    )
 )
 
 if /i "%~1"=="--setup-only" goto setup_complete
@@ -34,15 +50,9 @@ timeout /t 2 >nul
 exit /b 0
 
 :start_server
-:start
 echo Starting Flask server...
+rem The in-app Restart button starts a fresh server process itself, so no restart loop is needed.
 python app_local.py
-
-if %ERRORLEVEL% EQU 42 (
-    echo.
-    echo [UI] Restart command received! Rebooting server...
-    echo.
-    goto start
-)
-
+echo.
+echo Server process exited (code %ERRORLEVEL%). If you restarted from the app, it keeps running in the background.
 pause

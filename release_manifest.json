@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "description": "Files shipped by a release. Read from the downloaded archive by the in-app updater (safe_update.py) and used by build_staging.py for the installer. Entries must stay inside the allowed roots; user data is never part of a release.",
+  "patterns": ["*.py"],
+  "files": [
+    "run.bat",
+    "run.sh",
+    "launch-silent.vbs",
+    "install_ai.bat",
+    "requirements.txt",
+    "requirements-ai.txt",
+    "requirements-ai-common.txt",
+    "requirements-ai-cpu.txt",
+    "requirements-ai-directml.txt",
+    "requirements-ai-gpu.txt",
+    "requirements-ai-nodeps.txt",
+    "ai_packs.json",
+    "release_manifest.json",
+    "README.md",
+    "CHANGELOG.md",
+    "RELEASE_NOTES.md",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "directories": ["assets", "static", "templates", "docs", "ai_core"],
+  "exclude": ["static/fonts/custom/"]
+}

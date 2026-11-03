@@ -1,3 +1,21 @@
+# v5.0.0 — Everything real, every PC, nothing downloads without asking
+
+**Full installer required.** Download `AI-Influencer-Media-Grabber-v5.0.0-Setup.exe`. Your media, history, characters, caption projects and credentials are preserved.
+
+- **Nothing fake anymore.** Features that need models you have not installed say so ("Not available on this PC") and offer **Set up AI** instead of producing stand-in output.
+- **AI Setup wizard.** The app detects your hardware and recommends a profile (Laptop/CPU, GPU 6–10 GB, 12–16 GB, 24 GB+). Every download shows its live size, source, license and whether it runs locally or in the cloud. Non-commercial licenses must be accepted explicitly. Manage everything in **Downloads & Storage**.
+- **Better local AI.** One router picks the best installed model per job: Helper (Copilot), Translator (TranslateGemma when installed), Vision and Speech (Whisper large-v3-turbo on 12 GB GPUs). Laptops use the built-in engine with smaller models.
+- **Mixed-language songs.** Lines already in the target language are kept, mixed lines are translated only where needed, and **A/B this line** compares two models.
+- **Translations no longer disappear after editing.** Affected projects are repaired automatically (a backup is written first). Lines that need review stay visible with **Keep** / **Retranslate**.
+- **AI Studio.** Real FLUX keyframes, Wan animation, LatentSync lip-sync, LivePortrait and GPU face swap (with the Creative engine installed). Kling and Nano Banana are available as opt-in cloud actions with a cost confirmation.
+- **Copilot.** Streams answers, uses real tools and shows a proposal before changing anything.
+- **Instagram & cookies.** Fixed empty profile downloads reported as complete, reels without audio and altered photos. On Windows use Firefox or **Import cookies.txt** (Chrome/Edge cookies cannot be read on Windows because of App-Bound Encryption).
+
+**Limits:** Kling and Nano Banana are cloud-only and cost credits. Wan 14B takes about 15–30 minutes per 5 s clip on a 12 GB GPU. Laptop AI is slower and less capable. Lyric timing still needs a listening review.
+
+See CHANGELOG.md for the full list.
+
+## Previous release notes
 # v3.2.1 — Local translation privacy and mixed-language timing fixes
 
 - Check Ollama model metadata before sending lyrics; reject cloud-backed aliases, unverifiable models, and redirects. The built-in Qwen translator remains local.

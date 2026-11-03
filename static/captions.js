@@ -152,14 +152,71 @@ const CaptionTiming = (() => {
     function mergeCaptions(left,right){
         const merged=JSON.parse(JSON.stringify(left));merged.end=right.end;merged.text=left.text+' '+right.text;
         merged.words=left.words?.length&&right.words?.length?[...left.words,...right.words]:[];
-        merged.translations??={};
-        for(const lang of new Set([...Object.keys(left.translations||{}),...Object.keys(right.translations||{})])){
-            merged.translations[lang]={text:[left.translations?.[lang]?.text,right.translations?.[lang]?.text].filter(Boolean).join(' '),
-                source:'',status:'stale',locked:false,note:'Original lines merged. Review this combined translation.'};
-        }
+        // Combined text is kept but marked stale (empty source): it always needs review, never auto-approves.
+        const languages=new Set([...Object.keys(left.translations||{}),...Object.keys(right.translations||{})]);
+        merged.translations=Object.fromEntries([...languages].map(lang=>[lang,{
+            text:[left.translations?.[lang]?.text,right.translations?.[lang]?.text].filter(Boolean).join(' '),
+            source:'',status:'stale',locked:false,note:'Original lines merged. Review this combined translation.'}]));
         return merged;
     }
-    return {validate, visualizerBars, detectBeats, splitSequence, splitCaption, mergeCaptions};
+    /* Translation record contract (docs/v5-architecture.md): source = sha256(normalizeWs(cue.text)).
+       The whitespace class is identical to assets/lyric_tracks.py so both sides hash the same bytes. */
+    const WHITESPACE=/[ \t\n\r\f\v\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+/g;
+    const TRANSLATION_STATUSES=['approved','review','stale'];
+    function normalizeWs(text){return String(text??'').replace(WHITESPACE,' ').replace(/^ +| +$/g,'');}
+    async function sourceHash(text){
+        const digest=await globalThis.crypto.subtle.digest('SHA-256',new TextEncoder().encode(normalizeWs(text)));
+        return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');
+    }
+    /** The only writer of cue.translations records. Manual edits are approved; Copilot edits land in review. */
+    async function setCueTranslation(cue,lang,text,{status='approved',locked,note,origin='user'}={}){
+        if(!/^[a-z]{2,3}$/.test(String(lang)))throw Error('Choose a supported translation language.');
+        if(!TRANSLATION_STATUSES.includes(status))throw Error('Invalid translation review state.');
+        const value=String(text??'');
+        if(value.length>2000)throw Error('A translation must contain at most 2,000 characters.');
+        let lineText,source;
+        do{lineText=cue.text;source=await sourceHash(lineText);}while(cue.text!==lineText);
+        const previous=cue.translations?.[lang]||{};
+        const record={text:value.trim(),source,status,locked:Boolean(locked??previous.locked??false),
+            note:String(note??(origin==='copilot'?'Suggested by Copilot. Review, then Keep to approve.':previous.note??'')).slice(0,500)};
+        cue.translations={...(cue.translations||{}),[lang]:record};
+        return record;
+    }
+    function translationState(cue,lang,style={}){
+        const entry=cue?.translations?.[lang];
+        const hasText=Boolean(entry?.text?.trim());
+        const duplicate=hasText&&normalizeWs(entry.text)===normalizeWs(cue.text);
+        return {entry,hasText,pending:hasText&&entry.status!=='approved',
+            hiddenDuplicate:duplicate&&entry.status==='approved'&&style.track_mode==='both'&&style.hide_duplicate_translation!==false&&!cue.show_duplicate_translation};
+    }
+    /* Embedded copy of static/anim_constants.json (fallback if the fetch fails); the export reads the same file. */
+    const ANIM_DEFAULTS={
+        fade:{duration:0.18},
+        pop:{duration:0.16,from_scale:0.85},
+        zoom_in:{duration:0.2,from_scale:0.7},
+        slide_up:{duration:0.18,offset:0.035},
+        typewriter:{char_duration:0.045,min_duration:0.4,word_reveal:0.85,min_word:0.08},
+        word_pop:{scale:1.15},
+        glow:{radius:0.0066},
+        title:{fade_in:0.25,fade_out:0.35,y:0.28,scale:1.25,pad_x:0.45,pad_y:0.14,radius:0.28}
+    };
+    function mergeAnimConstants(loaded){
+        const result=JSON.parse(JSON.stringify(ANIM_DEFAULTS));
+        for(const [group,values] of Object.entries(result)){
+            for(const key of Object.keys(values)){
+                const value=Number(loaded?.[group]?.[key]);
+                if(Number.isFinite(value)&&value>=0)values[key]=value;
+            }
+        }
+        return result;
+    }
+    function entranceScale(anim,elapsed,constants=ANIM_DEFAULTS){
+        const spec=constants[anim];
+        const progress=Math.min(1,Math.max(0,elapsed)/spec.duration);
+        return spec.from_scale+(1-spec.from_scale)*progress;
+    }
+    return {validate, visualizerBars, detectBeats, splitSequence, splitCaption, mergeCaptions,
+        normalizeWs, sourceHash, setCueTranslation, translationState, ANIM_DEFAULTS, mergeAnimConstants, entranceScale};
 })();
 if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
 /* Local caption editor. All imported text is rendered through textContent. */
@@ -190,6 +247,12 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         dramatic:'contrast(1.35) brightness(0.96) saturate(0.85)',
         dreamy:'blur(1.2px) brightness(1.06) contrast(0.95) saturate(1.2)'
     };
+    let ANIM = CaptionTiming.mergeAnimConstants(CaptionTiming.ANIM_DEFAULTS);
+    if(typeof fetch==='function'){
+        fetch('/static/anim_constants.json').then(r=>r.ok?r.json():null)
+            .then(data=>{if(data&&typeof data==='object'&&data.fade){ANIM=CaptionTiming.mergeAnimConstants(data);}})
+            .catch(()=>{});
+    }
     let project = null, selected = -1, history = [], future = [], dirty = false;
     let compFilledSource = null;
     let saveTimer, pollTimer, saving = null, generation = 0, busy = false, dragging = false, pendingPreview = false;
@@ -204,6 +267,16 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         $('status').textContent = text; $('status').classList.toggle('error', error);
         document.querySelectorAll('dialog[open] .dialogStatus').forEach(node=>{node.textContent=error?text:'';});
     };
+    /** Append a [Set up AI] action to the status line for a missing local model (never auto-downloads). */
+    function offerSetup(hint) {
+        if (!hint || typeof window.openAISetup !== 'function') return;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'status-setup';
+        button.textContent = 'Set up AI';
+        button.onclick = () => window.openAISetup(hint);
+        $('status').append(' ', button);
+    }
     const media = name => `/api/captions/${project.id}/media/${encodeURIComponent(name)}`;
     const draftKey = kind => `creator-${kind}-${project.id}`;
     function readDraft(kind) {try{return JSON.parse(localStorage.getItem(draftKey(kind)));}catch{return null;}}
@@ -217,10 +290,10 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         else if (body !== undefined) { options.headers['Content-Type']='application/json'; options.body=JSON.stringify(body); }
         const response = await fetch(url, options);
         const data = await response.json().catch(() => ({error:'The app could not complete this request. Restart it if the connection was lost.'}));
-        if (!response.ok) throw new Error(data.error || 'Request failed');
+        if (!response.ok) throw Object.assign(new Error(data.error || 'Request failed'), {status: response.status, setupHint: data.setup_hint});
         return data;
     }
-    const act = fn => async event => { try { await fn(event); } catch (e) { say(e.message, true); } };
+    const act = fn => async event => { try { await fn(event); } catch (e) { say(e.message, true); offerSetup(e.setupHint); } };
     function checkpoint() { history.push(snapshot()); if (history.length>80) history.shift(); future=[]; }
     function changed(redraw = true) {
         for(const cue of project.cues){if(!cue.id)cue.id='cue_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2);}
@@ -337,7 +410,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         const translationSettings=project.translation_settings||{};
         $('translationNotes').value=translationSettings.notes||'';
         $('translationGlossary').value=translationSettings.glossary||'';
-        const translationModel=translationSettings.model||'';
+        const translationModel=translationSettings.model==='qwen3-4b-local'?'qwen3-4b':(translationSettings.model||'');
         if(translationModel&&!Array.from($('translationModel').options).some(o=>o.value===translationModel)) {
             $('translationModel').add(new Option(translationModel,translationModel));
         }
@@ -360,6 +433,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
             edited:'Review timing while listening. Word timings are editable below.'
         })[project.timing] || 'Review timing while listening.';
         say(project.status,project.state==='error');
+        if(project.state==='error')offerSetup(project.setup_hint);
         drawTimeline();drawList();fillSelection();drawDownloads();drawCaption();drawKaraokeSummary();drawComposition();
         $('reviewLyrics').hidden=!project.lyric_proposal;
     }
@@ -403,7 +477,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         if(key!==sharedLayoutKey){
             if(sharedLayoutPending!==key){
                 sharedLayoutPending=key;
-                api(`/api/captions/${project.id}/layout`,'POST',{cue,style:s}).then(data=>{
+                api(`/api/captions/${project.id}/layout`,'POST',{cue,style:s,editor_preview:true}).then(data=>{
                     if(sharedLayoutPending===key){sharedLayoutKey=key;sharedLayoutRows=data.rows;drawCaption();}
                 }).catch(e=>{if(sharedLayoutPending===key){sharedLayoutKey=key;sharedLayoutRows=[];say(e.message,true);}});
             }
@@ -429,22 +503,29 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
                 transform:`translate(${xShift},-100%)`,fontSize:h*row.size/100+'px',whiteSpace:'pre',lineHeight:'1',marginLeft:s.background?(row.alignment==='left'?-1:row.alignment==='right'?1:0)*h*(s.box_padding||0)/100+'px':'0',marginTop:s.background?h*(s.box_padding||0)/100+'px':'0',
                 letterSpacing:h*(row.letter_spacing??s.letter_spacing??0)/100+'px',color:row.color,textAlign:row.alignment,
                 background:s.background?'rgba(10,12,20,.78)':'transparent',padding:s.background?h*(s.box_padding||0)/100+'px':'0',borderRadius:h*(s.box_radius||0)/100+'px'});
+            if(row.pending){
+                // Editor-only: unapproved translations stay visible but dimmed; exports omit them.
+                line.classList.add?.('pendingTranslation');
+                Object.assign(line.style,{opacity:'.45',fontStyle:'italic',outline:'1px dashed rgba(255,214,10,.75)',outlineOffset:'3px'});
+                line.title='Needs review: not included in exports until you Keep it.';
+            }
+            if(Number(s.glow)>0)line.style.textShadow=`0 0 ${(h*ANIM.glow.radius*Number(s.glow)).toFixed(1)}px ${s.highlight}`;
             const elapsed=video.currentTime-cue.start,remaining=cue.end-video.currentTime;
-            if(row.track==='original'&&s.animation==='fade')line.style.opacity=String(Math.max(0,Math.min(1,elapsed/.18,remaining/.18)));
-            if(row.track==='original'&&(s.animation==='pop'||s.animation==='pop_in')&&elapsed<.16)line.style.transform+=` scale(${.85+.15*Math.max(0,elapsed)/.16})`;
-            if(row.track==='original'&&s.animation==='zoom_in'&&elapsed<.2)line.style.transform+=` scale(${.7+.3*Math.max(0,elapsed)/.2})`;
-            if(row.track==='original'&&s.animation==='slide_up'&&elapsed<.18)line.style.marginTop=(rowPadding+h*.035*(1-Math.max(0,elapsed)/.18))+'px';
+            const anim=s.animation==='pop_in'?'pop':s.animation, tw=ANIM.typewriter;
+            if(row.track==='original'&&anim==='fade')line.style.opacity=String(Math.max(0,Math.min(1,elapsed/ANIM.fade.duration,remaining/ANIM.fade.duration)));
+            if(row.track==='original'&&(anim==='pop'||anim==='zoom_in')&&elapsed<ANIM[anim].duration)line.style.transform+=` scale(${CaptionTiming.entranceScale(anim,elapsed,ANIM)})`;
+            if(row.track==='original'&&anim==='slide_up'&&elapsed<ANIM.slide_up.duration)line.style.marginTop=(rowPadding+h*ANIM.slide_up.offset*(1-Math.max(0,elapsed)/ANIM.slide_up.duration))+'px';
             if(row.track==='original' && row.words.length){
                 let wordOffset=0;
-                row.words.forEach((w,i)=>{if(s.animation==='typewriter'&&w.start>video.currentTime)return;if(i)line.append(' ');const word=document.createElement('span');word.textContent=w.text;
-                    if(s.animation==='typewriter'&&video.currentTime<w.end){const chars=Array.from(w.text);word.textContent=chars.slice(0,Math.max(1,Math.ceil(chars.length*(video.currentTime-w.start)/(Math.max(.08,w.end-w.start)*.85)))).join('');}
+                row.words.forEach((w,i)=>{if(anim==='typewriter'&&w.start>video.currentTime)return;if(i)line.append(' ');const word=document.createElement('span');word.textContent=w.text;
+                    if(anim==='typewriter'&&video.currentTime<w.end){const chars=Array.from(w.text);word.textContent=chars.slice(0,Math.max(1,Math.ceil(chars.length*(video.currentTime-w.start)/(Math.max(tw.min_word,w.end-w.start)*tw.word_reveal)))).join('');}
                     const active=w.start<=video.currentTime&&video.currentTime<w.end;
                     if(s.cumulative?video.currentTime>=w.start:s.karaoke&&active)word.style.color=s.highlight;
-                    if(active&&s.word_pop)Object.assign(word.style,{display:'inline-block',transform:'scale(1.15)'});
+                    if(active&&s.word_pop)Object.assign(word.style,{display:'inline-block',transform:`scale(${ANIM.word_pop.scale})`});
                     const start=row.text.indexOf(w.text,wordOffset);wordOffset=start+w.text.length;
                     const visibleText=word.textContent;word.textContent='';appendFontRuns(word,visibleText,start,row.runs);
                     line.append(word);});
-            }else {let text=row.text;if(row.track==='original'&&s.animation==='typewriter'){const chars=Array.from(row.text),d=Math.min(cue.end-cue.start,Math.max(.4,chars.length*.045));text=chars.slice(0,Math.max(1,Math.ceil(chars.length*elapsed/d))).join('');}appendFontRuns(line,text,0,row.runs);}
+            }else {let text=row.text;if(row.track==='original'&&anim==='typewriter'){const chars=Array.from(row.text),d=Math.min(cue.end-cue.start,Math.max(tw.min_duration,chars.length*tw.char_duration));text=chars.slice(0,Math.max(1,Math.ceil(chars.length*elapsed/d))).join('');}appendFontRuns(line,text,0,row.runs);}
             box.append(line);
         }
     }
@@ -464,7 +545,8 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         const vig=$('stageVignette');
         if(vig) vig.hidden = !(s.vignette || activeFilter==='vintage' || activeFilter==='dramatic');
         const compSet=project.studio?.settings||project.composition||{};
-        const showTitle=compSet.title_text && compSet.title_duration>0 && video.currentTime>=0 && video.currentTime<=compSet.title_duration;
+        const showTitle=Boolean(compSet.title_text && compSet.title_duration>0 && video.currentTime>=0 && video.currentTime<=compSet.title_duration);
+        drawTitleCard(compSet,showTitle,s,h);
         const st=$('stageSticker');
         if(st) {
             // Use live form values so placement/face-snap changes show before Apply; fall back to saved settings.
@@ -552,67 +634,34 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
             };
         }
 
-        const glowPx=Number(s.glow||0)*2.5;
+        // Same constants and curves as the ASS export (static/anim_constants.json).
+        const glowPx=h*ANIM.glow.radius*Number(s.glow||0);
         let animTransform='translateY(-100%)', animOpacity='1';
-        if(cue && activeAnim && activeAnim!=='none') {
+        const shownAnim=activeAnim==='pop_in'?'pop':activeAnim;
+        if(cue && shownAnim && shownAnim!=='none') {
             const animElapsed = isPreviewing ? previewElapsed : Math.max(0, video.currentTime - cue.start);
             const animRemain = isPreviewing ? Math.max(0, 1.35 - previewElapsed) : Math.max(0, cue.end - video.currentTime);
-
-            if(activeAnim==='fade') {
-                if(isPreviewing) {
-                    animOpacity=String(Math.min(1, animElapsed/0.28));
-                } else {
-                    animOpacity=String(Math.min(1, animElapsed/0.25, animRemain/0.20));
-                }
-            } else if(activeAnim==='pop') {
-                const popDur = 0.32;
-                if(animElapsed < popDur) {
-                    const p = animElapsed / popDur;
-                    let sc;
-                    if(p < 0.6) {
-                        sc = 0.55 + 0.59 * Math.sin((p / 0.6) * (Math.PI / 2));
-                    } else {
-                        sc = 1.14 - 0.14 * Math.sin(((p - 0.6) / 0.4) * (Math.PI / 2));
-                    }
-                    animTransform=`translateY(-100%) scale(${sc.toFixed(3)})`;
-                }
-            } else if(activeAnim==='slide_up') {
-                const slideDur = 0.30;
-                if(animElapsed < slideDur) {
-                    const p = animElapsed / slideDur;
-                    const ease = 1 - Math.pow(1 - p, 3);
-                    const dy = (1 - ease) * Math.max(24, (h || 380) * 0.05);
-                    animTransform=`translateY(calc(-100% + ${dy.toFixed(1)}px))`;
-                    animOpacity=String(Math.min(1, p / 0.5));
-                }
-            } else if(activeAnim==='zoom_in') {
-                const zoomDur = 0.30;
-                if(animElapsed < zoomDur) {
-                    const p = animElapsed / zoomDur;
-                    const ease = 1 - Math.pow(1 - p, 3);
-                    const sc = 0.45 + 0.55 * ease;
-                    animTransform=`translateY(-100%) scale(${sc.toFixed(3)})`;
-                    animOpacity=String(Math.min(1, p / 0.35));
-                }
+            if(shownAnim==='fade') {
+                animOpacity=String(Math.max(0,Math.min(1, animElapsed/ANIM.fade.duration, animRemain/ANIM.fade.duration)));
+            } else if((shownAnim==='pop'||shownAnim==='zoom_in') && animElapsed < ANIM[shownAnim].duration) {
+                animTransform=`translateY(-100%) scale(${CaptionTiming.entranceScale(shownAnim,animElapsed,ANIM).toFixed(3)})`;
+            } else if(shownAnim==='slide_up' && animElapsed < ANIM.slide_up.duration) {
+                const dy=h*ANIM.slide_up.offset*(1-animElapsed/ANIM.slide_up.duration);
+                animTransform=`translateY(calc(-100% + ${dy.toFixed(1)}px))`;
             }
         }
         Object.assign(box.style,{fontFamily:`"${s.font}",Roboto,"Noto Sans KR",sans-serif`,fontSize:h*s.size/100+'px',color:s.color,
-            top:(showTitle&&!cue?28:s.position)+'%',webkitTextStroke:`${2*h*s.outline/360}px black`,
+            top:s.position+'%',webkitTextStroke:`${2*h*s.outline/360}px black`,
             transform:animTransform,opacity:animOpacity,textShadow:glowPx>0?`0 0 ${glowPx.toFixed(1)}px ${s.highlight}`:'none'});
         if(isPreviewing && cue) {
             $('playingCaption').textContent = `Previewing animation: ${activeAnim} · ${cue.text}`;
         } else {
             $('playingCaption').textContent=cue ? 'Playing: '+cue.text+((s.karaoke||s.cumulative||s.word_pop)&&!cue.words?.length?' · No word timings — use Add karaoke timing.':'') : (showTitle ? 'Title card: '+compSet.title_text : '');
         }
-        if(!cue && !showTitle) return;
+        if(!cue) return;
         const content=document.createElement('span');
-        content.style.background=(s.background||showTitle)?'rgba(10,12,20,.78)':'transparent';
-        if(s.background||showTitle) Object.assign(content.style,{padding:'.14em .45em',borderRadius:'.28em',boxDecorationBreak:'clone',webkitBoxDecorationBreak:'clone',boxShadow:'0 4px 16px rgba(0,0,0,.45)'});
-        if(!cue && showTitle) {
-            content.textContent=compSet.title_text;
-            box.append(content);
-            return;
-        }
+        content.style.background=s.background?'rgba(10,12,20,.78)':'transparent';
+        if(s.background) Object.assign(content.style,{padding:'.14em .45em',borderRadius:'.28em',boxDecorationBreak:'clone',webkitBoxDecorationBreak:'clone'});
 
         const isTypewriter = (activeAnim === 'typewriter');
         let effectiveTime = video.currentTime;
@@ -644,27 +693,23 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
                 if(isTypewriter && isWordActive) {
                     isTypingActive = true;
                     const wElapsed = Math.max(0, effectiveTime - w.start);
-                    const wDur = Math.max(0.08, w.end - w.start);
-                    const charProgress = Math.min(1, Math.max(0, wElapsed / (wDur * 0.85)));
+                    const wDur = Math.max(ANIM.typewriter.min_word, w.end - w.start);
+                    const charProgress = Math.min(1, Math.max(0, wElapsed / (wDur * ANIM.typewriter.word_reveal)));
                     const letters = Array.from(w.text);
                     const charsToShow = Math.max(1, Math.min(letters.length, Math.ceil(letters.length * charProgress)));
                     wordText = letters.slice(0, charsToShow).join('');
                 }
 
                 span.textContent=wordText;
-                span.style.transition = 'transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.1s ease';
                 if(isWordLit) span.style.color=s.highlight;
                 if(isWordActive && s.word_pop) {
-                    Object.assign(span.style,{
-                        display:'inline-block',
-                        transform:'scale(1.15)',
-                        textShadow:`0 0 12px ${s.highlight}`
-                    });
+                    Object.assign(span.style,{display:'inline-block',transform:`scale(${ANIM.word_pop.scale})`});
                 }
                 content.append(span);
             });
 
-            if(isTypewriter && (isTypingActive || (cue.words.length > 0 && effectiveTime < cue.words[0].start))) {
+            // The blinking cursor is an editor hint for the animation demo only; exports never draw it.
+            if(isPreviewing && isTypewriter && (isTypingActive || (cue.words.length > 0 && effectiveTime < cue.words[0].start))) {
                 const cursor = document.createElement('span');
                 cursor.className = 'typewriterCursor';
                 cursor.textContent = '▎';
@@ -680,12 +725,12 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
                     frac = Math.min(1, previewElapsed / 1.15);
                 } else {
                     const elapsed = Math.max(0, video.currentTime - cue.start);
-                    const typeDur = Math.min(cue.end - cue.start, Math.max(0.5, (cue.text || '').length * 0.05));
+                    const typeDur = Math.min(cue.end - cue.start, Math.max(ANIM.typewriter.min_duration, (cue.text || '').length * ANIM.typewriter.char_duration));
                     frac = Math.min(1, elapsed / typeDur);
                 }
                 const visibleCount = Math.max(1, Math.min(cue.text.length, Math.ceil(frac * cue.text.length)));
                 displayText = cue.text.slice(0, visibleCount);
-                if(visibleCount < cue.text.length) showCursor = true;
+                if(isPreviewing && visibleCount < cue.text.length) showCursor = true;
             }
             content.textContent = displayText;
             if(showCursor) {
@@ -697,8 +742,45 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
             }
         }
         box.append(content);
-        if(cue&&(cue.style_override||s.layout_enabled||s.track_mode&&s.track_mode!=='original'))drawSharedLayout(box,cue,s,h);
+        // Background plates use the shared server layout so rounded boxes match the export.
+        if(cue&&(cue.style_override||s.layout_enabled||s.background||s.track_mode&&s.track_mode!=='original'))drawSharedLayout(box,cue,s,h);
         else Object.assign(box.style,{left:'6%',width:'88%',height:'auto'});
+    }
+    function drawTitleCard(compSet,show,s,h) {
+        let card=$('stageTitle');
+        if(!card){
+            if(!show||!$('stage')?.append)return;
+            card=document.createElement('div');card.id='stageTitle';card.className='stageTitle';$('stage').append(card);
+        }
+        card.hidden=!show;
+        if(!show)return;
+        const spec=ANIM.title,t=video.currentTime,duration=Number(compSet.title_duration)||0;
+        card.textContent=compSet.title_text;
+        Object.assign(card.style,{position:'absolute',left:'50%',top:(spec.y*100)+'%',transform:'translate(-50%,-50%)',
+            fontFamily:`"${s.font}",Roboto,"Noto Sans KR",sans-serif`,fontSize:(h*s.size/100*spec.scale)+'px',color:s.color,
+            padding:`${spec.pad_y}em ${spec.pad_x}em`,borderRadius:spec.radius+'em',background:'rgba(10,12,20,.78)',
+            lineHeight:'1.2',whiteSpace:'nowrap',pointerEvents:'none',zIndex:'4',webkitTextStroke:`${2*h*s.outline/360}px black`,
+            opacity:String(Math.max(0,Math.min(1,t/spec.fade_in,(duration-t)/spec.fade_out)))});
+    }
+    function drawTranslationReview(c) {
+        const lang=project?.style?.translation_language||'en';
+        const state=c?CaptionTiming.translationState(c,lang,project.style):{};
+        const box=$('translationReviewBox');
+        if(box){
+            box.hidden=!state.pending;
+            if(state.pending){
+                $('translationReviewText').textContent=state.entry.status==='stale'
+                    ?'The original line changed after this translation was written. It is hidden from exports until you keep or retranslate it.'
+                    :(state.entry.note||'Suggested translation. It is hidden from exports until you keep it.');
+            }
+        }
+        const note=$('duplicateNote');
+        if(note){
+            const duplicate=Boolean(c&&state.hasText&&state.entry.status==='approved'&&project.style.track_mode==='both'&&project.style.hide_duplicate_translation!==false
+                &&CaptionTiming.normalizeWs(state.entry.text)===CaptionTiming.normalizeWs(c.text));
+            note.hidden=!duplicate;
+            if($('showDuplicateTranslation'))$('showDuplicateTranslation').checked=Boolean(c?.show_duplicate_translation);
+        }
     }
     function select(index,seek=true) {
         selected=index;
@@ -717,14 +799,16 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
             textWrap.style.display='flex';textWrap.style.flexDirection='column';textWrap.style.gap='2px';textWrap.style.minWidth='0';textWrap.style.flex='1';
             const text=document.createElement('span');text.textContent=(needsReview(c)?'⚑ ': '')+c.text;
             textWrap.append(text);
-            const trans=c.translations?.[project?.style?.translation_language||'en'];
-            if(trans?.text && trans.text!==c.text){
+            const trState=CaptionTiming.translationState(c,project?.style?.translation_language||'en',project?.style);
+            const trans=trState.entry;
+            if(trState.hasText && (trState.pending || CaptionTiming.normalizeWs(trans.text)!==CaptionTiming.normalizeWs(c.text))){
                 const sub=document.createElement('small');
-                sub.style.color='#c084fc';sub.style.fontSize='11px';sub.style.opacity='0.95';
+                sub.className='cueTranslation'+(trState.pending?' pending':'');
+                sub.style.color='#c084fc';sub.style.fontSize='11px';sub.style.opacity=trState.pending?'0.55':'0.95';
                 sub.style.overflow='hidden';sub.style.textOverflow='ellipsis';sub.style.whiteSpace='nowrap';
                 sub.style.cursor='pointer';
-                sub.title='Click to edit translated subtitle';
-                sub.textContent='🌐 ' + trans.text;
+                sub.title=trState.pending?'Needs review: not exported until you Keep it. Click to review.':'Click to edit translated subtitle';
+                sub.textContent=(trState.pending?'⚠ Needs review · ':'🌐 ') + trans.text;
                 sub.onclick=(e)=>{
                     e.stopPropagation();
                     select(i);
@@ -763,6 +847,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         } else {
             $('translationState').textContent=tr?`Translation: ${tr.status}${tr.note?' · '+tr.note:''}`:'No translation for this line yet.';
         }
+        drawTranslationReview(c);
         $('lineReview').textContent=c?.karaoke?.note || (c?.words?.length ? 'Word timings available — listen and adjust if needed.' : 'No word timings yet.');
         $('text').value=c?.text||'';$('start').value=c?.start.toFixed(2)||'';$('end').value=c?.end.toFixed(2)||'';
         for(const node of document.querySelectorAll('#selection textarea,#selection input,#selection button')) node.disabled=!c||busy;
@@ -1138,8 +1223,9 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         $('createSong').disabled=true;
         try {await create(form);$('songDialog').close();} finally {$('createSong').disabled=false;}
     });
-    const compositionKeys=['shape','color','fit','x','y','blur','dim','overlay','opacity','zoom','brightness','contrast','saturation','video_filter','vignette','film_grain','sharpen','chromatic','background_speed','transition_in','transition_out','keyframe_end_x','keyframe_end_y','title_text','title_duration','broll_start','broll_duration','broll_x','broll_y','broll_scale','broll_opacity','broll_fade','sticker_start','sticker_duration','sticker_x','sticker_y','sticker_scale','sticker_opacity','sticker_fade','sticker_anim','start','end','offset','volume','fade_in','fade_out','noise_cancel','voice_isolation','audio_effect','background_volume','ducking','loop','background_start','background_duration','visualizer','visualizer_style','visualizer_position','visualizer_height','visualizer_sensitivity','visualizer_color','sequence_transition','sequence_transition_duration'];
-    const compositionChecks=['loop','visualizer','ducking','vignette','noise_cancel','voice_isolation'], compositionStrings=['shape','color','fit','overlay','visualizer_style','visualizer_position','visualizer_color','title_text','video_filter','audio_effect','sequence_transition','sticker_anim'];
+    // The audio visualizer lives only in the caption style (one visualizer, previewed live and exported as ASS bars).
+    const compositionKeys=['shape','color','fit','x','y','blur','dim','overlay','opacity','zoom','brightness','contrast','saturation','video_filter','vignette','film_grain','sharpen','chromatic','background_speed','transition_in','transition_out','keyframe_end_x','keyframe_end_y','title_text','title_duration','broll_start','broll_duration','broll_x','broll_y','broll_scale','broll_opacity','broll_fade','sticker_start','sticker_duration','sticker_x','sticker_y','sticker_scale','sticker_opacity','sticker_fade','sticker_anim','start','end','offset','volume','fade_in','fade_out','noise_cancel','voice_isolation','audio_effect','background_volume','ducking','loop','background_start','background_duration','sequence_transition','sequence_transition_duration'];
+    const compositionChecks=['loop','ducking','vignette','noise_cancel','voice_isolation'], compositionStrings=['shape','color','fit','overlay','title_text','video_filter','audio_effect','sequence_transition','sticker_anim'];
     let previousComposition=null;
     function fillComposition(settings) {
         previousComposition=copy(settings);
@@ -1710,6 +1796,19 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
     if ($('seqAiBackdropBtn')) $('seqAiBackdropBtn').onclick = () => switchDock('ai-backdrop');
     if ($('compAiBackdropBtn')) $('compAiBackdropBtn').onclick = () => switchDock('ai-backdrop');
 
+    function showBackdropUnavailable(statusEl, message, hint) {
+        const setup = document.createElement('button');
+        setup.type = 'button';
+        setup.className = 'primary';
+        setup.textContent = 'Set up AI';
+        setup.onclick = () => (typeof window.openAISetup === 'function' ? window.openAISetup(hint) : (window.location.href = '/#ai-setup'));
+        const title = document.createElement('strong');
+        title.textContent = 'Not available on this PC';
+        const text = document.createElement('span');
+        text.textContent = ` ${message} `;
+        statusEl.hidden = false;
+        statusEl.replaceChildren(title, text, setup);
+    }
     if ($('generateAiBackdropBtn')) {
         $('generateAiBackdropBtn').onclick = act(async () => {
             const prompt = ($('aiBackdropPrompt')?.value || '').trim();
@@ -1723,19 +1822,21 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
 
             const origText = btn.innerHTML;
             btn.disabled = true;
-            btn.innerHTML = `<span>⏳ Synthesizing AI ${isMotion ? 'Animated Loop' : 'Backdrop'}…</span>`;
+            btn.innerHTML = `<span>⏳ Generating with FLUX on this PC…</span>`;
             if (statusEl) {
                 statusEl.hidden = false;
-                statusEl.textContent = `Generating 1080x1920 ${isMotion ? 'motion video loop' : 'atmospheric image'}…`;
+                statusEl.textContent = isMotion ? 'Generating the image, then adding a camera push-in (no AI motion)…' : 'Generating the image locally…';
             }
 
             try {
-                const res = await api('/api/captions/generate-backdrop', 'POST', {
-                    prompt,
-                    style,
-                    motion: isMotion,
-                    duration: 10.0
-                });
+                let res;
+                try {
+                    res = await api('/api/captions/generate-backdrop', 'POST', {prompt, style, motion: isMotion, duration: 10.0, use_character: false});
+                } catch (error) {
+                    if (error.status !== 424 || !statusEl) throw error;
+                    showBackdropUnavailable(statusEl, error.message, error.setupHint);
+                    return;
+                }
 
                 latestGeneratedBackdrop = res;
                 await refreshLibraries();
@@ -1763,7 +1864,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
                 if (statusEl) {
                     statusEl.textContent = `✓ Generated ${res.name} • Ready to apply or add to sequence!`;
                 }
-                say(`✓ AI ${isMotion ? 'Motion Loop' : 'Backdrop'} generated successfully!`);
+                say(isMotion ? '✓ Backdrop generated (camera push-in added, no AI motion).' : '✓ Backdrop generated with FLUX.');
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = origText;
@@ -1876,7 +1977,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
             if(['line_spacing','letter_spacing','box_width','horizontal','alignment','box_padding','box_radius','translation_size','translation_color','translation_gap'].includes(key)){project.style.layout_enabled=true;$('layout_enabled').checked=true;}
             if($('styleScope').value==='selected'&&current()&&scoped.has(key)){current().style_override??={};current().style_override[key]=val;}
             else project.style[key]=val;
-            const compMirror=$('comp_'+key);
+            const compMirror=key.startsWith('visualizer')?null:$('comp_'+key);
             if(compMirror) {if(styleChecks.includes(key))compMirror.checked=!!val;else compMirror.value=val;}
             if(key==='translation_language' && $('workspace_translation_language')) $('workspace_translation_language').value=val;
             if(key==='track_mode' && $('workspace_track_mode')) $('workspace_track_mode').value=val;
@@ -1987,29 +2088,51 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         }
     };
     $('text').onchange=()=>{drawTimeline();drawList();fillSelection();};
+    /** Editor wrapper around CaptionTiming.setCueTranslation: one undo step, autosave, redraw. */
+    async function writeTranslation(cue,lang,text,options={}) {
+        if(!project||busy||!cue)return null;
+        checkpoint();
+        const record=await CaptionTiming.setCueTranslation(cue,lang,text,options);
+        changed(false);
+        drawList();fillSelection();
+        return record;
+    }
     if($('sideTranslationText')){
+        // Writes are chained so a slower hash can never overwrite newer keystrokes.
+        let sideWrite=Promise.resolve();
         $('sideTranslationText').oninput=()=>{
             const c=current();
-            if(c){
-                const val=$('sideTranslationText').value;
-                const lang=project?.style?.translation_language||'en';
-                storeDraft('translation-'+c.id+'-'+lang,{text:val});
-                if($('translationText')) $('translationText').value=val;
-                edit(()=>{
-                    c.translations??={};
-                    c.translations[lang]={
-                        text:val,
-                        source:c.text,
-                        status:'approved',
-                        locked:true,
-                        note:c.translations[lang]?.note||''
-                    };
-                },false);
-                drawTimeline();drawList();drawCaption();
-            }
+            if(!c||busy)return;
+            const lang=project?.style?.translation_language||'en';
+            const val=$('sideTranslationText').value;
+            storeDraft('translation-'+c.id+'-'+lang,{text:val});
+            if($('translationText')) $('translationText').value=val;
+            sideWrite=sideWrite.then(async()=>{
+                if(current()!==c)return;
+                checkpoint();
+                await CaptionTiming.setCueTranslation(c,lang,$('sideTranslationText').value,{status:'approved',locked:true});
+                changed(false);
+                drawTimeline();drawList();drawTranslationReview(c);
+            }).catch(e=>say(e.message,true));
         };
         $('sideTranslationText').onchange=()=>{drawTimeline();drawList();drawCaption();};
     }
+    if($('keepTranslation')) $('keepTranslation').onclick=act(async()=>{
+        const c=current(),lang=project?.style?.translation_language||'en',entry=c?.translations?.[lang];
+        if(!entry?.text)throw Error('This line has no translation to keep.');
+        await writeTranslation(c,lang,entry.text,{status:'approved',note:''});
+        say('Translation kept and approved for the current line.');
+    });
+    if($('retranslateLine')) $('retranslateLine').onclick=act(async()=>{
+        if(!current())throw Error('Select a lyric line first.');
+        await job('translate',{language:project.style.translation_language||'en',ids:[current().id]});
+    });
+    if($('showDuplicateTranslation')) $('showDuplicateTranslation').onchange=()=>{
+        const c=current();if(!c)return;
+        const show=$('showDuplicateTranslation').checked;
+        edit(()=>{if(show)c.show_duplicate_translation=true;else delete c.show_duplicate_translation;},false);
+        drawCaption();
+    };
     for(const k of ['start','end']) $(k).onchange=()=>{if(current())timingEdit(()=>{current()[k]=Number($(k).value);current().words=[];});};
     $('setStart').onclick=()=>{if(current())timingEdit(()=>{current().start=video.currentTime;current().words=[];});};
     $('setEnd').onclick=()=>{if(current())timingEdit(()=>{current().end=video.currentTime;current().words=[];});};
@@ -2124,45 +2247,82 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
     }
     $('applyLyricReview').onclick=act(()=>finishLyricReview('apply'));
     $('discardLyricReview').onclick=act(()=>finishLyricReview('discard'));
-    async function translationHash(text){
-        const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text));
-        return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');
-    }
     $('translationText').oninput=()=>{if(current())storeDraft('translation-'+current().id+'-'+(project.style.translation_language||'en'),{text:$('translationText').value});};
     $('approveManualTranslation').onclick=act(async()=>{
         const c=current();if(!c)throw Error('Select a caption line first.');
         const text=$('translationText').value.trim();if(!text)throw Error('Enter a translation.');
-        const source=await translationHash(c.text),language=project.style.translation_language||'en';
+        const language=project.style.translation_language||'en';
         storeDraft('translation-'+c.id+'-'+language,null);
-        edit(()=>{c.translations??={};c.translations[language]={text,source,status:'approved',locked:$('translationLocked').checked,note:''};});
+        await writeTranslation(c,language,text,{status:'approved',locked:$('translationLocked').checked,note:''});
     });
     for(const id of ['translationNotes','translationGlossary','translationModel'])$(id).onchange=()=>{
         if(project)edit(()=>{project.translation_settings={notes:$('translationNotes').value,glossary:$('translationGlossary').value,model:$('translationModel').value};},false);
     };
+    let translationSetup=null;
+    const ROLE_LABELS={helper:'Helper',translator:'Translator',vision:'Vision'};
     async function refreshTranslationModels(){
         try{
             const data=await api('/api/captions/translation-models');
             const currentVal=$('translationModel').value||(project?.translation_settings?.model||'');
-            const models=data.models||[];
-            if(!models.length)return;
-            const formatLabel=(m)=>{
-                if(m==='qwen3-4b-local')return 'Qwen 3 (4B Built-in CPU)';
-                if(m.includes('14b'))return `${m} (14B High Quality GPU)`;
-                if(m.includes('7b')||m.includes('8b'))return `${m} (Fast GPU)`;
-                return `${m} (Local Ollama)`;
-            };
-            $('translationModel').replaceChildren(
-                new Option('Choose an installed model',''),
-                ...models.map(m=>new Option(formatLabel(m),m))
-            );
-            if(currentVal&&models.includes(currentVal)){
-                $('translationModel').value=currentVal;
-            }
-        }catch(_){}
+            const auto=data.auto||{};
+            translationSetup=data.setup||null;
+            const autoLabel=auto.available?`Auto (best for this PC): ${auto.model} · Local`:'Auto (best for this PC): no translator installed';
+            const label=m=>`${m.name} · ${(m.roles||[]).map(r=>ROLE_LABELS[r]||r).join(' / ')} · ${m.backend==='builtin'?'Built-in':'Ollama'} · Local`;
+            $('translationModel').replaceChildren(new Option(autoLabel,''),...(data.models||[]).map(m=>new Option(label(m),m.name)));
+            if(currentVal&&(data.models||[]).some(m=>m.name===currentVal))$('translationModel').value=currentVal;
+            const size=translationSetup?.size_bytes?` (${(translationSetup.size_bytes/1e9).toFixed(1)} GB)`:'';
+            $('setupTranslationModel').textContent=translationSetup?`Set up ${translationSetup.name}${size}`:'Set up local translator';
+            $('setupTranslationModel').hidden=Boolean(auto.available&&!translationSetup);
+        }catch(e){say(e.message,true);}
     }
     refreshTranslationModels();
     $('findTranslationModels').onclick=act(async()=>{await refreshTranslationModels();say('Local translation models updated.');});
-    $('setupTranslationModel').onclick=act(()=>job('translation-setup',{}));
+    $('setupTranslationModel').onclick=()=>{
+        if(typeof window.openAISetup==='function')window.openAISetup(translationSetup?.item_id);
+    };
+    function renderTranslationAB(result){
+        const box=$('translationAB');
+        const card=(role,title)=>{
+            const side=result[role]||{};
+            const node=document.createElement('div');
+            node.className='ab-side';
+            const heading=document.createElement('strong');
+            heading.textContent=side.model?`${title} · ${side.model} · Local`:title;
+            const body=document.createElement('p');
+            body.textContent=side.error||side.text||'';
+            node.append(heading,body);
+            if(side.note){const note=document.createElement('small');note.textContent=side.note;node.append(note);}
+            if(side.text){
+                const use=document.createElement('button');
+                use.type='button';
+                use.textContent='Use this translation';
+                use.onclick=act(async()=>{
+                    const cue=project.cues.find(c=>c.id===result.cue_id);
+                    if(!cue)throw Error('This line no longer exists.');
+                    await writeTranslation(cue,result.language,side.text,{status:'approved',note:side.note||'',origin:'ai'});
+                    box.hidden=true;say(`${title} translation approved for this line.`);
+                });
+                node.append(use);
+            }else if(side.setup_hint){
+                const setup=document.createElement('button');
+                setup.type='button';setup.textContent='Set up';
+                setup.onclick=()=>window.openAISetup?.(side.setup_hint);
+                node.append(setup);
+            }
+            return node;
+        };
+        box.replaceChildren(card('translator','Translator'),card('helper','Helper'));
+        box.hidden=false;
+    }
+    $('compareTranslation').onclick=act(async()=>{
+        if(!project)throw Error('Open a project first.');
+        const cue=current();if(!cue)throw Error('Select a lyric line first.');
+        if(dirty)await save();
+        say('Comparing Translator and Helper on this line (local)…');
+        const result=await api(`/api/captions/${project.id}/translate-ab`,'POST',{cue_id:cue.id,language:project.style.translation_language||'en'});
+        renderTranslationAB(result);
+        say('Pick the version that reads best. Nothing is saved until you choose.');
+    });
     const translateJob=(selectedOnly=false,resume=false)=>act(async()=>{
         if(!project)throw Error('Open a project first.');
         if(selectedOnly&&!current())throw Error('Select a lyric line first.');
@@ -2223,9 +2383,72 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         document.body.append(link); link.click(); link.remove();
         setTimeout(() => URL.revokeObjectURL(url), 60000);
     }
-    $('translationSrt').onclick=act(()=>downloadCaptionFile(`srt?mode=translation&language=${project.style.translation_language||'en'}`, 'translation.srt'));
-    $('bilingualSrt').onclick=act(()=>downloadCaptionFile(`srt?mode=both&language=${project.style.translation_language||'en'}`, 'bilingual.srt'));
-    $('styledAss').onclick=act(()=>downloadCaptionFile('ass', 'captions.ass'));
+    /* Export guard: nothing is silently dropped from a bilingual or translation export. */
+    let exportGuardResolve=null;
+    function closeExportGuard(choice){
+        const resolve=exportGuardResolve;exportGuardResolve=null;
+        if($('exportGuardDialog')?.open)$('exportGuardDialog').close();
+        resolve?.(choice);
+    }
+    async function exportGuard(mode) {
+        if(!project||mode==='original')return {proceed:true,skip:false};
+        await save();
+        const language=project.style.translation_language||'en';
+        const report=await api(`/api/captions/${project.id}/translation-status?language=${encodeURIComponent(language)}`);
+        const pending=[...report.review,...report.stale],missing=report.missing;
+        if(!pending.length&&!missing.length)return {proceed:true,skip:false};
+        const total=pending.length+missing.length;
+        $('exportGuardTitle').textContent=`${total} line${total===1?'':'s'} need${total===1?'s':''} review`;
+        const parts=[];
+        if(pending.length)parts.push(`${pending.length} translation${pending.length===1?' is':'s are'} waiting for review (suggested or written for an earlier version of the line).`);
+        if(missing.length)parts.push(`${missing.length} line${missing.length===1?' has':'s have'} no translation yet.`);
+        parts.push(mode==='translation'?'Lines without an approved translation are left out of a translation-only export.':'Unapproved lines export with the original text only.');
+        $('exportGuardSummary').textContent=parts.join(' ');
+        const rows=$('exportGuardRows');rows.replaceChildren();
+        for(const item of [...pending,...missing].sort((a,b)=>a.index-b.index).slice(0,8)){
+            const li=document.createElement('li');
+            const badge=document.createElement('span');badge.className='trBadge '+(item.status||'missing');
+            badge.textContent=item.status==='missing'?'Missing':item.status==='stale'?'Changed line':'Needs review';
+            const label=document.createElement('span');label.textContent=`#${item.index+1} ${item.text}${item.translation?' → '+item.translation:''}`;
+            li.append(badge,label);rows.append(li);
+        }
+        if(total>8){const more=document.createElement('li');more.className='hint';more.textContent=`…and ${total-8} more.`;rows.append(more);}
+        $('exportGuardKeep').disabled=!pending.length;
+        const choice=await new Promise(resolve=>{exportGuardResolve=resolve;$('exportGuardDialog').showModal();});
+        if(choice==='keep'){
+            checkpoint();
+            for(const item of pending){
+                const cue=project.cues.find(c=>c.id===item.id),entry=cue?.translations?.[language];
+                if(entry?.text)await CaptionTiming.setCueTranslation(cue,language,entry.text,{status:'approved',note:''});
+            }
+            changed();await save();
+            say(`${pending.length} translation${pending.length===1?'':'s'} kept and approved.`);
+            return {proceed:true,skip:missing.length>0};
+        }
+        if(choice==='review'){
+            const first=[...pending,...missing].sort((a,b)=>a.index-b.index)[0];
+            const index=project.cues.findIndex(c=>c.id===first?.id);
+            if(index>=0){select(index);$('sideTranslationText')?.focus?.();}
+            return {proceed:false};
+        }
+        return choice==='skip'?{proceed:true,skip:true}:{proceed:false};
+    }
+    if($('exportGuardKeep')){
+        $('exportGuardKeep').onclick=()=>closeExportGuard('keep');
+        $('exportGuardReview').onclick=()=>closeExportGuard('review');
+        $('exportGuardSkip').onclick=()=>closeExportGuard('skip');
+        $('exportGuardCancel').onclick=()=>closeExportGuard('cancel');
+        $('exportGuardDialog').addEventListener('close',()=>closeExportGuard('cancel'));
+    }
+    async function guardedCaptionFile(mode,path,filename){
+        const guard=await exportGuard(mode);
+        if(!guard.proceed)return;
+        const separator=path.includes('?')?'&':'?';
+        await downloadCaptionFile(guard.skip?`${path}${separator}skip_missing=1`:path,filename);
+    }
+    $('translationSrt').onclick=act(()=>guardedCaptionFile('translation',`srt?mode=translation&language=${project.style.translation_language||'en'}`, 'translation.srt'));
+    $('bilingualSrt').onclick=act(()=>guardedCaptionFile('both',`srt?mode=both&language=${project.style.translation_language||'en'}`, 'bilingual.srt'));
+    $('styledAss').onclick=act(()=>guardedCaptionFile(project.style.track_mode||'original','ass', 'captions.ass'));
     $('cancelLyrics').onclick=()=>$('lyricsDialog').close();
     $('applyLyrics').onclick=act(()=>{
         const lines=$('lyrics').value.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
@@ -2271,10 +2494,22 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         if(project?.cues.length&&!confirm('Replace existing captions with automatic transcription? The current version stays saved if transcription fails.'))return;
         checkpoint();await job('transcribe',{language:$('language').value});
     });
-    $('renderCheck').onclick=act(()=>{if(sequenceHasChanges())throw Error('Apply your clip sequence changes before rendering.');return job('render',{preview:true,quality:$('renderQuality').value||'standard',force_cpu:$('renderCpu').checked,start:Math.min(video.currentTime,Math.max(0,project.duration-.1))});});
-    $('export').onclick=act(()=>{if(sequenceHasChanges())throw Error('Apply your clip sequence changes before exporting.');return job('render',{preview:false,quality:$('renderQuality').value||'standard',force_cpu:$('renderCpu').checked});});
+    // A 5-second check is not an export: it renders approved translations only and never blocks on review.
+    $('renderCheck').onclick=act(()=>{if(sequenceHasChanges())throw Error('Apply your clip sequence changes before rendering.');return job('render',{preview:true,quality:$('renderQuality').value||'standard',force_cpu:$('renderCpu').checked,skip_unapproved:true,start:Math.min(video.currentTime,Math.max(0,project.duration-.1))});});
+    $('export').onclick=act(async()=>{
+        if(sequenceHasChanges())throw Error('Apply your clip sequence changes before exporting.');
+        const guard=await exportGuard(project.style.track_mode||'original');if(!guard.proceed)return;
+        return job('render',{preview:false,quality:$('renderQuality').value||'standard',force_cpu:$('renderCpu').checked,skip_unapproved:guard.skip});
+    });
     $('srt').onclick=act(async()=>{await save();const a=document.createElement('a');a.href=`/api/captions/${project.id}/srt`;a.click();});
-    $('stop').onclick=act(async()=>{if(confirm('Stop active app jobs, including downloads and caption processing?')){const d=await api('/api/cancel_all','POST',{});say(d.status||'Stopping…');}});
+    $('stop').onclick=act(async()=>{
+        if(!project)return;
+        if(project.state!=='busy'){say('Nothing is running for this project.');return;}
+        if(!confirm('Stop the current task for this project? Saved captions are kept; other app jobs keep running.'))return;
+        const d=await api(`/api/captions/${project.id}/cancel`,'POST',{});
+        say(d.status||'Stopping…');
+        if(d.cancelled)poll();
+    });
     $('closeRender').onclick=()=>{$('renderVideo').pause();$('renderDialog').close();};
     window.addEventListener('resize',()=>{fitVideo();drawTimeline();});
     if(typeof ResizeObserver !== 'undefined') {
@@ -2388,6 +2623,52 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
 
     if(typeof window !== 'undefined'){
         window.currentProjectData = () => project;
+        window.copilotHasUnsavedChanges = () => Boolean(dirty);
+        window.copilotContext = () => ({page: 'captions', project: project ? {
+            id: project.id, name: project.name, duration: project.duration,
+            style: {translation_language: project.style?.translation_language || 'en', font: project.style?.font},
+            cues: project.cues.map(c => ({id: c.id, start: c.start, end: c.end, text: c.text, translations: c.translations || {}})),
+        } : null});
+        const setSelect = (id, value) => {
+            const option = [...($(id)?.options || [])].find(o => o.value.toLowerCase() === String(value).toLowerCase());
+            if (!option) return null;
+            $(id).value = option.value;
+            $(id).dispatchEvent(new Event('change'));
+            return option.value;
+        };
+        // Proposal handlers for the Copilot drawer: each runs the editor's own action, only after Apply.
+        window.copilotActions = {
+            transcribe_project: ({language} = {}) => {
+                if (!project) throw Error('Open a project first.');
+                if (language) setSelect('language', language);
+                $('transcribe').click();
+                return 'Transcription started — progress is shown in the editor.';
+            },
+            sync_lyrics: () => {
+                if (!project) throw Error('Open a project first.');
+                $('paste').click();
+                return 'Paste the lyrics in the dialog, then choose how to sync them.';
+            },
+            translate_project: async ({language}) => {
+                if (!project) throw Error('Open a project first.');
+                if (!setSelect('translation_language', language)) throw Error(`The language "${language}" is not offered for translation.`);
+                await job('translate', {language: project.style.translation_language, ids: null, resume: false});
+                return 'Translation job started — results arrive marked for review.';
+            },
+            batch_fix_subtitles: ({updates}) => window.fixSubtitlesBatch(updates),
+            shift_timing: ({seconds}) => window.shiftTimingBySeconds(seconds),
+            apply_preset: ({preset}) => window.applyPresetByName(preset),
+            set_font: ({font}) => {
+                const applied = setSelect('font', font);
+                if (!applied) throw Error(`The font "${font}" is not installed. Upload it under Style → Font first.`);
+                return `Font set to ${applied}.`;
+            },
+            render_export: () => {
+                if (!project) throw Error('Open a project first.');
+                $('export').click();
+                return 'Export started.';
+            },
+        };
         window.applyPresetByName = (name) => {
             if(presets && presets[name]){
                 edit(()=>Object.assign(project.style, presets[name]));
@@ -2441,6 +2722,10 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
             }
             if (!cue) return false;
             edit(() => {
+                if (CaptionTiming.normalizeWs(cue.text) !== CaptionTiming.normalizeWs(newText)) {
+                    cue.words = [];
+                    for (const tr of Object.values(cue.translations || {})) tr.status = 'stale';
+                }
                 cue.text = newText;
             });
             return true;
@@ -2457,42 +2742,38 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
             }
             if (!cue) return false;
             const targetLang = lang || project.style?.translation_language || 'en';
-            edit(() => {
-                cue.translations = cue.translations || {};
-                cue.translations[targetLang] = {
-                    text: newTranslation,
-                    source: 'copilot',
-                    status: 'approved',
-                    locked: false,
-                    note: 'Updated via AI Copilot'
-                };
-            });
-            return true;
+            // Copilot suggestions go through review: visible in the editor, excluded from exports until kept.
+            return writeTranslation(cue, targetLang, newTranslation, {status: 'review', locked: false, origin: 'copilot'})
+                .then(record => Boolean(record))
+                .catch(e => { say(e.message, true); return false; });
         };
 
-        window.fixSubtitlesBatch = (updates) => {
-            if (!project || !project.cues || !Array.isArray(updates)) return false;
-            edit(() => {
-                updates.forEach(u => {
-                    const lineNum = typeof u.line === 'number' ? u.line : parseInt(u.line, 10);
-                    const idx = !isNaN(lineNum) && lineNum > 0 && lineNum <= project.cues.length ? lineNum - 1 : lineNum;
-                    const cue = project.cues[idx] || (u.id ? project.cues.find(c => c.id === u.id) : null);
-                    if (cue) {
-                        if (u.text !== undefined && u.text !== null) cue.text = u.text;
-                        if (u.translation !== undefined && u.translation !== null) {
-                            const l = u.lang || project.style?.translation_language || 'en';
-                            cue.translations = cue.translations || {};
-                            cue.translations[l] = {
-                                text: u.translation,
-                                source: 'copilot',
-                                status: 'approved',
-                                locked: false,
-                                note: 'Fixed via AI Copilot'
-                            };
-                        }
+        window.fixSubtitlesBatch = async (updates) => {
+            if (!project || !project.cues || !Array.isArray(updates) || busy) return false;
+            const targets = [];
+            for (const u of updates) {
+                const lineNum = typeof u.line === 'number' ? u.line : parseInt(u.line, 10);
+                const idx = !isNaN(lineNum) && lineNum > 0 && lineNum <= project.cues.length ? lineNum - 1 : lineNum;
+                const cue = project.cues[idx] || (u.id ? project.cues.find(c => c.id === u.id) : null);
+                if (cue) targets.push([cue, u]);
+            }
+            if (!targets.length) return false;
+            checkpoint();
+            try {
+                for (const [cue, u] of targets) {
+                    if (u.text !== undefined && u.text !== null && CaptionTiming.normalizeWs(u.text) !== CaptionTiming.normalizeWs(cue.text)) {
+                        cue.words = [];
+                        for (const tr of Object.values(cue.translations || {})) tr.status = 'stale';
+                        cue.text = String(u.text);
                     }
-                });
-            });
+                    if (u.translation !== undefined && u.translation !== null) {
+                        const l = u.lang || project.style?.translation_language || 'en';
+                        await CaptionTiming.setCueTranslation(cue, l, u.translation, {status: 'review', locked: false, origin: 'copilot'});
+                    }
+                }
+            } finally {
+                changed();
+            }
             return true;
         };
 

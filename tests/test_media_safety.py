@@ -24,7 +24,8 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from job_process import check_cancelled
-from ai_runtime import transcribe, translate_srt
+from ai_runtime import segments_to_srt, translate_srt
+from ai_core.errors import AIUnavailable, ModelMissing
 import cleaner
 import imageio_ffmpeg
 from PIL import Image
@@ -49,10 +50,8 @@ class MediaTests(unittest.TestCase):
         cls.app = Flask('regression', template_folder=str(ROOT / 'templates'), static_folder=str(ROOT / 'static'))
         cls.app.secret_key = 'test-key-only'
         cls.ns = dict(globals(), app=cls.app, DEFAULT_SAVE_DIR=str(cls.save), APP_VERSION='test', _approved_media_roots=set(), _approved_preview_files=set(), invalidate_gallery_cache=lambda: None, increment_active_job=lambda: None, decrement_active_job=lambda: None)
-        class WhisperStub:
-            def transcribe(self, *args, **kwargs):
-                return {'segments': [{'start': 0, 'end': 0.5, 'text': 'test caption'}]}
-        cls.ns['get_whisper'] = lambda: WhisperStub()
+        cls.ns['asr'] = SimpleNamespace(transcribe=lambda *args, **kwargs: {
+            'segments': [{'start': 0, 'end': 0.5, 'text': 'test caption'}]})
         names = {'parse_time_seconds', 'format_srt_timestamp', 'convert_media', 'is_safe_path', 'preview_file', 'serve_media', 'delete_gallery_item', 'protect_local_service', 'secure_local_response', 'index'}
         tree = ast.parse((ROOT / 'app_local.py').read_text(encoding='utf-8'))
         selected = ast.Module(body=[n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in names], type_ignores=[])
@@ -116,9 +115,12 @@ class MediaTests(unittest.TestCase):
         self.assertTrue(events[-1].get('done'), events)
 
     def test_missing_subtitle_engine_is_failure(self):
-        with patch.dict(self.ns, get_whisper=lambda: None), patch('traceback.print_exc'):
+        def missing(*args, **kwargs):
+            raise ModelMissing('No speech model is installed.', setup_hint='whisper-base')
+        with patch.dict(self.ns, asr=SimpleNamespace(transcribe=missing)), patch('traceback.print_exc'):
             _, events = self.convert(format='mp4', export_subtitles='true')
         self.assertIn('error', events[-1])
+        self.assertIn('No speech model', events[-1]['error'])
 
     def test_file_reads_restricted(self):
         outside = self.home / 'outside.txt'

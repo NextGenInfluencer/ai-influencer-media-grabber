@@ -52,3 +52,9 @@ CREATOR_STUDIO_ROADMAP.md
 IMPLEMENTATION_NOTES.md
 audit_checks.py
 .jobs/
+
+# Development tooling output (CI lint)
+node_modules/
+build/
+.coverage
+htmlcov/

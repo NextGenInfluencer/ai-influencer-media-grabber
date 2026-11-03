@@ -3,7 +3,7 @@
 ![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D4?style=for-the-badge&logo=windows)
 ![100% Local](https://img.shields.io/badge/Processing-100%25%20Local-0a84ff?style=for-the-badge)
 ![GPU Accelerated](https://img.shields.io/badge/GPU-NVENC%20%2F%20QSV%20%2F%20AMF%20%2F%20CPU-30d158?style=for-the-badge)
-![AI Engine](https://img.shields.io/badge/Offline%20AI-Whisper%20%C2%B7%20BLIP%20%C2%B7%20Llama%20%C2%B7%20Qwen3-a855f7?style=for-the-badge)
+![AI Engine](https://img.shields.io/badge/Local%20AI-Opt--in%20%C2%B7%20Every%20PC-a855f7?style=for-the-badge)
 
 **A complete Windows desktop suite for downloading high-quality social media videos, MP3 audio, and photo carousels; converting, trimming, and face-tracking clips offline; cleaning AI metadata; preparing Nano Banana → Kling references; and editing multi-clip music & lyric videos.**
 
@@ -46,7 +46,8 @@ Download reference videos, music/audio tracks, photos, and multi-slide carousels
 - **Resolution & Audio-Only (`MP3`) Selector**:
   - Choose **`Max Quality (4K / 2K / Best)`**, **`4K Ultra HD (2160p)`**, **`2K Quad HD (1440p)`**, **`1080p Full HD`**, **`720p HD`**, **`480p SD`**, or **`Audio Only (MP3)`** to download YouTube songs, backing tracks, and podcasts directly as MP3 files.
 - **Browser Cookie Authentication**:
-  - Use **`Anonymous (Public Media)`** by default, or select your local **Chrome**, **Firefox**, **Edge**, or **Safari** profile (or a custom `cookies.txt` file) to access age-restricted, private, or login-required posts.
+  - Use **`Anonymous (public posts)`** by default. For login-only, private or age-restricted posts (often Instagram) choose **`Firefox`** or click **`Import cookies.txt…`** (stored locally in your user-data folder, never logged).
+  - On Windows, Chrome and Edge cookies cannot be read by download tools because of App-Bound Encryption; export a `cookies.txt` with the *Get cookies.txt LOCALLY* extension and import it. On macOS/Linux, Chrome, Edge and Safari profiles remain available.
 - **Custom Save Destination**:
   - Saves automatically to `Documents/Media Grabber` (neatly sorted into `YouTube/`, `TikTok/`, `Instagram/`, etc.), or pick any custom folder on any drive and click **`Reveal`** to open it in Windows Explorer.
 - **9 Automated Processing & AI Pipeline Tiles** *(optional toggles that run automatically on every download)*:
@@ -57,7 +58,7 @@ Download reference videos, music/audio tracks, photos, and multi-slide carousels
   5. **Transcribe Audio**: Runs offline **Whisper AI** speech-to-text on the downloaded media.
   6. **Burn Subtitles**: Hardcodes styled captions directly onto the downloaded video.
   7. **Export `.SRT` File**: Saves a standalone `.srt` subtitle timing file next to the video.
-  8. **Scene Prompt**: Uses local **BLIP Vision** + **Local LLM** (`Llama 3.2 1B` or `Llama 3 8B`) to write a detailed `.txt` visual prompt describing the subject, lighting, camera angle, and outfit.
+  8. **Scene Prompt**: Uses your installed local **Vision** model to describe the subject, outfit, pose, camera and lighting, and writes a Kling/Nano Banana-ready `.txt` prompt (requires AI Setup).
   9. **Smart SEO & Hooks**: Uses the local LLM to generate a `.txt` summary with viral hooks, key takeaways, and social hashtags.
 
 ---
@@ -79,7 +80,7 @@ Edit, convert, compress, and re-frame any local video, audio, or image file comp
 - **File Size (MB) Compression & Resolution Downscaling**:
   - Choose **`💎 High Quality`**, **`👑 Maximum Encoder Quality (Lossless)`**, **`Standard Web`**, or dedicated MB-reduction presets (**`Higher`**, **`Web`**, **`80%`**, **`85%`**, **`Extreme`**), or downscale dimensions to `1080p`, `720p`, `480p`, or `50%`.
 - **Offline Subtitles & Local AI Translation**:
-  - Transcribe any local video with **Whisper AI**, burn subtitles into the video or export an `.srt` file, and optionally translate subtitles offline into **English, Spanish, French, German, or Japanese** via `Llama 3.2 1B` / `Llama 3 8B`.
+  - Transcribe any local video with **Whisper AI**, burn subtitles into the video or export an `.srt` file, and optionally translate subtitles offline with your installed local Translator model (cue numbers and timings never reach the model).
 - **CapCut-Style Video Filters & Audio Effects**:
   - **Video Filters**: *Black & White*, *Sepia*, *Vintage Film*, *Cyberpunk Neon*, *Warm Golden Hour*, *Cool Cinema*, *Dramatic Contrast*, *Dreamy Soft Glow*, plus **Film Grain (`0–30`)**, **Sharpen (`0–2`)**, **RGB Glitch (`0–10`)**, and **Cinematic Vignette**.
   - **Audio Effects**: *Slowed + Reverb (TikTok)*, *Nightcore / High Pitch*, *Vocal Remover (Karaoke)*, *Echo*, *Concert Hall Reverb*, *Studio Vocal Polish*, *Lo-Fi / Vintage Radio*, *Bass Boost*, *Vocal Chorus*, **AI/FFT Noise Cancellation**, and **Voice Isolation & Clarity**.
@@ -124,8 +125,9 @@ A dedicated 4-zone desktop video editor for building music videos, lyric videos,
   - Paste your own lyrics and choose **`Correct lyrics, keep timing`** or **`Sync lyrics to audio`** (powered by Whisper + `stable-ts`, supporting Greek, English, French, Korean, and mixed-language songs).
   - Review proposed changes before applying; uncertain lines, words stretched `> 4.0s` across instrumental gaps, and mixed-script lines are automatically flagged for listening checks.
   - Fine-tune word timings by dragging blocks on the waveform timeline, nudging with arrow keys, or typing exact timestamps, and combine **Karaoke Highlight**, **Cumulative Highlight**, **Active Word Pop (`115%`)**, and 60fps animations (*Typewriter*, *Pop*, *Fade*, *Slide Up*, *Zoom In*).
-- **Offline AI Lyric Translation (`Qwen3-4B` & Ollama) & Shared Layout**:
-  - Click **`Set up local translator (2.5 GB)`** to download and verify the official `Qwen3-4B-Q4_K_M.gguf` model locally (or use local Ollama) to translate lyrics with song context, custom glossaries, ambiguity notes, and automatic chorus reuse.
+- **Offline AI Lyric Translation & Shared Layout**:
+  - Translate lyrics locally with song context, glossaries, ambiguity notes and chorus reuse. **Auto** picks the best installed model for your PC: lines already in the target language are kept, single-language lines go to the Translator (TranslateGemma when installed), mixed-language lines (e.g. Greek + English) go to the Helper. **A/B this line** compares both. Lyrics are never sent to the cloud.
+  - Model translations arrive as a reviewable proposal. Lines whose original changed show **⚠ Needs review** with **Keep** / **Retranslate**, and exports warn before leaving any line out.
   - Export **Original**, **Translated**, or **Bilingual (Original + Translation)** videos (`MP4`), styled subtitles (`ASS`), or `SRT` with bundled open-license fonts (**Montserrat**, **Roboto**, **Noto Sans KR**, **Oswald**, **Lobster**, **Bangers**) and smart glyph fallback (`Roboto` for Greek, `Noto Sans KR` for Korean).
 
 ---
@@ -186,23 +188,29 @@ Always visible on the right side of the main workspace:
 
 You do **not** need to install Python, Node.js, or FFmpeg manually when using the Windows installer — they are bundled inside.
 
-1. Go to the [**GitHub Releases page**](https://github.com/NextGenInfluencer/ai-influencer-media-grabber/releases/latest) and download **`AI-Influencer-Media-Grabber-v3.2.0-Setup.exe`**.
+1. Go to the [**GitHub Releases page**](https://github.com/NextGenInfluencer/ai-influencer-media-grabber/releases/latest) and download **`AI-Influencer-Media-Grabber-v5.0.0-Setup.exe`**.
 2. Run the installer. It installs into `%LOCALAPPDATA%\AI Influencer Media Grabber` and creates a **Desktop** and **Start Menu** shortcut (`AI Influencer Media Grabber`).
 3. Double-click the shortcut to launch the app. All core features (Downloader, YouTube-to-MP3, Media Tools, Trimmer, Face-Tracking Crop, AI Cleaner, Kling Prep, Carousel Studio, Gallery, History, and Creator Studio video editing) work immediately out of the box.
 
 ---
 
-### Option 2: Installing the Optional AI Engine Pack (For Offline Whisper, BLIP & Local LLMs)
+### Option 2: Optional Local AI (AI Setup wizard)
 
-To keep the main installer compact (~111 MB), heavy offline AI models (`PyTorch`, `Whisper`, `stable-ts`, `Transformers/BLIP`, and `llama-cpp-python`) are provided as an optional 1-click **AI Engine Pack**:
+The installer contains **no AI models**. Nothing AI-related downloads until you approve it. Open **`⋯` → Set up AI** (also offered once on first launch, with a *Use without AI* option):
 
-1. **From Inside the App (Easiest)**:
-   - Click the **`✨ Install AI Engine`** badge in the top-right header bar of the app and click **Start Installation**.
-   - The app automatically prepares `setuptools`/`wheel`, installs all required AI packages constrained to the core runtime, verifies every AI interface (`Whisper`, `stable-ts`, `Torch`, `BLIP`, `llama_cpp`) in a fresh process, and prompts you to restart.
-2. **Or via Batch Script**:
-   - Double-click `install_ai.bat` in the application folder.
-3. **Optional Local Lyric Translator (`Qwen3-4B`, 2.5 GB)**:
-   - After installing the AI Engine Pack, open **Captions Studio → Lyrics & AI → Translation workspace** and click **`Set up local translator (2.5 GB)`** to download and verify the pinned official `Qwen3-4B-Q4_K_M.gguf` model locally.
+1. **AI Engine Pack** – the app detects your hardware and picks a pack: **CPU** (~0.3 GB), **DirectML** for Intel/AMD graphics (~0.3 GB) or **NVIDIA GPU** (~2.9 GB). An itemized notice lists every package, its size and license before you press Install.
+2. **Profile & models** – a checklist for your PC with the live download size, RAM/VRAM need, publisher, license and Local/Cloud badge of each item. Items with non-commercial licenses (for example InsightFace face-swap models and FLUX.1 Kontext dev) are badged **Personal / non-commercial use only** and require explicit acceptance.
+3. **Manage** – **Downloads & Storage** lists everything installed with size, location and the features that use it, with Remove and one-click *Reclaim space*. **AI Engines** shows Ollama, the Built-in engine and the Creative engine (ComfyUI), the model chosen for each role, and optional cloud keys (stored in Windows Credential Manager).
+
+| Profile (auto-detected) | Helper / Copilot | Translator | Speech | Image / video generation |
+|---|---|---|---|---|
+| Essentials (no AI) | — | manual editing | — | — |
+| Laptop / CPU | Built-in Qwen3 1.7B / 4B | same | Whisper base / small | not local (opt-in cloud) |
+| GPU 6–10 GB | Qwen3 8B (Ollama) | TranslateGemma 4B | Whisper large-v3-turbo | FLUX schnell (slower) |
+| GPU 12–16 GB | Qwen3 14B | TranslateGemma 12B | large-v3-turbo | FLUX, Kontext, Wan 2.2 5B, Wan 2.1 14B, LatentSync, LivePortrait |
+| GPU 24 GB+ | Qwen3 32B | TranslateGemma 27B | large-v3 | same, faster |
+
+**Honest limits:** Kling and Nano Banana are proprietary cloud services – available only as opt-in actions with your own key and a cost confirmation. Wan 2.1 14B takes roughly 15–30 minutes per 5-second clip on a 12 GB GPU. Laptop AI is slower and less capable. Lyric timing still needs a listening review. Preview and export are closely matched but not pixel-identical. See [docs/PRIVACY.md](docs/PRIVACY.md), [docs/RESPONSIBLE_USE.md](docs/RESPONSIBLE_USE.md) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ---
 
@@ -226,12 +234,12 @@ python -m pip install -r requirements.txt
 ```
 *(Note: `requirements.txt` includes `imageio-ffmpeg`, which provides a self-contained FFmpeg binary automatically.)*
 
-#### 2. Install Optional AI Dependencies (Whisper, Alignment, BLIP, Llama.cpp)
+#### 2. Install Optional AI Dependencies
 ```powershell
-python -m pip install setuptools wheel
-python -m pip install --no-build-isolation -c requirements.txt --only-binary=llama-cpp-python -r requirements-ai.txt
-python -m assets.ai_setup
+# Prints an itemized notice and asks for confirmation; --pack cpu | directml | gpu (auto-detected when omitted)
+python -m assets.ai_setup --install
 ```
+Models are then installed from inside the app (**Set up AI**).
 
 #### 3. Launch the Application
 ```powershell
@@ -245,8 +253,9 @@ python -m unittest discover -s tests -v
 node tests/test_stream.js
 node tests/test_caption_timing.js
 node --check static/captions.js
+npm ci; npm run lint:inline   # ESLint no-undef on inline template scripts
 
-# Build portable staging directory + Inno Setup 6 installer (dist/AI-Influencer-Media-Grabber-v3.2.0-Setup.exe)
+# Build portable staging directory + Inno Setup 6 installer (dist/AI-Influencer-Media-Grabber-v5.0.0-Setup.exe)
 python build_staging.py
 ```
 

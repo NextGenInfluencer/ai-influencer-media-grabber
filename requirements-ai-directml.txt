@@ -1,0 +1,12 @@
+# AI Engine Pack - CPU build with DirectML (Windows PCs with Intel or AMD graphics).
+# Same as requirements-ai-cpu.txt, but ONNX Runtime uses DirectML so face tools can run
+# on the integrated/discrete GPU. Install with the in-app installer or install_ai.bat.
+-r requirements-ai-common.txt
+--extra-index-url https://download.pytorch.org/whl/cpu
+--only-binary=torch,torchvision,torchaudio,onnxruntime-directml
+
+# Keep the torch pins identical in requirements-ai-cpu.txt.
+torch==2.11.0+cpu
+torchvision==0.26.0+cpu
+torchaudio==2.11.0+cpu
+onnxruntime-directml==1.24.4

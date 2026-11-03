@@ -1,0 +1,13 @@
+{
+  "name": "ai-influencer-media-grabber-dev",
+  "private": true,
+  "description": "Development-only tooling (CI lint and JS tests). Not part of the application or its releases.",
+  "scripts": {
+    "lint:inline": "python tools/extract_inline_js.py && eslint build/inline-js",
+    "test:js": "node tests/test_caption_timing.js && node tests/test_stream.js"
+  },
+  "devDependencies": {
+    "eslint": "10.14.0",
+    "globals": "17.14.0"
+  }
+}

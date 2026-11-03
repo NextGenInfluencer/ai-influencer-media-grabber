@@ -1,4 +1,4 @@
-from assets import lyric_tracks, lyric_translation, lyric_layout, lyric_fonts
+from assets import lyric_tracks, lyric_layout, lyric_fonts
 """Local caption projects, validated subtitle data and non-destructive rendering."""
 import io
 import hashlib
@@ -9,7 +9,6 @@ import os
 from pathlib import Path
 import re
 import shutil
-import subprocess
 import threading
 import time
 import urllib.parse
@@ -28,7 +27,8 @@ import numpy as np
 from PIL import ImageFont
 from flask import Blueprint, jsonify, request, send_file, render_template, session
 import job_process as process
-from ai_runtime import transcribe, align_lyrics, align_caption_words, detect_caption_language
+from ai_core import asr, catalog as ai_catalog, hardware as ai_hardware, llm as ai_llm, translate as ai_translate
+from ai_core.errors import AIUnavailable, ConsentRequired, ModelMissing
 import creator_composition as composition_model
 
 DEFAULT_STYLE = dict(font='Arial', size=5, color='#ffffff', highlight='#ffdc55',
@@ -90,6 +90,26 @@ refresh_custom_fonts()
 
 
 WORD_TIME_TOLERANCE = 0.01  # seconds of edge drift absorbed when validating word timings
+# Shared with static/captions.js so the live preview and the ASS export animate identically.
+ANIM = json.loads((Path(__file__).resolve().parent / 'static' / 'anim_constants.json').read_text(encoding='utf-8'))
+
+
+def entrance_scale(animation, elapsed):
+    """Pop/zoom entrance scale in percent at ``elapsed`` seconds (100 once finished)."""
+    spec = ANIM[animation]
+    progress = min(1.0, max(0.0, elapsed) / spec['duration'])
+    return 100 * (spec['from_scale'] + (1 - spec['from_scale']) * progress)
+
+
+def fade_opacity(instant, start, end):
+    ramp = ANIM['fade']['duration']
+    return max(0.0, min(1.0, (instant - start) / ramp, (end - instant) / ramp))
+
+
+def rounded_rect_path(x, y, w, h, r):
+    return (f'm {x+r} {y} l {x+w-r} {y} b {x+w} {y} {x+w} {y} {x+w} {y+r} l {x+w} {y+h-r} '
+            f'b {x+w} {y+h} {x+w} {y+h} {x+w-r} {y+h} l {x+r} {y+h} b {x} {y+h} {x} {y+h} {x} {y+h-r} '
+            f'l {x} {y+r} b {x} {y} {x} {y} {x+r} {y}')
 
 
 def number(value, low, high):
@@ -147,6 +167,11 @@ def validate_edit(data, duration):
             item['style_override']={key:checked[key] for key in override}
         if cue.get('translations'):
             item['translations'] = lyric_tracks.clean_translations({**cue,'text':text})
+        if 'show_duplicate_translation' in cue:
+            if type(cue['show_duplicate_translation']) is not bool:
+                raise ValueError('Invalid duplicate-translation display setting.')
+            if cue['show_duplicate_translation']:
+                item['show_duplicate_translation'] = True
         if isinstance(cue.get('karaoke'), dict):
             info = cue['karaoke']
             state = info.get('state')
@@ -202,6 +227,70 @@ def validate_edit(data, duration):
     style['noise_cancel'] = bool(style['noise_cancel'])
     style['voice_isolation'] = bool(style['voice_isolation'])
     return dict(cues=clean, style=style)
+
+
+GENERATED_RENDER = re.compile(r'(?:composition|preview|check)_[0-9a-f]{12}\.mp4')
+
+
+def prune_renders(project, folder, keep_checks=3):
+    """Delete generated renders a project no longer references.
+
+    Only app-generated ``composition_*``/``preview_*``/``check_*`` files are candidates;
+    the user's original media, assets and captioned exports are never touched. The
+    newest ``keep_checks`` five-second check renders are kept.
+    """
+    exports = list(project.get('exports', []))
+    checks = [name for name in exports if name.startswith('check_')]
+    dropped = set(checks[:-keep_checks] if keep_checks else checks)
+    project['exports'] = [name for name in exports if name not in dropped]
+    backup = project.get('composition_backup') or {}
+    keep = {project.get('source'), project.get('preview'), project.get('last_render'),
+            backup.get('source'), backup.get('preview'), *project['exports']}
+    removed = []
+    for path in Path(folder).iterdir():
+        if GENERATED_RENDER.fullmatch(path.name) and path.name not in keep and path.is_file():
+            try:
+                path.unlink()
+                removed.append(path.name)
+            except OSError:
+                pass  # A player may still hold the file; the next prune retries.
+    return removed
+
+
+def progress_runner(report):
+    """Runner for ``hwaccel.run_render`` that streams FFmpeg ``-progress`` output.
+
+    ``report`` receives the encoded output time in seconds. Cancellation still goes
+    through ``job_process`` (the process is killed when the job is cancelled).
+    """
+    def run(command, *, cwd=None, capture_output=True):
+        command = [*command[:-1], '-progress', 'pipe:1', '-nostats', command[-1]]
+        errors = bytearray()
+        with process.Popen(command, cwd=cwd, stdin=process.DEVNULL, stdout=process.PIPE, stderr=process.PIPE) as proc:
+            reader = threading.Thread(target=lambda: errors.extend(proc.stderr.read()), daemon=True)
+            reader.start()
+            for raw in proc.stdout:
+                key, _, value = raw.decode('ascii', errors='replace').strip().partition('=')
+                if key in ('out_time_us', 'out_time_ms') and value.isdigit():
+                    report(int(value) / 1_000_000)  # FFmpeg reports both keys in microseconds.
+            proc.wait()
+            reader.join()
+        process.check_cancelled()
+        return process.CompletedProcess(command, proc.returncode, b'', bytes(errors))
+    return run
+
+
+def sync_file(source, target):
+    """Copy only when the target is missing or differs (size or modification time)."""
+    src = source.stat()
+    try:
+        dst = target.stat()
+        if dst.st_size == src.st_size and dst.st_mtime_ns == src.st_mtime_ns:
+            return False
+    except FileNotFoundError:
+        pass
+    shutil.copy2(source, target)
+    return True
 
 
 def font_scale(name):
@@ -299,10 +388,30 @@ def visualizer_bars(peaks, duration, time_sec, width, height, style):
     return rects
 
 
-def layout_rows(cue, style, width, height):
+def layout_rows(cue, style, width, height, editor_preview=False):
     def locate(name):return lyric_layout.font_file(name,BUNDLED_FONTS,CUSTOM_FONT_DIR,CUSTOM_FONTS)
     return lyric_layout.rows(cue,style,width,height,locate(style['font']),
-        lambda text:lyric_fonts.runs(text,style['font'],locate),locate)
+        lambda text:lyric_fonts.runs(text,style['font'],locate),locate,editor_preview=editor_preview)
+
+
+VISUALIZER_KEYS = ('visualizer_style', 'visualizer_position', 'visualizer_height', 'visualizer_sensitivity', 'visualizer_color')
+
+
+def adopt_composition_visualizer(project):
+    """One visualizer: a legacy composition visualizer becomes the caption-style visualizer."""
+    settings = (project.get('studio') or {}).get('settings') or {}
+    if not settings.get('visualizer'):
+        return
+    style = project.setdefault('style', {})
+    if not style.get('visualizer'):
+        style['visualizer'] = True
+        style.update({key: settings[key] for key in VISUALIZER_KEYS if key in settings})
+    settings['visualizer'] = False
+
+
+def has_approved_translation(cue, language):
+    entry = lyric_tracks.clean_translations(cue).get(language)
+    return bool(entry and entry['status'] == 'approved' and entry['text'])
 
 
 def _row_background_events(cue, row, style, height):
@@ -316,27 +425,28 @@ def _row_background_events(cue, row, style, height):
     animation = style['animation'] if row['track']=='original' else 'none'
     if animation == 'pop_in':
         animation = 'pop'
-    duration = {'pop':.16,'zoom_in':.2,'slide_up':.18}.get(animation,0)
+    duration = ANIM[animation]['duration'] if animation in ('pop','zoom_in','slide_up') else 0
     start, end = cue['start'], cue['end']
     boundaries = {start,end}
     if duration:
         boundaries.add(min(end,start+duration))
         boundaries.update(start+i/60 for i in range(1,math.ceil(duration*60)) if start+i/60<end)
+    ramp = ANIM['fade']['duration']
     if animation=='fade':
-        boundaries.update(t for t in (start+.18,end-.18,(start+end)/2) if start<t<end)
+        boundaries.update(t for t in (start+ramp,end-ramp,(start+end)/2) if start<t<end)
     points=sorted(boundaries)
     events=[]
     for a,b in zip(points,points[1:]):
         if round(a*100)>=round(b*100):continue
         progress=min(1,(a-start)/duration) if duration else 1
-        scale=(.85+.15*progress) if animation=='pop' else (.7+.3*progress) if animation=='zoom_in' else 1
-        offset=height*.035*(1-progress) if animation=='slide_up' else 0
+        scale=entrance_scale(animation,a-start)/100 if animation in ('pop','zoom_in') else 1
+        offset=height*ANIM['slide_up']['offset']*(1-progress) if animation=='slide_up' else 0
         x=row['x']+(left-row['x'])*scale
         y=row['y']+(top-row['y'])*scale+offset
         w,h,r=width*scale,box_height*scale,radius*scale
-        path=f'm {x+r} {y} l {x+w-r} {y} b {x+w} {y} {x+w} {y} {x+w} {y+r} l {x+w} {y+h-r} b {x+w} {y+h} {x+w} {y+h} {x+w-r} {y+h} l {x+r} {y+h} b {x} {y+h} {x} {y+h} {x} {y+h-r} l {x} {y+r} b {x} {y} {x} {y} {x+r} {y}'
+        path=rounded_rect_path(x,y,w,h,r)
         def alpha(t):
-            opacity=max(0,min(1,(t-start)/.18,(end-t)/.18)) if animation=='fade' else 1
+            opacity=fade_opacity(t,start,end) if animation=='fade' else 1
             return round(255-(255-56)*opacity)
         tags=rf'\an7\pos(0,0)\c&H140C0A&\alpha&H{alpha(a):02X}&'
         if alpha(a)!=alpha(b):tags+=rf'\t(0,{round((b-a)*1000)},\alpha&H{alpha(b):02X}&)'
@@ -344,14 +454,19 @@ def _row_background_events(cue, row, style, height):
     return events
 
 
-def ass_text(project):
+def ass_text(project, skip_unapproved=False):
+    """Styled ASS export. Only approved translations are rendered; with ``skip_unapproved``
+    translation-only exports omit lines that have no approved translation instead of failing."""
     style={**DEFAULT_STYLE,**project.get('style',{})}
-    if not style['layout_enabled'] and style['track_mode']=='original' and not any(c.get('style_override') for c in project['cues']):
+    # Background plates use the shared layout so their rounded boxes match the preview.
+    if not style['layout_enabled'] and not style['background'] and style['track_mode']=='original' and not any(c.get('style_override') for c in project['cues']):
         return _legacy_ass_text(project)
     base=_legacy_ass_text({**project,'cues':[],'style':style})
     definitions=[];events=[]
     for cue in project['cues']:
         cue_style={**style,**cue.get('style_override',{})}
+        if skip_unapproved and cue_style['track_mode']=='translation' and not has_approved_translation(cue,cue_style['translation_language']):
+            continue
         for row in layout_rows(cue,cue_style,project['width'],project['height']):
             if not row['text']: continue
             name='Row'+str(len(definitions))
@@ -362,10 +477,15 @@ def ass_text(project):
             if row['track']=='translation': row_style.update(karaoke=False,cumulative=False,word_pop=False,animation='none')
             piece=_legacy_ass_text({**project,'style':row_style,'studio':{},'composition':{},
                 'cues':[{**cue,'text':row['text'],'words':row['words']}]})
-            definition=next(line for line in piece.splitlines() if line.startswith('Style: Default,'))
-            definitions.append(definition.replace('Style: Default,','Style: '+name+',',1))
             for line in piece.splitlines():
-                if line.startswith('Dialogue: 0,'):
+                if line.startswith('Style: Default,'):
+                    definitions.append(line.replace('Style: Default,','Style: '+name+',',1))
+                elif line.startswith('Style: Glow,'):
+                    definitions.append(line.replace('Style: Glow,','Style: '+name+'Glow,',1))
+                elif line.startswith('Dialogue: -1,') and ',Glow,' in line:
+                    # Glow halo: above the row plate (same layer, later), below the sharp text.
+                    events.append(line.replace(',Glow,',','+name+'Glow,',1))
+                elif line.startswith('Dialogue: 0,'):
                     events.append(line.replace(',Default,',','+name+',',1))
     return base.replace('[Events]','\n'.join(definitions)+'\n[Events]')+'\n'.join(events)+'\n'
 
@@ -398,6 +518,11 @@ def _legacy_ass_text(project):
     box_outline = max(outline, height * style['box_padding']/100) if style['background'] else outline
     outline_col = '&H38140C0A' if style['background'] else '&H00000000'
     vis_col = color(style.get('visualizer_color', '#bba6ff'), '28')
+    margin = round(width*(1-style['box_width']/100)/2)
+    # Glow matches the preview's text-shadow: a blurred highlight halo under sharp text.
+    glow_radius = height * ANIM['glow']['radius'] * float(style.get('glow') or 0)
+    glow_blur = round(glow_radius / 2, 2)
+    glow_border = round(max(1.0, glow_radius / 4), 2)
     output = [f'''[Script Info]
 ScriptType: v4.00+
 PlayResX: {width}
@@ -408,6 +533,8 @@ ScaledBorderAndShadow: yes
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Default,{style['font']},{font_size},{color(style['color'])},{color(style['color'])},{outline_col},&H80000000,0,0,0,0,100,100,{letter_spacing},0,{border_style},{box_outline},0,{alignment},{round(width*(1-style['box_width']/100)/2)},{round(width*(1-style['box_width']/100)/2)},0,1
 Style: Vis,Arial,20,{vis_col},{vis_col},&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
+Style: Glow,{style['font']},{font_size},{color(style['color'], 'FF')},{color(style['color'], 'FF')},{color(style['highlight'])},&H00000000,0,0,0,0,100,100,{letter_spacing},0,1,{glow_border},0,{alignment},{margin},{margin},0,1
+Style: Title,{style['font']},{font_size},{color(style['color'])},{color(style['color'])},&H00000000,&H80000000,0,0,0,0,100,100,{letter_spacing},0,1,{outline},0,5,0,0,0,1
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text''']
     if style.get('visualizer'):
@@ -424,14 +551,40 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text'
                 rects = visualizer_bars(peaks, dur, (t0 + t1) / 2, width, height, style)
                 drawing = ' '.join(f'm {x1} {y1} l {x2} {y1} {x2} {y2} {x1} {y2}' for x1, y1, x2, y2 in rects)
                 output.append(f"Dialogue: -1,{timestamp(t0, True)},{timestamp(t1, True)},Vis,,0,0,0,,{{\\pos(0,0)\\p1}}{drawing}{{\\p0}}")
+    def emit(start, end, tags, body):
+        """Caption event plus, with glow, a halo event drawn underneath it."""
+        if glow_radius > 0:
+            halo_tags = ''.join(tags).replace('\\alpha', '\\3a')
+            halo_body = re.sub(r'\\c&H[0-9A-Fa-f]+&', '', body).replace('\\alpha', '\\3a')
+            halo_body = halo_body.replace('{\\r', '{\\r\\1a&HFF&\\blur' + f'{glow_blur:g}')
+            output.append(f"Dialogue: -1,{timestamp(start, True)},{timestamp(end, True)},Glow,,0,0,0,,"
+                          f"{{{halo_tags}\\1a&HFF&\\blur{glow_blur:g}}}{halo_body}")
+        output.append(f"Dialogue: 0,{timestamp(start, True)},{timestamp(end, True)},Default,,0,0,0,,{{{''.join(tags)}}}{body}")
     studio_settings = (project.get('studio') or {}).get('settings') or project.get('composition') or {}
     title_text = str(studio_settings.get('title_text') or '').strip()
     title_dur = float(studio_settings.get('title_duration') or 0)
     if title_text and title_dur > 0:
         t_end = min(float(project.get('duration') or title_dur), title_dur)
         if round(t_end * 100) > 0:
-            title_size = round(font_size * 1.25, 1)
-            output.append(f"Dialogue: 1,{timestamp(0, True)},{timestamp(t_end, True)},Default,,0,0,0,,{{\\an5\\pos({width/2:.0f},{height*.28:.0f})\\fs{title_size}\\fad(250,350)}}{escape(title_text)}")
+            spec = ANIM['title']
+            em = height * style['size'] / 100 * spec['scale']
+            title_size = round(font_size * spec['scale'], 1)
+            fade = rf"\fad({round(spec['fade_in']*1000)},{round(spec['fade_out']*1000)})"
+            cx, cy = width / 2, height * spec['y']
+            try:
+                font = ImageFont.truetype(str(lyric_layout.font_file(style['font'], BUNDLED_FONTS, CUSTOM_FONT_DIR, CUSTOM_FONTS)), max(1, round(em)))
+                text_width = font.getlength(title_text) + max(0, len(title_text) - 1) * letter_spacing
+            except OSError:
+                text_width = len(title_text) * em * .55
+            # Same rounded plate as the preview title card (padding/radius in em).
+            box_w, box_h = text_width + 2 * em * spec['pad_x'], em * 1.2 + 2 * em * spec['pad_y']
+            plate = rounded_rect_path(round(cx - box_w / 2, 1), round(cy - box_h / 2, 1), round(box_w, 1), round(box_h, 1),
+                                      round(min(box_h / 2, em * spec['radius']), 1))
+            output.append(f"Dialogue: 1,{timestamp(0, True)},{timestamp(t_end, True)},Vis,,0,0,0,,"
+                          f"{{\\an7\\pos(0,0)\\c&H140C0A&\\alpha&H38&{fade}\\p1}}{plate}{{\\p0}}")
+            output.append(f"Dialogue: 2,{timestamp(0, True)},{timestamp(t_end, True)},Title,,0,0,0,,"
+                          f"{{\\an5\\pos({cx:.0f},{cy:.0f})\\fs{title_size}{fade}}}{escape(title_text)}")
+    typewriter = ANIM['typewriter']
     for cue in project['cues']:
         anim = style.get('animation', 'none')
         if anim == 'pop_in':
@@ -440,7 +593,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text'
         if not use_words and anim == 'typewriter' and len(cue['text']) > 1:
             raw_text = cue['text']
             total_dur = cue['end'] - cue['start']
-            type_dur = min(total_dur, max(0.4, len(raw_text) * 0.045))
+            type_dur = min(total_dur, max(typewriter['min_duration'], len(raw_text) * typewriter['char_duration']))
             num_steps = len(raw_text)
             step_dur = type_dur / num_steps
             pieces = []
@@ -452,27 +605,20 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text'
             for start, end, t_slice in pieces:
                 if round(start*100) >= round(end*100):
                     continue
-                body = escape(t_slice)
                 cx, cy = width * style['horizontal']/100, height * style['position'] / 100
-                glow = float(style.get('glow') or 0)
-                tags = [rf'\pos({cx:.1f},{cy:.1f})']
-                if glow > 0:
-                    tags.append(rf'\blur{glow:.1f}')
-                    body = body.replace(r'{\r}', r'{\r\blur' + f'{glow:.1f}' + '}')
-                position = '{' + ''.join(tags) + '}'
-                output.append(f"Dialogue: 0,{timestamp(start, True)},{timestamp(end, True)},Default,,0,0,0,,{position}{body}")
+                emit(start, end, [rf'\pos({cx:.1f},{cy:.1f})'], escape(t_slice))
             continue
 
         pieces = [(cue['start'], cue['end'], None)]
         if use_words:
             boundaries = sorted({cue['start'], cue['end'], *(w[k] for w in cue['words'] for k in ('start', 'end'))})
             if anim == 'fade':
-                ramp = min(.18, (cue['end']-cue['start'])/2)
+                ramp = min(ANIM['fade']['duration'], (cue['end']-cue['start'])/2)
                 boundaries = sorted(set(boundaries) | {cue['start']+ramp, cue['end']-ramp})
             if anim == 'typewriter':
                 character_times = set(boundaries)
                 for word in cue['words']:
-                    reveal_duration = max(.08, word['end']-word['start']) * .85
+                    reveal_duration = max(typewriter['min_word'], word['end']-word['start']) * typewriter['word_reveal']
                     for index in range(1, len(word['text'])):
                         instant = word['start'] + reveal_duration * index / len(word['text'])
                         if instant < word['end']:
@@ -497,16 +643,18 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text'
                     is_pop = is_active and bool(style.get('word_pop'))
                     text = w['text']
                     if anim == 'typewriter' and is_active:
-                        count = max(1, min(len(text), math.ceil(len(text)*(mid-w['start'])/(max(.08,w['end']-w['start'])*.85))))
+                        count = max(1, min(len(text), math.ceil(len(text)*(mid-w['start'])/(max(typewriter['min_word'],w['end']-w['start'])*typewriter['word_reveal']))))
                         text = text[:count]
                     w_esc = escape(text)
-                    pop_tags = r'\fscx115\fscy115'
+                    pop_scale = ANIM['word_pop']['scale']
+                    pop_percent = f'{pop_scale*100:g}'
+                    pop_tags = rf'\fscx{pop_percent}\fscy{pop_percent}'
                     if is_pop and anim in ('pop','zoom_in'):
-                        initial,duration=(85,.16) if anim=='pop' else (70,.2)
+                        duration=ANIM[anim]['duration']
                         elapsed=max(0,start-cue['start'])
                         if elapsed<duration:
-                            combined=1.15*(initial+(100-initial)*elapsed/duration)
-                            pop_tags=rf'\fscx{combined:g}\fscy{combined:g}\t(0,{round((duration-elapsed)*1000)},\fscx115\fscy115)'
+                            combined=pop_scale*entrance_scale(anim,elapsed)
+                            pop_tags=rf'\fscx{combined:g}\fscy{combined:g}\t(0,{round((duration-elapsed)*1000)},\fscx{pop_percent}\fscy{pop_percent})'
                     if is_lit and is_pop:
                         parts.append(sep + r'{\c' + hl + '&' + pop_tags + '}' + w_esc + r'{\r}')
                     elif is_lit:
@@ -519,38 +667,33 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text'
                 if not body and anim == 'typewriter':
                     continue
             cx, cy = width * style['horizontal']/100, height * style['position'] / 100
-            glow = float(style.get('glow') or 0)
             elapsed = max(0, start-cue['start'])
             tags = []
-            if anim == 'slide_up' and elapsed < .18:
-                remaining_ms = round((.18-elapsed)*1000)
-                initial_y = cy + height*.035*(1-elapsed/.18)
+            slide = ANIM['slide_up']
+            if anim == 'slide_up' and elapsed < slide['duration']:
+                remaining_ms = round((slide['duration']-elapsed)*1000)
+                initial_y = cy + height*slide['offset']*(1-elapsed/slide['duration'])
                 tags.append(rf'\move({cx:.1f},{initial_y:.1f},{cx:.1f},{cy:.1f},0,{remaining_ms})')
             else:
                 tags.append(rf'\pos({cx:.1f},{cy:.1f})')
             if anim == 'fade':
+                ramp = ANIM['fade']['duration']
                 def alpha_at(instant):
-                    opacity=max(0,min(1,(instant-cue['start'])/.18,(cue['end']-instant)/.18))
-                    return round(255*(1-opacity))
+                    return round(255*(1-fade_opacity(instant, cue['start'], cue['end'])))
                 tags.append(rf'\alpha&H{alpha_at(start):02X}&')
-                points=sorted({start,end,*[t for t in (cue['start']+.18,cue['end']-.18,(cue['start']+cue['end'])/2) if start<t<end]})
+                points=sorted({start,end,*[t for t in (cue['start']+ramp,cue['end']-ramp,(cue['start']+cue['end'])/2) if start<t<end]})
                 for a,b in zip(points,points[1:]):
                     if alpha_at(a)!=alpha_at(b):
                         tags.append(rf'\t({round((a-start)*1000)},{round((b-start)*1000)},\alpha&H{alpha_at(b):02X}&)')
             elif anim in ('pop','zoom_in'):
-                initial,duration=(85,.16) if anim=='pop' else (70,.2)
+                duration = ANIM[anim]['duration']
                 if elapsed < duration:
-                    scale=initial+(100-initial)*elapsed/duration
+                    scale = entrance_scale(anim, elapsed)
                     tags.append(rf'\fscx{scale:g}\fscy{scale:g}\t(0,{round((duration-elapsed)*1000)},\fscx100\fscy100)')
-            if glow > 0:
-                tags.append(rf'\blur{glow:.1f}')
-            position = '{' + ''.join(tags) + '}'
             # Word highlighting resets the style; retain the enclosing cue animation.
             if anim in ('fade','pop','zoom_in','slide_up'):
                 body = body.replace(r'{\r}', '{\\r' + ''.join(tags) + '}')
-            elif glow > 0:
-                body = body.replace(r'{\r}', r'{\r\blur' + f'{glow:.1f}' + '}')
-            output.append(f"Dialogue: 0,{timestamp(start, True)},{timestamp(end, True)},Default,,0,0,0,,{position}{body}")
+            emit(start, end, tags, body)
     return '\n'.join(output) + '\n'
 
 
@@ -632,6 +775,86 @@ def has_mixed_lyric_scripts(text):
         r'[\u1100-\u11ff\u3130-\u318f\uac00-\ud7af]',
         r'[a-zA-Z\u00c0-\u024f]',
     )) > 1
+
+
+SCRIPT_PATTERNS = (('el', re.compile(r'[\u0370-\u03ff\u1f00-\u1fff]')),
+                   ('ko', re.compile(r'[\u1100-\u11ff\u3130-\u318f\uac00-\ud7af]')),
+                   ('latin', re.compile(r'[a-zA-Z\u00c0-\u024f]')))
+LATIN_LANGUAGES = ('en', 'fr', 'es', 'de', 'it', 'pt', 'tr')
+
+
+def script_runs(text):
+    """Split a line into consecutive (script, tokens) runs; neutral tokens join their neighbour."""
+    runs = []
+    for token in text.split():
+        counts = {name: len(pattern.findall(token)) for name, pattern in SCRIPT_PATTERNS}
+        script = max(counts, key=counts.get) if any(counts.values()) else None
+        if runs and (script is None or runs[-1][0] in (script, None)):
+            if runs[-1][0] is None:
+                runs[-1][0] = script
+            runs[-1][1].append(token)
+        else:
+            runs.append([script, [token]])
+    return [(script or 'latin', tokens) for script, tokens in runs]
+
+
+def detect_lyric_language(samples, candidates=None):
+    """Language of the most-voiced window, restricted to the supported caption languages."""
+    return asr.detect_language(samples, tuple(candidates or composition_model.LANGUAGES))
+
+
+def run_language(samples, script, language):
+    """Alignment language for one script run of a mixed line."""
+    if script in ('el', 'ko'):
+        return script
+    pair = composition_model.MIXED.get(language)
+    candidates = [code for code in (pair or LATIN_LANGUAGES) if code in LATIN_LANGUAGES]
+    if len(candidates) == 1:
+        return candidates[0]
+    if not candidates:
+        return 'en'
+    return detect_lyric_language(samples, candidates)
+
+
+def refine_script_runs(samples, cue, words, coarse_language, language, duration):
+    """Re-align each script run of a mixed line in its own language over its coarse sub-range.
+
+    ``words`` come from a whole-line pass; each run is re-aligned inside the window
+    between the previous run's end and its coarse end. Raises ValueError when the runs
+    cannot be stitched in order, so the caller keeps the whole-line result.
+    """
+    runs = script_runs(cue['text'])
+    if len(runs) < 2 or len(words) != sum(len(tokens) for _, tokens in runs):
+        raise ValueError('Line has a single script.')
+    start, end = float(cue['start']), float(cue['end'])
+    refined, languages, cursor, index = [], [], start, 0
+    for position, (script, tokens) in enumerate(runs):
+        coarse = words[index:index + len(tokens)]
+        index += len(tokens)
+        chosen = run_language(samples, script, language)
+        languages.append(chosen)
+        if chosen == coarse_language and coarse[0]['start'] >= cursor - 1e-3:
+            refined.extend(copy.deepcopy(coarse))
+            cursor = coarse[-1]['end']
+            continue
+        a = start if position == 0 else max(cursor, coarse[0]['start'] - .15)
+        b = end if position == len(runs) - 1 else min(end, coarse[-1]['end'] + .15)
+        if b - a < .05 * len(tokens):
+            raise ValueError('Not enough audio for this language run.')
+        window = samples[max(0, round((a - start) * 16000)):min(len(samples), round((b - start) * 16000))]
+        text = ' '.join(tokens)
+        process.check_cancelled()
+        part = aligned_cues(asr.align_words(window, text, chosen), [text], a, duration, b - a, recover=True)[0]
+        if part['words'][0]['start'] < cursor - 1e-3:
+            raise ValueError('Language runs overlap.')
+        refined.extend(part['words'])
+        cursor = part['words'][-1]['end']
+    previous = start
+    for word in refined:
+        if word['start'] < previous - 1e-3 or word['end'] <= word['start'] or word['end'] > end + 1e-3:
+            raise ValueError('Stitched word timings are not in order.')
+        previous = word['end']
+    return refined, languages
 
 
 def aligned_cues(result, lines, offset, duration, limit, recover=False):
@@ -795,7 +1018,7 @@ def distribute_words_in_cue(words_text: list[str], cue_start: float, cue_end: fl
     return words
 
 
-def match_lyrics_to_transcription(cues, lyrics, duration, language=None, model=None, audio_samples=None, generate_fn=None, llm_model_id='llama-3.2-1b'):
+def match_lyrics_to_transcription(cues, lyrics, duration):
     """Match user's supplied lyrics to existing timed transcription cues using global sequence alignment.
 
     Replaces transcription text using ONLY supplied lyrics, preserves valid line timings,
@@ -1127,7 +1350,52 @@ def detect_face_in_video(video_path: Path, time_sec: float = 0.0, target: str = 
         cap.release()
 
 
-def register_captions(app, save_dir, job_started, job_finished, refresh_gallery, get_whisper, allowed_path):
+TRANSLATION_GROUP = 8
+SONG_CONTEXT_CHARS = 12000
+LEGACY_TRANSLATION_MODELS = {'qwen3-4b-local': 'qwen3-4b'}
+
+
+def translation_model(settings):
+    """Model chosen in the project, or None for "Auto (best for this PC)"."""
+    value = str((settings or {}).get('model') or '').strip()
+    if not value or value == 'auto':
+        return None
+    return LEGACY_TRANSLATION_MODELS.get(value, value)
+
+
+def song_context(cues):
+    """Whole-song lyric context when it fits the model's prompt budget, else '' (callers use neighbours)."""
+    song = '\n'.join(c['text'] for c in cues)
+    return song if len(song) <= SONG_CONTEXT_CHARS else ''
+
+
+def _model_roles(entry):
+    if entry.get('item_id') and ai_catalog.exists(entry['item_id']):
+        roles = [r for r in ai_catalog.get(entry['item_id']).get('roles', []) if r in ('helper', 'translator', 'vision')]
+        if roles:
+            return roles
+    capabilities = set(entry.get('capabilities') or [])
+    return ['translator'] + (['helper'] if 'tools' in capabilities else []) + (['vision'] if 'vision' in capabilities else [])
+
+
+def translation_model_catalog():
+    """Installed local models (role badges), the automatic translator and the setup item to offer."""
+    models = [{**entry, 'roles': _model_roles(entry)} for entry in ai_llm.available_models()]
+    try:
+        choice = ai_llm.resolve('translator')
+        auto = {'available': True, 'model': choice['model'], 'backend': choice['backend'], 'local': True}
+    except AIUnavailable as exc:
+        auto = {'available': False, 'model': None, 'error': exc.message, 'setup_hint': exc.setup_hint}
+    recommended = ai_catalog.recommended(ai_hardware.current_profile(), 'translator', ai_hardware.detect())
+    setup_item = recommended[0] if recommended else auto.get('setup_hint')
+    setup = None
+    if setup_item and ai_catalog.exists(setup_item):
+        item = ai_catalog.get(setup_item)
+        setup = {'item_id': setup_item, 'name': item['name'], 'size_bytes': item.get('size_bytes')}
+    return {'models': models, 'auto': auto, 'setup': setup}
+
+
+def register_captions(app, save_dir, job_started, job_finished, refresh_gallery, allowed_path):
     bp = Blueprint('captions', __name__)
     root = Path(save_dir) / 'Caption Projects'
     stock_dir = Path(save_dir) / 'Stock Media'
@@ -1164,13 +1432,31 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             raise ValueError('Invalid project ID.')
         return root / pid
 
+    def recover_translations(data):
+        """One-time v5 repair of translations hidden by the v4.x writer bug (backup first)."""
+        migrations = data.get('migrations') if isinstance(data.get('migrations'), list) else []
+        if lyric_tracks.TRANSLATION_MIGRATION in migrations or data.get('state') == 'busy':
+            return
+        repaired = copy.deepcopy(data.get('cues', []))
+        if not lyric_tracks.migrate_translation_sources(repaired):
+            return
+        destination = folder(data['id']) / 'project.json'
+        backup = destination.parent / 'pre-v5-project.json'
+        if destination.exists() and not backup.exists():
+            shutil.copy2(destination, backup)
+        data['cues'] = repaired
+        data['migrations'] = [*migrations, lyric_tracks.TRANSLATION_MIGRATION]
+        write(data)
+
     def read(pid):
         with lock:
             data = json.loads((folder(pid) / 'project.json').read_text(encoding='utf-8'))
+            recover_translations(data)
             lyric_tracks.ensure_ids(data.get('cues',[]), data['id'])
             data['style']={**DEFAULT_STYLE,**data.get('style',{})}
             if data.get('duration'):
                 data['studio'] = composition_model.migrate(data, folder(pid))
+                adopt_composition_visualizer(data)
                 data['missing_assets'] = [key for key, asset in data['studio']['assets'].items() if not composition_model.local_asset(folder(pid), asset).is_file()]
             return data
 
@@ -1198,23 +1484,43 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                         raise
                     time.sleep(.05 * (attempt + 1))
 
-    def ffmpeg(args, cwd):
+    cancel_events: dict[str, threading.Event] = {}
+
+    def ffmpeg(args, cwd, progress=None):
         from assets import hwaccel
-        result = hwaccel.run_render([imageio_ffmpeg.get_ffmpeg_exe(), '-nostdin', '-y', *args], cwd=cwd, runner=process.run)
+        runner = progress_runner(progress) if progress else process.run
+        result = hwaccel.run_render([imageio_ffmpeg.get_ffmpeg_exe(), '-nostdin', '-y', *args], cwd=cwd, runner=runner)
         if result.returncode:
             raise ValueError('Video processing failed: ' + result.stderr.decode('utf-8', errors='replace')[-700:])
         return getattr(result, 'video_encoder', '')
 
+    def progress_reporter(d, label, total):
+        """Write '<label> NN%' into the project status at most every 0.75 s."""
+        last = dict(at=0.0, percent=-1)
+        def report(seconds):
+            percent = max(0, min(99, int(seconds / max(total, .01) * 100)))
+            now = time.monotonic()
+            if percent != last['percent'] and now - last['at'] >= .75:
+                last.update(at=now, percent=percent)
+                d['status'] = f'{label} {percent}%'
+                write(d)
+        return report
+
     def launch(data, action, work):
+        event = threading.Event()
         with lock:
             data['state'], data['status'] = 'busy', action
             write(data)
+            cancel_events[data['id']] = event
             job_started()
         def run():
             process.begin_job()
+            data.pop('setup_hint', None)
             original = copy.deepcopy(data)
             try:
-                work(data, folder(data['id']))
+                # Project-scoped cancel: Stop in this editor ends only this project's job.
+                with process.cancellation_scope(event.is_set):
+                    work(data, folder(data['id']))
                 process.check_cancelled()
                 data['state'], data['status'] = 'ready', data.pop('_completion_notice', 'Ready')
                 data['revision'] += 1
@@ -1223,14 +1529,28 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                 data.clear()
                 data.update(original)
                 data['state'], data['status'] = 'error', str(exc)
+                if isinstance(exc, AIUnavailable) and exc.setup_hint:
+                    # The editor turns this into a [Set up AI] action; nothing is downloaded silently.
+                    data['setup_hint'] = exc.setup_hint
             finally:
                 try:
                     write(data)
                 finally:
+                    if cancel_events.get(data['id']) is event:
+                        cancel_events.pop(data['id'], None)
                     process.end_job()
                     job_finished()
         threading.Thread(target=run, daemon=True).start()
         return jsonify(data), 202
+
+    @bp.post('/api/captions/<pid>/cancel')
+    def cancel_project(pid):
+        folder(pid)
+        event = cancel_events.get(pid)
+        if event is None:
+            return jsonify(cancelled=False, status='Nothing is running for this project.')
+        event.set()
+        return jsonify(cancelled=True, status='Stopping this project’s task… Saved captions are kept.')
 
     @bp.errorhandler(ValueError)
     @bp.errorhandler(KeyError)
@@ -1241,6 +1561,14 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
     @bp.errorhandler(FileNotFoundError)
     def missing(exc):
         return jsonify(error='Caption project or media not found.'), 404
+
+    @bp.errorhandler(ConsentRequired)
+    def consent_required(exc):
+        return jsonify(error=exc.message, setup_hint=exc.setup_hint, consent_required=True), 409
+
+    @bp.errorhandler(AIUnavailable)
+    def ai_unavailable(exc):
+        return jsonify(error=exc.message, setup_hint=exc.setup_hint), 424
 
     @bp.get('/captions')
     def editor():
@@ -1301,7 +1629,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             bg_ext = Path(bg_name).suffix.lower() if bg_name else ''
             if (background or bg_path) and bg_ext not in {'.png','.jpg','.jpeg','.webp','.mp4','.mov','.mkv','.webm'}:
                 raise ValueError('Choose a photo or video background.')
-            composition = dict(shape=shape, color=color, visualizer=request.form.get('visualizer') == 'true')
+            composition = dict(shape=shape, color=color)
             if (background or bg_path) and request.form.get('stock_provenance'):
                 composition['provenance'] = composition_model.validate_provenance(
                     json.loads(request.form.get('stock_provenance', '{}'))
@@ -1322,6 +1650,8 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             shutil.copy2(source, media)
         data = dict(id=pid, name=name[:200], source=media.name, state='busy', status='Preparing video',
                     revision=0, cues=[], style=dict(DEFAULT_STYLE), width=0, height=0, duration=0, peaks=[], timing='manual', exports=[])
+        if song and request.form.get('visualizer') == 'true':
+            data['style'].update(visualizer=True, visualizer_style='waveform')
         def prepare(d, f):
             if song:
                 # Decode a bounded audio file first: arbitrary metadata durations cannot create runaway renders.
@@ -1339,10 +1669,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                 else:
                     args += ['-f','lavfi','-i',f'color=c={color}:s={width}x{height}:r=30']
                 graph = f'[1:v]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1,fps=30[bg]'
-                if composition and composition.get('visualizer'):
-                    graph += f';[0:a]showwaves=s={width}x{height//5}:mode=cline:rate=30:colors=0xbba6ff:scale=sqrt[wave];[bg][wave]overlay=0:H-h:shortest=1[out]'
-                else:
-                    graph += ';[bg]null[out]'
+                graph += ';[bg]null[out]'
                 ffmpeg([*args,'-filter_complex',graph,'-map','[out]','-map','0:a:0','-t',str(seconds),'-c:v','libx264','-preset','veryfast','-crf','18','-pix_fmt','yuv420p','-c:a','aac','-b:a','256k','-movflags','+faststart',media.name], f)
                 d['composition'] = composition
                 d['style']['position'] = 65
@@ -1378,6 +1705,65 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
     def composition_snapshot(d):
         keys = ('studio','source','preview','duration','width','height','peaks','cues','style','timing','karaoke_backup','composition')
         return {key:copy.deepcopy(d[key]) for key in keys if key in d}
+
+    def composition_work(pid, assets, settings, added):
+        """Render the draft composition preview; shared by Apply and the storyboard bridge."""
+        settings['visualizer'] = False  # The caption-style visualizer is the only one (no baked FFmpeg waveform).
+        def work(d, f):
+            token = uuid.uuid4().hex[:12]
+            output, preview = 'composition_'+token+'.mp4','preview_'+token+'.mp4'
+            audio_probe = 'duration_'+token+'.wav'
+            success = False
+            try:
+                # Bounded decode verifies the real replacement duration, not its filename or metadata.
+                ffmpeg(['-i',assets['audio']['file'],'-t','1200.1','-vn','-ac','1','-ar','1000','-c:a','pcm_s16le',audio_probe], f)
+                with wave.open(str(f/audio_probe),'rb') as audio:
+                    source_duration = audio.getnframes()/audio.getframerate()
+                number(source_duration,.1,1200)
+                if 0 < float(settings.get('end',0))-source_duration <= .05:
+                    settings['end'] = source_duration  # Legacy video frame rounding.
+                clean = composition_model.validate(settings,source_duration)
+                assets['audio']['duration'] = source_duration
+                has_audio = False
+                if clean['background_volume']:
+                    video_assets = [a for a in assets.values() if isinstance(a, dict) and a.get('kind') == 'video' and a.get('file')]
+                    for va in video_assets:
+                        v_file = f / va['file']
+                        if v_file.is_file():
+                            probe = process.run([imageio_ffmpeg.get_ffmpeg_exe(), '-i', str(v_file)], capture_output=True)
+                            va['has_audio'] = b'Audio:' in probe.stderr
+                            has_audio = has_audio or va['has_audio']
+                studio = composition_model.schema(assets,clean,d['style'])
+                d['status'] = 'Applying background and audio settings…'
+                write(d)
+                ffmpeg(composition_model.render_args(studio,f,output,has_audio,False,include_sticker=False,quality='draft'),f)
+                preview_and_peaks(d,f,output,preview)
+                process.check_cancelled()
+                old_settings = d['studio']['settings']
+                duration = clean['end']-clean['start']+clean['offset']
+                delta = old_settings['start']-clean['start']+clean['offset']-old_settings['offset']
+                cues = composition_model.shift_cues(d['cues'],delta,duration)
+                for fx_key in ('video_filter', 'vignette', 'film_grain', 'sharpen', 'chromatic',
+                               'noise_cancel', 'voice_isolation', 'audio_effect'):
+                    d['style'][fx_key] = clean[fx_key]
+                validate_edit(dict(cues=cues,style=d['style']),duration)
+                # Read the saved pre-job peaks: preview generation only modified the worker copy.
+                backup = composition_snapshot(read(pid))
+                d.update(studio=studio,source=output,preview=preview,duration=duration,
+                         width=composition_model.SHAPES[clean['shape']][0],height=composition_model.SHAPES[clean['shape']][1],
+                         cues=cues,composition={**clean, 'fx_baked': False, 'sticker_baked': False},composition_backup=backup,missing_assets=[])
+                if delta or duration != backup['duration']:
+                    d.pop('karaoke_backup',None)
+                if any(p.name == assets['audio']['file'] for p in added):
+                    for cue in d['cues']:
+                        cue['karaoke'] = dict(state='review',note='Audio replaced or relinked. Check lyric synchronization.')
+                success = True
+                prune_renders(d, f)
+            finally:
+                (f/audio_probe).unlink(missing_ok=True)
+                if not success:
+                    for path in [f/output,f/preview,*added]: path.unlink(missing_ok=True)
+        return work
 
     @bp.post('/api/captions/<pid>/composition')
     def update_composition(pid):
@@ -1498,61 +1884,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             except Exception:
                 for path in added: path.unlink(missing_ok=True)
                 raise
-            def work(d, f):
-                token = uuid.uuid4().hex[:12]
-                output, preview = 'composition_'+token+'.mp4','preview_'+token+'.mp4'
-                audio_probe = 'duration_'+token+'.wav'
-                success = False
-                try:
-                    # Bounded decode verifies the real replacement duration, not its filename or metadata.
-                    ffmpeg(['-i',assets['audio']['file'],'-t','1200.1','-vn','-ac','1','-ar','1000','-c:a','pcm_s16le',audio_probe], f)
-                    with wave.open(str(f/audio_probe),'rb') as audio:
-                        source_duration = audio.getnframes()/audio.getframerate()
-                    number(source_duration,.1,1200)
-                    if 0 < float(settings.get('end',0))-source_duration <= .05:
-                        settings['end'] = source_duration  # Legacy video frame rounding.
-                    clean = composition_model.validate(settings,source_duration)
-                    assets['audio']['duration'] = source_duration
-                    bg = assets.get('background')
-                    has_audio = False
-                    if clean['background_volume']:
-                        video_assets = [a for a in assets.values() if isinstance(a, dict) and a.get('kind') == 'video' and a.get('file')]
-                        for va in video_assets:
-                            v_file = f / va['file']
-                            if v_file.is_file():
-                                probe = process.run([imageio_ffmpeg.get_ffmpeg_exe(), '-i', str(v_file)], capture_output=True)
-                                va['has_audio'] = b'Audio:' in probe.stderr
-                                has_audio = has_audio or va['has_audio']
-                    studio = composition_model.schema(assets,clean,d['style'])
-                    d['status'] = 'Applying background and audio settings…'
-                    write(d)
-                    ffmpeg(composition_model.render_args(studio,f,output,has_audio,False,include_sticker=False,quality='draft'),f)
-                    preview_and_peaks(d,f,output,preview)
-                    process.check_cancelled()
-                    old_settings = d['studio']['settings']
-                    duration = clean['end']-clean['start']+clean['offset']
-                    delta = old_settings['start']-clean['start']+clean['offset']-old_settings['offset']
-                    cues = composition_model.shift_cues(d['cues'],delta,duration)
-                    for fx_key in ('video_filter', 'vignette', 'film_grain', 'sharpen', 'chromatic',
-                                   'noise_cancel', 'voice_isolation', 'audio_effect'):
-                        d['style'][fx_key] = clean[fx_key]
-                    validate_edit(dict(cues=cues,style=d['style']),duration)
-                    # Read the saved pre-job peaks: preview generation only modified the worker copy.
-                    backup = composition_snapshot(read(pid))
-                    d.update(studio=studio,source=output,preview=preview,duration=duration,
-                             width=composition_model.SHAPES[clean['shape']][0],height=composition_model.SHAPES[clean['shape']][1],
-                             cues=cues,composition={**clean, 'fx_baked': False, 'sticker_baked': False},composition_backup=backup,missing_assets=[])
-                    if delta or duration != backup['duration']:
-                        d.pop('karaoke_backup',None)
-                    if any(p.name == assets['audio']['file'] for p in added):
-                        for cue in d['cues']:
-                            cue['karaoke'] = dict(state='review',note='Audio replaced or relinked. Check lyric synchronization.')
-                    success = True
-                finally:
-                    (f/audio_probe).unlink(missing_ok=True)
-                    if not success:
-                        for path in [f/output,f/preview,*added]: path.unlink(missing_ok=True)
-            return launch(data,'Preparing editable composition…',work)
+            return launch(data,'Preparing editable composition…',composition_work(pid,assets,settings,added))
 
     @bp.post('/api/captions/<pid>/restore-composition')
     def restore_composition(pid):
@@ -1643,69 +1975,81 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             write(data)
         return jsonify(data)
 
+    def clean_storyboard(storyboard):
+        if not isinstance(storyboard, list):
+            raise ValueError('Invalid storyboard list.')
+        if any(not isinstance(scene, dict) for scene in storyboard):
+            raise ValueError('Each storyboard scene must be an object.')
+        return copy.deepcopy(storyboard[:60])
+
     @bp.post('/api/captions/<pid>/storyboard')
     def save_storyboard(pid):
+        """Store storyboard metadata. It is not caption or composition content, so the
+        project revision is unchanged and open caption editors keep saving normally."""
         incoming = request.get_json() or {}
         with lock:
             data = read(pid)
             if data['state'] == 'busy':
                 return jsonify(error='Project is busy processing.'), 409
-            storyboard = incoming.get('storyboard', [])
-            if not isinstance(storyboard, list):
-                return jsonify(error='Invalid storyboard list'), 400
-            data['storyboard'] = storyboard[:60]
-            data['revision'] += 1
+            data['storyboard'] = clean_storyboard(incoming.get('storyboard', []))
             write(data)
             return jsonify(storyboard=data['storyboard'], revision=data['revision'])
 
     @bp.post('/api/captions/<pid>/bridge-storyboard')
     def bridge_storyboard(pid):
-        """Assembles rendered storyboard scene clips into the project sequence timeline."""
+        """Register rendered storyboard scenes as clip assets and render them as the timeline sequence."""
+        incoming = request.get_json(silent=True) or {}
         with lock:
             data = read(pid)
-            if data['state'] == 'busy':
-                return jsonify(error='Project is busy processing.'), 409
-            storyboard = data.get('storyboard', [])
-            if not storyboard:
-                return jsonify(error='No storyboard scenes found in project.'), 400
-
+            if data['state'] == 'busy' or incoming.get('revision') != data['revision']:
+                return jsonify(error='Project changed or is processing. Reload it, then send the storyboard again.'), 409
+            if not data.get('studio') or 'audio' not in data['studio'].get('assets', {}):
+                raise ValueError('Finish preparing the caption project before adding storyboard scenes.')
+            if 'storyboard' in incoming:
+                data['storyboard'] = clean_storyboard(incoming['storyboard'])
+            scenes = [scene for scene in data.get('storyboard', []) if scene.get('video_path') or scene.get('video_file')]
+            if not scenes:
+                raise ValueError('No rendered scene videos found in the storyboard. Animate scenes first.')
+            if len(scenes) > 30:
+                raise ValueError('A video sequence can contain at most 30 clips.')
             f = folder(pid)
-            assets = copy.deepcopy(data.get('studio', {}).get('assets', {}))
-            settings = copy.deepcopy(data.get('studio', {}).get('settings', {}))
-
-            seq = []
-            for scene in storyboard:
-                vid_path = scene.get('video_path') or scene.get('video_file')
-                if not vid_path:
-                    continue
-                p = Path(vid_path)
-                if not p.is_file():
-                    continue
-                dest_name = f"scene_{uuid.uuid4().hex[:8]}.mp4"
-                shutil.copy2(p, f / dest_name)
-                duration = float(scene.get('duration') or (scene.get('end_time', 0) - scene.get('start_time', 0)) or 5.0)
-                seq.append({
-                    'file': dest_name,
-                    'name': f"Scene #{scene.get('number', len(seq)+1)}",
-                    'duration': duration,
-                    'start': float(scene.get('start_time', 0.0)),
-                    'scene_id': scene.get('id') or scene.get('scene_id') or f"scene_{len(seq)+1:03d}"
-                })
-
-            if not seq:
-                return jsonify(error='No rendered video files found in storyboard scenes. Animate scenes first.'), 400
-
-            settings['sequence'] = seq
-            if not data.get('studio'):
-                data['studio'] = composition_model.schema(assets, settings, data.get('style', {}))
-            else:
-                data['studio']['settings']['sequence'] = seq
-
-            data['has_composition'] = True
-            data['composition_sequence'] = seq
-            data['revision'] += 1
-            write(data)
-            return jsonify(project=data, sequence=seq)
+            assets = copy.deepcopy(data['studio']['assets'])
+            settings = copy.deepcopy(data['studio']['settings'])
+            entries, added = [], []
+            try:
+                for number_, scene in enumerate(scenes, 1):
+                    source = str(scene.get('video_path') or scene.get('video_file'))
+                    if not is_allowed_media(source) or not Path(source).is_file():
+                        raise ValueError(f'Scene {number_} video is outside your library or missing. Render it again.')
+                    ext = Path(source).suffix.lower()
+                    if ext not in composition_model.VIDEOS:
+                        raise ValueError(f'Scene {number_} is not a supported video file.')
+                    start = scene.get('start', scene.get('start_time', 0)) or 0
+                    end = scene.get('end', scene.get('end_time', 0)) or 0
+                    duration = composition_model.finite(scene.get('duration') or max(0.0, float(end) - float(start)), 0, 1200)
+                    name = re.sub(r'[\r\n\t]+', ' ', str(scene.get('lyric') or scene.get('name') or f'Scene {number_}')).strip()[:120]
+                    key = 'clip_' + uuid.uuid4().hex[:8]
+                    target = f / ('asset_' + uuid.uuid4().hex + ext)
+                    shutil.copy2(source, target)
+                    added.append(target)
+                    assets[key] = dict(file=target.name, kind='video', name=name)
+                    scene_id = str(scene.get('id') or scene.get('scene_id') or '')[:80]
+                    if scene_id:
+                        assets[key]['scene_id'] = scene_id
+                    entries.append(dict(asset=key, name=name, duration=duration, speed=1, source_start=0))
+                settings['sequence'] = composition_model.validate_sequence(entries)
+                if not composition_model.schedule_sequence(settings['sequence'], assets, settings['end'] - settings['start'] + settings['offset'], settings['loop']):
+                    raise ValueError('The storyboard clips could not be scheduled on the timeline.')
+                assets['background'] = copy.deepcopy(assets[entries[0]['asset']])
+                used = {item['asset'] for item in settings['sequence']}
+                for key in [k for k in assets if k.startswith('clip_') and k not in used]:
+                    assets.pop(key)
+                composition_model.validate(settings, 7200)
+            except Exception:
+                for path in added:
+                    path.unlink(missing_ok=True)
+                raise
+            return launch(data, 'Adding storyboard scenes to the timeline…', composition_work(pid, assets, settings, added))
 
     @bp.post('/api/captions/<pid>/import')
     def import_file(pid):
@@ -1727,10 +2071,8 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             def work(d, f):
                 ffmpeg(['-i', d['source'], '-vn', '-ac', '1', '-ar', '16000', 'speech.wav'], f)
                 try:
-                    model = get_whisper()
-                    if model is None:
-                        raise ValueError('Install the AI Pack in the main app to enable transcription. Manual editing and import work without it.')
-                    result = transcribe(model, str(f / 'speech.wav'), word_timestamps=True, language=language or None)
+                    result = asr.transcribe(str(f / 'speech.wav'), word_timestamps=True, language=language or None)
+                    process.check_cancelled()
                     cues = []
                     for segment in result.get('segments', []):
                         start = max(0, float(segment['start']))
@@ -1779,9 +2121,6 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             if not indices:
                 raise ValueError('No lines need another timing pass.')
             def work(d, f):
-                model = get_whisper()
-                if model is None:
-                    raise ValueError('Install the AI Pack in the Studio to add karaoke timing.')
                 # Decode once, then read bounded cue slices rather than loading a full song into RAM.
                 audio_file = f / 'karaoke.wav'
                 pending = copy.deepcopy(d['cues'])
@@ -1820,12 +2159,20 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                                 if language == 'auto' or language in composition_model.MIXED:
                                     candidates = composition_model.MIXED.get(language)
                                     if not greek and not korean:
-                                        chosen = detect_caption_language(model, samples, candidates)
-                                result = align_caption_words(model, samples, cue['text'], chosen)
+                                        chosen = detect_lyric_language(samples, candidates)
+                                result = asr.align_words(samples, cue['text'], chosen)
                                 process.check_cancelled()
                                 aligned = aligned_cues(result, [cue['text']], cue['start'], d['duration'], cue['end']-cue['start'], recover=True)[0]
                                 words = aligned['words']
                                 notes = [aligned['karaoke']['note']] if aligned.get('karaoke',{}).get('state') == 'review' else []
+                                if (language == 'auto' or language in composition_model.MIXED) and has_mixed_lyric_scripts(cue['text']):
+                                    # Whole-line pass gives run boundaries; each script run is re-aligned in its own language.
+                                    try:
+                                        words, run_languages = refine_script_runs(samples, cue, words, chosen, language, d['duration'])
+                                        notes.append('Aligned per language (' + ' + '.join(dict.fromkeys(run_languages)) + ').')
+                                    except ValueError:
+                                        process.check_cancelled()
+                                        notes.append(f'Per-language alignment was inconsistent; kept the whole-line {chosen} timing.')
                                 if any(w['end']-w['start'] < .06 for w in words):
                                     notes.append('Very short word timings; check against the vocals.')
                                 if any(w['end']-w['start'] > 4.0 for w in words) and not any('stretched' in n for n in notes):
@@ -1878,6 +2225,8 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             return jsonify(d)
 
     def propose_lyrics(data, cues, options):
+        # Re-timed lines keep their identity and translations; unchanged text keeps them approved.
+        lyric_tracks.carry_identity(data['cues'], cues)
         lyric_tracks.ensure_ids(cues,data['id'])
         validate_edit(dict(cues=cues), data['duration'])
         if options.get('review'):
@@ -1938,9 +2287,6 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                 try:
                     ffmpeg(['-ss', str(start), '-i', d['source'], '-t', str(end-start),
                             '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', audio_file.name], f)
-                    model = get_whisper()
-                    if model is None:
-                        raise ValueError('Install the AI Pack in the Studio to enable lyric timing.')
                     with wave.open(str(audio_file), 'rb') as audio:
                         samples = np.frombuffer(audio.readframes(audio.getnframes()), dtype='<i2').astype(np.float32) / 32768
                     if not samples.size or np.max(np.abs(samples)) < .0001:
@@ -1961,23 +2307,23 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                         if type(completed) is not int or not 0 <= completed <= len(cues):
                             raise ValueError('Invalid lyric checkpoint. Start a new sync.')
                     else:
-                        coarse_language=language if language in composition_model.LANGUAGES else detect_caption_language(model,samples[:480000],composition_model.MIXED.get(language))
+                        coarse_language=language if language in composition_model.LANGUAGES else detect_lyric_language(samples,composition_model.MIXED.get(language))
                         try:
-                            result = align_lyrics(model, samples, '\n'.join(lines), coarse_language)
+                            result = asr.align(samples, '\n'.join(lines), coarse_language)
                             cues = aligned_cues(result, lines, start, d['duration'], end-start, recover=True)
-                        except ValueError:
-                            if not options.get('sections'): raise
+                        except (ValueError, AIUnavailable) as exc:
+                            if isinstance(exc, ModelMissing) or not options.get('sections'): raise
                             # Speech timestamps can provide approximate section anchors when forced alignment fails.
                             # These remain explicitly reviewable; an LLM never invents timestamps.
                             process.check_cancelled()
-                            transcript=transcribe(model,samples,word_timestamps=True,language=coarse_language)
+                            transcript=asr.transcribe(samples,word_timestamps=True,language=coarse_language)
                             anchors=[]
                             for seg in transcript.get('segments',[]):
                                 a=max(anchors[-1]['end'] if anchors else 0,float(seg['start']))
                                 b=min(end-start,float(seg['end']))
                                 if b>a and str(seg['text']).strip(): anchors.append(dict(start=a,end=b,text=str(seg['text']).strip(),words=[]))
                             if not anchors: raise ValueError('No reliable vocal sections found. Choose a shorter matching range; saved captions are unchanged.')
-                            cues=match_lyrics_to_transcription(anchors,lines,end-start,language=coarse_language)
+                            cues=match_lyrics_to_transcription(anchors,lines,end-start)
                             cues=composition_model.shift_cues(cues,start,d['duration'])
                             for cue in cues: cue['karaoke']=dict(state='review',note='Recovered section from transcription; verify its placement against the song.')
                         process.check_cancelled()
@@ -2000,8 +2346,8 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                                 if language=='auto' or language in composition_model.MIXED:
                                     if re.search(r'[\u0370-\u03ff\u1f00-\u1fff]',cue['text']): chosen='el'
                                     elif re.search(r'[\u1100-\u11ff\u3130-\u318f\uac00-\ud7af]',cue['text']): chosen='ko'
-                                    else: chosen=detect_caption_language(model,chunk,composition_model.MIXED.get(language))
-                                result = align_caption_words(model, chunk, cue['text'], chosen)
+                                    else: chosen=detect_lyric_language(chunk,composition_model.MIXED.get(language))
+                                result = asr.align_words(chunk, cue['text'], chosen)
                                 process.check_cancelled()
                                 refined = aligned_cues(result, [cue['text']], cue['start'], d['duration'], length, recover=True)[0]
                                 validate_edit(dict(cues=[refined]), d['duration'])
@@ -2056,7 +2402,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             def work(d, f):
                 process.check_cancelled()
                 shifted = composition_model.shift_cues(selected_cues, -start, end-start)
-                matched = match_lyrics_to_transcription(shifted, lines, end-start, language=language)
+                matched = match_lyrics_to_transcription(shifted, lines, end-start)
                 matched = composition_model.shift_cues(matched, start, d['duration'])
                 outside = [c for c in d['cues'] if c['end'] <= start or c['start'] >= end]
                 matched = sorted(outside + matched,key=lambda c:c['start'])
@@ -2091,16 +2437,16 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                 ass = f / (token + '.ass')
                 output = ('check_' if preview else 'captioned_') + token + '.mp4'
                 temporary = f / ('.working_' + output)
-                ass.write_text(ass_text(d), encoding='utf-8-sig')
+                ass.write_text(ass_text(d, skip_unapproved=bool(options.get('skip_unapproved'))), encoding='utf-8-sig')
                 try:
                     fonts = f / 'caption_fonts'
                     fonts.mkdir(exist_ok=True)
                     for filename in BUNDLED_FONTS.values():
-                        shutil.copy2(FONT_DIR / filename, fonts / filename)
+                        sync_file(FONT_DIR / filename, fonts / filename)
                     for filename in CUSTOM_FONTS.values():
                         cf = CUSTOM_FONT_DIR / filename
                         if cf.is_file():
-                            shutil.copy2(cf, fonts / filename)
+                            sync_file(cf, fonts / filename)
                     style_cfg = {**DEFAULT_STYLE, **d.get('style', {})}
                     baked = d.get('composition') if isinstance(d.get('composition'), dict) else {}
                     fx_already_baked = baked.get('fx_baked', True)
@@ -2117,9 +2463,17 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                         scale_vf = 'scale=trunc(iw/2)*2:trunc(ih/2)*2'
                     if q_spec.get('fps'):
                         scale_vf += f",fps={q_spec['fps']}"
-                    vf_chain = [*composition_model.video_fx_chain(render_fx), f'ass={ass.name}:fontsdir=caption_fonts', scale_vf]
+                    clip = min(5, d['duration']-start) if preview else d['duration']
+                    subtitles = f'ass={ass.name}:fontsdir=caption_fonts'
+                    vf_chain = [*composition_model.video_fx_chain(render_fx), subtitles, scale_vf]
+                    seek = []
+                    if preview:
+                        # Seek on the input (fast), shift frames back to source time for the
+                        # subtitle filter, then restart the clip at zero.
+                        seek = ['-ss', f'{start:.3f}', '-t', f'{clip:.3f}']
+                        vf_chain = [f'setpts=PTS+{start:.3f}/TB', *vf_chain[:-1], 'setpts=PTS-STARTPTS', scale_vf]
                     af_chain = composition_model.audio_fx_chain(render_fx)
-                    args = ['-i', d['source'], '-map', '0:v:0', '-map', '0:a:0?', '-vf', ','.join(vf_chain)]
+                    args = [*seek, '-i', d['source'], '-map', '0:v:0', '-map', '0:a:0?', '-vf', ','.join(vf_chain)]
                     if af_chain:
                         args += ['-af', ','.join(af_chain)]
                     if d.get('composition') and d.get('studio'):
@@ -2128,6 +2482,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                         for key in ('video_filter', 'vignette', 'film_grain', 'sharpen', 'chromatic',
                                     'noise_cancel', 'voice_isolation', 'audio_effect'):
                             studio['settings'][key] = style_cfg[key]
+                        studio['settings']['visualizer'] = False  # Drawn once, by the ASS caption layer.
                         has_audio = False
                         for asset in studio['assets'].values():
                             if asset.get('kind') == 'video' and 'has_audio' not in asset:
@@ -2142,21 +2497,30 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                         # Keep inputs, graph and maps; apply the chosen encoder below.
                         args = composed[:composed.index('-c:v')]
                         gi = args.index('-filter_complex')+1
-                        args[gi] = args[gi].replace('[out]', '[composed]') + f';[composed]ass={ass.name}:fontsdir=caption_fonts,{scale_vf}[out]'
                         if preview:
-                            ti = args.index('-t', args.index('-filter_complex'))
-                            args[ti+1] = str(min(5,d['duration']-start))
-                    if preview:
-                        args += ['-ss', str(start), '-t', str(min(5, d['duration']-start))]
+                            # The composed timeline starts at zero; trim after the subtitles so caption
+                            # timing stays exact, and stop decoding at the end of the check window.
+                            window = f'start={start:.3f}:end={start+clip:.3f}'
+                            args[gi] = (args[gi].replace('[out]', '[composed]') +
+                                        f';[composed]{subtitles},trim={window},setpts=PTS-STARTPTS,{scale_vf}[out]'
+                                        f';[aout]atrim={window},asetpts=PTS-STARTPTS[aclip]')
+                            args[args.index('[aout]')] = '[aclip]'
+                            ti = args.index('-t', gi)
+                            args[ti+1] = f'{clip:.3f}'
+                        else:
+                            args[gi] = args[gi].replace('[out]', '[composed]') + f';[composed]{subtitles},{scale_vf}[out]'
                     try:
                         from assets import hwaccel
                         enc_args = hwaccel.get_video_encoder_args(codec='h264', quality=quality, force_cpu=bool(options.get('force_cpu')))
                     except Exception:
                         enc_args = ['-c:v', 'libx264', '-preset', q_spec['preset'], '-crf', q_spec['crf']]
-                    completed_encoder = ffmpeg([*args, *enc_args, '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', q_spec['audio_bitrate'], '-movflags', '+faststart', temporary.name], f)
+                    label = 'Rendering five-second check…' if preview else 'Exporting captioned video…'
+                    completed_encoder = ffmpeg([*args, *enc_args, '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', q_spec['audio_bitrate'], '-movflags', '+faststart', temporary.name], f,
+                                               progress=progress_reporter(d, label, clip))
                     os.replace(temporary, f / output)
                     d['exports'].append(output)
                     d['last_render'] = output
+                    prune_renders(d, f)
                     d['_completion_notice'] = f'Export ready ({completed_encoder or "CPU"}).'
                 finally:
                     ass.unlink(missing_ok=True)
@@ -2167,28 +2531,23 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
     def caption_layout(pid):
         data=read(pid);incoming=request.get_json() or {}
         cleaned=validate_edit(dict(cues=[incoming['cue']],style=incoming.get('style',data['style'])),data['duration'])
-        return jsonify(rows=layout_rows(cleaned['cues'][0],{**cleaned['style'],**cleaned['cues'][0].get('style_override',{})},data['width'],data['height']))
+        cue=cleaned['cues'][0]
+        return jsonify(rows=layout_rows(cue,{**cleaned['style'],**cue.get('style_override',{})},data['width'],data['height'],
+                                        editor_preview=incoming.get('editor_preview') is True))
+
+    @bp.get('/api/captions/<pid>/translation-status')
+    def translation_status(pid):
+        """Export guard: lines that a bilingual/translation export would leave out."""
+        data=read(pid)
+        language=request.args.get('language') or data['style'].get('translation_language','en')
+        if language not in composition_model.LANGUAGES:
+            raise ValueError('Choose a supported translation language.')
+        return jsonify(lyric_tracks.translation_report(data['cues'],language,data['style'].get('hide_duplicate_translation',True)))
 
     @bp.get('/api/captions/translation-models')
     def translation_models():
-        return jsonify(models=lyric_translation.models())
-
-    @bp.post('/api/captions/<pid>/translation-setup')
-    def setup_translation_model(pid):
-        with lock:
-            data = read(pid)
-            options = request.get_json() or {}
-            if data['state'] == 'busy' or options.get('revision') != data['revision']:
-                return jsonify(error='Project changed or is processing. Save and reload first.'), 409
-            lyric_translation.require_local_runtime()
-            def work(d, f):
-                def progress(message):
-                    d['status'] = message
-                    write(d)
-                lyric_translation.install_model(progress)
-                d.setdefault('translation_settings', {})['model'] = 'qwen3-4b-local'
-                d['_completion_notice'] = 'Translation model ready. Choose Translate unlocked lines to create a reviewable proposal.'
-            return launch(data, 'Setting up local translation…', work)
+        """Installed local models with role badges, plus the automatic choice and setup item."""
+        return jsonify(translation_model_catalog())
 
     @bp.post('/api/captions/<pid>/translate')
     def translate_project(pid):
@@ -2203,8 +2562,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             if selected is not None and (not isinstance(selected,list) or any(i not in {c['id'] for c in data['cues']} for i in selected)):
                 raise ValueError('Choose valid lyric lines.')
             settings = data.get('translation_settings',{})
-            model = settings.get('model','')
-            if not model: raise ValueError('Select an installed local model, or enter translations manually.')
+            model = translation_model(settings)
             def work(d,f):
                 originals = d['cues']
                 pending = [c for c in originals if (selected is None or c['id'] in selected)
@@ -2220,13 +2578,14 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                     done = saved['done']
                 # Carry user-approved chorus choices into identical repeated lines.
                 chorus = {c['text']:t for c in originals if (t:=c.get('translations',{}).get(language))
-                          and t.get('status')=='approved' and t.get('source')==lyric_tracks.source_hash(c['text'])}
+                          and t.get('status')=='approved' and lyric_tracks.matches_source(t.get('source'),c['text'])}
                 for c in pending:
                     if c['id'] in done:
                         chorus.setdefault(c['text'], done[c['id']])
-                for offset in range(0,len(pending),8):
+                song = song_context(originals)
+                for offset in range(0,len(pending),TRANSLATION_GROUP):
                     process.check_cancelled()
-                    group = [c for c in pending[offset:offset+8] if c['id'] not in done]
+                    group = [c for c in pending[offset:offset+TRANSLATION_GROUP] if c['id'] not in done]
                     request_lines = []
                     representatives = {}
                     for c in group:
@@ -2237,11 +2596,11 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                             request_lines.append(dict(id=c['id'],text=c['text']))
                     if request_lines:
                         first = originals.index(group[0]);last = originals.index(group[-1])
-                        context = '\n'.join(c['text'] for c in originals[max(0,first-3):last+4])[:12000]
-                        d['status']=f'Translating: {len(done)}/{len(pending)} lines (translating lines {offset+1}–{min(offset+8,len(pending))}…)'
+                        context = song or '\n'.join(c['text'] for c in originals[max(0,first-3):last+4])[:SONG_CONTEXT_CHARS]
+                        d['status']=f'Translating: {len(done)}/{len(pending)} lines (translating lines {offset+1}–{min(offset+TRANSLATION_GROUP,len(pending))}…)'
                         write(d)
-                        answer = lyric_translation.translate(request_lines,context,composition_model.LANGUAGES[language],model,
-                                                              settings.get('notes',''),settings.get('glossary',''))
+                        answer = ai_translate.translate_lines(request_lines, language, context=context, model=model,
+                                                              notes=settings.get('notes',''), glossary=settings.get('glossary',''))
                         process.check_cancelled()
                         done.update(answer)
                         for text, cue_id in representatives.items():
@@ -2251,11 +2610,31 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                     temporary=path.with_suffix('.tmp')
                     temporary.write_text(json.dumps(dict(signature=signature,done=done),ensure_ascii=False),encoding='utf-8')
                     os.replace(temporary,path)
-                    d['status']=f'Translating: {min(offset+8,len(pending))}/{len(pending)} lines. Saved translations are unchanged.'
+                    d['status']=f'Translating: {min(offset+TRANSLATION_GROUP,len(pending))}/{len(pending)} lines. Saved translations are unchanged.'
                     write(d)
                 d['translation_proposal']=dict(id=uuid.uuid4().hex,signature=lyric_signature(d),language=language,lines=done)
                 d['_completion_notice']='Translation ready to review. Original lyrics and accepted translations are unchanged.'
             return launch(data,'Translating locally…',work)
+
+    @bp.post('/api/captions/<pid>/translate-ab')
+    def translate_ab(pid):
+        """Translator vs Helper output for one line, side by side; nothing is saved until the user picks."""
+        data = read(pid)
+        options = request.get_json() or {}
+        language = options.get('language') or data['style'].get('translation_language', 'en')
+        if language not in composition_model.LANGUAGES:
+            raise ValueError('Choose a supported target language.')
+        cues = data['cues']
+        index = next((i for i, c in enumerate(cues) if c['id'] == options.get('cue_id')), None)
+        if index is None:
+            raise ValueError('Choose a lyric line to compare.')
+        settings = data.get('translation_settings', {})
+        result = ai_translate.compare_line(
+            cues[index]['text'], language, model=translation_model(settings),
+            before=cues[index - 1]['text'] if index > 0 else '',
+            after=cues[index + 1]['text'] if index + 1 < len(cues) else '',
+            context=song_context(cues), notes=settings.get('notes', ''), glossary=settings.get('glossary', ''))
+        return jsonify(cue_id=cues[index]['id'], language=language, source=cues[index]['text'], **result)
 
     @bp.post('/api/captions/<pid>/translation-proposal')
     def apply_translation(pid):
@@ -2274,8 +2653,8 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                         entry=edits[c['id']]
                         if not isinstance(entry,dict): raise ValueError('Invalid translation.')
                         if c.get('translations',{}).get(language,{}).get('locked'): continue
-                        c.setdefault('translations',{})[language]=dict(text=entry.get('text',''),source=lyric_tracks.source_hash(c['text']),
-                            status='approved',locked=bool(entry.get('locked',False)),note=entry.get('note',''))
+                        c.setdefault('translations',{})[language]=lyric_tracks.make_translation(
+                            str(entry.get('text','')),c['text'],'approved',entry.get('locked',False),entry.get('note',''))
                 updated=validate_edit(dict(cues=updated),d['duration'])['cues']
                 d['karaoke_backup']=dict(cues=copy.deepcopy(d['cues']),timing=d['timing'])
                 d['cues']=updated
@@ -2285,12 +2664,15 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
     @bp.get('/api/captions/<pid>/ass')
     def export_ass(pid):
         data=read(pid)
-        return send_file(io.BytesIO(ass_text(data).encode('utf-8-sig')),mimetype='text/plain',as_attachment=True,download_name='captions.ass')
+        script=ass_text(data,skip_unapproved=request.args.get('skip_missing')=='1')
+        return send_file(io.BytesIO(script.encode('utf-8-sig')),mimetype='text/plain',as_attachment=True,download_name='captions.ass')
 
     @bp.get('/api/captions/<pid>/srt')
     def export_srt(pid):
         data = read(pid)
-        cues=lyric_tracks.export_cues(data['cues'],request.args.get('language','en'),request.args.get('mode','original'))
+        cues=lyric_tracks.export_cues(data['cues'],request.args.get('language','en'),request.args.get('mode','original'),
+                                      data['style'].get('hide_duplicate_translation',True),
+                                      skip_missing=request.args.get('skip_missing')=='1')
         return send_file(io.BytesIO(srt_text(cues).encode('utf-8-sig')), mimetype='application/x-subrip', as_attachment=True, download_name='captions.srt')
 
     @bp.get('/api/captions/<pid>/media/<name>')
@@ -2463,17 +2845,17 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
         duration = float(payload.get('duration', 10.0))
         duration = max(2.0, min(60.0, duration))
 
+        use_character = payload.get('use_character') is True  # backdrops never include the persona by default
+        from ai_core.errors import AIUnavailable
+        from assets import ai_video_engine
         process.begin_job()
         job_started()
         try:
-            from assets import ai_video_engine
-            # Synthesize 9:16 atmospheric backdrop without requiring character references
-            res = ai_video_engine.render_keyframe_image(
-                prompt=prompt,
-                character_id=None,
-                scene_number=1,
-                custom_reference=None
-            )
+            try:
+                res = ai_video_engine.render_keyframe(prompt, use_character=use_character,
+                                                      character_id=payload.get('character_id'), width=768, height=1344)
+            except AIUnavailable as exc:
+                return jsonify(exc.to_dict()), 424
             raw_img_path = Path(res['path'])
             if not raw_img_path.is_file():
                 raise RuntimeError("Failed to generate base backdrop image.")
@@ -2481,7 +2863,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             stock_dir.mkdir(parents=True, exist_ok=True)
 
             if motion:
-                # Convert the static backdrop into a cinematic slow push-in 1080x1920 MP4 loop
+                # Camera push-in over the generated still (FFmpeg, not AI motion; labelled as such).
                 out_name = f"ai_loop_{uuid.uuid4().hex[:8]}.mp4"
                 dest_file = stock_dir / out_name
                 fps = 30
@@ -2500,20 +2882,20 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                     '-c:v', 'libx264', '-preset', 'fast', '-crf', '19', '-pix_fmt', 'yuv420p',
                     str(dest_file)
                 ]
-                res_proc = subprocess.run(cmd, capture_output=True)
+                res_proc = process.run(cmd, capture_output=True)
                 if res_proc.returncode != 0 or not dest_file.is_file():
                     raise RuntimeError("Failed to generate motion backdrop loop: " + res_proc.stderr.decode('utf-8', errors='ignore')[-300:])
                 kind = 'video'
             else:
                 out_name = f"ai_backdrop_{uuid.uuid4().hex[:8]}.png"
                 dest_file = stock_dir / out_name
-                shutil.copy2(str(raw_img_path), str(dest_file))
+                shutil.move(str(raw_img_path), str(dest_file))
                 kind = 'image'
 
             prov = {
                 "provider": "ai_backdrop",
-                "attribution": f"Autonomous AI Generation ({style if style != 'auto' else 'Custom'})",
-                "license": "Royalty Free / Local Synthesis"
+                "attribution": "Generated locally with FLUX.1" + (" (camera push-in, no AI motion)" if motion else ""),
+                "license": "Your own generation (FLUX.1 schnell, Apache-2.0)"
             }
             refresh_gallery()
 
@@ -2527,7 +2909,8 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                 "kind": kind,
                 "url": web_url,
                 "provenance": prov,
-                "message": f"AI {kind.capitalize()} backdrop synthesized successfully!"
+                "workflow": res["workflow"],
+                "ai_motion": False,
             })
         finally:
             process.end_job()

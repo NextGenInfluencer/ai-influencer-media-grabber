@@ -17,6 +17,7 @@ import imageio_ffmpeg
 from PIL import Image, ImageDraw, ImageEnhance, ImageFont, ImageOps
 
 from media_safety import safe_media_name
+from storage_utils import atomic_write_json
 
 FONT_DIR = Path(__file__).resolve().parent / 'static' / 'fonts'
 CAROUSEL_PRESETS = {
@@ -213,9 +214,7 @@ def register_reference_prep(app, save_dir, job_started, job_finished, refresh_ga
 
     def save_project(folder, data):
         with lock:
-            temporary = folder / (uuid.uuid4().hex + '.json.tmp')
-            temporary.write_text(json.dumps(data, indent=2), encoding='utf-8')
-            os.replace(temporary, folder / 'project.json')
+            atomic_write_json(folder / 'project.json', data, ensure_ascii=True)
 
     def run_ffmpeg(args):
         result = subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), '-y', *args], capture_output=True, text=True, encoding='utf-8', errors='replace')
