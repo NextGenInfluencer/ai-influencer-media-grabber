@@ -1,5 +1,9 @@
 # Changelog
 
+## [v5.0.1] - 2026-11-03
+- AI Setup: fixed stray "null" text next to model names in the checklist.
+- AI Setup: the vocal isolation model is no longer pre-selected in profile bundles until its runtime library ships in an AI pack (it stays installable from the catalog).
+
 ## [v5.0.0] - 2026-11-03
 
 **Full installer required** (AI dependencies changed). User media, history, characters, caption projects and credentials are preserved; caption projects get a `pre-v5-project.json` backup before the one-time translation repair.
