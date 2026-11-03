@@ -464,6 +464,66 @@ class TestV4Routes(unittest.TestCase):
             except Exception:
                 pass
 
+    def test_gallery_categorization_downloads_vs_studio(self):
+        """Verify /api/gallery classifies studio creations vs media downloads."""
+        from app_local import DEFAULT_SAVE_DIR, invalidate_gallery_cache
+        from pathlib import Path
+
+        storyboard_dir = Path(DEFAULT_SAVE_DIR) / 'Storyboard Images'
+        storyboard_dir.mkdir(parents=True, exist_ok=True)
+        kf_file = storyboard_dir / 'keyframe_scene_2_test999.png'
+        kf_file.write_bytes(b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82')
+
+        ig_dir = Path(DEFAULT_SAVE_DIR) / 'Instagram'
+        ig_dir.mkdir(parents=True, exist_ok=True)
+        ig_file = ig_dir / 'download_test999.mp4'
+        ig_file.write_bytes(b'fake-video-content')
+
+        invalidate_gallery_cache()
+        try:
+            res = self.client.get('/api/gallery', headers=self.headers)
+            self.assertEqual(res.status_code, 200)
+            items = res.json
+
+            kf_item = next((i for i in items if i['name'] == 'keyframe_scene_2_test999.png'), None)
+            self.assertIsNotNone(kf_item)
+            self.assertEqual(kf_item['section'], 'studio')
+            self.assertEqual(kf_item['studio_type'], 'keyframe')
+            self.assertEqual(kf_item['scene_number'], 2)
+
+            ig_item = next((i for i in items if i['name'] == 'download_test999.mp4'), None)
+            self.assertIsNotNone(ig_item)
+            self.assertEqual(ig_item['section'], 'downloads')
+        finally:
+            kf_file.unlink(missing_ok=True)
+            ig_file.unlink(missing_ok=True)
+            invalidate_gallery_cache()
+
+    def test_instagram_profile_detection_and_extraction(self):
+        """Verify Instagram profile URL recognition and metadata extraction."""
+        from download_support import is_instagram_profile_url, extract_instagram_username, extract_instagram_profile
+        from unittest.mock import patch
+
+        self.assertTrue(is_instagram_profile_url('https://www.instagram.com/j1aa11/'))
+        self.assertTrue(is_instagram_profile_url('https://www.instagram.com/j1aa11/?hl=en'))
+        self.assertTrue(is_instagram_profile_url('@_j1aa11'))
+        self.assertTrue(is_instagram_profile_url('https://www.instagram.com/j1aa11/reels/'))
+        self.assertFalse(is_instagram_profile_url('https://www.instagram.com/p/De6ogMclFBy/'))
+        self.assertFalse(is_instagram_profile_url('https://www.instagram.com/reel/De6ogMclFBy/'))
+        self.assertFalse(is_instagram_profile_url('https://www.youtube.com/watch?v=123'))
+
+        self.assertEqual(extract_instagram_username('https://www.instagram.com/j1aa11/'), 'j1aa11')
+        self.assertEqual(extract_instagram_username('@_j1aa11'), '_j1aa11')
+        self.assertEqual(extract_instagram_username('https://www.instagram.com/j1aa11/reels/'), 'j1aa11')
+
+        # Test extraction returns valid profile structure
+        with patch('yt_dlp.YoutubeDL'):
+            prof = extract_instagram_profile('https://www.instagram.com/j1aa11/')
+            self.assertTrue(prof.get('is_profile'))
+            self.assertEqual(prof.get('username'), 'j1aa11')
+            self.assertEqual(prof.get('platform'), 'instagram')
+            self.assertIn('posts', prof)
+
 
 if __name__ == '__main__':
     unittest.main()

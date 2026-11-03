@@ -1073,22 +1073,33 @@ https://www.youtube.com/watch?v=..."></textarea>
 
             <!-- SECTION 4: GALLERY -->
             <div id="section-gallery" class="hidden flex-1 overflow-y-auto space-y-4">
-                <div class="sticky top-0 bg-[#0c0c0e] z-10 py-2 border-b border-zinc-800 flex items-center justify-between">
-                    <div class="flex items-center space-x-2.5">
-                        <span class="text-xs font-bold text-zinc-300 uppercase tracking-wider">Output Gallery</span>
-                        <button id="galleryFavoritesBtn" onclick="toggleFavoritesFilter()" class="px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-rose-400 text-[11px] font-medium transition flex items-center space-x-1.5 cursor-pointer shadow-sm" title="Show only liked / favorited media">
+                <div class="sticky top-0 bg-[#0c0c0e]/95 backdrop-blur-xl z-10 py-2.5 border-b border-zinc-800/80 flex flex-wrap items-center justify-between gap-3">
+                    <div class="flex items-center space-x-2">
+                        <div class="flex items-center p-0.5 rounded-xl bg-zinc-900 border border-white/10 shadow-inner">
+                            <button id="galleryTabDownloads" type="button" onclick="switchGallerySection('downloads')" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-2 bg-white/10 text-white shadow-sm cursor-pointer">
+                                <i class="fa-solid fa-cloud-arrow-down text-xs text-blue-400"></i>
+                                <span>Media Downloads</span>
+                                <span id="galleryDownloadsBadge" class="px-1.5 py-0.2 rounded-md text-[10px] bg-white/10 text-zinc-300 font-mono">0</span>
+                            </button>
+                            <button id="galleryTabStudio" type="button" onclick="switchGallerySection('studio')" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-2 text-zinc-400 hover:text-white cursor-pointer">
+                                <i class="fa-solid fa-clapperboard text-xs text-purple-400"></i>
+                                <span>AI Studio & Storyboards</span>
+                                <span id="galleryStudioBadge" class="px-1.5 py-0.2 rounded-md text-[10px] bg-purple-500/20 text-purple-300 font-mono">0</span>
+                            </button>
+                        </div>
+                        <button id="galleryFavoritesBtn" onclick="toggleFavoritesFilter()" class="px-2.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-rose-400 text-[11px] font-medium transition flex items-center space-x-1.5 cursor-pointer shadow-sm" title="Show only liked / favorited media">
                             <i id="galleryFavoritesIcon" class="fa-regular fa-heart text-rose-400 text-xs"></i>
                             <span id="galleryFavoritesCount">Liked (0)</span>
                         </button>
                     </div>
                     <div class="flex items-center space-x-2">
-                        <input type="text" id="gallerySearch" placeholder="Search gallery..." class="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white focus:outline-none focus:border-pink-500 w-48" oninput="loadGallery()">
-                        <select id="galleryFilter" class="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white focus:outline-none" onchange="loadGallery()">
-                            <option value="All">All Media</option>
+                        <input type="text" id="gallerySearch" placeholder="Search downloads..." class="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white focus:outline-none focus:border-pink-500 w-48" oninput="loadGallery()">
+                        <select id="galleryFilter" class="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white focus:outline-none cursor-pointer" onchange="loadGallery()">
+                            <option value="All">All Downloads</option>
                             <option value="Favorites">❤️ Liked Only</option>
-                            <option value="YouTube">YouTube</option>
                             <option value="Instagram">Instagram</option>
                             <option value="TikTok">TikTok</option>
+                            <option value="YouTube">YouTube</option>
                             <option value="Twitter">Twitter</option>
                             <option value="Conversions">Conversions / Edits</option>
                             <option value="AI Cleaned">AI Cleaned</option>
@@ -1318,6 +1329,38 @@ https://www.youtube.com/watch?v=..."></textarea>
                         <i class="fa-solid fa-trash text-xs"></i>
                     </button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Instagram Profile Post Picker Modal -->
+    <div id="profilePostPickerModal" style="display:none; position:fixed; inset:0; z-index:99999; background:rgba(0,0,0,0.85); backdrop-filter:blur(24px); align-items:center; justify-content:center; flex-direction:column;" onclick="closeProfilePostPicker()">
+        <div class="relative w-full max-w-4xl max-h-[88vh] flex flex-col bg-[#101116]/98 border border-white/10 rounded-2xl shadow-2xl overflow-hidden m-4 backdrop-blur-2xl" onclick="event.stopPropagation()">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-white/[0.08] bg-white/[0.02]">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-pink-500 to-purple-600 flex items-center justify-center text-white shadow-md">
+                        <i class="fa-brands fa-instagram text-lg"></i>
+                    </div>
+                    <div>
+                        <h3 id="profilePickerTitle" class="text-sm font-bold text-white">Select Posts to Download</h3>
+                        <p id="profilePickerSubtitle" class="text-xs text-zinc-400">Choose the specific photos, carousels, or reels to download</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button type="button" onclick="toggleSelectAllProfilePosts(true)" class="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-zinc-300 transition cursor-pointer">Select All</button>
+                    <button type="button" onclick="toggleSelectAllProfilePosts(false)" class="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-zinc-300 transition cursor-pointer">Clear All</button>
+                    <button type="button" onclick="closeProfilePostPicker()" class="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white flex items-center justify-center transition cursor-pointer">
+                        <i class="fa-solid fa-xmark text-sm"></i>
+                    </button>
+                </div>
+            </div>
+            <div id="profilePickerGrid" class="flex-1 overflow-y-auto p-5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5"></div>
+            <div class="flex items-center justify-between px-6 py-3.5 border-t border-white/[0.08] bg-white/[0.02]">
+                <div id="profilePickerCount" class="text-xs font-medium text-zinc-400">0 posts selected</div>
+                <button id="profilePickerConfirmBtn" type="button" onclick="confirmProfileSelection()" class="px-5 py-2 rounded-xl apple-btn-primary text-xs font-bold shadow-lg shadow-pink-500/25 transition flex items-center space-x-2 cursor-pointer">
+                    <i class="fa-solid fa-cloud-arrow-down text-xs"></i>
+                    <span>Confirm & Select</span>
+                </button>
             </div>
         </div>
     </div>
@@ -1774,6 +1817,49 @@ https://www.youtube.com/watch?v=..."></textarea>
             }
         }
 
+        window.activeGallerySection = 'downloads';
+
+        function switchGallerySection(sec) {
+            window.activeGallerySection = sec;
+            const btnDown = document.getElementById('galleryTabDownloads');
+            const btnStud = document.getElementById('galleryTabStudio');
+            const search = document.getElementById('gallerySearch');
+            const filter = document.getElementById('galleryFilter');
+
+            if (sec === 'studio') {
+                if (btnDown) btnDown.className = 'px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-2 text-zinc-400 hover:text-white cursor-pointer';
+                if (btnStud) btnStud.className = 'px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-2 bg-gradient-to-r from-purple-600/30 to-pink-600/30 text-white border border-purple-500/40 shadow-sm cursor-pointer';
+                if (search) search.placeholder = 'Search studio scenes, prompts...';
+                if (filter) {
+                    filter.innerHTML = `
+                        <option value="All">All Studio Creations</option>
+                        <option value="Favorites">❤️ Liked Only</option>
+                        <option value="keyframe">Keyframe Images</option>
+                        <option value="scene_video">Scene Videos</option>
+                        <option value="motion_swap">Motion Swaps</option>
+                    `;
+                }
+            } else {
+                if (btnDown) btnDown.className = 'px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-2 bg-white/10 text-white shadow-sm cursor-pointer';
+                if (btnStud) btnStud.className = 'px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-2 text-zinc-400 hover:text-white cursor-pointer';
+                if (search) search.placeholder = 'Search downloads...';
+                if (filter) {
+                    filter.innerHTML = `
+                        <option value="All">All Downloads</option>
+                        <option value="Favorites">❤️ Liked Only</option>
+                        <option value="Instagram">Instagram</option>
+                        <option value="TikTok">TikTok</option>
+                        <option value="YouTube">YouTube</option>
+                        <option value="Twitter">Twitter</option>
+                        <option value="Conversions">Conversions / Edits</option>
+                        <option value="AI Cleaned">AI Cleaned</option>
+                        <option value="Other">Other</option>
+                    `;
+                }
+            }
+            loadGallery();
+        }
+
         async function loadGallery() {
             const filter = document.getElementById('galleryFilter')?.value || 'All';
             const query = (document.getElementById('gallerySearch')?.value || '').toLowerCase();
@@ -1797,16 +1883,30 @@ https://www.youtube.com/watch?v=..."></textarea>
                 const res = await fetch('/api/gallery');
                 const data = await res.json();
                 
-                // Compute total liked
+                const sec = window.activeGallerySection || 'downloads';
+                const totalDownloads = data.filter(item => (item.section || 'downloads') !== 'studio').length;
+                const totalStudio = data.filter(item => (item.section || 'downloads') === 'studio').length;
                 const totalLiked = data.filter(item => item.liked).length;
+
+                const downBadge = document.getElementById('galleryDownloadsBadge');
+                const studBadge = document.getElementById('galleryStudioBadge');
                 const countEl = document.getElementById('galleryFavoritesCount');
+
+                if (downBadge) downBadge.textContent = totalDownloads;
+                if (studBadge) studBadge.textContent = totalStudio;
                 if (countEl) countEl.textContent = `Liked (${totalLiked})`;
 
                 const filtered = data.filter(item => {
+                    const itemSection = item.section || 'downloads';
+                    if (sec === 'studio' && itemSection !== 'studio') return false;
+                    if (sec === 'downloads' && itemSection === 'studio') return false;
+
                     if (filter === 'Favorites') {
                         if (!item.liked) return false;
-                    } else if (filter !== 'All' && item.folder !== filter) {
-                        return false;
+                    } else if (sec === 'studio') {
+                        if (filter !== 'All' && item.studio_type !== filter) return false;
+                    } else {
+                        if (filter !== 'All' && item.folder !== filter) return false;
                     }
                     if (query && !item.name.toLowerCase().includes(query)) return false;
                     return true;
@@ -1839,6 +1939,24 @@ https://www.youtube.com/watch?v=..."></textarea>
                                 </div>
                                 <h4 class="text-xs font-bold text-zinc-300">No media matches "${escapeHtml(query)}"</h4>
                                 <button type="button" onclick="document.getElementById('gallerySearch').value=''; loadGallery();" class="text-xs text-pink-400 hover:text-pink-300 hover:underline">Clear Search Filter</button>
+                            </div>
+                        `;
+                    } else if (sec === 'studio') {
+                        grid.innerHTML = `
+                            <div class="col-span-full py-14 px-6 text-center flex flex-col items-center justify-center space-y-3 rounded-2xl bg-gradient-to-b from-purple-500/10 via-zinc-900/40 to-transparent border border-purple-500/20 my-2 shadow-2xl backdrop-blur-xl">
+                                <div class="w-14 h-14 rounded-2xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400 shadow-inner">
+                                    <i class="fa-solid fa-clapperboard text-2xl"></i>
+                                </div>
+                                <div class="max-w-md space-y-1">
+                                    <h4 class="text-sm font-bold text-zinc-200">AI Studio Library is Empty</h4>
+                                    <p class="text-xs text-zinc-400 leading-relaxed">Synthesize storyboard keyframes, generate Wan motion scenes, or render character swaps in the AI Video Studio to view and organize them here.</p>
+                                </div>
+                                <div class="pt-2">
+                                    <a href="/video-studio" class="px-4 py-2 rounded-xl apple-btn-primary text-xs font-semibold shadow-lg shadow-purple-500/25 transition inline-flex items-center space-x-1.5 cursor-pointer">
+                                        <i class="fa-solid fa-film text-xs"></i>
+                                        <span>Open AI Video Studio</span>
+                                    </a>
+                                </div>
                             </div>
                         `;
                     } else {
@@ -1917,7 +2035,30 @@ https://www.youtube.com/watch?v=..."></textarea>
                     sizeBadge.textContent = formatBytes(item.size);
                     topBar.appendChild(sizeBadge);
                     
-                    if (item.uploader) {
+                    if (item.section === 'studio') {
+                        const typeBadge = document.createElement('span');
+                        if (item.studio_type === 'keyframe') {
+                            typeBadge.className = 'bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider';
+                            typeBadge.textContent = 'Keyframe';
+                        } else if (item.studio_type === 'scene_video') {
+                            typeBadge.className = 'bg-blue-500/20 text-blue-300 border border-blue-500/30 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider';
+                            typeBadge.textContent = 'Scene Video';
+                        } else if (item.studio_type === 'motion_swap') {
+                            typeBadge.className = 'bg-pink-500/20 text-pink-300 border border-pink-500/30 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider';
+                            typeBadge.textContent = 'Motion Swap';
+                        } else {
+                            typeBadge.className = 'bg-zinc-800 text-zinc-300 border border-zinc-700 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider';
+                            typeBadge.textContent = 'Studio';
+                        }
+                        topBar.appendChild(typeBadge);
+
+                        if (item.scene_number) {
+                            const sceneBadge = document.createElement('span');
+                            sceneBadge.className = 'bg-white/10 text-zinc-200 border border-white/10 text-[9px] px-1.5 py-0.5 rounded font-bold';
+                            sceneBadge.textContent = `Scene ${item.scene_number}`;
+                            topBar.appendChild(sceneBadge);
+                        }
+                    } else if (item.uploader) {
                         const authorBadge = document.createElement('span');
                         authorBadge.className = 'bg-pink-500/20 text-pink-300 border border-pink-500/30 text-[9px] px-1.5 py-0.5 rounded font-bold truncate max-w-[100px]';
                         authorBadge.textContent = `@${item.uploader}`;
@@ -2286,6 +2427,55 @@ https://www.youtube.com/watch?v=..."></textarea>
                             return;
                         }
                         
+                        if (data.is_profile) {
+                            window.currentProfileData = window.currentProfileData || {};
+                            window.currentProfileData[previewId] = data;
+                            window.profileDownloadModes = window.profileDownloadModes || {};
+                            window.profileDownloadModes[url] = 'all';
+
+                            actualCard.className = 'p-4 rounded-2xl bg-gradient-to-r from-pink-500/10 via-purple-500/10 to-zinc-900 border border-pink-500/30 shadow-xl transition-all flex flex-col space-y-3';
+                            actualCard.innerHTML = `
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center space-x-3 min-w-0">
+                                        <div class="w-12 h-12 rounded-full ring-2 ring-pink-500/50 overflow-hidden shrink-0 bg-zinc-900">
+                                            ${data.thumbnail ? `<img src="${escapeHtml(safeWebUrl(data.thumbnail))}" class="w-full h-full object-cover" />` : `<div class="w-full h-full flex items-center justify-center text-pink-400 font-bold text-sm">@</div>`}
+                                        </div>
+                                        <div class="min-w-0">
+                                            <div class="flex items-center space-x-2">
+                                                <span class="text-xs font-bold text-white truncate">@${escapeHtml(data.username || data.uploader)}</span>
+                                                <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-pink-500/20 text-pink-300 border border-pink-500/30">Instagram Profile</span>
+                                            </div>
+                                            <div class="text-[10px] text-zinc-400 mt-0.5">${data.post_count ? `Found ${data.post_count} recent posts available for download` : 'Batch download full profile'}</div>
+                                        </div>
+                                    </div>
+                                    <button onclick="document.getElementById('${previewId}').remove()" class="text-zinc-500 hover:text-zinc-300 transition p-1 cursor-pointer">
+                                        <i class="fa-solid fa-xmark text-xs"></i>
+                                    </button>
+                                </div>
+                                <div class="flex flex-wrap items-center gap-2 pt-1 border-t border-white/5">
+                                    <button type="button" id="btn-mode-all-${previewId}" onclick="setProfileDownloadMode('${previewId}', '${escapeHtml(url)}', 'all')" class="px-3 py-1.5 rounded-xl bg-pink-500 text-white font-semibold text-xs shadow-md transition flex items-center space-x-1.5 cursor-pointer">
+                                        <i class="fa-solid fa-cloud-arrow-down text-xs"></i>
+                                        <span>Download All</span>
+                                    </button>
+                                    <button type="button" id="btn-mode-photos-${previewId}" onclick="setProfileDownloadMode('${previewId}', '${escapeHtml(url)}', 'photos')" class="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-medium text-xs border border-white/10 transition flex items-center space-x-1.5 cursor-pointer">
+                                        <i class="fa-solid fa-camera text-xs text-pink-400"></i>
+                                        <span>Photos Only</span>
+                                    </button>
+                                    <button type="button" id="btn-mode-videos-${previewId}" onclick="setProfileDownloadMode('${previewId}', '${escapeHtml(url)}', 'videos')" class="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-medium text-xs border border-white/10 transition flex items-center space-x-1.5 cursor-pointer">
+                                        <i class="fa-solid fa-film text-xs text-blue-400"></i>
+                                        <span>Videos / Reels</span>
+                                    </button>
+                                    ${data.posts && data.posts.length > 0 ? `
+                                        <button type="button" id="btn-mode-select-${previewId}" onclick="openProfilePostPicker('${previewId}', '${escapeHtml(url)}')" class="px-3 py-1.5 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 font-semibold text-xs border border-purple-500/30 transition flex items-center space-x-1.5 cursor-pointer">
+                                            <i class="fa-solid fa-table-cells text-xs"></i>
+                                            <span>Inspect & Select (${data.posts.length})</span>
+                                        </button>
+                                    ` : ''}
+                                </div>
+                            `;
+                            return;
+                        }
+
                         let durationStr = '';
                         if (data.duration) {
                             const m = Math.floor(data.duration / 60);
@@ -2315,6 +2505,119 @@ https://www.youtube.com/watch?v=..."></textarea>
                 });
             }, 500);
         });
+
+        window.profileDownloadModes = {};
+        window.selectedProfileUrls = {};
+        window.currentProfileData = {};
+        window.activeProfileUrl = '';
+        window.activeProfilePreviewId = '';
+
+        function setProfileDownloadMode(previewId, url, mode) {
+            window.profileDownloadModes = window.profileDownloadModes || {};
+            window.profileDownloadModes[url] = mode;
+
+            const modes = ['all', 'photos', 'videos'];
+            modes.forEach(m => {
+                const btn = document.getElementById(`btn-mode-${m}-${previewId}`);
+                if (!btn) return;
+                if (m === mode) {
+                    btn.className = 'px-3 py-1.5 rounded-xl bg-pink-500 text-white font-semibold text-xs shadow-md transition flex items-center space-x-1.5 cursor-pointer';
+                } else {
+                    btn.className = 'px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-medium text-xs border border-white/10 transition flex items-center space-x-1.5 cursor-pointer';
+                }
+            });
+            const selectBtn = document.getElementById(`btn-mode-select-${previewId}`);
+            if (selectBtn) {
+                selectBtn.className = 'px-3 py-1.5 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 font-semibold text-xs border border-purple-500/30 transition flex items-center space-x-1.5 cursor-pointer';
+            }
+            const modeNames = { all: 'All Posts', photos: 'Photos Only', videos: 'Videos / Reels Only' };
+            showToast('Download Mode', `Selected: ${modeNames[mode] || mode}`);
+        }
+
+        function openProfilePostPicker(previewId, url) {
+            const data = window.currentProfileData?.[previewId];
+            if (!data || !data.posts || data.posts.length === 0) return;
+
+            window.activeProfileUrl = url;
+            window.activeProfilePreviewId = previewId;
+
+            const modal = document.getElementById('profilePostPickerModal');
+            const title = document.getElementById('profilePickerTitle');
+            const grid = document.getElementById('profilePickerGrid');
+
+            if (title) title.textContent = `Select Posts from @${data.username || data.uploader}`;
+            if (!modal || !grid) return;
+
+            grid.innerHTML = '';
+            const previouslySelected = window.selectedProfileUrls?.[url] || [];
+
+            data.posts.forEach((post, i) => {
+                const isSelected = previouslySelected.length === 0 || previouslySelected.includes(post.url);
+                const card = document.createElement('label');
+                card.className = 'relative aspect-[3/4] rounded-xl overflow-hidden border border-zinc-800 bg-zinc-900 cursor-pointer group shadow-md hover:border-pink-500/60 transition block select-none';
+                card.innerHTML = `
+                    ${post.thumbnail ? `<img src="${escapeHtml(safeWebUrl(post.thumbnail))}" class="w-full h-full object-cover group-hover:scale-105 transition duration-200" />` : '<div class="w-full h-full flex items-center justify-center text-zinc-600"><i class="fa-solid fa-image text-2xl"></i></div>'}
+                    <div class="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-black/35 p-2.5 flex flex-col justify-between">
+                        <div class="flex items-center justify-between">
+                            <span class="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${post.type === 'video' ? 'bg-blue-500/80 text-white' : 'bg-pink-500/80 text-white'}">${post.type}</span>
+                            <input type="checkbox" value="${escapeHtml(post.url)}" class="profile-post-checkbox w-4 h-4 rounded text-pink-500 bg-black/60 border-white/20 focus:ring-0 cursor-pointer" ${isSelected ? 'checked' : ''} onchange="updateProfilePickerCount()" />
+                        </div>
+                        <div class="text-[10px] text-zinc-200 truncate font-medium">${escapeHtml(post.title || `Post #${i+1}`)}</div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+
+            updateProfilePickerCount();
+            modal.style.display = 'flex';
+        }
+
+        function updateProfilePickerCount() {
+            const boxes = document.querySelectorAll('.profile-post-checkbox:checked');
+            const countEl = document.getElementById('profilePickerCount');
+            if (countEl) countEl.textContent = `${boxes.length} post${boxes.length === 1 ? '' : 's'} selected`;
+        }
+
+        function toggleSelectAllProfilePosts(select) {
+            document.querySelectorAll('.profile-post-checkbox').forEach(cb => {
+                cb.checked = select;
+            });
+            updateProfilePickerCount();
+        }
+
+        function confirmProfileSelection() {
+            const checked = Array.from(document.querySelectorAll('.profile-post-checkbox:checked')).map(cb => cb.value);
+            if (checked.length === 0) {
+                showToast('Selection Notice', 'Please select at least 1 post');
+                return;
+            }
+
+            const url = window.activeProfileUrl;
+            const previewId = window.activeProfilePreviewId;
+
+            window.selectedProfileUrls = window.selectedProfileUrls || {};
+            window.selectedProfileUrls[url] = checked;
+            window.profileDownloadModes = window.profileDownloadModes || {};
+            window.profileDownloadModes[url] = 'selected';
+
+            const selectBtn = document.getElementById(`btn-mode-select-${previewId}`);
+            if (selectBtn) {
+                selectBtn.innerHTML = `<i class="fa-solid fa-check text-xs"></i> <span>Selected (${checked.length})</span>`;
+                selectBtn.className = 'px-3 py-1.5 rounded-xl bg-purple-600 text-white font-semibold text-xs shadow-md transition flex items-center space-x-1.5 cursor-pointer';
+            }
+            ['all', 'photos', 'videos'].forEach(m => {
+                const btn = document.getElementById(`btn-mode-${m}-${previewId}`);
+                if (btn) btn.className = 'px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-medium text-xs border border-white/10 transition flex items-center space-x-1.5 cursor-pointer';
+            });
+
+            closeProfilePostPicker();
+            showToast('Selection Confirmed', `${checked.length} posts queued for download`);
+        }
+
+        function closeProfilePostPicker() {
+            const modal = document.getElementById('profilePostPickerModal');
+            if (modal) modal.style.display = 'none';
+        }
 
         function generateUUID() {
             return Math.random().toString(36).substring(2) + Date.now().toString(36);
@@ -2794,6 +3097,8 @@ https://www.youtube.com/watch?v=..."></textarea>
                     filename: document.getElementById('filename').value,
                     browser: document.getElementById('browser').value,
                     task_id: taskId,
+                    profile_mode: window.profileDownloadModes?.[singleUrl] || 'all',
+                    selected_urls: window.selectedProfileUrls?.[singleUrl] || null,
                     processing_options: {
                         quality: document.getElementById('videoQuality')?.value || 'max',
                         forceH264: document.getElementById('forceH264').checked,

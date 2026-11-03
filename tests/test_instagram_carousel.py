@@ -157,6 +157,62 @@ class TestInstagramCarousel(unittest.TestCase):
             self.assertEqual(res.json["uploader"], "Test Creator")
             self.assertEqual(res.json["thumbnail"], "https://cdn.example.com/preview.jpg")
 
+    @patch("download_support.instagram_download")
+    @patch("download_support.extract_instagram_profile")
+    def test_instagram_profile_download_modes(self, mock_extract, mock_dl):
+        from download_support import instagram_profile_download
+
+        mock_extract.return_value = {
+            "is_profile": True,
+            "username": "creator_jane",
+            "posts": [
+                {"url": "https://www.instagram.com/p/post1/", "type": "photo", "is_video": False, "shortcode": "post1"},
+                {"url": "https://www.instagram.com/reel/reel2/", "type": "video", "is_video": True, "shortcode": "reel2"},
+                {"url": "https://www.instagram.com/p/post3/", "type": "photo", "is_video": False, "shortcode": "post3"},
+            ]
+        }
+        mock_dl.side_effect = lambda post_url, *args, **kwargs: {
+            "_type": "playlist",
+            "entries": [{"filepath": f"/mock/{post_url.strip('/').split('/')[-1]}.jpg", "title": "post"}]
+        }
+
+        # 1. Mode: 'photos' -> should only download post1 and post3 (2 items)
+        reports = []
+        res = instagram_profile_download(
+            "https://www.instagram.com/creator_jane/",
+            str(self.test_dir),
+            browser="none",
+            report=lambda r: reports.append(r),
+            mode="photos"
+        )
+        self.assertEqual(len(res["entries"]), 2)
+        self.assertEqual(mock_dl.call_count, 2)
+
+        # 2. Mode: 'videos' -> should only download reel2 (1 item)
+        mock_dl.reset_mock()
+        res_vids = instagram_profile_download(
+            "https://www.instagram.com/creator_jane/",
+            str(self.test_dir),
+            browser="none",
+            report=lambda r: reports.append(r),
+            mode="videos"
+        )
+        self.assertEqual(len(res_vids["entries"]), 1)
+        self.assertEqual(mock_dl.call_count, 1)
+
+        # 3. Mode: 'selected' -> should only download specified URLs
+        mock_dl.reset_mock()
+        res_sel = instagram_profile_download(
+            "https://www.instagram.com/creator_jane/",
+            str(self.test_dir),
+            browser="none",
+            report=lambda r: reports.append(r),
+            mode="selected",
+            selected_urls=["https://www.instagram.com/reel/reel2/"]
+        )
+        self.assertEqual(len(res_sel["entries"]), 1)
+        self.assertEqual(mock_dl.call_count, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

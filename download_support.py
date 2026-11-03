@@ -21,8 +21,104 @@ class InstagramMediaIE(yt_dlp.extractor.instagram.InstagramIE):
         pass
 
 
+def is_instagram_profile_url(url: str) -> bool:
+    """Determine if a URL points to an Instagram user profile rather than a single post or reel."""
+    if not url:
+        return False
+    clean = url.strip()
+    if clean.startswith('@'):
+        return True
+    import urllib.parse
+    parsed = urllib.parse.urlparse(clean)
+    if 'instagram.com' not in parsed.netloc.lower():
+        return False
+    parts = [p for p in parsed.path.strip('/').split('/') if p]
+    if not parts:
+        return False
+    reserved = {'p', 'reel', 'reels', 'stories', 'tv', 'explore', 'direct', 'accounts', 'api', 'graphql', 'about', 'developer'}
+    return parts[0].lower() not in reserved
+
+
+def extract_instagram_username(url: str) -> str:
+    """Extract clean username from an Instagram profile URL or handle."""
+    clean = url.strip()
+    if clean.startswith('@'):
+        return clean.lstrip('@')
+    import urllib.parse
+    parsed = urllib.parse.urlparse(clean)
+    parts = [p for p in parsed.path.strip('/').split('/') if p]
+    if parts:
+        return parts[0]
+    return 'Instagram Creator'
+
+
+def extract_instagram_profile(url: str, browser=None) -> dict:
+    """Extract profile metadata and recent posts for the Instagram profile picker."""
+    username = extract_instagram_username(url)
+    profile_url = f"https://www.instagram.com/{username}/"
+
+    ydl_opts = {
+        'quiet': True,
+        'no_warnings': True,
+        'extract_flat': 'in_playlist',
+        'playlist_items': '1:24',
+    }
+    if browser and browser != 'none':
+        if browser == 'cookies.txt':
+            ydl_opts['cookiefile'] = 'cookies.txt'
+        else:
+            ydl_opts['cookiesfrombrowser'] = (browser, None, None, None)
+
+    entries = []
+    avatar_url = ''
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ie = yt_dlp.extractor.instagram.InstagramUserIE(ydl)
+            info = ie._real_extract(profile_url)
+            if info:
+                entries = info.get('entries') or []
+                thumbs = info.get('thumbnails') or []
+                if thumbs:
+                    avatar_url = thumbs[-1].get('url', '')
+    except Exception:
+        pass
+
+    formatted_posts = []
+    for idx, entry in enumerate(entries, 1):
+        if not isinstance(entry, dict):
+            continue
+        post_id = entry.get('id') or f"post_{idx}"
+        post_url = entry.get('url') or f"https://www.instagram.com/p/{post_id}/"
+        thumbs = entry.get('thumbnails') or []
+        thumb_url = thumbs[-1].get('url', '') if thumbs else ''
+        title = entry.get('title') or f"Post by @{username}"
+        is_video = bool(entry.get('duration') or 'reel' in post_url.lower())
+
+        formatted_posts.append({
+            'id': post_id,
+            'url': post_url,
+            'title': title,
+            'thumbnail': thumb_url,
+            'type': 'video' if is_video else 'photo'
+        })
+
+    return {
+        'is_profile': True,
+        'platform': 'instagram',
+        'username': username,
+        'title': f"Instagram Profile: @{username}",
+        'uploader': username,
+        'thumbnail': avatar_url or (formatted_posts[0]['thumbnail'] if formatted_posts else ''),
+        'duration': 0,
+        'post_count': len(formatted_posts),
+        'posts': formatted_posts
+    }
+
+
 def extract_instagram_preview(url, browser=None):
     """Extract metadata for UI preview without requiring video formats."""
+    if is_instagram_profile_url(url):
+        return extract_instagram_profile(url, browser=browser)
     ydl_opts = {'quiet': True, 'no_warnings': True}
     if browser and browser != 'none':
         if browser == 'cookies.txt':
@@ -158,15 +254,86 @@ def instagram_download(url, output_path, browser, report, custom_name=None):
     return {'_type': 'playlist', 'entries': downloaded_entries}
 
 
-def gallery_download(url, output_path, browser, report, custom_name=None):
-    if 'instagram.com' in url.lower():
+def instagram_profile_download(url, output_path, browser, report, mode='all', selected_urls=None, custom_name=None):
+    """Batch download an Instagram profile with granular selection (all, photos, videos, or selected URLs)."""
+    username = extract_instagram_username(url)
+    raw_uploader = username
+    safe_uploader = safe_media_name(raw_uploader).rsplit('.', 1)[0] or 'Instagram'
+    target_dir = Path(output_path) / safe_uploader
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    urls_to_download = []
+    if selected_urls and isinstance(selected_urls, list) and len(selected_urls) > 0:
+        urls_to_download = [u for u in selected_urls if str(u).startswith(('http://', 'https://'))]
+    else:
+        report({'status': f"Extracting posts from @{username}..."})
+        profile_data = extract_instagram_profile(url, browser=browser)
+        posts = profile_data.get('posts', [])
+        if mode == 'photos':
+            urls_to_download = [p['url'] for p in posts if p.get('type') == 'photo' or (not p.get('is_video', False) and p.get('type') != 'video')]
+        elif mode == 'videos':
+            urls_to_download = [p['url'] for p in posts if p.get('type') == 'video' or p.get('is_video', False)]
+        else:
+            urls_to_download = [p['url'] for p in posts]
+
+    if not urls_to_download:
+        report({'status': f"Downloading @{username} via gallery-dl ({mode})..."})
+        cmd = [sys.executable, '-m', 'gallery_dl', '-d', str(target_dir)]
+        if browser and browser != 'none':
+            cmd.extend(['--cookies' if browser == 'cookies.txt' else '--cookies-from-browser', browser])
+        if mode == 'photos':
+            cmd.extend(['--filter', "extension in ('jpg', 'jpeg', 'png', 'webp')"])
+        elif mode == 'videos':
+            cmd.extend(['--filter', "extension in ('mp4', 'mov', 'webm')"])
+        cmd.append(f"https://www.instagram.com/{username}/")
+
+        with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace') as proc:
+            for line in proc.stdout:
+                report({'status': 'gallery-dl: ' + line.strip()[-150:]})
+            proc.wait()
+
+        subprocess.check_cancelled()
+        entries = [{'filepath': str(f), '_filename': str(f), 'title': f.stem, 'webpage_url': url, 'extractor_key': 'Instagram'}
+                   for f in target_dir.rglob('*') if f.is_file() and f.suffix.lower() in MEDIA_EXTENSIONS]
+        return {'_type': 'playlist', 'entries': entries}
+
+    total_posts = len(urls_to_download)
+    report({'status': f"Downloading {total_posts} selected posts from @{username}..."})
+    all_downloaded = []
+    for p_idx, post_url in enumerate(urls_to_download, 1):
+        subprocess.check_cancelled()
+        report({'status': f"[{p_idx}/{total_posts}] Downloading post..."})
         try:
-            return instagram_download(url, output_path, browser, report, custom_name=custom_name)
+            res = instagram_download(post_url, output_path, browser, report, custom_name=custom_name)
+            if res and res.get('entries'):
+                all_downloaded.extend(res['entries'])
         except Exception as e:
-            err = str(e).lower()
-            if 'cancelled' in err:
-                raise
-            report({'status': f'Native Instagram download failed ({e}); trying gallery-dl fallback...'})
+            report({'status': f"Skipping post {p_idx} due to error: {e}"})
+
+    if not all_downloaded:
+        raise RuntimeError(f"No posts could be downloaded from @{username}")
+
+    return {'_type': 'playlist', 'entries': all_downloaded}
+
+
+def gallery_download(url, output_path, browser, report, custom_name=None, profile_mode='all', selected_urls=None):
+    if 'instagram.com' in url.lower() or url.strip().startswith('@'):
+        if is_instagram_profile_url(url):
+            try:
+                return instagram_profile_download(url, output_path, browser, report, mode=profile_mode, selected_urls=selected_urls, custom_name=custom_name)
+            except Exception as e:
+                err = str(e).lower()
+                if 'cancelled' in err:
+                    raise
+                report({'status': f'Profile download fallback ({e})...'})
+        else:
+            try:
+                return instagram_download(url, output_path, browser, report, custom_name=custom_name)
+            except Exception as e:
+                err = str(e).lower()
+                if 'cancelled' in err:
+                    raise
+                report({'status': f'Native Instagram download failed ({e}); trying gallery-dl fallback...'})
 
     folder = Path(output_path) / ('Gallery-' + uuid.uuid4().hex[:12])
     folder.mkdir(parents=True)

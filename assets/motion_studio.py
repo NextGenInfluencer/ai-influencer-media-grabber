@@ -362,8 +362,28 @@ def swap_character_identity(target_frame_path, character_id=None, custom_portrai
     dest_path = Path(output_path) if output_path else (REFERENCES_DIR / out_name)
 
     used_neural = False
+
+    # 1. Try local GPU FaceFusion engine if available
+    ff_python = Path(r"C:\Users\lefte\miniconda3\envs\facefusion\python.exe")
+    ff_script = Path(r"F:\new faceswap\facefusion-master\facefusion.py")
+    if ff_python.is_file() and ff_script.is_file():
+        try:
+            cmd = [
+                str(ff_python), str(ff_script), "headless-run",
+                "-s", str(src_p),
+                "-t", str(target_p),
+                "-o", str(dest_path),
+                "--processors", "face_swapper",
+                "--execution-providers", "cuda"
+            ]
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+            if res.returncode == 0 and Path(dest_path).is_file():
+                used_neural = True
+        except Exception:
+            pass
+
     app, swapper = get_neural_swapper()
-    if swapper is not None and app is not None and engine in ('neural', 'opencv', 'default'):
+    if not used_neural and swapper is not None and app is not None and engine in ('neural', 'opencv', 'default'):
         try:
             target_faces = app.get(target_img)
             source_faces = app.get(src_img)
@@ -624,7 +644,39 @@ def render_character_motion(driving_video_path, source_image_path, audio_path=No
     use_neural_for_video = False
 
     if resolved_driving and resolved_driving.is_file():
-        # High-fidelity video motion synthesis:
+        # 1. Try local GPU FaceFusion engine for full-fidelity neural video tracking
+        ff_python = Path(r"C:\Users\lefte\miniconda3\envs\facefusion\python.exe")
+        ff_script = Path(r"F:\new faceswap\facefusion-master\facefusion.py")
+        if ff_python.is_file() and ff_script.is_file():
+            if progress_callback:
+                progress_callback(10, 100, "Synthesizing neural character motion via FaceFusion CUDA...")
+            try:
+                cmd = [
+                    str(ff_python), str(ff_script), "headless-run",
+                    "-s", str(ipath),
+                    "-t", str(resolved_driving),
+                    "-o", str(out_path),
+                    "--processors", "face_swapper",
+                    "--execution-providers", "cuda"
+                ]
+                res = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+                if res.returncode == 0 and out_path.is_file():
+                    if progress_callback:
+                        progress_callback(100, 100, "Neural video motion synthesized successfully!")
+                    return {
+                        "filename": out_name,
+                        "path": str(out_path),
+                        "duration": duration,
+                        "status": "ready",
+                        "model_ready": True,
+                        "model_required": "FaceFusion-CUDA",
+                        "mode": "facefusion_cuda_motion",
+                        "message": "Character identity motion synthesized via FaceFusion CUDA."
+                    }
+            except Exception:
+                pass
+
+        # Fallback: High-fidelity video motion synthesis:
         # Transpose character face/identity onto the driving video's motion frames!
         import cv2
         import numpy as np

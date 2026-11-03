@@ -785,7 +785,7 @@ def shazam_file(audio_path):
         print("Shazam error:", e)
         return None
 
-APP_VERSION = "4.1.1"
+APP_VERSION = "4.2.0"
 SERVER_START_TIME = time.time()
 
 # --- Active Job & Auto-Shutdown Watchdog State ---
@@ -1302,8 +1302,9 @@ def cancel_task(task_id):
 
 @app.route('/api/preview', methods=['POST'])
 def preview_url():
-    data = request.json
+    data = request.json or {}
     url = data.get('url')
+    browser = data.get('browser')
     if not url:
         return jsonify({"error": "No URL provided"}), 400
     url = url.strip()
@@ -1328,10 +1329,10 @@ def preview_url():
                 "duration": info.get('duration', 0)
             })
     except Exception as e:
-        if 'instagram.com' in url.lower():
+        if 'instagram.com' in url.lower() or url.strip().startswith('@'):
             try:
                 from download_support import extract_instagram_preview
-                ig_info = extract_instagram_preview(url)
+                ig_info = extract_instagram_preview(url, browser=browser)
                 if ig_info:
                     return jsonify(ig_info)
             except Exception:
@@ -1454,6 +1455,9 @@ def download_video():
 
         ydl_opts['progress_hooks'] = [hook]
 
+        profile_mode = processing_options.get('profile_mode') or data.get('profile_mode', 'all')
+        selected_urls = processing_options.get('selected_urls') or data.get('selected_urls')
+
         def _run_dl_worker():
             total = len(urls)
             failed_count = 0
@@ -1463,42 +1467,47 @@ def download_video():
                 prefix = f"[{idx}/{total}] " if total > 1 else ""
                 q.put({"status": f"{prefix}Starting download..."})
                 try:
-                    with yt_dlp.YoutubeDL(cast(Any, ydl_opts)) as ydl:
-                        try:
-                            # Pre-flight check for file collisions to add (1) to filename
-                            actual_download_path = None
-                            info_dict = ydl.extract_info(url, download=False)
-                            if info_dict:
-                                temp_final = ydl.prepare_filename(cast(Any, info_dict))
-                                base, ext = os.path.splitext(temp_final)
-                                if os.path.exists(temp_final) or os.path.exists(base + ".mp4"):
-                                    orig_base = base
-                                    c = 1
-                                    while os.path.exists(f"{orig_base} ({c}){ext}") or os.path.exists(f"{orig_base} ({c}).mp4"):
-                                        c += 1
+                    from download_support import is_instagram_profile_url, gallery_download
+                    if is_instagram_profile_url(url):
+                        q.put({"status": f"{prefix}Instagram Profile detected. Downloading {profile_mode} media..."})
+                        info = gallery_download(url, output_path, browser, q.put, custom_name=custom_name, profile_mode=profile_mode, selected_urls=selected_urls)
+                    else:
+                        with yt_dlp.YoutubeDL(cast(Any, ydl_opts)) as ydl:
+                            try:
+                                # Pre-flight check for file collisions to add (1) to filename
+                                actual_download_path = None
+                                info_dict = ydl.extract_info(url, download=False)
+                                if info_dict:
+                                    temp_final = ydl.prepare_filename(cast(Any, info_dict))
+                                    base, ext = os.path.splitext(temp_final)
+                                    if os.path.exists(temp_final) or os.path.exists(base + ".mp4"):
+                                        orig_base = base
+                                        c = 1
+                                        while os.path.exists(f"{orig_base} ({c}){ext}") or os.path.exists(f"{orig_base} ({c}).mp4"):
+                                            c += 1
 
-                                    local_opts: dict[str, Any] = ydl_opts.copy()
-                                    local_opts['outtmpl'] = f"{orig_base} ({c}).%(ext)s"
-                                    actual_download_path = f"{orig_base} ({c}).mp4"
-                                    with yt_dlp.YoutubeDL(cast(Any, local_opts)) as local_ydl:
-                                        info: Any = local_ydl.extract_info(url, download=True)
+                                        local_opts: dict[str, Any] = ydl_opts.copy()
+                                        local_opts['outtmpl'] = f"{orig_base} ({c}).%(ext)s"
+                                        actual_download_path = f"{orig_base} ({c}).mp4"
+                                        with yt_dlp.YoutubeDL(cast(Any, local_opts)) as local_ydl:
+                                            info: Any = local_ydl.extract_info(url, download=True)
+                                    else:
+                                        info: Any = ydl.extract_info(url, download=True)
                                 else:
                                     info: Any = ydl.extract_info(url, download=True)
-                            else:
-                                info: Any = ydl.extract_info(url, download=True)
-                        except Exception as e:
-                            err_msg = str(e)
-                            err_msg = re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', err_msg)
+                            except Exception as e:
+                                err_msg = str(e)
+                                err_msg = re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', err_msg)
 
-                            check_cancelled()
-                            if "Could not copy Chrome cookie database" in err_msg or "database is locked" in err_msg:
-                                raise RuntimeError('Close Chrome completely before using its cookies.')
-                            if any(message in err_msg for message in ('No video formats found', 'Unable to extract data', 'HTTP Error 400', 'Video info extraction failed', 'There is no video in this post', "There's no video", 'no video', 'empty media response', 'does not contain any video', 'only images')) or any(dom in url.lower() for dom in ('instagram.com', 'pin.it', 'pinterest.com')):
-                                q.put({"status": f"{prefix}Unsupported by yt-dlp. Downloading via gallery-dl..."})
-                                from download_support import gallery_download
-                                info = gallery_download(url, output_path, browser, q.put, custom_name=custom_name)
-                            else:
-                                raise
+                                check_cancelled()
+                                if "Could not copy Chrome cookie database" in err_msg or "database is locked" in err_msg:
+                                    raise RuntimeError('Close Chrome completely before using its cookies.')
+                                if any(message in err_msg for message in ('No video formats found', 'Unable to extract data', 'HTTP Error 400', 'Video info extraction failed', 'There is no video in this post', "There's no video", 'no video', 'empty media response', 'does not contain any video', 'only images')) or any(dom in url.lower() for dom in ('instagram.com', 'pin.it', 'pinterest.com')):
+                                    q.put({"status": f"{prefix}Unsupported by yt-dlp. Downloading via gallery-dl..."})
+                                    from download_support import gallery_download
+                                    info = gallery_download(url, output_path, browser, q.put, custom_name=custom_name, profile_mode=profile_mode, selected_urls=selected_urls)
+                                else:
+                                    raise
 
                         if not info:
                             q.put({"status": f"{prefix}Failed. No video found."})
@@ -1853,6 +1862,31 @@ def list_gallery():
                             source_url, uploader = resolve_source_url(file_path, history_data)
                             norm_fp = os.path.normpath(file_path).lower()
 
+                            is_studio = (
+                                folder in ['Storyboard Images', 'Storyboard Videos', 'Motion Outputs', 'AI Creations'] or
+                                file.startswith(('keyframe_scene_', 'video_scene_', 'motion_')) or
+                                'storyboard' in folder.lower()
+                            )
+                            section = "studio" if is_studio else "downloads"
+                            studio_type = "other"
+                            scene_num = None
+                            if is_studio:
+                                if folder == 'Storyboard Images' or file.startswith('keyframe_scene_'):
+                                    studio_type = "keyframe"
+                                elif folder == 'Storyboard Videos' or file.startswith('video_scene_'):
+                                    studio_type = "scene_video"
+                                elif folder == 'Motion Outputs' or file.startswith('motion_'):
+                                    studio_type = "motion_swap"
+                                else:
+                                    studio_type = "studio_asset"
+
+                                scene_match = re.search(r'scene_(\d+)', file, re.IGNORECASE)
+                                if scene_match:
+                                    try:
+                                        scene_num = int(scene_match.group(1))
+                                    except Exception:
+                                        pass
+
                             media.append({
                                 "name": file,
                                 "url": '/api/preview_file?path=' + __import__('urllib.parse', fromlist=['quote']).quote(file_path),
@@ -1860,6 +1894,9 @@ def list_gallery():
                                 "path": f"{folder}/{item_path}",
                                 "full_path": file_path,
                                 "type": "video" if ext in ['.mp4', '.mov', '.mkv', '.webm', '.avi'] else "audio" if ext == ".mp3" else "image",
+                                "section": section,
+                                "studio_type": studio_type,
+                                "scene_number": scene_num,
                                 "timestamp": os.path.getmtime(file_path),
                                 "size": os.path.getsize(file_path),
                                 "source_url": source_url,
