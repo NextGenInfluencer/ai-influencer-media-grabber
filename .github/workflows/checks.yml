@@ -1,23 +1,54 @@
 name: Release checks
 on: [push, pull_request]
+
+permissions:
+  contents: read
+
 jobs:
   windows:
     runs-on: windows-latest
+    env:
+      PYTHONIOENCODING: utf-8
+    # One command per step: Windows pwsh steps only fail on the exit code of their last command.
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.13'
-      - uses: actions/setup-node@v4
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - uses: actions/setup-node@v7
         with:
           node-version: '26'
-      - run: "python -m pip install --only-binary=:all: -r requirements.txt"
-      - run: python -m unittest discover -s tests -v
-      - run: node tests/test_stream.js
-      - run: node tests/test_caption_timing.js
-      - run: node --check static/captions.js
-      - run: node --check static/copilot.js
-      - run: node --check static/characters.js
-      - run: node --check static/motion_studio.js
-      - run: node --check static/storyboard.js
-      - run: node --check static/video_studio.js
+          cache: npm
+
+      # Core dependencies only: AI packs are optional and their tests mock the libraries.
+      - name: Install core Python dependencies
+        run: python -m pip install --only-binary=:all: -r requirements.txt
+      - name: Install coverage
+        run: python -m pip install coverage
+      - name: Install lint tooling
+        run: npm ci --no-audit --no-fund
+
+      - name: Python tests with coverage
+        run: python -m coverage run -m unittest discover -s tests
+      - name: Coverage gate (.coveragerc fail_under)
+        run: python -m coverage report
+
+      - name: Syntax check every static script
+        run: |
+          $failed = $false
+          foreach ($file in Get-ChildItem static -Filter *.js) {
+            node --check $file.FullName
+            if ($LASTEXITCODE) { $failed = $true }
+          }
+          if ($failed) { exit 1 }
+      - name: Extract inline template scripts
+        run: python tools/extract_inline_js.py
+      - name: ESLint no-undef on inline template scripts
+        run: npx eslint build/inline-js
+
+      - name: Caption timing tests (JS)
+        run: node tests/test_caption_timing.js
+      - name: Stream decoder tests (JS)
+        run: node tests/test_stream.js
