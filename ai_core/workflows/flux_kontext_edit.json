@@ -1,0 +1,26 @@
+{
+ "name": "flux_kontext_edit",
+ "description": "FLUX.1 Kontext dev identity-preserving edit of an uploaded reference image. Requires ComfyUI-GGUF. 'image' is a local file path; it is uploaded to ComfyUI and replaced by the uploaded name.",
+ "inputs": {
+  "image": {"node": "10", "field": "image", "type": "file", "required": true},
+  "prompt": {"node": "4", "field": "text", "type": "string", "required": true},
+  "seed": {"node": "6", "field": "seed", "type": "int", "default": 0},
+  "guidance": {"node": "14", "field": "guidance", "type": "float", "default": 2.5}
+ },
+ "outputs": ["9"],
+ "prompt": {
+  "1": {"class_type": "UnetLoaderGGUF", "inputs": {"unet_name": "flux1-kontext-dev-Q4_K_M.gguf"}},
+  "2": {"class_type": "DualCLIPLoader", "inputs": {"clip_name1": "t5xxl_fp8_e4m3fn.safetensors", "clip_name2": "clip_l.safetensors", "type": "flux"}},
+  "3": {"class_type": "VAELoader", "inputs": {"vae_name": "ae.safetensors"}},
+  "4": {"class_type": "CLIPTextEncode", "inputs": {"text": "{{prompt}}", "clip": ["2", 0]}},
+  "6": {"class_type": "KSampler", "inputs": {"model": ["1", 0], "seed": "{{seed}}", "steps": 20, "cfg": 1.0, "sampler_name": "euler", "scheduler": "simple", "positive": ["14", 0], "negative": ["7", 0], "latent_image": ["12", 0], "denoise": 1.0}},
+  "7": {"class_type": "ConditioningZeroOut", "inputs": {"conditioning": ["4", 0]}},
+  "8": {"class_type": "VAEDecode", "inputs": {"samples": ["6", 0], "vae": ["3", 0]}},
+  "9": {"class_type": "SaveImage", "inputs": {"images": ["8", 0], "filename_prefix": "mg_flux_kontext"}},
+  "10": {"class_type": "LoadImage", "inputs": {"image": "{{image}}"}},
+  "11": {"class_type": "FluxKontextImageScale", "inputs": {"image": ["10", 0]}},
+  "12": {"class_type": "VAEEncode", "inputs": {"pixels": ["11", 0], "vae": ["3", 0]}},
+  "13": {"class_type": "ReferenceLatent", "inputs": {"conditioning": ["4", 0], "latent": ["12", 0]}},
+  "14": {"class_type": "FluxGuidance", "inputs": {"conditioning": ["13", 0], "guidance": "{{guidance}}"}}
+ }
+}

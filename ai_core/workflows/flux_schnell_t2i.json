@@ -1,0 +1,22 @@
+{
+ "name": "flux_schnell_t2i",
+ "description": "FLUX.1 schnell text-to-image (4 steps). Requires ComfyUI-GGUF for UnetLoaderGGUF. Placeholders are strings of the form {{name}} inside 'prompt'; 'inputs' documents which node/field each one fills.",
+ "inputs": {
+  "prompt": {"node": "4", "field": "text", "type": "string", "required": true},
+  "width": {"node": "5", "field": "width", "type": "int", "default": 768},
+  "height": {"node": "5", "field": "height", "type": "int", "default": 1344},
+  "seed": {"node": "6", "field": "seed", "type": "int", "default": 0}
+ },
+ "outputs": ["9"],
+ "prompt": {
+  "1": {"class_type": "UnetLoaderGGUF", "inputs": {"unet_name": "flux1-schnell-Q4_0.gguf"}},
+  "2": {"class_type": "DualCLIPLoader", "inputs": {"clip_name1": "t5xxl_fp8_e4m3fn.safetensors", "clip_name2": "clip_l.safetensors", "type": "flux"}},
+  "3": {"class_type": "VAELoader", "inputs": {"vae_name": "ae.safetensors"}},
+  "4": {"class_type": "CLIPTextEncode", "inputs": {"text": "{{prompt}}", "clip": ["2", 0]}},
+  "5": {"class_type": "EmptySD3LatentImage", "inputs": {"width": "{{width}}", "height": "{{height}}", "batch_size": 1}},
+  "6": {"class_type": "KSampler", "inputs": {"model": ["1", 0], "seed": "{{seed}}", "steps": 4, "cfg": 1.0, "sampler_name": "euler", "scheduler": "simple", "positive": ["4", 0], "negative": ["7", 0], "latent_image": ["5", 0], "denoise": 1.0}},
+  "7": {"class_type": "CLIPTextEncode", "inputs": {"text": "", "clip": ["2", 0]}},
+  "8": {"class_type": "VAEDecode", "inputs": {"samples": ["6", 0], "vae": ["3", 0]}},
+  "9": {"class_type": "SaveImage", "inputs": {"images": ["8", 0], "filename_prefix": "mg_flux_schnell"}}
+ }
+}
