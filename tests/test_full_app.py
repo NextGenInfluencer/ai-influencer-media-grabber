@@ -57,6 +57,7 @@ class FullAppTests(unittest.TestCase):
             def __enter__(self): return self
             def __exit__(self, *args): pass
             def extract_info(self, *args, **kwargs): return info
+            def process_ie_result(self, result, download=True): return result
             def prepare_filename(self, info): return str(FullAppTests.root / 'playlist.mp4')
         with patch.object(self.module.yt_dlp, 'YoutubeDL', Downloader):
             response = self.client.post('/api/download', headers=self.headers, json={
