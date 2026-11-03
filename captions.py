@@ -90,6 +90,26 @@ refresh_custom_fonts()
 
 
 WORD_TIME_TOLERANCE = 0.01  # seconds of edge drift absorbed when validating word timings
+# Shared with static/captions.js so the live preview and the ASS export animate identically.
+ANIM = json.loads((Path(__file__).resolve().parent / 'static' / 'anim_constants.json').read_text(encoding='utf-8'))
+
+
+def entrance_scale(animation, elapsed):
+    """Pop/zoom entrance scale in percent at ``elapsed`` seconds (100 once finished)."""
+    spec = ANIM[animation]
+    progress = min(1.0, max(0.0, elapsed) / spec['duration'])
+    return 100 * (spec['from_scale'] + (1 - spec['from_scale']) * progress)
+
+
+def fade_opacity(instant, start, end):
+    ramp = ANIM['fade']['duration']
+    return max(0.0, min(1.0, (instant - start) / ramp, (end - instant) / ramp))
+
+
+def rounded_rect_path(x, y, w, h, r):
+    return (f'm {x+r} {y} l {x+w-r} {y} b {x+w} {y} {x+w} {y} {x+w} {y+r} l {x+w} {y+h-r} '
+            f'b {x+w} {y+h} {x+w} {y+h} {x+w-r} {y+h} l {x+r} {y+h} b {x} {y+h} {x} {y+h} {x} {y+h-r} '
+            f'l {x} {y+r} b {x} {y} {x} {y} {x+r} {y}')
 
 
 def number(value, low, high):
@@ -338,6 +358,21 @@ def layout_rows(cue, style, width, height, editor_preview=False):
         lambda text:lyric_fonts.runs(text,style['font'],locate),locate,editor_preview=editor_preview)
 
 
+VISUALIZER_KEYS = ('visualizer_style', 'visualizer_position', 'visualizer_height', 'visualizer_sensitivity', 'visualizer_color')
+
+
+def adopt_composition_visualizer(project):
+    """One visualizer: a legacy composition visualizer becomes the caption-style visualizer."""
+    settings = (project.get('studio') or {}).get('settings') or {}
+    if not settings.get('visualizer'):
+        return
+    style = project.setdefault('style', {})
+    if not style.get('visualizer'):
+        style['visualizer'] = True
+        style.update({key: settings[key] for key in VISUALIZER_KEYS if key in settings})
+    settings['visualizer'] = False
+
+
 def has_approved_translation(cue, language):
     entry = lyric_tracks.clean_translations(cue).get(language)
     return bool(entry and entry['status'] == 'approved' and entry['text'])
@@ -354,27 +389,28 @@ def _row_background_events(cue, row, style, height):
     animation = style['animation'] if row['track']=='original' else 'none'
     if animation == 'pop_in':
         animation = 'pop'
-    duration = {'pop':.16,'zoom_in':.2,'slide_up':.18}.get(animation,0)
+    duration = ANIM[animation]['duration'] if animation in ('pop','zoom_in','slide_up') else 0
     start, end = cue['start'], cue['end']
     boundaries = {start,end}
     if duration:
         boundaries.add(min(end,start+duration))
         boundaries.update(start+i/60 for i in range(1,math.ceil(duration*60)) if start+i/60<end)
+    ramp = ANIM['fade']['duration']
     if animation=='fade':
-        boundaries.update(t for t in (start+.18,end-.18,(start+end)/2) if start<t<end)
+        boundaries.update(t for t in (start+ramp,end-ramp,(start+end)/2) if start<t<end)
     points=sorted(boundaries)
     events=[]
     for a,b in zip(points,points[1:]):
         if round(a*100)>=round(b*100):continue
         progress=min(1,(a-start)/duration) if duration else 1
-        scale=(.85+.15*progress) if animation=='pop' else (.7+.3*progress) if animation=='zoom_in' else 1
-        offset=height*.035*(1-progress) if animation=='slide_up' else 0
+        scale=entrance_scale(animation,a-start)/100 if animation in ('pop','zoom_in') else 1
+        offset=height*ANIM['slide_up']['offset']*(1-progress) if animation=='slide_up' else 0
         x=row['x']+(left-row['x'])*scale
         y=row['y']+(top-row['y'])*scale+offset
         w,h,r=width*scale,box_height*scale,radius*scale
-        path=f'm {x+r} {y} l {x+w-r} {y} b {x+w} {y} {x+w} {y} {x+w} {y+r} l {x+w} {y+h-r} b {x+w} {y+h} {x+w} {y+h} {x+w-r} {y+h} l {x+r} {y+h} b {x} {y+h} {x} {y+h} {x} {y+h-r} l {x} {y+r} b {x} {y} {x} {y} {x+r} {y}'
+        path=rounded_rect_path(x,y,w,h,r)
         def alpha(t):
-            opacity=max(0,min(1,(t-start)/.18,(end-t)/.18)) if animation=='fade' else 1
+            opacity=fade_opacity(t,start,end) if animation=='fade' else 1
             return round(255-(255-56)*opacity)
         tags=rf'\an7\pos(0,0)\c&H140C0A&\alpha&H{alpha(a):02X}&'
         if alpha(a)!=alpha(b):tags+=rf'\t(0,{round((b-a)*1000)},\alpha&H{alpha(b):02X}&)'
@@ -386,7 +422,8 @@ def ass_text(project, skip_unapproved=False):
     """Styled ASS export. Only approved translations are rendered; with ``skip_unapproved``
     translation-only exports omit lines that have no approved translation instead of failing."""
     style={**DEFAULT_STYLE,**project.get('style',{})}
-    if not style['layout_enabled'] and style['track_mode']=='original' and not any(c.get('style_override') for c in project['cues']):
+    # Background plates use the shared layout so their rounded boxes match the preview.
+    if not style['layout_enabled'] and not style['background'] and style['track_mode']=='original' and not any(c.get('style_override') for c in project['cues']):
         return _legacy_ass_text(project)
     base=_legacy_ass_text({**project,'cues':[],'style':style})
     definitions=[];events=[]
@@ -404,10 +441,15 @@ def ass_text(project, skip_unapproved=False):
             if row['track']=='translation': row_style.update(karaoke=False,cumulative=False,word_pop=False,animation='none')
             piece=_legacy_ass_text({**project,'style':row_style,'studio':{},'composition':{},
                 'cues':[{**cue,'text':row['text'],'words':row['words']}]})
-            definition=next(line for line in piece.splitlines() if line.startswith('Style: Default,'))
-            definitions.append(definition.replace('Style: Default,','Style: '+name+',',1))
             for line in piece.splitlines():
-                if line.startswith('Dialogue: 0,'):
+                if line.startswith('Style: Default,'):
+                    definitions.append(line.replace('Style: Default,','Style: '+name+',',1))
+                elif line.startswith('Style: Glow,'):
+                    definitions.append(line.replace('Style: Glow,','Style: '+name+'Glow,',1))
+                elif line.startswith('Dialogue: -1,') and ',Glow,' in line:
+                    # Glow halo: above the row plate (same layer, later), below the sharp text.
+                    events.append(line.replace(',Glow,',','+name+'Glow,',1))
+                elif line.startswith('Dialogue: 0,'):
                     events.append(line.replace(',Default,',','+name+',',1))
     return base.replace('[Events]','\n'.join(definitions)+'\n[Events]')+'\n'.join(events)+'\n'
 
@@ -440,6 +482,11 @@ def _legacy_ass_text(project):
     box_outline = max(outline, height * style['box_padding']/100) if style['background'] else outline
     outline_col = '&H38140C0A' if style['background'] else '&H00000000'
     vis_col = color(style.get('visualizer_color', '#bba6ff'), '28')
+    margin = round(width*(1-style['box_width']/100)/2)
+    # Glow matches the preview's text-shadow: a blurred highlight halo under sharp text.
+    glow_radius = height * ANIM['glow']['radius'] * float(style.get('glow') or 0)
+    glow_blur = round(glow_radius / 2, 2)
+    glow_border = round(max(1.0, glow_radius / 4), 2)
     output = [f'''[Script Info]
 ScriptType: v4.00+
 PlayResX: {width}
@@ -450,6 +497,8 @@ ScaledBorderAndShadow: yes
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Default,{style['font']},{font_size},{color(style['color'])},{color(style['color'])},{outline_col},&H80000000,0,0,0,0,100,100,{letter_spacing},0,{border_style},{box_outline},0,{alignment},{round(width*(1-style['box_width']/100)/2)},{round(width*(1-style['box_width']/100)/2)},0,1
 Style: Vis,Arial,20,{vis_col},{vis_col},&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
+Style: Glow,{style['font']},{font_size},{color(style['color'], 'FF')},{color(style['color'], 'FF')},{color(style['highlight'])},&H00000000,0,0,0,0,100,100,{letter_spacing},0,1,{glow_border},0,{alignment},{margin},{margin},0,1
+Style: Title,{style['font']},{font_size},{color(style['color'])},{color(style['color'])},&H00000000,&H80000000,0,0,0,0,100,100,{letter_spacing},0,1,{outline},0,5,0,0,0,1
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text''']
     if style.get('visualizer'):
@@ -466,14 +515,40 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text'
                 rects = visualizer_bars(peaks, dur, (t0 + t1) / 2, width, height, style)
                 drawing = ' '.join(f'm {x1} {y1} l {x2} {y1} {x2} {y2} {x1} {y2}' for x1, y1, x2, y2 in rects)
                 output.append(f"Dialogue: -1,{timestamp(t0, True)},{timestamp(t1, True)},Vis,,0,0,0,,{{\\pos(0,0)\\p1}}{drawing}{{\\p0}}")
+    def emit(start, end, tags, body):
+        """Caption event plus, with glow, a halo event drawn underneath it."""
+        if glow_radius > 0:
+            halo_tags = ''.join(tags).replace('\\alpha', '\\3a')
+            halo_body = re.sub(r'\\c&H[0-9A-Fa-f]+&', '', body).replace('\\alpha', '\\3a')
+            halo_body = halo_body.replace('{\\r', '{\\r\\1a&HFF&\\blur' + f'{glow_blur:g}')
+            output.append(f"Dialogue: -1,{timestamp(start, True)},{timestamp(end, True)},Glow,,0,0,0,,"
+                          f"{{{halo_tags}\\1a&HFF&\\blur{glow_blur:g}}}{halo_body}")
+        output.append(f"Dialogue: 0,{timestamp(start, True)},{timestamp(end, True)},Default,,0,0,0,,{{{''.join(tags)}}}{body}")
     studio_settings = (project.get('studio') or {}).get('settings') or project.get('composition') or {}
     title_text = str(studio_settings.get('title_text') or '').strip()
     title_dur = float(studio_settings.get('title_duration') or 0)
     if title_text and title_dur > 0:
         t_end = min(float(project.get('duration') or title_dur), title_dur)
         if round(t_end * 100) > 0:
-            title_size = round(font_size * 1.25, 1)
-            output.append(f"Dialogue: 1,{timestamp(0, True)},{timestamp(t_end, True)},Default,,0,0,0,,{{\\an5\\pos({width/2:.0f},{height*.28:.0f})\\fs{title_size}\\fad(250,350)}}{escape(title_text)}")
+            spec = ANIM['title']
+            em = height * style['size'] / 100 * spec['scale']
+            title_size = round(font_size * spec['scale'], 1)
+            fade = rf"\fad({round(spec['fade_in']*1000)},{round(spec['fade_out']*1000)})"
+            cx, cy = width / 2, height * spec['y']
+            try:
+                font = ImageFont.truetype(str(lyric_layout.font_file(style['font'], BUNDLED_FONTS, CUSTOM_FONT_DIR, CUSTOM_FONTS)), max(1, round(em)))
+                text_width = font.getlength(title_text) + max(0, len(title_text) - 1) * letter_spacing
+            except OSError:
+                text_width = len(title_text) * em * .55
+            # Same rounded plate as the preview title card (padding/radius in em).
+            box_w, box_h = text_width + 2 * em * spec['pad_x'], em * 1.2 + 2 * em * spec['pad_y']
+            plate = rounded_rect_path(round(cx - box_w / 2, 1), round(cy - box_h / 2, 1), round(box_w, 1), round(box_h, 1),
+                                      round(min(box_h / 2, em * spec['radius']), 1))
+            output.append(f"Dialogue: 1,{timestamp(0, True)},{timestamp(t_end, True)},Vis,,0,0,0,,"
+                          f"{{\\an7\\pos(0,0)\\c&H140C0A&\\alpha&H38&{fade}\\p1}}{plate}{{\\p0}}")
+            output.append(f"Dialogue: 2,{timestamp(0, True)},{timestamp(t_end, True)},Title,,0,0,0,,"
+                          f"{{\\an5\\pos({cx:.0f},{cy:.0f})\\fs{title_size}{fade}}}{escape(title_text)}")
+    typewriter = ANIM['typewriter']
     for cue in project['cues']:
         anim = style.get('animation', 'none')
         if anim == 'pop_in':
@@ -482,7 +557,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text'
         if not use_words and anim == 'typewriter' and len(cue['text']) > 1:
             raw_text = cue['text']
             total_dur = cue['end'] - cue['start']
-            type_dur = min(total_dur, max(0.4, len(raw_text) * 0.045))
+            type_dur = min(total_dur, max(typewriter['min_duration'], len(raw_text) * typewriter['char_duration']))
             num_steps = len(raw_text)
             step_dur = type_dur / num_steps
             pieces = []
@@ -494,27 +569,20 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text'
             for start, end, t_slice in pieces:
                 if round(start*100) >= round(end*100):
                     continue
-                body = escape(t_slice)
                 cx, cy = width * style['horizontal']/100, height * style['position'] / 100
-                glow = float(style.get('glow') or 0)
-                tags = [rf'\pos({cx:.1f},{cy:.1f})']
-                if glow > 0:
-                    tags.append(rf'\blur{glow:.1f}')
-                    body = body.replace(r'{\r}', r'{\r\blur' + f'{glow:.1f}' + '}')
-                position = '{' + ''.join(tags) + '}'
-                output.append(f"Dialogue: 0,{timestamp(start, True)},{timestamp(end, True)},Default,,0,0,0,,{position}{body}")
+                emit(start, end, [rf'\pos({cx:.1f},{cy:.1f})'], escape(t_slice))
             continue
 
         pieces = [(cue['start'], cue['end'], None)]
         if use_words:
             boundaries = sorted({cue['start'], cue['end'], *(w[k] for w in cue['words'] for k in ('start', 'end'))})
             if anim == 'fade':
-                ramp = min(.18, (cue['end']-cue['start'])/2)
+                ramp = min(ANIM['fade']['duration'], (cue['end']-cue['start'])/2)
                 boundaries = sorted(set(boundaries) | {cue['start']+ramp, cue['end']-ramp})
             if anim == 'typewriter':
                 character_times = set(boundaries)
                 for word in cue['words']:
-                    reveal_duration = max(.08, word['end']-word['start']) * .85
+                    reveal_duration = max(typewriter['min_word'], word['end']-word['start']) * typewriter['word_reveal']
                     for index in range(1, len(word['text'])):
                         instant = word['start'] + reveal_duration * index / len(word['text'])
                         if instant < word['end']:
@@ -539,16 +607,18 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text'
                     is_pop = is_active and bool(style.get('word_pop'))
                     text = w['text']
                     if anim == 'typewriter' and is_active:
-                        count = max(1, min(len(text), math.ceil(len(text)*(mid-w['start'])/(max(.08,w['end']-w['start'])*.85))))
+                        count = max(1, min(len(text), math.ceil(len(text)*(mid-w['start'])/(max(typewriter['min_word'],w['end']-w['start'])*typewriter['word_reveal']))))
                         text = text[:count]
                     w_esc = escape(text)
-                    pop_tags = r'\fscx115\fscy115'
+                    pop_scale = ANIM['word_pop']['scale']
+                    pop_percent = f'{pop_scale*100:g}'
+                    pop_tags = rf'\fscx{pop_percent}\fscy{pop_percent}'
                     if is_pop and anim in ('pop','zoom_in'):
-                        initial,duration=(85,.16) if anim=='pop' else (70,.2)
+                        duration=ANIM[anim]['duration']
                         elapsed=max(0,start-cue['start'])
                         if elapsed<duration:
-                            combined=1.15*(initial+(100-initial)*elapsed/duration)
-                            pop_tags=rf'\fscx{combined:g}\fscy{combined:g}\t(0,{round((duration-elapsed)*1000)},\fscx115\fscy115)'
+                            combined=pop_scale*entrance_scale(anim,elapsed)
+                            pop_tags=rf'\fscx{combined:g}\fscy{combined:g}\t(0,{round((duration-elapsed)*1000)},\fscx{pop_percent}\fscy{pop_percent})'
                     if is_lit and is_pop:
                         parts.append(sep + r'{\c' + hl + '&' + pop_tags + '}' + w_esc + r'{\r}')
                     elif is_lit:
@@ -561,38 +631,33 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text'
                 if not body and anim == 'typewriter':
                     continue
             cx, cy = width * style['horizontal']/100, height * style['position'] / 100
-            glow = float(style.get('glow') or 0)
             elapsed = max(0, start-cue['start'])
             tags = []
-            if anim == 'slide_up' and elapsed < .18:
-                remaining_ms = round((.18-elapsed)*1000)
-                initial_y = cy + height*.035*(1-elapsed/.18)
+            slide = ANIM['slide_up']
+            if anim == 'slide_up' and elapsed < slide['duration']:
+                remaining_ms = round((slide['duration']-elapsed)*1000)
+                initial_y = cy + height*slide['offset']*(1-elapsed/slide['duration'])
                 tags.append(rf'\move({cx:.1f},{initial_y:.1f},{cx:.1f},{cy:.1f},0,{remaining_ms})')
             else:
                 tags.append(rf'\pos({cx:.1f},{cy:.1f})')
             if anim == 'fade':
+                ramp = ANIM['fade']['duration']
                 def alpha_at(instant):
-                    opacity=max(0,min(1,(instant-cue['start'])/.18,(cue['end']-instant)/.18))
-                    return round(255*(1-opacity))
+                    return round(255*(1-fade_opacity(instant, cue['start'], cue['end'])))
                 tags.append(rf'\alpha&H{alpha_at(start):02X}&')
-                points=sorted({start,end,*[t for t in (cue['start']+.18,cue['end']-.18,(cue['start']+cue['end'])/2) if start<t<end]})
+                points=sorted({start,end,*[t for t in (cue['start']+ramp,cue['end']-ramp,(cue['start']+cue['end'])/2) if start<t<end]})
                 for a,b in zip(points,points[1:]):
                     if alpha_at(a)!=alpha_at(b):
                         tags.append(rf'\t({round((a-start)*1000)},{round((b-start)*1000)},\alpha&H{alpha_at(b):02X}&)')
             elif anim in ('pop','zoom_in'):
-                initial,duration=(85,.16) if anim=='pop' else (70,.2)
+                duration = ANIM[anim]['duration']
                 if elapsed < duration:
-                    scale=initial+(100-initial)*elapsed/duration
+                    scale = entrance_scale(anim, elapsed)
                     tags.append(rf'\fscx{scale:g}\fscy{scale:g}\t(0,{round((duration-elapsed)*1000)},\fscx100\fscy100)')
-            if glow > 0:
-                tags.append(rf'\blur{glow:.1f}')
-            position = '{' + ''.join(tags) + '}'
             # Word highlighting resets the style; retain the enclosing cue animation.
             if anim in ('fade','pop','zoom_in','slide_up'):
                 body = body.replace(r'{\r}', '{\\r' + ''.join(tags) + '}')
-            elif glow > 0:
-                body = body.replace(r'{\r}', r'{\r\blur' + f'{glow:.1f}' + '}')
-            output.append(f"Dialogue: 0,{timestamp(start, True)},{timestamp(end, True)},Default,,0,0,0,,{position}{body}")
+            emit(start, end, tags, body)
     return '\n'.join(output) + '\n'
 
 
@@ -1305,6 +1370,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             data['style']={**DEFAULT_STYLE,**data.get('style',{})}
             if data.get('duration'):
                 data['studio'] = composition_model.migrate(data, folder(pid))
+                adopt_composition_visualizer(data)
                 data['missing_assets'] = [key for key, asset in data['studio']['assets'].items() if not composition_model.local_asset(folder(pid), asset).is_file()]
             return data
 
@@ -1435,7 +1501,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             bg_ext = Path(bg_name).suffix.lower() if bg_name else ''
             if (background or bg_path) and bg_ext not in {'.png','.jpg','.jpeg','.webp','.mp4','.mov','.mkv','.webm'}:
                 raise ValueError('Choose a photo or video background.')
-            composition = dict(shape=shape, color=color, visualizer=request.form.get('visualizer') == 'true')
+            composition = dict(shape=shape, color=color)
             if (background or bg_path) and request.form.get('stock_provenance'):
                 composition['provenance'] = composition_model.validate_provenance(
                     json.loads(request.form.get('stock_provenance', '{}'))
@@ -1456,6 +1522,8 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             shutil.copy2(source, media)
         data = dict(id=pid, name=name[:200], source=media.name, state='busy', status='Preparing video',
                     revision=0, cues=[], style=dict(DEFAULT_STYLE), width=0, height=0, duration=0, peaks=[], timing='manual', exports=[])
+        if song and request.form.get('visualizer') == 'true':
+            data['style'].update(visualizer=True, visualizer_style='waveform')
         def prepare(d, f):
             if song:
                 # Decode a bounded audio file first: arbitrary metadata durations cannot create runaway renders.
@@ -1473,10 +1541,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                 else:
                     args += ['-f','lavfi','-i',f'color=c={color}:s={width}x{height}:r=30']
                 graph = f'[1:v]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1,fps=30[bg]'
-                if composition and composition.get('visualizer'):
-                    graph += f';[0:a]showwaves=s={width}x{height//5}:mode=cline:rate=30:colors=0xbba6ff:scale=sqrt[wave];[bg][wave]overlay=0:H-h:shortest=1[out]'
-                else:
-                    graph += ';[bg]null[out]'
+                graph += ';[bg]null[out]'
                 ffmpeg([*args,'-filter_complex',graph,'-map','[out]','-map','0:a:0','-t',str(seconds),'-c:v','libx264','-preset','veryfast','-crf','18','-pix_fmt','yuv420p','-c:a','aac','-b:a','256k','-movflags','+faststart',media.name], f)
                 d['composition'] = composition
                 d['style']['position'] = 65
@@ -1515,6 +1580,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
 
     def composition_work(pid, assets, settings, added):
         """Render the draft composition preview; shared by Apply and the storyboard bridge."""
+        settings['visualizer'] = False  # The caption-style visualizer is the only one (no baked FFmpeg waveform).
         def work(d, f):
             token = uuid.uuid4().hex[:12]
             output, preview = 'composition_'+token+'.mp4','preview_'+token+'.mp4'
@@ -2288,6 +2354,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                         for key in ('video_filter', 'vignette', 'film_grain', 'sharpen', 'chromatic',
                                     'noise_cancel', 'voice_isolation', 'audio_effect'):
                             studio['settings'][key] = style_cfg[key]
+                        studio['settings']['visualizer'] = False  # Drawn once, by the ASS caption layer.
                         has_audio = False
                         for asset in studio['assets'].values():
                             if asset.get('kind') == 'video' and 'has_audio' not in asset:

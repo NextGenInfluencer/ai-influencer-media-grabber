@@ -9,7 +9,7 @@ from pathlib import Path
 import imageio_ffmpeg
 
 import creator_composition
-from captions import prune_renders
+from captions import ANIM, DEFAULT_STYLE, adopt_composition_visualizer, ass_text, prune_renders
 from tests import test_captions
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -43,6 +43,73 @@ class DiskHygieneTests(unittest.TestCase):
                 if name not in removed:
                     self.assertIn(name, remaining)
             self.assertEqual(prune_renders(project, folder), [])
+
+
+class PreviewExportParityTests(unittest.TestCase):
+    def test_animation_constants_are_shared_by_preview_and_export(self):
+        shared = json.loads((ROOT / 'static' / 'anim_constants.json').read_text(encoding='utf-8'))
+        self.assertEqual(ANIM, shared)
+        result = subprocess.run(['node', '-e', 'console.log(JSON.stringify(require("./static/captions.js").ANIM_DEFAULTS))'],
+                                cwd=ROOT, capture_output=True, text=True, check=True)
+        self.assertEqual(json.loads(result.stdout), shared, 'Embedded JS fallback must equal anim_constants.json')
+        source = (ROOT / 'static' / 'captions.js').read_text(encoding='utf-8')
+        start = source.index('function drawCaption()')
+        body = source[start:source.index('function drawTitleCard(', start)]
+        for legacy in ('0.32', '0.30', '0.55 + 0.59', '0.45 + 0.55', '* 0.05)', 'animElapsed/0.25'):
+            self.assertNotIn(legacy, body, 'Single-line preview must use the shared export curves')
+
+    def test_glow_is_a_halo_layer_under_sharp_text(self):
+        cue = dict(start=0, end=1, text='Glow', words=[])
+        style = {**DEFAULT_STYLE, 'glow': 6, 'highlight': '#ff0000', 'size': 12, 'outline': 0}
+        script = ass_text(dict(cues=[cue], width=320, height=180, style=style))
+        halos = [l for l in script.splitlines() if l.startswith('Dialogue: -1,') and ',Glow,' in l]
+        texts = [l for l in script.splitlines() if l.startswith('Dialogue: 0,')]
+        self.assertEqual(len(halos), 1)
+        self.assertIn(r'\1a&HFF&\blur', halos[0])
+        self.assertNotIn(r'\blur', texts[0])
+        self.assertIn('Style: Glow,', script)
+
+        def red_pixels(glow):
+            with tempfile.TemporaryDirectory() as directory:
+                Path(directory, 'c.ass').write_text(ass_text(dict(cues=[cue], width=320, height=180, style={**style, 'glow': glow})), encoding='utf-8')
+                frame = subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), '-v', 'error', '-f', 'lavfi', '-i',
+                                        'color=black:size=320x180:rate=10:duration=0.5', '-vf', 'ass=c.ass', '-frames:v', '1', '-ss', '0.3',
+                                        '-pix_fmt', 'rgb24', '-f', 'rawvideo', '-'], cwd=directory, capture_output=True, check=True, timeout=30).stdout
+            return sum(1 for i in range(0, len(frame), 3) if frame[i] > 60 and frame[i + 1] < 40 and frame[i + 2] < 40)
+        self.assertEqual(red_pixels(0), 0)
+        self.assertGreater(red_pixels(6), 200, 'Glow renders as a visible highlight halo')
+
+    def test_title_card_has_rounded_plate_fade_and_scale_from_constants(self):
+        project = dict(cues=[], width=1080, height=1920, duration=5, style=dict(DEFAULT_STYLE),
+                       studio=dict(settings=dict(title_text='Intro', title_duration=3)))
+        lines = ass_text(project).splitlines()
+        plate = next(l for l in lines if l.startswith('Dialogue: 1,') and r'\p1' in l)
+        title = next(l for l in lines if l.startswith('Dialogue: 2,'))
+        self.assertIn(r'\fad(250,350)', plate)
+        self.assertIn(r'\alpha&H38&', plate)
+        self.assertIn(',Title,', title)
+        self.assertIn(rf"\pos(540,{round(1920 * ANIM['title']['y'])})", title)
+        self.assertIn(r'\fad(250,350)', title)
+
+    def test_background_captions_use_the_shared_rounded_layout(self):
+        cue = dict(start=0, end=1, text='Boxed line', words=[])
+        script = ass_text(dict(cues=[cue], width=1080, height=1920, style={**DEFAULT_STYLE, 'background': True}))
+        self.assertIn('Style: Row0,', script)
+        self.assertTrue(any(l.startswith('Dialogue: -1,') and r'\p1' in l and r'\c&H140C0A&' in l for l in script.splitlines()))
+
+    def test_single_visualizer(self):
+        project = dict(style=dict(DEFAULT_STYLE), studio=dict(settings=dict(visualizer=True, visualizer_style='spectrum', visualizer_color='#00ff00')))
+        adopt_composition_visualizer(project)
+        self.assertTrue(project['style']['visualizer'])
+        self.assertEqual(project['style']['visualizer_color'], '#00ff00')
+        self.assertFalse(project['studio']['settings']['visualizer'])
+        html = (ROOT / 'templates' / 'captions.html').read_text(encoding='utf-8')
+        self.assertNotIn('comp_visualizer', html)
+        self.assertIn('Animated bars', html)
+        self.assertNotIn('Spectrum EQ', html)
+        source = (ROOT / 'static' / 'captions.js').read_text(encoding='utf-8')
+        keys = source[source.index('const compositionKeys='):source.index('let previousComposition')]
+        self.assertNotIn('visualizer', keys)
 
 
 class StoryboardBridgeTests(unittest.TestCase):

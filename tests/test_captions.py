@@ -342,7 +342,12 @@ class CaptionWorkflowTests(unittest.TestCase):
             data = self.wait(pid)
             self.assertEqual((data['width'],data['height']),(1080,1080))
             self.assertAlmostEqual(data['duration'],2,delta=.1)
-            self.assertTrue(data['composition']['visualizer'])
+            # One visualizer: the song option enables the caption-style visualizer (live preview + ASS),
+            # never a second FFmpeg waveform baked into the composition.
+            self.assertTrue(data['style']['visualizer'])
+            self.assertEqual(data['style']['visualizer_style'],'waveform')
+            self.assertFalse(data['composition'].get('visualizer'))
+            self.assertFalse(data['studio']['settings']['visualizer'])
             folder=self.root/'library'/'Caption Projects'/pid
             self.assertEqual((folder/'song.wav').read_bytes(),audio.read_bytes())
         self.assertEqual(self.client.post(f'/api/captions/{pid}/render',json={'preview':True}).status_code,202)
@@ -890,7 +895,10 @@ class CaptionWorkflowTests(unittest.TestCase):
         self.assertEqual(saved['style']['audio_effect'], 'slowed_reverb')
         ass_out = ass_text(saved)
         self.assertIn(r'\move(', ass_out)
-        self.assertIn(r'\blur4.0', ass_out)
+        self.assertIn('Style: Glow,', ass_out)
+        halo = next(line for line in ass_out.splitlines() if line.startswith('Dialogue: -1,') and ',Glow,' in line)
+        self.assertIn(r'\move(', halo)
+        self.assertIn(r'\blur', halo)
 
         r_fx = self.client.post(f'/api/captions/{pid}/render', json={'preview': True, 'quality': 'draft'})
         self.assertEqual(r_fx.status_code, 202, r_fx.json)
