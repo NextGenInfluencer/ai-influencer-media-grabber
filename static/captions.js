@@ -2429,5 +2429,127 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
             poll();
             return true;
         };
+
+        window.updateCueText = (lineIndexOrId, newText) => {
+            if (!project || !project.cues) return false;
+            let cue = null;
+            if (typeof lineIndexOrId === 'number') {
+                const idx = lineIndexOrId > 0 && lineIndexOrId <= project.cues.length ? lineIndexOrId - 1 : lineIndexOrId;
+                cue = project.cues[idx];
+            } else if (typeof lineIndexOrId === 'string') {
+                cue = project.cues.find(c => c.id === lineIndexOrId);
+            }
+            if (!cue) return false;
+            edit(() => {
+                cue.text = newText;
+            });
+            return true;
+        };
+
+        window.updateCueTranslation = (lineIndexOrId, lang, newTranslation) => {
+            if (!project || !project.cues) return false;
+            let cue = null;
+            if (typeof lineIndexOrId === 'number') {
+                const idx = lineIndexOrId > 0 && lineIndexOrId <= project.cues.length ? lineIndexOrId - 1 : lineIndexOrId;
+                cue = project.cues[idx];
+            } else if (typeof lineIndexOrId === 'string') {
+                cue = project.cues.find(c => c.id === lineIndexOrId);
+            }
+            if (!cue) return false;
+            const targetLang = lang || project.style?.translation_language || 'en';
+            edit(() => {
+                cue.translations = cue.translations || {};
+                cue.translations[targetLang] = {
+                    text: newTranslation,
+                    source: 'copilot',
+                    status: 'approved',
+                    locked: false,
+                    note: 'Updated via AI Copilot'
+                };
+            });
+            return true;
+        };
+
+        window.fixSubtitlesBatch = (updates) => {
+            if (!project || !project.cues || !Array.isArray(updates)) return false;
+            edit(() => {
+                updates.forEach(u => {
+                    const lineNum = typeof u.line === 'number' ? u.line : parseInt(u.line, 10);
+                    const idx = !isNaN(lineNum) && lineNum > 0 && lineNum <= project.cues.length ? lineNum - 1 : lineNum;
+                    const cue = project.cues[idx] || (u.id ? project.cues.find(c => c.id === u.id) : null);
+                    if (cue) {
+                        if (u.text !== undefined && u.text !== null) cue.text = u.text;
+                        if (u.translation !== undefined && u.translation !== null) {
+                            const l = u.lang || project.style?.translation_language || 'en';
+                            cue.translations = cue.translations || {};
+                            cue.translations[l] = {
+                                text: u.translation,
+                                source: 'copilot',
+                                status: 'approved',
+                                locked: false,
+                                note: 'Fixed via AI Copilot'
+                            };
+                        }
+                    }
+                });
+            });
+            return true;
+        };
+
+        window.auditProjectSubtitles = () => {
+            if (!project || !project.cues) return { total_cues: 0, issues: [] };
+            const lang = project.style?.translation_language || 'en';
+            const issues = [];
+            project.cues.forEach((c, i) => {
+                const lineNum = i + 1;
+                const dur = (c.end || 0) - (c.start || 0);
+                const tr = c.translations?.[lang]?.text || '';
+                const trLen = tr.length;
+
+                if (!tr.trim()) {
+                    issues.push({
+                        line: lineNum,
+                        cue_id: c.id,
+                        type: 'missing_translation',
+                        severity: 'warning',
+                        message: `Line ${lineNum} has no ${lang.toUpperCase()} translation.`,
+                        text: c.text
+                    });
+                } else if (dur > 0 && trLen > 0) {
+                    const cps = trLen / dur;
+                    if (cps > 24) {
+                        issues.push({
+                            line: lineNum,
+                            cue_id: c.id,
+                            type: 'reading_speed',
+                            severity: 'warning',
+                            cps: Math.round(cps),
+                            duration: Number(dur.toFixed(2)),
+                            message: `Line ${lineNum} translation is too long for its duration (${Math.round(cps)} chars/sec). Consider shortening.`,
+                            text: c.text,
+                            translation: tr
+                        });
+                    }
+                }
+
+                if (dur < 0.4) {
+                    issues.push({
+                        line: lineNum,
+                        cue_id: c.id,
+                        type: 'duration_too_short',
+                        severity: 'info',
+                        duration: Number(dur.toFixed(2)),
+                        message: `Line ${lineNum} duration is very short (${dur.toFixed(2)}s).`,
+                        text: c.text
+                    });
+                }
+            });
+
+            return {
+                total_cues: project.cues.length,
+                language: lang,
+                issues: issues
+            };
+        };
     }
 })();
