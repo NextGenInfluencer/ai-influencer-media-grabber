@@ -525,10 +525,14 @@
     return mode === 'project' ? { audio_mode: 'project', audio_path: projectSelect.value } : { audio_mode: mode, mute: mode === 'mute' };
   }
 
+  /** Face swap, lip-sync, portrait animation and Kling need the one-time consent & likeness notice. */
+  const consented = () => window.ensureNoticeAccepted('responsible_use');
+
   const slotOf = (button) => button.closest('.card').querySelector('.jobSlot');
 
   async function lipSync(button) {
     if (!$('lipVideo').value || !$('lipAudio').value) return toast('Choose a face video and a song.', true);
+    if (!(await consented())) return;
     await runJob('/api/video-studio/performance/lip-sync', { video_path: $('lipVideo').value, audio_path: $('lipAudio').value },
       slotOf(button), 'Lip-sync');
   }
@@ -537,6 +541,7 @@
     if (!$('lpVideo').value) return toast('Choose a driving video.', true);
     let audio;
     try { audio = audioPayload($('lpAudioMode'), $('lpProjectAudio')); } catch (e) { return toast(e.message, true); }
+    if (!(await consented())) return;
     await runJob('/api/motion/render', { engine: 'live_portrait', cloud, driving_video: $('lpVideo').value,
       character_id: state.persona?.id, ...audio }, slotOf(button), cloud ? 'LivePortrait (cloud)' : 'Portrait animation');
   }
@@ -550,12 +555,14 @@
     if (!$('swapVideo').value) return toast('Choose a video.', true);
     let audio;
     try { audio = audioPayload($('swapAudioMode'), $('swapProjectAudio')); } catch (e) { return toast(e.message, true); }
+    if (!(await consented())) return;
     await runJob('/api/motion/render', { engine: 'face_swap', driving_video: $('swapVideo').value,
       restore: $('swapRestore').checked, ...identityPayload(), ...audio }, slotOf(button), 'Face Swap Video');
   }
 
   async function swapFrame(button, engine) {
     if (!$('swapVideo').value) return toast('Choose a video.', true);
+    if (!(await consented())) return;
     const result = await runJob('/api/motion/swap-identity', { driving_video_path: $('swapVideo').value, engine,
       restore: $('swapRestore').checked, ...identityPayload() }, slotOf(button), engine ? 'Identity edit (cloud)' : 'Face Swap (frame)');
     if (result) await loadLibraries();
@@ -563,6 +570,7 @@
 
   async function klingTransfer(button) {
     if (!$('swapVideo').value) return toast('Choose the motion video in the Face Swap Video card.', true);
+    if (!(await consented())) return;
     await runJob('/api/motion/render', { engine: 'kling', driving_video: $('swapVideo').value, prompt: $('klingPrompt').value,
       ...identityPayload() }, slotOf(button), 'Motion transfer (Kling, cloud)');
   }
