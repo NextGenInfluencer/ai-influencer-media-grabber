@@ -262,3 +262,36 @@ def translate_lines(lines, target, *, context='', glossary='', notes='', model=N
         for line_id in entry['ids']:
             results[line_id] = dict(value)
     return {line['id']: results[line['id']] for line in lines}
+
+
+def compare_line(text, target, *, before='', after='', context='', glossary='', notes='', model=None):
+    """A/B one line: the Translator and the Helper outputs side by side.
+
+    Each side reports its own error instead of a fabricated result; when neither side has a
+    local model the Translator's ``AIUnavailable`` is raised.
+    """
+    text = str(text or '')
+    if not text.strip() or len(text) > MAX_TEXT:
+        raise ValueError('Choose a lyric line with text to compare.')
+    kind, source = classify_line(text, target)
+    line = [{'id': 'line', 'text': text}]
+    sides, errors = {}, {}
+    for role in ('translator', 'helper'):
+        try:
+            choice = llm.resolve(role, model=model if role == 'translator' else None)
+            if role == 'translator' and choice.get('prompt_format') == 'translategemma' and source:
+                prompt = _translategemma_prompt(text, source, target, before, after)
+                answer = llm.chat('translator', [{'role': 'user', 'content': prompt}], model=model,
+                                  temperature=0.1, max_tokens=400)
+                value = {'text': _clean_plain(answer['content']), 'note': ''}
+            else:
+                system = SYSTEM_MIXED if role == 'helper' and kind == 'mixed' else SYSTEM_SINGLE
+                value = _batch(role, system, line, target, context, glossary, notes,
+                               model if role == 'translator' else None)['line']
+            sides[role] = {**value, 'model': choice['model'], 'backend': choice['backend'], 'local': True}
+        except AIUnavailable as exc:
+            errors[role] = exc
+            sides[role] = {'error': exc.message, 'setup_hint': exc.setup_hint}
+    if len(errors) == 2:
+        raise errors['translator']
+    return {'kind': kind, 'source_language': source, **sides}

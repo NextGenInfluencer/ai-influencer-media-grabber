@@ -43,7 +43,9 @@ from download_support import (MAX_COOKIE_FILE_BYTES, CookieError, LoginRequiredE
                               gallery_download, host_matches, import_cookie_bytes, is_instagram_profile_url,
                               is_instagram_url, migrate_legacy_cookies, platform_folder,
                               read_json_with_recovery, wants_playlist, write_json_with_backup)
-from ai_runtime import serialized, transcribe, translate_srt
+from ai_runtime import segments_to_srt, translate_srt
+from ai_core import asr
+from ai_core.errors import AIUnavailable
 import creator_composition
 from assets import hwaccel
 from typing import Any, Optional, cast
@@ -51,7 +53,6 @@ from typing import Any, Optional, cast
 # --- Constants ---
 MAX_UPLOAD_BYTES = 500 * 1024 * 1024  # 500 MB
 UPDATE_CHECK_INTERVAL = 86400  # 24 hours in seconds
-MODEL_UNLOAD_TIMEOUT = 600  # 10 minutes before unloading AI models
 GALLERY_CACHE_TTL = 15  # seconds
 
 # --- Live Server Log Capture (Tee stdout & stderr for In-App Live Console) ---
@@ -319,119 +320,14 @@ def resolve_source_url(file_path, history_index=None):
 # Ensure ffmpeg is in PATH for whisper
 os.environ["PATH"] += os.pathsep + os.path.dirname(imageio_ffmpeg.get_ffmpeg_exe())
 
-import gc
-whisper_model = None
-_whisper_timer = None
 
-@serialized
-def unload_whisper():
-    global whisper_model, _whisper_timer
-    if whisper_model is not None:
-        print("Unloading Whisper model to free memory...")
-        whisper_model = None
-        try:
-            import torch
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-        except Exception: pass
-        gc.collect()
-    _whisper_timer = None
+def helper_generate(prompt, system_prompt):
+    """One local chat turn on the helper role (Ollama or built-in engine). Raises AIUnavailable."""
+    from ai_core import llm
+    answer = llm.chat('helper', [{'role': 'system', 'content': system_prompt},
+                                 {'role': 'user', 'content': prompt}], temperature=0.4, max_tokens=1024)
+    return answer['content'].strip()
 
-@serialized
-def get_whisper():
-    global whisper_model, _whisper_timer
-    if _whisper_timer is not None:
-        _whisper_timer.cancel()
-    if whisper_model is None:
-        try:
-            import whisper
-        except ImportError:
-            print("Whisper is not installed. AI Pack required.")
-            return None
-        print("Loading Whisper model (this may take a moment)...")
-        whisper_model = whisper.load_model("base")
-    _whisper_timer = threading.Timer(MODEL_UNLOAD_TIMEOUT, unload_whisper)
-    _whisper_timer.daemon = True
-    _whisper_timer.start()
-    return whisper_model
-
-llm_model = None
-_llm_timer = None
-_current_llm_id = None
-
-@serialized
-def unload_llm():
-    global llm_model, _llm_timer, _current_llm_id
-    if llm_model is not None:
-        del llm_model
-        llm_model = None
-        _current_llm_id = None
-        gc.collect()
-    _llm_timer = None
-
-@serialized
-def get_llm(model_id="llama-3.2-1b"):
-    global llm_model, _llm_timer, _current_llm_id
-    if _llm_timer is not None:
-        _llm_timer.cancel()
-
-    if llm_model is None or _current_llm_id != model_id:
-        if llm_model is not None: unload_llm()
-
-        try:
-            from llama_cpp import Llama
-            from huggingface_hub import hf_hub_download
-        except ImportError:
-            print("llama-cpp-python or huggingface_hub not installed. AI Pack required.")
-            return None
-
-        models_dir = os.path.join(app.root_path, "ai_models")
-        os.makedirs(models_dir, exist_ok=True)
-
-        print(f"Loading Local LLM ({model_id})...")
-        if model_id == "llama-3-8b":
-            repo_id = "QuantFactory/Meta-Llama-3-8B-Instruct-GGUF"
-            filename = "Meta-Llama-3-8B-Instruct.Q4_K_M.gguf"
-        else: # Default: Llama 3.2 1B
-            repo_id = "bartowski/Llama-3.2-1B-Instruct-GGUF"
-            filename = "Llama-3.2-1B-Instruct-Q4_K_M.gguf"
-
-        model_path = os.path.join(models_dir, filename)
-        if not os.path.exists(model_path):
-            print(f"Downloading {filename} from HuggingFace (First time only)...")
-            hf_hub_download(repo_id=repo_id, filename=filename, local_dir=models_dir)
-
-        # Initialize Llama model
-        llm_model = Llama(
-            model_path=model_path,
-            n_gpu_layers=-1, # Auto-detect GPU if possible
-            n_ctx=4096,
-            verbose=False
-        )
-        _current_llm_id = model_id
-
-    _llm_timer = threading.Timer(MODEL_UNLOAD_TIMEOUT, unload_llm)
-    _llm_timer.daemon = True
-    _llm_timer.start()
-    return llm_model
-
-@serialized
-def llm_generate(prompt, system_prompt="You are a helpful AI assistant.", model_id="llama-3.2-1b"):
-    llm = get_llm(model_id)
-    if not llm:
-        raise RuntimeError("AI Engine pack required for local LLM generation.")
-    response = llm.create_chat_completion(
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0.7,
-        max_tokens=1024
-    )
-    if isinstance(response, dict):
-        content = response.get('choices', [{}])[0].get('message', {}).get('content')
-        return (content or "").strip()
-    return ""
 
 # Cache the face detection cascade globally but initialize lazily and defensively
 _face_cascade = None
@@ -962,7 +858,6 @@ def convert_media():
     burn_subtitles = request.form.get('burn_subtitles') == 'true'
     export_subtitles = request.form.get('export_subtitles') == 'true'
     translate_lang = request.form.get('translate_lang', 'none')
-    llm_model = request.form.get('llmModel', 'none')
     trim_start = request.form.get('trimStart')
     trim_end = request.form.get('trimEnd')
     compress_opt = request.form.get('compress')
@@ -999,8 +894,6 @@ def convert_media():
     if len(files) > 1 and (trim_start or trim_end):
         return jsonify({'error': 'Trim one video at a time.'}), 400
     if translate_lang != 'none':
-        if llm_model == 'none':
-            return jsonify({'error': 'Select a translation model first.'}), 400
         export_subtitles = True
 
     if not files or files[0].filename == '':
@@ -1195,27 +1088,16 @@ def convert_media():
 
                             if os.path.exists(temp_audio):
                                 try:
-                                    model = get_whisper()
-                                    if not model:
-                                        raise RuntimeError('Whisper is unavailable. Install the AI Pack or turn off subtitles.')
-                                    else:
-                                        result = transcribe(model, temp_audio, verbose=False)
+                                    result = asr.transcribe(temp_audio, word_timestamps=False)
+                                    with open(temp_srt, 'w', encoding='utf-8') as f:
+                                        f.write(segments_to_srt(result.get('segments', []), format_srt_timestamp))
 
-
-
-                                        with open(temp_srt, 'w', encoding='utf-8') as f:
-                                            for i, segment in enumerate(result.get('segments', [])):
-                                                f.write(f"{i + 1}\n")
-                                                f.write(f"{format_srt_timestamp(segment['start'])} --> {format_srt_timestamp(segment['end'])}\n")
-                                                f.write(f"{segment['text'].strip()}\n\n")
-
-                                    if translate_lang and translate_lang != 'none' and llm_model and llm_model != 'none':
+                                    if translate_lang and translate_lang != 'none':
                                         q.put({"status": f"{prefix}Translating Subtitles to {translate_lang}..."})
                                         try:
                                             with open(temp_srt, 'r', encoding='utf-8') as tf:
                                                 srt_content = tf.read()
-                                            sys_p = f"You are a professional subtitle translator. Translate the following .srt file to {translate_lang}. Maintain the exact SRT formatting and timestamps. Output ONLY the translated SRT text."
-                                            translated_srt = translate_srt(srt_content, llm_generate, llm_model, translate_lang)
+                                            translated_srt = translate_srt(srt_content, translate_lang)
                                             with open(temp_srt, 'w', encoding='utf-8') as tf:
                                                 tf.write(translated_srt)
                                         except Exception as e:
@@ -1699,24 +1581,12 @@ def postprocess_download(info, url, processing_options, report, prefix='', namer
             report({"status": f"{prefix}Warning: could not extract the first frame; the video itself was saved."})
 
     if processing_options.get('autoExtractPrompt'):
-        report({"status": f"{prefix}Extracting AI Prompt (BLIP)..."})
+        report({"status": f"{prefix}Describing the first frame with the local vision model..."})
         try:
             from ai_prompter import extract_prompt_from_image
             target_image = frame_path if frame_path and os.path.exists(frame_path) else final_path
             if os.path.exists(target_image):
                 prompt_text = extract_prompt_from_image(target_image)
-                if prompt_text.startswith("Error:"):
-                    raise RuntimeError(prompt_text)
-
-                llm_model_choice = processing_options.get('llmModel', 'none')
-                if llm_model_choice and llm_model_choice != 'none':
-                    report({"status": f"{prefix}Enhancing prompt with Local LLM..."})
-                    sys_p = "Polish this image-editing instruction for clarity only. It is a character identity replacement in an existing first frame for Kling motion control, not new scene generation. Preserve every constraint and the Image 1 / Image 2 reference roles, including original pose, proportions, clothing, composition, dimensions, background, lighting, and other people. Keep the instruction to clarify an ambiguous target. Keep the automatic caption explicitly uncertain and subordinate to the actual images. Do not invent visual details or add cinematic, beauty, quality, resolution, or camera keywords. Output ONLY the complete editing prompt."
-                    try:
-                        prompt_text = llm_generate(prompt_text, sys_p, llm_model_choice)
-                    except Exception as e:
-                        print(f"LLM Enhancement Error: {e}")
-
                 prompt_txt_path = base + "_prompt.txt"
                 with open(prompt_txt_path, "w", encoding="utf-8") as f:
                     f.write(prompt_text)
@@ -1794,42 +1664,28 @@ def postprocess_download(info, url, processing_options, report, prefix='', namer
                 "-vn", "-acodec", "libmp3lame", full_audio
             ]
             subprocess.run(ffmpeg_full_audio, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            model = get_whisper()
-            if not model:
-                raise RuntimeError("Whisper AI Pack is required for transcription/subtitles.")
-            result: dict[str, Any] = transcribe(model, full_audio, verbose=False)
+            result: dict[str, Any] = asr.transcribe(full_audio, word_timestamps=False)
             transcript_text = result.get("text", "").strip()
             if want_transcribe and transcript_text:
                 with open(transcript_path, "w", encoding="utf-8") as f:
                     f.write(transcript_text)
 
             if want_summarize and transcript_text:
-                llm_model_choice = processing_options.get('llmModel', 'none')
-                if llm_model_choice and llm_model_choice != 'none':
-                    report({"status": f"{prefix}Generating AI Summary & SEO Tags..."})
-                    sys_p = "You are an expert social media manager. Read the video transcript and output: 1) A clean, bulleted summary of key points. 2) 3 viral TikTok/Reels captions. 3) SEO-optimized hashtags."
-                    try:
-                        summary_text = llm_generate(transcript_text, sys_p, llm_model_choice)
-                        summary_path = base + "_AI_Summary.txt"
-                        with open(summary_path, "w", encoding="utf-8") as sf:
-                            sf.write(summary_text)
-                    except Exception as e:
-                        print(f"LLM Summarize Error: {e}")
+                report({"status": f"{prefix}Generating AI Summary & SEO Tags (local helper model)..."})
+                sys_p = "You are an expert social media manager. Read the video transcript and output: 1) A clean, bulleted summary of key points. 2) 3 viral TikTok/Reels captions. 3) SEO-optimized hashtags."
+                try:
+                    summary_text = helper_generate(transcript_text[:12000], sys_p)
+                    summary_path = base + "_AI_Summary.txt"
+                    with open(summary_path, "w", encoding="utf-8") as sf:
+                        sf.write(summary_text)
+                except AIUnavailable as e:
+                    problems.append(f"{prefix}AI summary skipped: {e.message}")
+                    report({"status": f"{prefix}AI summary skipped: {e.message}"})
 
             if (want_burn or want_export) and final_path.endswith(('.mp4', '.mkv', '.mov')) and result:
                 srt_path = base + "_subtitles.srt"
                 with open(srt_path, "w", encoding="utf-8") as srt_f:
-                    raw_segs = result.get("segments", [])
-                    segments = raw_segs if isinstance(raw_segs, list) else []
-                    for i, segment in enumerate(segments, start=1):
-                        if not isinstance(segment, dict):
-                            continue
-                        seg_start = float(segment.get('start', 0.0))
-                        seg_end = float(segment.get('end', 0.0))
-                        seg_text = str(segment.get('text', '')).strip()
-                        srt_f.write(f"{i}\n")
-                        srt_f.write(f"{format_srt_timestamp(seg_start)} --> {format_srt_timestamp(seg_end)}\n")
-                        srt_f.write(f"{seg_text}\n\n")
+                    srt_f.write(segments_to_srt(result.get("segments", []), format_srt_timestamp))
 
                 if want_burn:
                     report({"status": f"{prefix}Burning subtitles into video..."})
@@ -2139,20 +1995,15 @@ def extract_prompt():
             return jsonify({"error": f"Video extraction error: {str(e)}"}), 500
 
     try:
-        from ai_prompter import extract_prompt_from_image, is_ai_vision_available
-        if not is_ai_vision_available():
-            return jsonify({
-                "error": "ai_pack_required",
-                "message": "AI Vision Engine pack is required for prompt extraction."
-            }), 400
+        from ai_prompter import extract_prompt_from_image
         increment_active_job()
         try:
             prompt = extract_prompt_from_image(target_image)
-            if prompt.startswith('Error:'):
-                raise RuntimeError(prompt)
         finally:
             decrement_active_job()
         return jsonify({"prompt": prompt})
+    except AIUnavailable as e:
+        return jsonify({"error": e.message, "setup_hint": e.setup_hint}), 424
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
@@ -2775,7 +2626,7 @@ except ModuleNotFoundError as exc:
     if exc.name != 'captions':
         raise
     raise RuntimeError('Captions & Lyrics requires the new application component. Upgrade from v2.4.x using the Windows installer on the GitHub release page.') from None
-register_captions(app, DEFAULT_SAVE_DIR, increment_active_job, decrement_active_job, invalidate_gallery_cache, get_whisper, is_safe_path)
+register_captions(app, DEFAULT_SAVE_DIR, increment_active_job, decrement_active_job, invalidate_gallery_cache, is_safe_path)
 from routes_studio import register_studio_routes
 register_studio_routes(app, save_dir=DEFAULT_SAVE_DIR, allowed_path=is_safe_path, app_version=APP_VERSION,
                        job_started=increment_active_job, job_finished=decrement_active_job)

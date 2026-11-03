@@ -1,4 +1,4 @@
-from assets import lyric_tracks, lyric_translation, lyric_layout, lyric_fonts
+from assets import lyric_tracks, lyric_layout, lyric_fonts
 """Local caption projects, validated subtitle data and non-destructive rendering."""
 import io
 import hashlib
@@ -27,7 +27,8 @@ import numpy as np
 from PIL import ImageFont
 from flask import Blueprint, jsonify, request, send_file, render_template, session
 import job_process as process
-from ai_runtime import transcribe, align_lyrics, align_caption_words, detect_caption_language
+from ai_core import asr, catalog as ai_catalog, hardware as ai_hardware, llm as ai_llm, translate as ai_translate
+from ai_core.errors import AIUnavailable, ConsentRequired, ModelMissing
 import creator_composition as composition_model
 
 DEFAULT_STYLE = dict(font='Arial', size=5, color='#ffffff', highlight='#ffdc55',
@@ -797,7 +798,12 @@ def script_runs(text):
     return [(script or 'latin', tokens) for script, tokens in runs]
 
 
-def run_language(model, samples, script, language):
+def detect_lyric_language(samples, candidates=None):
+    """Language of the most-voiced window, restricted to the supported caption languages."""
+    return asr.detect_language(samples, tuple(candidates or composition_model.LANGUAGES))
+
+
+def run_language(samples, script, language):
     """Alignment language for one script run of a mixed line."""
     if script in ('el', 'ko'):
         return script
@@ -807,10 +813,10 @@ def run_language(model, samples, script, language):
         return candidates[0]
     if not candidates:
         return 'en'
-    return detect_caption_language(model, samples, tuple(candidates))
+    return detect_lyric_language(samples, candidates)
 
 
-def refine_script_runs(model, samples, cue, words, coarse_language, language, duration):
+def refine_script_runs(samples, cue, words, coarse_language, language, duration):
     """Re-align each script run of a mixed line in its own language over its coarse sub-range.
 
     ``words`` come from a whole-line pass; each run is re-aligned inside the window
@@ -825,7 +831,7 @@ def refine_script_runs(model, samples, cue, words, coarse_language, language, du
     for position, (script, tokens) in enumerate(runs):
         coarse = words[index:index + len(tokens)]
         index += len(tokens)
-        chosen = run_language(model, samples, script, language)
+        chosen = run_language(samples, script, language)
         languages.append(chosen)
         if chosen == coarse_language and coarse[0]['start'] >= cursor - 1e-3:
             refined.extend(copy.deepcopy(coarse))
@@ -838,7 +844,7 @@ def refine_script_runs(model, samples, cue, words, coarse_language, language, du
         window = samples[max(0, round((a - start) * 16000)):min(len(samples), round((b - start) * 16000))]
         text = ' '.join(tokens)
         process.check_cancelled()
-        part = aligned_cues(align_caption_words(model, window, text, chosen), [text], a, duration, b - a, recover=True)[0]
+        part = aligned_cues(asr.align_words(window, text, chosen), [text], a, duration, b - a, recover=True)[0]
         if part['words'][0]['start'] < cursor - 1e-3:
             raise ValueError('Language runs overlap.')
         refined.extend(part['words'])
@@ -1344,7 +1350,52 @@ def detect_face_in_video(video_path: Path, time_sec: float = 0.0, target: str = 
         cap.release()
 
 
-def register_captions(app, save_dir, job_started, job_finished, refresh_gallery, get_whisper, allowed_path):
+TRANSLATION_GROUP = 8
+SONG_CONTEXT_CHARS = 12000
+LEGACY_TRANSLATION_MODELS = {'qwen3-4b-local': 'qwen3-4b'}
+
+
+def translation_model(settings):
+    """Model chosen in the project, or None for "Auto (best for this PC)"."""
+    value = str((settings or {}).get('model') or '').strip()
+    if not value or value == 'auto':
+        return None
+    return LEGACY_TRANSLATION_MODELS.get(value, value)
+
+
+def song_context(cues):
+    """Whole-song lyric context when it fits the model's prompt budget, else '' (callers use neighbours)."""
+    song = '\n'.join(c['text'] for c in cues)
+    return song if len(song) <= SONG_CONTEXT_CHARS else ''
+
+
+def _model_roles(entry):
+    if entry.get('item_id') and ai_catalog.exists(entry['item_id']):
+        roles = [r for r in ai_catalog.get(entry['item_id']).get('roles', []) if r in ('helper', 'translator', 'vision')]
+        if roles:
+            return roles
+    capabilities = set(entry.get('capabilities') or [])
+    return ['translator'] + (['helper'] if 'tools' in capabilities else []) + (['vision'] if 'vision' in capabilities else [])
+
+
+def translation_model_catalog():
+    """Installed local models (role badges), the automatic translator and the setup item to offer."""
+    models = [{**entry, 'roles': _model_roles(entry)} for entry in ai_llm.available_models()]
+    try:
+        choice = ai_llm.resolve('translator')
+        auto = {'available': True, 'model': choice['model'], 'backend': choice['backend'], 'local': True}
+    except AIUnavailable as exc:
+        auto = {'available': False, 'model': None, 'error': exc.message, 'setup_hint': exc.setup_hint}
+    recommended = ai_catalog.recommended(ai_hardware.current_profile(), 'translator', ai_hardware.detect())
+    setup_item = recommended[0] if recommended else auto.get('setup_hint')
+    setup = None
+    if setup_item and ai_catalog.exists(setup_item):
+        item = ai_catalog.get(setup_item)
+        setup = {'item_id': setup_item, 'name': item['name'], 'size_bytes': item.get('size_bytes')}
+    return {'models': models, 'auto': auto, 'setup': setup}
+
+
+def register_captions(app, save_dir, job_started, job_finished, refresh_gallery, allowed_path):
     bp = Blueprint('captions', __name__)
     root = Path(save_dir) / 'Caption Projects'
     stock_dir = Path(save_dir) / 'Stock Media'
@@ -1464,6 +1515,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             job_started()
         def run():
             process.begin_job()
+            data.pop('setup_hint', None)
             original = copy.deepcopy(data)
             try:
                 # Project-scoped cancel: Stop in this editor ends only this project's job.
@@ -1477,6 +1529,9 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                 data.clear()
                 data.update(original)
                 data['state'], data['status'] = 'error', str(exc)
+                if isinstance(exc, AIUnavailable) and exc.setup_hint:
+                    # The editor turns this into a [Set up AI] action; nothing is downloaded silently.
+                    data['setup_hint'] = exc.setup_hint
             finally:
                 try:
                     write(data)
@@ -1506,6 +1561,14 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
     @bp.errorhandler(FileNotFoundError)
     def missing(exc):
         return jsonify(error='Caption project or media not found.'), 404
+
+    @bp.errorhandler(ConsentRequired)
+    def consent_required(exc):
+        return jsonify(error=exc.message, setup_hint=exc.setup_hint, consent_required=True), 409
+
+    @bp.errorhandler(AIUnavailable)
+    def ai_unavailable(exc):
+        return jsonify(error=exc.message, setup_hint=exc.setup_hint), 424
 
     @bp.get('/captions')
     def editor():
@@ -2008,10 +2071,8 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             def work(d, f):
                 ffmpeg(['-i', d['source'], '-vn', '-ac', '1', '-ar', '16000', 'speech.wav'], f)
                 try:
-                    model = get_whisper()
-                    if model is None:
-                        raise ValueError('Install the AI Pack in the main app to enable transcription. Manual editing and import work without it.')
-                    result = transcribe(model, str(f / 'speech.wav'), word_timestamps=True, language=language or None)
+                    result = asr.transcribe(str(f / 'speech.wav'), word_timestamps=True, language=language or None)
+                    process.check_cancelled()
                     cues = []
                     for segment in result.get('segments', []):
                         start = max(0, float(segment['start']))
@@ -2060,9 +2121,6 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             if not indices:
                 raise ValueError('No lines need another timing pass.')
             def work(d, f):
-                model = get_whisper()
-                if model is None:
-                    raise ValueError('Install the AI Pack in the Studio to add karaoke timing.')
                 # Decode once, then read bounded cue slices rather than loading a full song into RAM.
                 audio_file = f / 'karaoke.wav'
                 pending = copy.deepcopy(d['cues'])
@@ -2101,8 +2159,8 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                                 if language == 'auto' or language in composition_model.MIXED:
                                     candidates = composition_model.MIXED.get(language)
                                     if not greek and not korean:
-                                        chosen = detect_caption_language(model, samples, candidates)
-                                result = align_caption_words(model, samples, cue['text'], chosen)
+                                        chosen = detect_lyric_language(samples, candidates)
+                                result = asr.align_words(samples, cue['text'], chosen)
                                 process.check_cancelled()
                                 aligned = aligned_cues(result, [cue['text']], cue['start'], d['duration'], cue['end']-cue['start'], recover=True)[0]
                                 words = aligned['words']
@@ -2110,7 +2168,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                                 if (language == 'auto' or language in composition_model.MIXED) and has_mixed_lyric_scripts(cue['text']):
                                     # Whole-line pass gives run boundaries; each script run is re-aligned in its own language.
                                     try:
-                                        words, run_languages = refine_script_runs(model, samples, cue, words, chosen, language, d['duration'])
+                                        words, run_languages = refine_script_runs(samples, cue, words, chosen, language, d['duration'])
                                         notes.append('Aligned per language (' + ' + '.join(dict.fromkeys(run_languages)) + ').')
                                     except ValueError:
                                         process.check_cancelled()
@@ -2229,9 +2287,6 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                 try:
                     ffmpeg(['-ss', str(start), '-i', d['source'], '-t', str(end-start),
                             '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', audio_file.name], f)
-                    model = get_whisper()
-                    if model is None:
-                        raise ValueError('Install the AI Pack in the Studio to enable lyric timing.')
                     with wave.open(str(audio_file), 'rb') as audio:
                         samples = np.frombuffer(audio.readframes(audio.getnframes()), dtype='<i2').astype(np.float32) / 32768
                     if not samples.size or np.max(np.abs(samples)) < .0001:
@@ -2252,16 +2307,16 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                         if type(completed) is not int or not 0 <= completed <= len(cues):
                             raise ValueError('Invalid lyric checkpoint. Start a new sync.')
                     else:
-                        coarse_language=language if language in composition_model.LANGUAGES else detect_caption_language(model,samples[:480000],composition_model.MIXED.get(language))
+                        coarse_language=language if language in composition_model.LANGUAGES else detect_lyric_language(samples,composition_model.MIXED.get(language))
                         try:
-                            result = align_lyrics(model, samples, '\n'.join(lines), coarse_language)
+                            result = asr.align(samples, '\n'.join(lines), coarse_language)
                             cues = aligned_cues(result, lines, start, d['duration'], end-start, recover=True)
-                        except ValueError:
-                            if not options.get('sections'): raise
+                        except (ValueError, AIUnavailable) as exc:
+                            if isinstance(exc, ModelMissing) or not options.get('sections'): raise
                             # Speech timestamps can provide approximate section anchors when forced alignment fails.
                             # These remain explicitly reviewable; an LLM never invents timestamps.
                             process.check_cancelled()
-                            transcript=transcribe(model,samples,word_timestamps=True,language=coarse_language)
+                            transcript=asr.transcribe(samples,word_timestamps=True,language=coarse_language)
                             anchors=[]
                             for seg in transcript.get('segments',[]):
                                 a=max(anchors[-1]['end'] if anchors else 0,float(seg['start']))
@@ -2291,8 +2346,8 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                                 if language=='auto' or language in composition_model.MIXED:
                                     if re.search(r'[\u0370-\u03ff\u1f00-\u1fff]',cue['text']): chosen='el'
                                     elif re.search(r'[\u1100-\u11ff\u3130-\u318f\uac00-\ud7af]',cue['text']): chosen='ko'
-                                    else: chosen=detect_caption_language(model,chunk,composition_model.MIXED.get(language))
-                                result = align_caption_words(model, chunk, cue['text'], chosen)
+                                    else: chosen=detect_lyric_language(chunk,composition_model.MIXED.get(language))
+                                result = asr.align_words(chunk, cue['text'], chosen)
                                 process.check_cancelled()
                                 refined = aligned_cues(result, [cue['text']], cue['start'], d['duration'], length, recover=True)[0]
                                 validate_edit(dict(cues=[refined]), d['duration'])
@@ -2491,24 +2546,8 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
 
     @bp.get('/api/captions/translation-models')
     def translation_models():
-        return jsonify(models=lyric_translation.models())
-
-    @bp.post('/api/captions/<pid>/translation-setup')
-    def setup_translation_model(pid):
-        with lock:
-            data = read(pid)
-            options = request.get_json() or {}
-            if data['state'] == 'busy' or options.get('revision') != data['revision']:
-                return jsonify(error='Project changed or is processing. Save and reload first.'), 409
-            lyric_translation.require_local_runtime()
-            def work(d, f):
-                def progress(message):
-                    d['status'] = message
-                    write(d)
-                lyric_translation.install_model(progress)
-                d.setdefault('translation_settings', {})['model'] = 'qwen3-4b-local'
-                d['_completion_notice'] = 'Translation model ready. Choose Translate unlocked lines to create a reviewable proposal.'
-            return launch(data, 'Setting up local translation…', work)
+        """Installed local models with role badges, plus the automatic choice and setup item."""
+        return jsonify(translation_model_catalog())
 
     @bp.post('/api/captions/<pid>/translate')
     def translate_project(pid):
@@ -2523,8 +2562,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             if selected is not None and (not isinstance(selected,list) or any(i not in {c['id'] for c in data['cues']} for i in selected)):
                 raise ValueError('Choose valid lyric lines.')
             settings = data.get('translation_settings',{})
-            model = settings.get('model','')
-            if not model: raise ValueError('Select an installed local model, or enter translations manually.')
+            model = translation_model(settings)
             def work(d,f):
                 originals = d['cues']
                 pending = [c for c in originals if (selected is None or c['id'] in selected)
@@ -2544,9 +2582,10 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                 for c in pending:
                     if c['id'] in done:
                         chorus.setdefault(c['text'], done[c['id']])
-                for offset in range(0,len(pending),8):
+                song = song_context(originals)
+                for offset in range(0,len(pending),TRANSLATION_GROUP):
                     process.check_cancelled()
-                    group = [c for c in pending[offset:offset+8] if c['id'] not in done]
+                    group = [c for c in pending[offset:offset+TRANSLATION_GROUP] if c['id'] not in done]
                     request_lines = []
                     representatives = {}
                     for c in group:
@@ -2557,11 +2596,11 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                             request_lines.append(dict(id=c['id'],text=c['text']))
                     if request_lines:
                         first = originals.index(group[0]);last = originals.index(group[-1])
-                        context = '\n'.join(c['text'] for c in originals[max(0,first-3):last+4])[:12000]
-                        d['status']=f'Translating: {len(done)}/{len(pending)} lines (translating lines {offset+1}–{min(offset+8,len(pending))}…)'
+                        context = song or '\n'.join(c['text'] for c in originals[max(0,first-3):last+4])[:SONG_CONTEXT_CHARS]
+                        d['status']=f'Translating: {len(done)}/{len(pending)} lines (translating lines {offset+1}–{min(offset+TRANSLATION_GROUP,len(pending))}…)'
                         write(d)
-                        answer = lyric_translation.translate(request_lines,context,composition_model.LANGUAGES[language],model,
-                                                              settings.get('notes',''),settings.get('glossary',''))
+                        answer = ai_translate.translate_lines(request_lines, language, context=context, model=model,
+                                                              notes=settings.get('notes',''), glossary=settings.get('glossary',''))
                         process.check_cancelled()
                         done.update(answer)
                         for text, cue_id in representatives.items():
@@ -2571,11 +2610,31 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                     temporary=path.with_suffix('.tmp')
                     temporary.write_text(json.dumps(dict(signature=signature,done=done),ensure_ascii=False),encoding='utf-8')
                     os.replace(temporary,path)
-                    d['status']=f'Translating: {min(offset+8,len(pending))}/{len(pending)} lines. Saved translations are unchanged.'
+                    d['status']=f'Translating: {min(offset+TRANSLATION_GROUP,len(pending))}/{len(pending)} lines. Saved translations are unchanged.'
                     write(d)
                 d['translation_proposal']=dict(id=uuid.uuid4().hex,signature=lyric_signature(d),language=language,lines=done)
                 d['_completion_notice']='Translation ready to review. Original lyrics and accepted translations are unchanged.'
             return launch(data,'Translating locally…',work)
+
+    @bp.post('/api/captions/<pid>/translate-ab')
+    def translate_ab(pid):
+        """Translator vs Helper output for one line, side by side; nothing is saved until the user picks."""
+        data = read(pid)
+        options = request.get_json() or {}
+        language = options.get('language') or data['style'].get('translation_language', 'en')
+        if language not in composition_model.LANGUAGES:
+            raise ValueError('Choose a supported target language.')
+        cues = data['cues']
+        index = next((i for i, c in enumerate(cues) if c['id'] == options.get('cue_id')), None)
+        if index is None:
+            raise ValueError('Choose a lyric line to compare.')
+        settings = data.get('translation_settings', {})
+        result = ai_translate.compare_line(
+            cues[index]['text'], language, model=translation_model(settings),
+            before=cues[index - 1]['text'] if index > 0 else '',
+            after=cues[index + 1]['text'] if index + 1 < len(cues) else '',
+            context=song_context(cues), notes=settings.get('notes', ''), glossary=settings.get('glossary', ''))
+        return jsonify(cue_id=cues[index]['id'], language=language, source=cues[index]['text'], **result)
 
     @bp.post('/api/captions/<pid>/translation-proposal')
     def apply_translation(pid):

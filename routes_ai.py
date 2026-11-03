@@ -159,6 +159,7 @@ def _settings_payload():
     data = settings.load()
     return {'roles': data.get('roles', {}), 'profile_override': data.get('profile_override'),
             'idle_release_seconds': data.get('idle_release_seconds'), 'accepted_licenses': data.get('accepted_licenses', []),
+            'notices': data.get('notices', {}), 'setup_seen': data.get('setup_seen') is True,
             'cloud': cloud.status()}
 
 
@@ -172,7 +173,9 @@ def post_settings():
     body = _body()
     roles = body.get('roles', {})
     cloud_flags = body.get('cloud', {})
-    if not isinstance(roles, dict) or not isinstance(cloud_flags, dict):
+    notices = body.get('notices', {})
+    setup_seen = body.get('setup_seen')
+    if not isinstance(roles, dict) or not isinstance(cloud_flags, dict) or not isinstance(notices, dict):
         raise ValueError('Invalid settings.')
     for role, value in roles.items():
         if role not in settings.ROLES or (value is not None and (not isinstance(value, str) or len(value) > 200)):
@@ -180,6 +183,11 @@ def post_settings():
     for provider, flags in cloud_flags.items():
         if provider not in settings.CLOUD_PROVIDERS or not isinstance(flags, dict) or not isinstance(flags.get('enabled'), bool):
             raise ValueError(f'Invalid cloud setting for {provider}.')
+    for name, accepted in notices.items():
+        if name not in settings.NOTICES or not isinstance(accepted, bool):
+            raise ValueError(f'Invalid notice: {name}.')
+    if setup_seen is not None and not isinstance(setup_seen, bool):
+        raise ValueError('setup_seen must be true or false.')
     idle = body.get('idle_release_seconds')
     if idle is not None and (not isinstance(idle, (int, float)) or not 10 <= idle <= 86400):
         raise ValueError('Idle release must be between 10 seconds and 24 hours.')
@@ -189,6 +197,10 @@ def post_settings():
             data['roles'][role] = value or None
         for provider, flags in cloud_flags.items():
             data['cloud'][provider] = {'enabled': flags['enabled']}
+        for name, accepted in notices.items():
+            data['notices'][name] = accepted
+        if setup_seen is not None:
+            data['setup_seen'] = setup_seen
         if idle is not None:
             data['idle_release_seconds'] = idle
     settings.update(apply)
