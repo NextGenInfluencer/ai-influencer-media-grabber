@@ -152,14 +152,45 @@ const CaptionTiming = (() => {
     function mergeCaptions(left,right){
         const merged=JSON.parse(JSON.stringify(left));merged.end=right.end;merged.text=left.text+' '+right.text;
         merged.words=left.words?.length&&right.words?.length?[...left.words,...right.words]:[];
-        merged.translations??={};
-        for(const lang of new Set([...Object.keys(left.translations||{}),...Object.keys(right.translations||{})])){
-            merged.translations[lang]={text:[left.translations?.[lang]?.text,right.translations?.[lang]?.text].filter(Boolean).join(' '),
-                source:'',status:'stale',locked:false,note:'Original lines merged. Review this combined translation.'};
-        }
+        // Combined text is kept but marked stale (empty source): it always needs review, never auto-approves.
+        const languages=new Set([...Object.keys(left.translations||{}),...Object.keys(right.translations||{})]);
+        merged.translations=Object.fromEntries([...languages].map(lang=>[lang,{
+            text:[left.translations?.[lang]?.text,right.translations?.[lang]?.text].filter(Boolean).join(' '),
+            source:'',status:'stale',locked:false,note:'Original lines merged. Review this combined translation.'}]));
         return merged;
     }
-    return {validate, visualizerBars, detectBeats, splitSequence, splitCaption, mergeCaptions};
+    /* Translation record contract (docs/v5-architecture.md): source = sha256(normalizeWs(cue.text)).
+       The whitespace class is identical to assets/lyric_tracks.py so both sides hash the same bytes. */
+    const WHITESPACE=/[ \t\n\r\f\v\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+/g;
+    const TRANSLATION_STATUSES=['approved','review','stale'];
+    function normalizeWs(text){return String(text??'').replace(WHITESPACE,' ').replace(/^ +| +$/g,'');}
+    async function sourceHash(text){
+        const digest=await globalThis.crypto.subtle.digest('SHA-256',new TextEncoder().encode(normalizeWs(text)));
+        return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');
+    }
+    /** The only writer of cue.translations records. Manual edits are approved; Copilot edits land in review. */
+    async function setCueTranslation(cue,lang,text,{status='approved',locked,note,origin='user'}={}){
+        if(!/^[a-z]{2,3}$/.test(String(lang)))throw Error('Choose a supported translation language.');
+        if(!TRANSLATION_STATUSES.includes(status))throw Error('Invalid translation review state.');
+        const value=String(text??'');
+        if(value.length>2000)throw Error('A translation must contain at most 2,000 characters.');
+        let lineText,source;
+        do{lineText=cue.text;source=await sourceHash(lineText);}while(cue.text!==lineText);
+        const previous=cue.translations?.[lang]||{};
+        const record={text:value.trim(),source,status,locked:Boolean(locked??previous.locked??false),
+            note:String(note??(origin==='copilot'?'Suggested by Copilot. Review, then Keep to approve.':previous.note??'')).slice(0,500)};
+        cue.translations={...(cue.translations||{}),[lang]:record};
+        return record;
+    }
+    function translationState(cue,lang,style={}){
+        const entry=cue?.translations?.[lang];
+        const hasText=Boolean(entry?.text?.trim());
+        const duplicate=hasText&&normalizeWs(entry.text)===normalizeWs(cue.text);
+        return {entry,hasText,pending:hasText&&entry.status!=='approved',
+            hiddenDuplicate:duplicate&&entry.status==='approved'&&style.track_mode==='both'&&style.hide_duplicate_translation!==false&&!cue.show_duplicate_translation};
+    }
+    return {validate, visualizerBars, detectBeats, splitSequence, splitCaption, mergeCaptions,
+        normalizeWs, sourceHash, setCueTranslation, translationState};
 })();
 if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
 /* Local caption editor. All imported text is rendered through textContent. */
@@ -403,7 +434,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         if(key!==sharedLayoutKey){
             if(sharedLayoutPending!==key){
                 sharedLayoutPending=key;
-                api(`/api/captions/${project.id}/layout`,'POST',{cue,style:s}).then(data=>{
+                api(`/api/captions/${project.id}/layout`,'POST',{cue,style:s,editor_preview:true}).then(data=>{
                     if(sharedLayoutPending===key){sharedLayoutKey=key;sharedLayoutRows=data.rows;drawCaption();}
                 }).catch(e=>{if(sharedLayoutPending===key){sharedLayoutKey=key;sharedLayoutRows=[];say(e.message,true);}});
             }
@@ -429,6 +460,12 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
                 transform:`translate(${xShift},-100%)`,fontSize:h*row.size/100+'px',whiteSpace:'pre',lineHeight:'1',marginLeft:s.background?(row.alignment==='left'?-1:row.alignment==='right'?1:0)*h*(s.box_padding||0)/100+'px':'0',marginTop:s.background?h*(s.box_padding||0)/100+'px':'0',
                 letterSpacing:h*(row.letter_spacing??s.letter_spacing??0)/100+'px',color:row.color,textAlign:row.alignment,
                 background:s.background?'rgba(10,12,20,.78)':'transparent',padding:s.background?h*(s.box_padding||0)/100+'px':'0',borderRadius:h*(s.box_radius||0)/100+'px'});
+            if(row.pending){
+                // Editor-only: unapproved translations stay visible but dimmed; exports omit them.
+                line.classList.add?.('pendingTranslation');
+                Object.assign(line.style,{opacity:'.45',fontStyle:'italic',outline:'1px dashed rgba(255,214,10,.75)',outlineOffset:'3px'});
+                line.title='Needs review: not included in exports until you Keep it.';
+            }
             const elapsed=video.currentTime-cue.start,remaining=cue.end-video.currentTime;
             if(row.track==='original'&&s.animation==='fade')line.style.opacity=String(Math.max(0,Math.min(1,elapsed/.18,remaining/.18)));
             if(row.track==='original'&&(s.animation==='pop'||s.animation==='pop_in')&&elapsed<.16)line.style.transform+=` scale(${.85+.15*Math.max(0,elapsed)/.16})`;
@@ -700,6 +737,26 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         if(cue&&(cue.style_override||s.layout_enabled||s.track_mode&&s.track_mode!=='original'))drawSharedLayout(box,cue,s,h);
         else Object.assign(box.style,{left:'6%',width:'88%',height:'auto'});
     }
+    function drawTranslationReview(c) {
+        const lang=project?.style?.translation_language||'en';
+        const state=c?CaptionTiming.translationState(c,lang,project.style):{};
+        const box=$('translationReviewBox');
+        if(box){
+            box.hidden=!state.pending;
+            if(state.pending){
+                $('translationReviewText').textContent=state.entry.status==='stale'
+                    ?'The original line changed after this translation was written. It is hidden from exports until you keep or retranslate it.'
+                    :(state.entry.note||'Suggested translation. It is hidden from exports until you keep it.');
+            }
+        }
+        const note=$('duplicateNote');
+        if(note){
+            const duplicate=Boolean(c&&state.hasText&&state.entry.status==='approved'&&project.style.track_mode==='both'&&project.style.hide_duplicate_translation!==false
+                &&CaptionTiming.normalizeWs(state.entry.text)===CaptionTiming.normalizeWs(c.text));
+            note.hidden=!duplicate;
+            if($('showDuplicateTranslation'))$('showDuplicateTranslation').checked=Boolean(c?.show_duplicate_translation);
+        }
+    }
     function select(index,seek=true) {
         selected=index;
         drawList();fillSelection();drawTimeline();drawCaption();
@@ -717,14 +774,16 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
             textWrap.style.display='flex';textWrap.style.flexDirection='column';textWrap.style.gap='2px';textWrap.style.minWidth='0';textWrap.style.flex='1';
             const text=document.createElement('span');text.textContent=(needsReview(c)?'⚑ ': '')+c.text;
             textWrap.append(text);
-            const trans=c.translations?.[project?.style?.translation_language||'en'];
-            if(trans?.text && trans.text!==c.text){
+            const trState=CaptionTiming.translationState(c,project?.style?.translation_language||'en',project?.style);
+            const trans=trState.entry;
+            if(trState.hasText && (trState.pending || CaptionTiming.normalizeWs(trans.text)!==CaptionTiming.normalizeWs(c.text))){
                 const sub=document.createElement('small');
-                sub.style.color='#c084fc';sub.style.fontSize='11px';sub.style.opacity='0.95';
+                sub.className='cueTranslation'+(trState.pending?' pending':'');
+                sub.style.color='#c084fc';sub.style.fontSize='11px';sub.style.opacity=trState.pending?'0.55':'0.95';
                 sub.style.overflow='hidden';sub.style.textOverflow='ellipsis';sub.style.whiteSpace='nowrap';
                 sub.style.cursor='pointer';
-                sub.title='Click to edit translated subtitle';
-                sub.textContent='🌐 ' + trans.text;
+                sub.title=trState.pending?'Needs review: not exported until you Keep it. Click to review.':'Click to edit translated subtitle';
+                sub.textContent=(trState.pending?'⚠ Needs review · ':'🌐 ') + trans.text;
                 sub.onclick=(e)=>{
                     e.stopPropagation();
                     select(i);
@@ -763,6 +822,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         } else {
             $('translationState').textContent=tr?`Translation: ${tr.status}${tr.note?' · '+tr.note:''}`:'No translation for this line yet.';
         }
+        drawTranslationReview(c);
         $('lineReview').textContent=c?.karaoke?.note || (c?.words?.length ? 'Word timings available — listen and adjust if needed.' : 'No word timings yet.');
         $('text').value=c?.text||'';$('start').value=c?.start.toFixed(2)||'';$('end').value=c?.end.toFixed(2)||'';
         for(const node of document.querySelectorAll('#selection textarea,#selection input,#selection button')) node.disabled=!c||busy;
@@ -1987,29 +2047,51 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         }
     };
     $('text').onchange=()=>{drawTimeline();drawList();fillSelection();};
+    /** Editor wrapper around CaptionTiming.setCueTranslation: one undo step, autosave, redraw. */
+    async function writeTranslation(cue,lang,text,options={}) {
+        if(!project||busy||!cue)return null;
+        checkpoint();
+        const record=await CaptionTiming.setCueTranslation(cue,lang,text,options);
+        changed(false);
+        drawList();fillSelection();
+        return record;
+    }
     if($('sideTranslationText')){
+        // Writes are chained so a slower hash can never overwrite newer keystrokes.
+        let sideWrite=Promise.resolve();
         $('sideTranslationText').oninput=()=>{
             const c=current();
-            if(c){
-                const val=$('sideTranslationText').value;
-                const lang=project?.style?.translation_language||'en';
-                storeDraft('translation-'+c.id+'-'+lang,{text:val});
-                if($('translationText')) $('translationText').value=val;
-                edit(()=>{
-                    c.translations??={};
-                    c.translations[lang]={
-                        text:val,
-                        source:c.text,
-                        status:'approved',
-                        locked:true,
-                        note:c.translations[lang]?.note||''
-                    };
-                },false);
-                drawTimeline();drawList();drawCaption();
-            }
+            if(!c||busy)return;
+            const lang=project?.style?.translation_language||'en';
+            const val=$('sideTranslationText').value;
+            storeDraft('translation-'+c.id+'-'+lang,{text:val});
+            if($('translationText')) $('translationText').value=val;
+            sideWrite=sideWrite.then(async()=>{
+                if(current()!==c)return;
+                checkpoint();
+                await CaptionTiming.setCueTranslation(c,lang,$('sideTranslationText').value,{status:'approved',locked:true});
+                changed(false);
+                drawTimeline();drawList();drawTranslationReview(c);
+            }).catch(e=>say(e.message,true));
         };
         $('sideTranslationText').onchange=()=>{drawTimeline();drawList();drawCaption();};
     }
+    if($('keepTranslation')) $('keepTranslation').onclick=act(async()=>{
+        const c=current(),lang=project?.style?.translation_language||'en',entry=c?.translations?.[lang];
+        if(!entry?.text)throw Error('This line has no translation to keep.');
+        await writeTranslation(c,lang,entry.text,{status:'approved',note:''});
+        say('Translation kept and approved for the current line.');
+    });
+    if($('retranslateLine')) $('retranslateLine').onclick=act(async()=>{
+        if(!current())throw Error('Select a lyric line first.');
+        await job('translate',{language:project.style.translation_language||'en',ids:[current().id]});
+    });
+    if($('showDuplicateTranslation')) $('showDuplicateTranslation').onchange=()=>{
+        const c=current();if(!c)return;
+        const show=$('showDuplicateTranslation').checked;
+        edit(()=>{if(show)c.show_duplicate_translation=true;else delete c.show_duplicate_translation;},false);
+        drawCaption();
+    };
     for(const k of ['start','end']) $(k).onchange=()=>{if(current())timingEdit(()=>{current()[k]=Number($(k).value);current().words=[];});};
     $('setStart').onclick=()=>{if(current())timingEdit(()=>{current().start=video.currentTime;current().words=[];});};
     $('setEnd').onclick=()=>{if(current())timingEdit(()=>{current().end=video.currentTime;current().words=[];});};
@@ -2124,17 +2206,13 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
     }
     $('applyLyricReview').onclick=act(()=>finishLyricReview('apply'));
     $('discardLyricReview').onclick=act(()=>finishLyricReview('discard'));
-    async function translationHash(text){
-        const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text));
-        return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');
-    }
     $('translationText').oninput=()=>{if(current())storeDraft('translation-'+current().id+'-'+(project.style.translation_language||'en'),{text:$('translationText').value});};
     $('approveManualTranslation').onclick=act(async()=>{
         const c=current();if(!c)throw Error('Select a caption line first.');
         const text=$('translationText').value.trim();if(!text)throw Error('Enter a translation.');
-        const source=await translationHash(c.text),language=project.style.translation_language||'en';
+        const language=project.style.translation_language||'en';
         storeDraft('translation-'+c.id+'-'+language,null);
-        edit(()=>{c.translations??={};c.translations[language]={text,source,status:'approved',locked:$('translationLocked').checked,note:''};});
+        await writeTranslation(c,language,text,{status:'approved',locked:$('translationLocked').checked,note:''});
     });
     for(const id of ['translationNotes','translationGlossary','translationModel'])$(id).onchange=()=>{
         if(project)edit(()=>{project.translation_settings={notes:$('translationNotes').value,glossary:$('translationGlossary').value,model:$('translationModel').value};},false);
@@ -2223,9 +2301,72 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         document.body.append(link); link.click(); link.remove();
         setTimeout(() => URL.revokeObjectURL(url), 60000);
     }
-    $('translationSrt').onclick=act(()=>downloadCaptionFile(`srt?mode=translation&language=${project.style.translation_language||'en'}`, 'translation.srt'));
-    $('bilingualSrt').onclick=act(()=>downloadCaptionFile(`srt?mode=both&language=${project.style.translation_language||'en'}`, 'bilingual.srt'));
-    $('styledAss').onclick=act(()=>downloadCaptionFile('ass', 'captions.ass'));
+    /* Export guard: nothing is silently dropped from a bilingual or translation export. */
+    let exportGuardResolve=null;
+    function closeExportGuard(choice){
+        const resolve=exportGuardResolve;exportGuardResolve=null;
+        if($('exportGuardDialog')?.open)$('exportGuardDialog').close();
+        resolve?.(choice);
+    }
+    async function exportGuard(mode) {
+        if(!project||mode==='original')return {proceed:true,skip:false};
+        await save();
+        const language=project.style.translation_language||'en';
+        const report=await api(`/api/captions/${project.id}/translation-status?language=${encodeURIComponent(language)}`);
+        const pending=[...report.review,...report.stale],missing=report.missing;
+        if(!pending.length&&!missing.length)return {proceed:true,skip:false};
+        const total=pending.length+missing.length;
+        $('exportGuardTitle').textContent=`${total} line${total===1?'':'s'} need${total===1?'s':''} review`;
+        const parts=[];
+        if(pending.length)parts.push(`${pending.length} translation${pending.length===1?' is':'s are'} waiting for review (suggested or written for an earlier version of the line).`);
+        if(missing.length)parts.push(`${missing.length} line${missing.length===1?' has':'s have'} no translation yet.`);
+        parts.push(mode==='translation'?'Lines without an approved translation are left out of a translation-only export.':'Unapproved lines export with the original text only.');
+        $('exportGuardSummary').textContent=parts.join(' ');
+        const rows=$('exportGuardRows');rows.replaceChildren();
+        for(const item of [...pending,...missing].sort((a,b)=>a.index-b.index).slice(0,8)){
+            const li=document.createElement('li');
+            const badge=document.createElement('span');badge.className='trBadge '+(item.status||'missing');
+            badge.textContent=item.status==='missing'?'Missing':item.status==='stale'?'Changed line':'Needs review';
+            const label=document.createElement('span');label.textContent=`#${item.index+1} ${item.text}${item.translation?' → '+item.translation:''}`;
+            li.append(badge,label);rows.append(li);
+        }
+        if(total>8){const more=document.createElement('li');more.className='hint';more.textContent=`…and ${total-8} more.`;rows.append(more);}
+        $('exportGuardKeep').disabled=!pending.length;
+        const choice=await new Promise(resolve=>{exportGuardResolve=resolve;$('exportGuardDialog').showModal();});
+        if(choice==='keep'){
+            checkpoint();
+            for(const item of pending){
+                const cue=project.cues.find(c=>c.id===item.id),entry=cue?.translations?.[language];
+                if(entry?.text)await CaptionTiming.setCueTranslation(cue,language,entry.text,{status:'approved',note:''});
+            }
+            changed();await save();
+            say(`${pending.length} translation${pending.length===1?'':'s'} kept and approved.`);
+            return {proceed:true,skip:missing.length>0};
+        }
+        if(choice==='review'){
+            const first=[...pending,...missing].sort((a,b)=>a.index-b.index)[0];
+            const index=project.cues.findIndex(c=>c.id===first?.id);
+            if(index>=0){select(index);$('sideTranslationText')?.focus?.();}
+            return {proceed:false};
+        }
+        return choice==='skip'?{proceed:true,skip:true}:{proceed:false};
+    }
+    if($('exportGuardKeep')){
+        $('exportGuardKeep').onclick=()=>closeExportGuard('keep');
+        $('exportGuardReview').onclick=()=>closeExportGuard('review');
+        $('exportGuardSkip').onclick=()=>closeExportGuard('skip');
+        $('exportGuardCancel').onclick=()=>closeExportGuard('cancel');
+        $('exportGuardDialog').addEventListener('close',()=>closeExportGuard('cancel'));
+    }
+    async function guardedCaptionFile(mode,path,filename){
+        const guard=await exportGuard(mode);
+        if(!guard.proceed)return;
+        const separator=path.includes('?')?'&':'?';
+        await downloadCaptionFile(guard.skip?`${path}${separator}skip_missing=1`:path,filename);
+    }
+    $('translationSrt').onclick=act(()=>guardedCaptionFile('translation',`srt?mode=translation&language=${project.style.translation_language||'en'}`, 'translation.srt'));
+    $('bilingualSrt').onclick=act(()=>guardedCaptionFile('both',`srt?mode=both&language=${project.style.translation_language||'en'}`, 'bilingual.srt'));
+    $('styledAss').onclick=act(()=>guardedCaptionFile(project.style.track_mode||'original','ass', 'captions.ass'));
     $('cancelLyrics').onclick=()=>$('lyricsDialog').close();
     $('applyLyrics').onclick=act(()=>{
         const lines=$('lyrics').value.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
@@ -2271,8 +2412,16 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         if(project?.cues.length&&!confirm('Replace existing captions with automatic transcription? The current version stays saved if transcription fails.'))return;
         checkpoint();await job('transcribe',{language:$('language').value});
     });
-    $('renderCheck').onclick=act(()=>{if(sequenceHasChanges())throw Error('Apply your clip sequence changes before rendering.');return job('render',{preview:true,quality:$('renderQuality').value||'standard',force_cpu:$('renderCpu').checked,start:Math.min(video.currentTime,Math.max(0,project.duration-.1))});});
-    $('export').onclick=act(()=>{if(sequenceHasChanges())throw Error('Apply your clip sequence changes before exporting.');return job('render',{preview:false,quality:$('renderQuality').value||'standard',force_cpu:$('renderCpu').checked});});
+    $('renderCheck').onclick=act(async()=>{
+        if(sequenceHasChanges())throw Error('Apply your clip sequence changes before rendering.');
+        const guard=await exportGuard(project.style.track_mode||'original');if(!guard.proceed)return;
+        return job('render',{preview:true,quality:$('renderQuality').value||'standard',force_cpu:$('renderCpu').checked,skip_unapproved:guard.skip,start:Math.min(video.currentTime,Math.max(0,project.duration-.1))});
+    });
+    $('export').onclick=act(async()=>{
+        if(sequenceHasChanges())throw Error('Apply your clip sequence changes before exporting.');
+        const guard=await exportGuard(project.style.track_mode||'original');if(!guard.proceed)return;
+        return job('render',{preview:false,quality:$('renderQuality').value||'standard',force_cpu:$('renderCpu').checked,skip_unapproved:guard.skip});
+    });
     $('srt').onclick=act(async()=>{await save();const a=document.createElement('a');a.href=`/api/captions/${project.id}/srt`;a.click();});
     $('stop').onclick=act(async()=>{if(confirm('Stop active app jobs, including downloads and caption processing?')){const d=await api('/api/cancel_all','POST',{});say(d.status||'Stopping…');}});
     $('closeRender').onclick=()=>{$('renderVideo').pause();$('renderDialog').close();};
@@ -2441,6 +2590,10 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
             }
             if (!cue) return false;
             edit(() => {
+                if (CaptionTiming.normalizeWs(cue.text) !== CaptionTiming.normalizeWs(newText)) {
+                    cue.words = [];
+                    for (const tr of Object.values(cue.translations || {})) tr.status = 'stale';
+                }
                 cue.text = newText;
             });
             return true;
@@ -2457,42 +2610,38 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
             }
             if (!cue) return false;
             const targetLang = lang || project.style?.translation_language || 'en';
-            edit(() => {
-                cue.translations = cue.translations || {};
-                cue.translations[targetLang] = {
-                    text: newTranslation,
-                    source: 'copilot',
-                    status: 'approved',
-                    locked: false,
-                    note: 'Updated via AI Copilot'
-                };
-            });
-            return true;
+            // Copilot suggestions go through review: visible in the editor, excluded from exports until kept.
+            return writeTranslation(cue, targetLang, newTranslation, {status: 'review', locked: false, origin: 'copilot'})
+                .then(record => Boolean(record))
+                .catch(e => { say(e.message, true); return false; });
         };
 
-        window.fixSubtitlesBatch = (updates) => {
-            if (!project || !project.cues || !Array.isArray(updates)) return false;
-            edit(() => {
-                updates.forEach(u => {
-                    const lineNum = typeof u.line === 'number' ? u.line : parseInt(u.line, 10);
-                    const idx = !isNaN(lineNum) && lineNum > 0 && lineNum <= project.cues.length ? lineNum - 1 : lineNum;
-                    const cue = project.cues[idx] || (u.id ? project.cues.find(c => c.id === u.id) : null);
-                    if (cue) {
-                        if (u.text !== undefined && u.text !== null) cue.text = u.text;
-                        if (u.translation !== undefined && u.translation !== null) {
-                            const l = u.lang || project.style?.translation_language || 'en';
-                            cue.translations = cue.translations || {};
-                            cue.translations[l] = {
-                                text: u.translation,
-                                source: 'copilot',
-                                status: 'approved',
-                                locked: false,
-                                note: 'Fixed via AI Copilot'
-                            };
-                        }
+        window.fixSubtitlesBatch = async (updates) => {
+            if (!project || !project.cues || !Array.isArray(updates) || busy) return false;
+            const targets = [];
+            for (const u of updates) {
+                const lineNum = typeof u.line === 'number' ? u.line : parseInt(u.line, 10);
+                const idx = !isNaN(lineNum) && lineNum > 0 && lineNum <= project.cues.length ? lineNum - 1 : lineNum;
+                const cue = project.cues[idx] || (u.id ? project.cues.find(c => c.id === u.id) : null);
+                if (cue) targets.push([cue, u]);
+            }
+            if (!targets.length) return false;
+            checkpoint();
+            try {
+                for (const [cue, u] of targets) {
+                    if (u.text !== undefined && u.text !== null && CaptionTiming.normalizeWs(u.text) !== CaptionTiming.normalizeWs(cue.text)) {
+                        cue.words = [];
+                        for (const tr of Object.values(cue.translations || {})) tr.status = 'stale';
+                        cue.text = String(u.text);
                     }
-                });
-            });
+                    if (u.translation !== undefined && u.translation !== null) {
+                        const l = u.lang || project.style?.translation_language || 'en';
+                        await CaptionTiming.setCueTranslation(cue, l, u.translation, {status: 'review', locked: false, origin: 'copilot'});
+                    }
+                }
+            } finally {
+                changed();
+            }
             return true;
         };
 

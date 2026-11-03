@@ -147,6 +147,11 @@ def validate_edit(data, duration):
             item['style_override']={key:checked[key] for key in override}
         if cue.get('translations'):
             item['translations'] = lyric_tracks.clean_translations({**cue,'text':text})
+        if 'show_duplicate_translation' in cue:
+            if type(cue['show_duplicate_translation']) is not bool:
+                raise ValueError('Invalid duplicate-translation display setting.')
+            if cue['show_duplicate_translation']:
+                item['show_duplicate_translation'] = True
         if isinstance(cue.get('karaoke'), dict):
             info = cue['karaoke']
             state = info.get('state')
@@ -299,10 +304,15 @@ def visualizer_bars(peaks, duration, time_sec, width, height, style):
     return rects
 
 
-def layout_rows(cue, style, width, height):
+def layout_rows(cue, style, width, height, editor_preview=False):
     def locate(name):return lyric_layout.font_file(name,BUNDLED_FONTS,CUSTOM_FONT_DIR,CUSTOM_FONTS)
     return lyric_layout.rows(cue,style,width,height,locate(style['font']),
-        lambda text:lyric_fonts.runs(text,style['font'],locate),locate)
+        lambda text:lyric_fonts.runs(text,style['font'],locate),locate,editor_preview=editor_preview)
+
+
+def has_approved_translation(cue, language):
+    entry = lyric_tracks.clean_translations(cue).get(language)
+    return bool(entry and entry['status'] == 'approved' and entry['text'])
 
 
 def _row_background_events(cue, row, style, height):
@@ -344,7 +354,9 @@ def _row_background_events(cue, row, style, height):
     return events
 
 
-def ass_text(project):
+def ass_text(project, skip_unapproved=False):
+    """Styled ASS export. Only approved translations are rendered; with ``skip_unapproved``
+    translation-only exports omit lines that have no approved translation instead of failing."""
     style={**DEFAULT_STYLE,**project.get('style',{})}
     if not style['layout_enabled'] and style['track_mode']=='original' and not any(c.get('style_override') for c in project['cues']):
         return _legacy_ass_text(project)
@@ -352,6 +364,8 @@ def ass_text(project):
     definitions=[];events=[]
     for cue in project['cues']:
         cue_style={**style,**cue.get('style_override',{})}
+        if skip_unapproved and cue_style['track_mode']=='translation' and not has_approved_translation(cue,cue_style['translation_language']):
+            continue
         for row in layout_rows(cue,cue_style,project['width'],project['height']):
             if not row['text']: continue
             name='Row'+str(len(definitions))
@@ -1164,9 +1178,26 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             raise ValueError('Invalid project ID.')
         return root / pid
 
+    def recover_translations(data):
+        """One-time v5 repair of translations hidden by the v4.x writer bug (backup first)."""
+        migrations = data.get('migrations') if isinstance(data.get('migrations'), list) else []
+        if lyric_tracks.TRANSLATION_MIGRATION in migrations or data.get('state') == 'busy':
+            return
+        repaired = copy.deepcopy(data.get('cues', []))
+        if not lyric_tracks.migrate_translation_sources(repaired):
+            return
+        destination = folder(data['id']) / 'project.json'
+        backup = destination.parent / 'pre-v5-project.json'
+        if destination.exists() and not backup.exists():
+            shutil.copy2(destination, backup)
+        data['cues'] = repaired
+        data['migrations'] = [*migrations, lyric_tracks.TRANSLATION_MIGRATION]
+        write(data)
+
     def read(pid):
         with lock:
             data = json.loads((folder(pid) / 'project.json').read_text(encoding='utf-8'))
+            recover_translations(data)
             lyric_tracks.ensure_ids(data.get('cues',[]), data['id'])
             data['style']={**DEFAULT_STYLE,**data.get('style',{})}
             if data.get('duration'):
@@ -1878,6 +1909,8 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             return jsonify(d)
 
     def propose_lyrics(data, cues, options):
+        # Re-timed lines keep their identity and translations; unchanged text keeps them approved.
+        lyric_tracks.carry_identity(data['cues'], cues)
         lyric_tracks.ensure_ids(cues,data['id'])
         validate_edit(dict(cues=cues), data['duration'])
         if options.get('review'):
@@ -2091,7 +2124,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                 ass = f / (token + '.ass')
                 output = ('check_' if preview else 'captioned_') + token + '.mp4'
                 temporary = f / ('.working_' + output)
-                ass.write_text(ass_text(d), encoding='utf-8-sig')
+                ass.write_text(ass_text(d, skip_unapproved=bool(options.get('skip_unapproved'))), encoding='utf-8-sig')
                 try:
                     fonts = f / 'caption_fonts'
                     fonts.mkdir(exist_ok=True)
@@ -2167,7 +2200,18 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
     def caption_layout(pid):
         data=read(pid);incoming=request.get_json() or {}
         cleaned=validate_edit(dict(cues=[incoming['cue']],style=incoming.get('style',data['style'])),data['duration'])
-        return jsonify(rows=layout_rows(cleaned['cues'][0],{**cleaned['style'],**cleaned['cues'][0].get('style_override',{})},data['width'],data['height']))
+        cue=cleaned['cues'][0]
+        return jsonify(rows=layout_rows(cue,{**cleaned['style'],**cue.get('style_override',{})},data['width'],data['height'],
+                                        editor_preview=incoming.get('editor_preview') is True))
+
+    @bp.get('/api/captions/<pid>/translation-status')
+    def translation_status(pid):
+        """Export guard: lines that a bilingual/translation export would leave out."""
+        data=read(pid)
+        language=request.args.get('language') or data['style'].get('translation_language','en')
+        if language not in composition_model.LANGUAGES:
+            raise ValueError('Choose a supported translation language.')
+        return jsonify(lyric_tracks.translation_report(data['cues'],language,data['style'].get('hide_duplicate_translation',True)))
 
     @bp.get('/api/captions/translation-models')
     def translation_models():
@@ -2220,7 +2264,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                     done = saved['done']
                 # Carry user-approved chorus choices into identical repeated lines.
                 chorus = {c['text']:t for c in originals if (t:=c.get('translations',{}).get(language))
-                          and t.get('status')=='approved' and t.get('source')==lyric_tracks.source_hash(c['text'])}
+                          and t.get('status')=='approved' and lyric_tracks.matches_source(t.get('source'),c['text'])}
                 for c in pending:
                     if c['id'] in done:
                         chorus.setdefault(c['text'], done[c['id']])
@@ -2274,8 +2318,8 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                         entry=edits[c['id']]
                         if not isinstance(entry,dict): raise ValueError('Invalid translation.')
                         if c.get('translations',{}).get(language,{}).get('locked'): continue
-                        c.setdefault('translations',{})[language]=dict(text=entry.get('text',''),source=lyric_tracks.source_hash(c['text']),
-                            status='approved',locked=bool(entry.get('locked',False)),note=entry.get('note',''))
+                        c.setdefault('translations',{})[language]=lyric_tracks.make_translation(
+                            str(entry.get('text','')),c['text'],'approved',entry.get('locked',False),entry.get('note',''))
                 updated=validate_edit(dict(cues=updated),d['duration'])['cues']
                 d['karaoke_backup']=dict(cues=copy.deepcopy(d['cues']),timing=d['timing'])
                 d['cues']=updated
@@ -2285,12 +2329,15 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
     @bp.get('/api/captions/<pid>/ass')
     def export_ass(pid):
         data=read(pid)
-        return send_file(io.BytesIO(ass_text(data).encode('utf-8-sig')),mimetype='text/plain',as_attachment=True,download_name='captions.ass')
+        script=ass_text(data,skip_unapproved=request.args.get('skip_missing')=='1')
+        return send_file(io.BytesIO(script.encode('utf-8-sig')),mimetype='text/plain',as_attachment=True,download_name='captions.ass')
 
     @bp.get('/api/captions/<pid>/srt')
     def export_srt(pid):
         data = read(pid)
-        cues=lyric_tracks.export_cues(data['cues'],request.args.get('language','en'),request.args.get('mode','original'))
+        cues=lyric_tracks.export_cues(data['cues'],request.args.get('language','en'),request.args.get('mode','original'),
+                                      data['style'].get('hide_duplicate_translation',True),
+                                      skip_missing=request.args.get('skip_missing')=='1')
         return send_file(io.BytesIO(srt_text(cues).encode('utf-8-sig')), mimetype='application/x-subrip', as_attachment=True, download_name='captions.srt')
 
     @bp.get('/api/captions/<pid>/media/<name>')

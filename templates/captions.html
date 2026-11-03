@@ -869,6 +869,18 @@
                 <span style="font-size:10px;color:#a78bfa;opacity:0.85;">Synced to video</span>
               </div>
               <textarea id="sideTranslationText" rows="2" maxlength="2000" placeholder="Translated text for this line…"></textarea>
+              <div id="translationReviewBox" class="trReview" role="status" hidden>
+                <div class="trReviewHead"><span class="trBadge">⚠ Needs review</span><span class="trReviewHint">Not included in exports yet</span></div>
+                <p id="translationReviewText" class="trReviewText"></p>
+                <div class="trReviewActions">
+                  <button id="retranslateLine" type="button" title="Create a new reviewable translation for this line">Retranslate</button>
+                  <button id="keepTranslation" type="button" class="primary" title="Approve this translation for the current line">Keep</button>
+                </div>
+              </div>
+              <div id="duplicateNote" class="trDuplicate" hidden>
+                <span title="Hide duplicate translations is on, and this translation matches the original line">Same as original (hidden)</span>
+                <label><input id="showDuplicateTranslation" type="checkbox"> Show on this line</label>
+              </div>
             </div>
             <div class="row">
               <label>Start (s)<input id="start" type="number" min="0" step=".01"></label>
@@ -1055,6 +1067,18 @@
     <button id="closeLyricReview" type="button">Review later</button>
     <button id="discardLyricReview" type="button">Keep current captions</button>
     <button id="applyLyricReview" type="button" class="primary">Apply proposed lyrics</button>
+  </div>
+</dialog>
+<dialog id="exportGuardDialog" class="apple-modal exportGuard" aria-labelledby="exportGuardTitle">
+  <div class="exportGuardIcon" aria-hidden="true">⚠</div>
+  <h2 id="exportGuardTitle">Lines need review</h2>
+  <p id="exportGuardSummary" class="exportGuardSummary"></p>
+  <ul id="exportGuardRows" class="exportGuardRows"></ul>
+  <div class="exportGuardActions">
+    <button id="exportGuardCancel" type="button">Cancel</button>
+    <button id="exportGuardReview" type="button">Review</button>
+    <button id="exportGuardSkip" type="button">Export without them</button>
+    <button id="exportGuardKeep" type="button" class="primary">Keep all</button>
   </div>
 </dialog>
 <dialog id="translationReviewDialog" class="lyricReviewDialog" aria-labelledby="translationReviewTitle">
