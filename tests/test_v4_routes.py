@@ -179,6 +179,7 @@ class TestV4Routes(unittest.TestCase):
 
         # Fetch rendered image
         res_file = self.client.get(img_url)
+        res_file.close()  # send_file keeps the file open until the response is closed.
         self.assertEqual(res_file.status_code, 200)
         self.assertEqual(res_file.content_type, 'image/png')
 
@@ -197,6 +198,7 @@ class TestV4Routes(unittest.TestCase):
 
         # Fetch rendered video
         res_vid = self.client.get(vid_url)
+        res_vid.close()
         self.assertEqual(res_vid.status_code, 200)
         self.assertEqual(res_vid.content_type, 'video/mp4')
 

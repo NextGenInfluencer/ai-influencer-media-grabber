@@ -2349,70 +2349,90 @@ ai_installer_state: dict[str, Any] = {
     "progress": 0,
     "status": "idle",
     "error": None,
+    "pack": None,
     "log": []
 }
 
+# One maintenance job (AI pack install or app update) at a time; double clicks get a 409.
+_maintenance_lock = threading.Lock()
+_MAINTENANCE_BUSY = 'Another installation or update is already running. Wait for it to finish.'
+
+
+def _run_maintenance(worker, *args):
+    try:
+        worker(*args)
+    finally:
+        _maintenance_lock.release()
+
+
 def get_ai_status():
-    from assets.ai_setup import inspect_runtime
-    checks = inspect_runtime()
-    st = {name: error is None for name, error in checks.items()}
+    # find_spec only: AI libraries are never imported into the server process.
+    from assets.ai_setup import installed_features
+    st = installed_features()
     st['all_installed'] = all(st.values())
     return st
 
-def run_ai_install_worker():
+
+def _run_pip(cmd):
+    """Stream one pip command into the installer log; returns its exit code."""
+    flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+    process = subprocess.Popen(
+        cmd,
+        cwd=app.root_path,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+        creationflags=flags
+    )
+    if process.stdout:
+        for line in iter(process.stdout.readline, ''):
+            line_clean = line.strip()
+            if line_clean:
+                ai_installer_state["log"].append(line_clean)
+                if len(ai_installer_state["log"]) > 40:
+                    ai_installer_state["log"].pop(0)
+                if "Downloading" in line_clean:
+                    ai_installer_state["progress"] = min(85, ai_installer_state["progress"] + 2)
+                    ai_installer_state["status"] = f"Downloading AI packages: {line_clean[:55]}..."
+                elif "Installing collected packages" in line_clean:
+                    ai_installer_state["progress"] = max(ai_installer_state["progress"], 90)
+                    ai_installer_state["status"] = "Unpacking and configuring AI packages..."
+                elif "Successfully installed" in line_clean:
+                    ai_installer_state["progress"] = max(ai_installer_state["progress"], 95)
+        process.stdout.close()
+    return process.wait()
+
+
+def run_ai_install_worker(pack=None):
     global ai_installer_state
+    from assets import ai_setup
     ai_installer_state["is_installing"] = True
     ai_installer_state["status"] = "Installing AI Engine pack..."
     ai_installer_state["progress"] = 10
     ai_installer_state["error"] = None
     ai_installer_state["log"] = ["Starting AI Engine installation via pip..."]
 
-    req_file = os.path.join(app.root_path, "requirements-ai.txt")
-    if not os.path.exists(req_file):
-        ai_installer_state["error"] = "requirements-ai.txt not found!"
-        ai_installer_state["status"] = "failed"
-        ai_installer_state["is_installing"] = False
-        return
-
-    cmd = [sys.executable, "-m", "pip", "install", "--no-build-isolation", "-r", req_file]
     try:
-        from assets.ai_setup import prepare_build_tools
+        pack = pack or ai_setup.recommended_pack(app.root_path)[0]
+        commands = ai_setup.install_commands(sys.executable, app.root_path, pack)
+        missing = [cmd[-1] for cmd in commands if not os.path.exists(os.path.join(app.root_path, cmd[-1]))]
+        if missing:
+            raise FileNotFoundError(f"{', '.join(missing)} not found. Reinstall the app with the release installer.")
+        ai_installer_state["pack"] = pack
+        ai_installer_state["log"].append(f"Selected pack: {pack}")
         ai_installer_state['status'] = 'Preparing AI installation tools...'
-        prepare_build_tools(sys.executable, app.root_path)
-        flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
-            creationflags=flags
-        )
-
-        if process.stdout:
-            for line in iter(process.stdout.readline, ''):
-                line_clean = line.strip()
-                if line_clean:
-                    ai_installer_state["log"].append(line_clean)
-                    if len(ai_installer_state["log"]) > 40:
-                        ai_installer_state["log"].pop(0)
-                    if "Downloading" in line_clean:
-                        ai_installer_state["progress"] = min(85, ai_installer_state["progress"] + 2)
-                        ai_installer_state["status"] = f"Downloading AI packages: {line_clean[:55]}..."
-                    elif "Installing collected packages" in line_clean:
-                        ai_installer_state["progress"] = 90
-                        ai_installer_state["status"] = "Unpacking and configuring AI packages..."
-                    elif "Successfully installed" in line_clean:
-                        ai_installer_state["progress"] = 98
-
-            process.stdout.close()
-        code = process.wait()
+        ai_setup.prepare_build_tools(sys.executable, app.root_path)
+        code = 0
+        for cmd in commands:
+            code = _run_pip(cmd)
+            if code:
+                break
 
         if code == 0:
             ai_installer_state["status"] = "Verifying AI libraries..."
             ai_installer_state["progress"] = 99
-            from assets.ai_setup import verify_runtime
-            verify_runtime(sys.executable, app.root_path)
+            ai_setup.verify_runtime(sys.executable, app.root_path, pack)
             ai_installer_state["is_installing"] = False
             ai_installer_state["status"] = "complete"
             ai_installer_state["progress"] = 100
@@ -2879,19 +2899,39 @@ def api_ai_status():
         "install_status": ai_installer_state["status"],
         "install_progress": ai_installer_state["progress"],
         "install_error": ai_installer_state["error"],
+        "install_pack": ai_installer_state.get("pack"),
         "install_log": ai_installer_state["log"][-8:]
     })
+
+@app.route('/api/install_ai/notice', methods=['GET'])
+def api_install_ai_notice():
+    """Itemized download notice (packages, sizes, licenses, chosen pack and why) shown before install."""
+    from assets.ai_setup import notice
+    try:
+        return jsonify(notice(app.root_path, request.args.get('pack') or None))
+    except ValueError as exc:
+        return jsonify(error=str(exc)), 400
 
 @app.route('/api/install_ai', methods=['POST'])
 def api_install_ai():
     global ai_installer_state
+    from assets.ai_setup import load_packs
+    data = request.get_json(silent=True) or {}
+    if data.get('accept') is not True:
+        return jsonify({"error": "Review the download notice (GET /api/install_ai/notice) and accept it first.",
+                        "requires_accept": True}), 400
+    pack = data.get('pack') or None
+    if pack is not None and pack not in load_packs(app.root_path)['packs']:
+        return jsonify({"error": f"Unknown AI pack: {pack}"}), 400
     if is_busy():
         return jsonify({"error": "Finish active jobs before installing AI packages."}), 409
+    if not _maintenance_lock.acquire(blocking=False):
+        return jsonify({"error": _MAINTENANCE_BUSY}), 409
     ai_installer_state["is_installing"] = True
 
-    t = threading.Thread(target=run_ai_install_worker, daemon=True)
+    t = threading.Thread(target=_run_maintenance, args=(run_ai_install_worker, pack), daemon=True)
     t.start()
-    return jsonify({"status": "started"})
+    return jsonify({"status": "started", "pack": pack})
 
 @app.route('/api/heartbeat', methods=['GET', 'POST'])
 def heartbeat():
@@ -3114,6 +3154,8 @@ def run_ota_update_worker():
                     out.write(chunk)
         app_updater_state.update(progress=70, status="Validating application files...")
         stage_archive(root, archive, rel['latest_version'])
+        # The cached release check would still offer the update that is now staged.
+        _update_check_cache.update(time=0.0, data=None)
         app_updater_state.update(progress=100, status='complete', has_update=False)
         app_updater_state['log'].append('Update staged. Restart to apply it. Recovery copies will be kept.')
     except Exception as exc:
@@ -3135,8 +3177,10 @@ def api_apply_update():
     global app_updater_state
     if is_busy():
         return jsonify({"error": "Finish active jobs before updating."}), 409
+    if not _maintenance_lock.acquire(blocking=False):
+        return jsonify({"error": _MAINTENANCE_BUSY}), 409
     app_updater_state["is_updating"] = True
-    threading.Thread(target=run_ota_update_worker, daemon=True).start()
+    threading.Thread(target=_run_maintenance, args=(run_ota_update_worker,), daemon=True).start()
     return jsonify({"status": "Update started"})
 
 @app.route('/api/update_status', methods=['GET'])
@@ -3187,4 +3231,5 @@ if __name__ == '__main__':
     print("="*50 + "\n", flush=True)
     if "--no-browser" not in sys.argv:
         threading.Timer(1.25, open_desktop_window).start()
-    serve(app, host='127.0.0.1', port=5000, threads=8)
+    # Long-lived SSE streams and polling each hold a worker thread.
+    serve(app, host='127.0.0.1', port=5000, threads=24)

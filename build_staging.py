@@ -140,22 +140,12 @@ def main():
 
     # 7. Copy Application Code & Assets
     print("Copying application files...")
-    # The updater and installer share the application payload manifest.
-    from safe_update import FILES, DIRECTORIES
-    files_to_copy = sorted(FILES | {
-        'launch-silent.vbs', 'run.bat', 'install_ai.bat', 'RELEASE_NOTES.md'
-    })
-    for fn in files_to_copy:
-        src = os.path.join(ROOT_DIR, fn)
-        if os.path.exists(src):
-            shutil.copy2(src, os.path.join(STAGING_DIR, fn))
-
-    dirs_to_copy = sorted(DIRECTORIES)
-    for dn in dirs_to_copy:
-        src = os.path.join(ROOT_DIR, dn)
-        dst = os.path.join(STAGING_DIR, dn)
-        if os.path.exists(src):
-            shutil.copytree(src, dst, dirs_exist_ok=True, ignore=lambda path, names: ['custom'] if os.path.normpath(path) == os.path.normpath(os.path.join(ROOT_DIR, 'static', 'fonts')) else [])
+    # The installer and the in-app updater share release_manifest.json.
+    from safe_update import release_files
+    for relative in release_files(ROOT_DIR):
+        destination = os.path.join(STAGING_DIR, *relative.split('/'))
+        os.makedirs(os.path.dirname(destination), exist_ok=True)
+        shutil.copy2(os.path.join(ROOT_DIR, *relative.split('/')), destination)
 
     # 8. Clean temporary caches from staging
     print("Purging bytecode caches from staging...")

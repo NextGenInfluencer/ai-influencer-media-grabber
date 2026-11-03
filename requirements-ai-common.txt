@@ -1,0 +1,34 @@
+# AI Engine Pack - shared libraries for every pack (CPU, DirectML and NVIDIA GPU).
+# Not installed on its own: requirements-ai-cpu/-directml/-gpu.txt include it.
+# Install with the in-app installer or install_ai.bat (python -m assets.ai_setup --install),
+# which show the download notice first. Shared packages stay compatible with the core app.
+-c requirements.txt
+# Native packages must come from prebuilt wheels (the portable Python has no compiler).
+# openai-whisper is source-only, which is why the installer prepares setuptools and uses
+# --no-build-isolation.
+--only-binary=llama-cpp-python,onnx,numba,llvmlite,tiktoken,tokenizers,safetensors,scipy,scikit-image,psutil
+--extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
+
+# Speech: transcription and lyric alignment
+openai-whisper==20250625
+stable-ts==2.19.1
+# Vision captions / tokenizers (models are downloaded separately after consent)
+transformers==5.14.1
+huggingface-hub>=1.0,<2
+# Runtime dependencies of InsightFace, which itself is installed from
+# requirements-ai-nodeps.txt (see that file for why)
+onnx==1.23.2
+scipy==1.18.1
+scikit-image==0.26.0
+tqdm>=4.66
+# Built-in llama.cpp engine (CPU wheel; used by laptop profiles)
+llama-cpp-python==0.3.36
+# Cloud API keys are stored in Windows Credential Manager
+keyring==25.7.0
+# Hardware / memory detection
+psutil==7.2.2
+
+# Not included: audio-separator (vocal isolation). On Python 3.13 its current releases
+# depend on nightly onnx-weekly builds that clash with the onnx package above, and older
+# releases need a C compiler (diffq). Vocal isolation reports "not installed" until a
+# compatible wheel exists.

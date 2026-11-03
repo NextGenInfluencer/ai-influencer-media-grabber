@@ -1,0 +1,151 @@
+{
+  "version": 1,
+  "note": "Approximate download sizes for Windows x64 / Python 3.13 wheels, measured for the pinned versions. Model files are NOT part of any pack: each model shows its own size and license and asks before downloading.",
+  "gpu_min_vram_gb": 6,
+  "packs": {
+    "cpu": {
+      "label": "AI Engine Pack - CPU",
+      "requirements": "requirements-ai-cpu.txt",
+      "onnx_provider": "CPUExecutionProvider",
+      "approx_disk_mb": 1100,
+      "summary": "For laptops and PCs without a supported GPU. Speech, translation, vision and face tools run on the processor (slower, but works everywhere)."
+    },
+    "directml": {
+      "label": "AI Engine Pack - CPU + DirectML",
+      "requirements": "requirements-ai-directml.txt",
+      "onnx_provider": "DmlExecutionProvider",
+      "approx_disk_mb": 1150,
+      "summary": "For Windows PCs with Intel or AMD graphics. Same as the CPU pack, but face tools use the graphics chip through DirectML."
+    },
+    "gpu": {
+      "label": "AI Engine Pack - NVIDIA GPU (CUDA 12.6)",
+      "requirements": "requirements-ai-gpu.txt",
+      "onnx_provider": "CUDAExecutionProvider",
+      "approx_disk_mb": 5800,
+      "summary": "For NVIDIA GPUs with at least 6 GB of video memory. Speech, vision and face tools run on the GPU. Includes the opt-in cloud clients."
+    }
+  },
+  "nodeps_requirements": "requirements-ai-nodeps.txt",
+  "items": [
+    {
+      "id": "torch-cpu",
+      "name": "PyTorch (CPU build) with torchvision and torchaudio",
+      "packs": ["cpu", "directml"],
+      "approx_mb": 120,
+      "purpose": "Runs Whisper speech recognition and vision captioning on the processor.",
+      "license": "BSD-3-Clause",
+      "license_url": "https://github.com/pytorch/pytorch/blob/main/LICENSE",
+      "source": "https://download.pytorch.org/whl/cpu"
+    },
+    {
+      "id": "torch-cuda",
+      "name": "PyTorch (CUDA 12.6 build) with torchvision and torchaudio",
+      "packs": ["gpu"],
+      "approx_mb": 2610,
+      "purpose": "Runs Whisper speech recognition and vision captioning on the NVIDIA GPU. Includes NVIDIA CUDA runtime libraries.",
+      "license": "BSD-3-Clause (bundled NVIDIA CUDA libraries: NVIDIA CUDA Toolkit EULA)",
+      "license_url": "https://github.com/pytorch/pytorch/blob/main/LICENSE",
+      "source": "https://download.pytorch.org/whl/cu126"
+    },
+    {
+      "id": "onnxruntime-cpu",
+      "name": "ONNX Runtime (CPU)",
+      "packs": ["cpu"],
+      "approx_mb": 15,
+      "purpose": "Runs the face analysis and face swap models.",
+      "license": "MIT",
+      "license_url": "https://github.com/microsoft/onnxruntime/blob/main/LICENSE",
+      "source": "https://pypi.org/project/onnxruntime/"
+    },
+    {
+      "id": "onnxruntime-directml",
+      "name": "ONNX Runtime (DirectML)",
+      "packs": ["directml"],
+      "approx_mb": 25,
+      "purpose": "Runs the face analysis and face swap models on Intel/AMD graphics.",
+      "license": "MIT",
+      "license_url": "https://github.com/microsoft/onnxruntime/blob/main/LICENSE",
+      "source": "https://pypi.org/project/onnxruntime-directml/"
+    },
+    {
+      "id": "onnxruntime-gpu",
+      "name": "ONNX Runtime (CUDA)",
+      "packs": ["gpu"],
+      "approx_mb": 170,
+      "purpose": "Runs the face analysis and face swap models on the NVIDIA GPU.",
+      "license": "MIT",
+      "license_url": "https://github.com/microsoft/onnxruntime/blob/main/LICENSE",
+      "source": "https://pypi.org/project/onnxruntime-gpu/"
+    },
+    {
+      "id": "whisper",
+      "name": "OpenAI Whisper and stable-ts (with numba / llvmlite)",
+      "packs": ["cpu", "directml", "gpu"],
+      "approx_mb": 47,
+      "purpose": "Local transcription, subtitles and word-level lyric alignment.",
+      "license": "MIT (numba, llvmlite: BSD-2-Clause)",
+      "license_url": "https://github.com/openai/whisper/blob/main/LICENSE",
+      "source": "https://pypi.org/project/openai-whisper/"
+    },
+    {
+      "id": "transformers",
+      "name": "Hugging Face Transformers, Tokenizers and Hub client",
+      "packs": ["cpu", "directml", "gpu"],
+      "approx_mb": 20,
+      "purpose": "Loads local vision-captioning models.",
+      "license": "Apache-2.0",
+      "license_url": "https://github.com/huggingface/transformers/blob/main/LICENSE",
+      "source": "https://pypi.org/project/transformers/"
+    },
+    {
+      "id": "insightface",
+      "name": "InsightFace library with ONNX, SciPy and scikit-image",
+      "packs": ["cpu", "directml", "gpu"],
+      "approx_mb": 61,
+      "purpose": "Face detection and face swap. The library code is MIT; the InsightFace models are for non-commercial use and are downloaded separately with their own notice.",
+      "license": "MIT (onnx: Apache-2.0; SciPy, scikit-image: BSD-3-Clause)",
+      "license_url": "https://github.com/deepinsight/insightface/blob/master/LICENSE",
+      "source": "https://pypi.org/project/insightface/"
+    },
+    {
+      "id": "llama-cpp",
+      "name": "llama-cpp-python (CPU build)",
+      "packs": ["cpu", "directml", "gpu"],
+      "approx_mb": 8,
+      "purpose": "Built-in offline engine for the Helper and translation on laptops (no Ollama needed).",
+      "license": "MIT",
+      "license_url": "https://github.com/abetlen/llama-cpp-python/blob/main/LICENSE.md",
+      "source": "https://abetlen.github.io/llama-cpp-python/whl/cpu"
+    },
+    {
+      "id": "system",
+      "name": "keyring and psutil",
+      "packs": ["cpu", "directml", "gpu"],
+      "approx_mb": 1,
+      "purpose": "Stores cloud API keys in Windows Credential Manager; reads memory and hardware information.",
+      "license": "MIT (keyring), BSD-3-Clause (psutil)",
+      "license_url": "https://github.com/jaraco/keyring/blob/main/LICENSE",
+      "source": "https://pypi.org/project/keyring/"
+    },
+    {
+      "id": "shared",
+      "name": "Other shared dependencies (sympy, rich, typer, setuptools, ...)",
+      "packs": ["cpu", "directml", "gpu"],
+      "approx_mb": 10,
+      "purpose": "Support libraries required by the packages above.",
+      "license": "Various permissive (BSD, MIT, Apache-2.0)",
+      "license_url": "https://pypi.org/",
+      "source": "https://pypi.org/"
+    },
+    {
+      "id": "cloud-clients",
+      "name": "fal.ai and Google Gen AI clients",
+      "packs": ["gpu"],
+      "approx_mb": 6,
+      "purpose": "Opt-in cloud features (Kling motion, LivePortrait, Gemini image edit). Never used unless you add your own key and choose a cloud action.",
+      "license": "Apache-2.0",
+      "license_url": "https://github.com/googleapis/python-genai/blob/main/LICENSE",
+      "source": "https://pypi.org/project/google-genai/"
+    }
+  ]
+}

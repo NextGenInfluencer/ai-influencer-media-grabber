@@ -1,0 +1,17 @@
+# Coverage settings for CI (`python -m coverage run -m unittest discover -s tests`).
+[run]
+source = .
+omit =
+    tests/*
+    tools/*
+    build/*
+    audit_artifacts/*
+    build_staging.py
+    */site-packages/*
+
+[report]
+# Global floor measured on the v5 platform branch (see docs/ci.md). Raise it as
+# coverage improves; never lower it to make a change pass.
+fail_under = 65
+skip_covered = true
+show_missing = false

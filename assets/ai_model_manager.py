@@ -14,17 +14,7 @@ import time
 from typing import Any, Dict, List, Optional
 import urllib.request
 
-try:
-    import torch
-    _HAS_TORCH = True
-except ImportError:
-    _HAS_TORCH = False
-
-try:
-    from huggingface_hub import hf_hub_download
-    _HAS_HF_HUB = True
-except ImportError:
-    _HAS_HF_HUB = False
+from storage_utils import atomic_write_json
 
 
 DATA_DIR = Path(os.environ.get('MEDIA_GRABBER_DATA_DIR') or Path.home() / 'Documents' / 'Media Grabber')
@@ -157,10 +147,13 @@ def get_gpu_info() -> Dict[str, Any]:
         "vram_gb": 0.0,
         "recommended_preset": "Cloud API / Distilled"
     }
-    if not _HAS_TORCH:
+    # Torch is imported lazily so the server never loads it at startup.
+    import importlib.util
+    if importlib.util.find_spec('torch') is None:
         return info
 
     try:
+        import torch
         if torch.cuda.is_available():
             info["has_cuda"] = True
             info["device_name"] = torch.cuda.get_device_name(0)
@@ -265,8 +258,7 @@ def detect_local_engines() -> Dict[str, Any]:
 def save_config(cfg: Dict[str, Any]):
     """Persists model selections."""
     _ensure_dirs()
-    with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
-        json.dump(cfg, f, indent=2)
+    atomic_write_json(CONFIG_FILE, cfg, ensure_ascii=True)
 
 
 def get_model_path(model_id: str) -> Optional[Path]:
