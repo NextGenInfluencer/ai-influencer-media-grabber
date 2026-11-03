@@ -2786,17 +2786,17 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
         duration = float(payload.get('duration', 10.0))
         duration = max(2.0, min(60.0, duration))
 
+        use_character = payload.get('use_character') is True  # backdrops never include the persona by default
+        from ai_core.errors import AIUnavailable
+        from assets import ai_video_engine
         process.begin_job()
         job_started()
         try:
-            from assets import ai_video_engine
-            # Synthesize 9:16 atmospheric backdrop without requiring character references
-            res = ai_video_engine.render_keyframe_image(
-                prompt=prompt,
-                character_id=None,
-                scene_number=1,
-                custom_reference=None
-            )
+            try:
+                res = ai_video_engine.render_keyframe(prompt, use_character=use_character,
+                                                      character_id=payload.get('character_id'), width=768, height=1344)
+            except AIUnavailable as exc:
+                return jsonify(exc.to_dict()), 424
             raw_img_path = Path(res['path'])
             if not raw_img_path.is_file():
                 raise RuntimeError("Failed to generate base backdrop image.")
@@ -2804,7 +2804,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             stock_dir.mkdir(parents=True, exist_ok=True)
 
             if motion:
-                # Convert the static backdrop into a cinematic slow push-in 1080x1920 MP4 loop
+                # Camera push-in over the generated still (FFmpeg, not AI motion; labelled as such).
                 out_name = f"ai_loop_{uuid.uuid4().hex[:8]}.mp4"
                 dest_file = stock_dir / out_name
                 fps = 30
@@ -2830,13 +2830,13 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             else:
                 out_name = f"ai_backdrop_{uuid.uuid4().hex[:8]}.png"
                 dest_file = stock_dir / out_name
-                shutil.copy2(str(raw_img_path), str(dest_file))
+                shutil.move(str(raw_img_path), str(dest_file))
                 kind = 'image'
 
             prov = {
                 "provider": "ai_backdrop",
-                "attribution": f"Autonomous AI Generation ({style if style != 'auto' else 'Custom'})",
-                "license": "Royalty Free / Local Synthesis"
+                "attribution": "Generated locally with FLUX.1" + (" (camera push-in, no AI motion)" if motion else ""),
+                "license": "Your own generation (FLUX.1 schnell, Apache-2.0)"
             }
             refresh_gallery()
 
@@ -2850,7 +2850,8 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                 "kind": kind,
                 "url": web_url,
                 "provenance": prov,
-                "message": f"AI {kind.capitalize()} backdrop synthesized successfully!"
+                "workflow": res["workflow"],
+                "ai_motion": False,
             })
         finally:
             process.end_job()
