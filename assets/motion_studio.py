@@ -232,14 +232,16 @@ def apply_audio(video, *, mode='original', audio=None):
 def face_swap_image(target, source, *, restore=True):
     output = _output('swap', '.png')
     info = face.swap_image(str(target), str(source), str(output), restore=restore)
-    return _result(output, provider=info.get('provider'), restored=info.get('restored'), ai=True, local=True)
+    return _result(output, provider=info.get('provider'), restored=info.get('restored'), ai=True, local=True,
+                   **({'warning': info['warning']} if info.get('warning') else {}))
 
 
 def face_swap_video(video, source, *, restore=True, audio_mode='original', audio=None, progress=None):
     output = _output('motion_swap', '.mp4')
     info = face.swap_video(str(video), str(source), str(output), restore=restore, progress=progress)
     final = apply_audio(output, mode=audio_mode, audio=audio)
-    return _result(final, provider=info.get('provider'), ai=True, local=True)
+    return _result(final, provider=info.get('provider'), ai=True, local=True,
+                   **({'warning': info['warning']} if info.get('warning') else {}))
 
 
 def _single_video(outputs):

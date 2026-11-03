@@ -44,6 +44,11 @@ _REQUIRED_ATTRIBUTES = {
 }
 _GPU_VENDORS = (('nvidia', 'nvidia'), ('geforce', 'nvidia'), ('quadro', 'nvidia'), ('amd', 'amd'),
                 ('radeon', 'amd'), ('intel', 'intel'))
+# Minimal 1-node Identity ONNX model (opset 13, IR v8) to verify real execution provider instantiation.
+_PROBE_ONNX_MODEL = (
+    b'\x08\x08:7\n\x10\n\x01X\x12\x01Y"\x08Identity\x12\x01gZ\x0f\n\x01X\x12\n\n\x08\x08\x01'
+    b'\x12\x04\n\x02\x08\x01b\x0f\n\x01Y\x12\n\n\x08\x08\x01\x12\x04\n\x02\x08\x01B\x04\n\x00\x10\r'
+)
 
 
 def load_packs(root=ROOT):
@@ -238,6 +243,18 @@ def inspect_runtime(pack=None, root=ROOT):
                 if expected_provider not in providers:
                     raise RuntimeError(f'{expected_provider} is not available (found: {", ".join(providers) or "none"}). '
                                        'Update the graphics driver, then reinstall the AI Engine Pack.')
+                if expected_provider == 'CUDAExecutionProvider':
+                    preload = getattr(loaded, 'preload_dlls', None)
+                    if callable(preload):
+                        preload()
+                    session = loaded.InferenceSession(_PROBE_ONNX_MODEL,
+                                                      providers=[expected_provider, 'CPUExecutionProvider'])
+                    active = list(session.get_providers()) if hasattr(session, 'get_providers') else [expected_provider]
+                    if expected_provider not in active:
+                        raise RuntimeError(
+                            f'{expected_provider} session fell back to {", ".join(active) or "CPU"}. '
+                            'Install onnxruntime-gpu[cuda,cudnn] or update the graphics driver.'
+                        )
             results[feature] = None
         except Exception as exc:
             # Native-library load errors also mean the feature is unavailable.

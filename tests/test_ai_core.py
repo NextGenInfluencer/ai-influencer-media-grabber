@@ -562,17 +562,25 @@ class ReclaimTests(IsolatedAIMixin, unittest.TestCase):
         self.assertIn('reclaimable', storage)
         self.assertEqual(storage['models_dir'], str(paths.MODELS_DIR))
 
-    def test_storage_verifies_preexisting_catalog_file(self):
+    def test_storage_returns_immediately_and_verifies_in_background_or_explicitly(self):
         data = b'preexisting-weights'
         self.use_catalog([_fake_item('existing', data)])
         dest = paths.MODELS_DIR / 'test' / 'existing.bin'
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes(data)
         self.assertFalse(models.status()['existing']['verified'])
-        storage = models.storage()
+        # storage() must not hash synchronously; it returns verified=None ('Checking…') and starts background verification.
+        with patch.object(models, '_start_background_verify') as bg_mock, \
+                patch.object(models, 'sha256_file', side_effect=AssertionError('synchronous hash in storage()')):
+            storage = models.storage()
+        bg_mock.assert_called_once()
         installed_by_id = {entry['id']: entry for entry in storage['installed']}
-        self.assertTrue(installed_by_id['existing']['verified'])
+        self.assertIsNone(installed_by_id['existing']['verified'])
+        # Explicit verification hashes the file and records the result.
+        verified = models.verify_installed('existing')
+        self.assertEqual(verified, {'existing': True})
         self.assertTrue(models.status()['existing']['verified'])
+        self.assertTrue(models.storage()['installed'][0]['verified'])
 
 
 class GpuBrokerTests(unittest.TestCase):
@@ -766,8 +774,20 @@ class EngineTests(IsolatedAIMixin, unittest.TestCase):
             engines.comfy.install_requirements('ComfyUI-LivePortraitKJ')
         cmd = run_mock.call_args.args[0]
         self.assertIn('pykalman', cmd)
-        self.assertIn('onnxruntime-gpu', cmd)
+        self.assertIn('onnxruntime-gpu==1.31.1', cmd)
         self.assertFalse(any(arg.startswith('numpy') or arg.startswith('torch') for arg in cmd))
+
+        # Verify LatentSyncWrapper extra packages are all pinned (including soundfile and decord).
+        ls_dir = root / 'ComfyUI' / 'custom_nodes' / 'ComfyUI-LatentSyncWrapper'
+        ls_dir.mkdir(parents=True)
+        (ls_dir / 'requirements.txt').write_text('diffusers==0.32.2\n', encoding='utf-8')
+        with patch.object(job_process, 'run', return_value=MagicMock(returncode=0)) as ls_run:
+            engines.comfy.install_requirements('ComfyUI-LatentSyncWrapper')
+        ls_cmd = ls_run.call_args_list[0].args[0]
+        for pinned in ('accelerate==1.15.0', 'pytorch-lightning==2.6.6', 'scikit-image==0.26.0',
+                       'soundfile==0.14.0', 'decord==0.6.0'):
+            self.assertIn(pinned, ls_cmd)
+        self.assertIn('insightface==2.1', ls_run.call_args_list[1].args[0])
 
         buffer = io.BytesIO()
         with zipfile.ZipFile(buffer, 'w') as bundle:
@@ -799,48 +819,56 @@ class EngineTests(IsolatedAIMixin, unittest.TestCase):
             engines.comfy._idle_stop()
             stop_mock.assert_called_once()
 
-    def test_comfy_patch_custom_nodes_is_idempotent(self):
+    def test_comfy_patch_custom_nodes_applies_is_idempotent_and_reports_warnings(self):
         root = paths.ENGINES_DIR / 'comfyui' / 'ComfyUI'
         custom = root / 'custom_nodes'
         (root / 'main.py').parent.mkdir(parents=True, exist_ok=True)
         (root / 'main.py').write_text('')
-        mp_utils = custom / 'ComfyUI-LivePortraitKJ' / 'media_pipe' / 'mp_utils.py'
-        mp_utils.parent.mkdir(parents=True, exist_ok=True)
-        mp_utils.write_text(
-            'from . import face_landmark\n'
-            'self.detector = face_landmark.FaceLandmarker.create_from_options(options)\n'
-            'detection_result, _ = self.detector.detect(image)\n',
-            encoding='utf-8',
+        py = paths.ENGINES_DIR / 'comfyui' / 'venv' / 'Scripts' / 'python.exe'
+        py.parent.mkdir(parents=True, exist_ok=True)
+        py.write_bytes(b'')
+        # Build fixture files containing the `target` for every named patch in ComfyEngine._CUSTOM_NODE_PATCHES.
+        by_file = {}
+        for name, node_folder, rel_path, target, replacement in engines.ComfyEngine._CUSTOM_NODE_PATCHES:
+            by_file.setdefault((node_folder, rel_path), []).append(target)
+        for (node_folder, rel_path), snippets in by_file.items():
+            file_path = custom / node_folder / rel_path
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            file_path.write_text('\n\n'.join(snippets) + '\n', encoding='utf-8')
+
+        first_states = engines.comfy._patch_custom_nodes()
+        self.assertEqual(len(first_states), len(engines.ComfyEngine._CUSTOM_NODE_PATCHES))
+        for name, *_ in engines.ComfyEngine._CUSTOM_NODE_PATCHES:
+            self.assertEqual(first_states[name], 'applied_now', name)
+        self.assertEqual(engines.comfy.status()['patch_warnings'], [])
+
+        second_states = engines.comfy._patch_custom_nodes()
+        for name, *_ in engines.ComfyEngine._CUSTOM_NODE_PATCHES:
+            self.assertEqual(second_states[name], 'already_applied', name)
+        self.assertEqual(engines.comfy.status()['patch_warnings'], [])
+
+        # When a file changes upstream and a target isn't found, record target_not_found and surface in status()['comfy']['patch_warnings'].
+        (custom / 'ComfyUI-LatentSyncWrapper' / 'nodes.py').write_text(
+            '# upstream changed this file\n', encoding='utf-8'
         )
-        ls_nodes = custom / 'ComfyUI-LatentSyncWrapper' / 'nodes.py'
-        ls_nodes.parent.mkdir(parents=True, exist_ok=True)
-        ls_nodes.write_text(
-            'torchaudio.save(audio_path, waveform_cpu, sample_rate)\n'
-            'except TypeError as e:\n'
-            "processed_frames = io.read_video(output_video_path, pts_unit='sec')[0]\n"
-            'torch.cuda.set_per_process_memory_fraction(0.8)\n',
-            encoding='utf-8',
-        )
-        ls_util = custom / 'ComfyUI-LatentSyncWrapper' / 'latentsync' / 'utils' / 'util.py'
-        ls_util.parent.mkdir(parents=True, exist_ok=True)
-        ls_util.write_text(
-            'def write_video(video_output_path: str, video_frames: np.ndarray, fps: int):\n'
-            '    with imageio.get_writer(\n',
-            encoding='utf-8',
-        )
-        engines.comfy._patch_custom_nodes()
-        first_mp = mp_utils.read_text(encoding='utf-8')
-        first_nodes = ls_nodes.read_text(encoding='utf-8')
-        first_util = ls_util.read_text(encoding='utf-8')
-        self.assertIn('vision.FaceLandmarker.create_from_options', first_mp)
-        self.assertIn('soundfile', first_nodes)
-        self.assertIn('VideoReader', first_nodes)
-        self.assertNotIn('set_per_process_memory_fraction(0.8)', first_nodes)
-        self.assertIn('return write_video_cv2', first_util)
-        engines.comfy._patch_custom_nodes()
-        self.assertEqual(mp_utils.read_text(encoding='utf-8'), first_mp)
-        self.assertEqual(ls_nodes.read_text(encoding='utf-8'), first_nodes)
-        self.assertEqual(ls_util.read_text(encoding='utf-8'), first_util)
+        third_states = engines.comfy._patch_custom_nodes()
+        self.assertEqual(third_states['latentsync_torchaudio_save'], 'target_not_found')
+        warnings = engines.status()['comfy']['patch_warnings']
+        self.assertTrue(any('latentsync_torchaudio_save' in w for w in warnings))
+
+    def test_captions_whisper_name_helper_and_third_party_notices(self):
+        import captions
+        with patch.object(captions.asr, 'whisper_model_name', return_value='large-v3-turbo'):
+            self.assertEqual(captions._whisper_name(), 'large-v3-turbo')
+        with patch.object(captions.asr, 'whisper_model_name', side_effect=RuntimeError('missing')):
+            self.assertIsNone(captions._whisper_name())
+        root_dir = Path(__file__).resolve().parents[1]
+        captions_src = (root_dir / 'captions.py').read_text(encoding='utf-8')
+        self.assertEqual(captions_src.count('asr.whisper_model_name()'), 1)
+        notices = (root_dir / 'THIRD_PARTY_NOTICES.md').read_text(encoding='utf-8')
+        for pkg in ('curl-cffi', 'cffi', 'pycparser', 'soundfile', 'decord',
+                    'mediapipe', 'pytorch-lightning', 'accelerate'):
+            self.assertIn(pkg, notices, pkg)
 
 
 if __name__ == '__main__':

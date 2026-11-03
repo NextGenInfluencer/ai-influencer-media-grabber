@@ -57,6 +57,13 @@ CUSTOM_FONT_DIR = Path(os.environ.get('MEDIA_GRABBER_DATA_DIR') or Path.home() /
 CUSTOM_FONTS = {}
 
 
+def _whisper_name():
+    try:
+        return asr.whisper_model_name()
+    except Exception:
+        return None
+
+
 def refresh_custom_fonts():
     CUSTOM_FONTS.clear()
     legacy = FONT_DIR / 'custom'
@@ -2096,20 +2103,13 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                         raise ValueError('No speech detected. Paste lyrics or import subtitles instead.')
                     d.update(validate_edit(dict(cues=cues, style=d['style']), d['duration']))
                     d['timing'] = 'automatic'
-                    model_name = (result.get('meta') or {}).get('model') if isinstance(result, dict) else None
-                    if not model_name:
-                        try:
-                            model_name = asr.whisper_model_name()
-                        except Exception:
-                            model_name = None
+                    model_name = ((result.get('meta') or {}).get('model') if isinstance(result, dict) else None) or _whisper_name()
                     if model_name:
                         d['_completion_notice'] = f'Transcribed with Whisper {model_name}.'
                 finally:
                     (f / 'speech.wav').unlink(missing_ok=True)
-            try:
-                transcribe_label = f'Transcribing audio with Whisper {asr.whisper_model_name()} (existing captions are kept if this fails)…'
-            except Exception:
-                transcribe_label = 'Transcribing audio (existing captions are kept if this fails)…'
+            w_name = _whisper_name()
+            transcribe_label = f'Transcribing audio{f" with Whisper {w_name}" if w_name else ""} (existing captions are kept if this fails)…'
             return launch(data, transcribe_label, work)
 
     @bp.post('/api/captions/<pid>/karaoke')
@@ -2378,20 +2378,15 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                                 cue['karaoke'] = dict(state='review', note='First-pass timing retained. ' + str(exc)[:180])
                             process.check_cancelled()
                             save_lyric_progress(progress_file, signature, cues, i+1)
-                            d['status'] = f'Refining lyric sections: {i+1}/{len(cues)}. Saved captions are kept until review.'
-                            try:
-                                d['status'] = f'Refining lyric sections (Whisper {asr.whisper_model_name()}): {i+1}/{len(cues)}. Saved captions are kept until review.'
-                            except Exception:
-                                pass
+                            w_name = _whisper_name()
+                            d['status'] = f'Refining lyric sections{f" (Whisper {w_name})" if w_name else ""}: {i+1}/{len(cues)}. Saved captions are kept until review.'
                             write(d)
                     process.check_cancelled()
                     outside = [c for c in d['cues'] if c['end'] <= start or c['start'] >= end]
                     combined = sorted(outside + cues, key=lambda c:c['start'])
                     propose_lyrics(d, combined, options)
-                    try:
-                        speech_tag = f' (Whisper {asr.whisper_model_name()})'
-                    except Exception:
-                        speech_tag = ''
+                    w_name = _whisper_name()
+                    speech_tag = f' (Whisper {w_name})' if w_name else ''
                     if options.get('review'):
                         d['_completion_notice'] = f'Lyrics are ready to review{speech_tag}. Saved captions have not changed.'
                     if not options.get('review'):
@@ -2399,10 +2394,8 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                         d['_completion_notice'] = f'Lyrics updated{speech_tag}. {flagged} lines need timing review.'
                 finally:
                     audio_file.unlink(missing_ok=True)
-            try:
-                align_label = f'Matching your lyrics to the audio with Whisper {asr.whisper_model_name()} (existing captions are kept if this fails)…'
-            except Exception:
-                align_label = 'Matching your lyrics to the audio (existing captions are kept if this fails)…'
+            w_name = _whisper_name()
+            align_label = f'Matching your lyrics to the audio{f" with Whisper {w_name}" if w_name else ""} (existing captions are kept if this fails)…'
             return launch(data, align_label, work)
 
     @bp.post('/api/captions/<pid>/correct-lyrics')

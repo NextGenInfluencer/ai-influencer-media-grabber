@@ -1,5 +1,19 @@
 # Changelog
 
+## [v5.0.7] - 2026-11-04
+- Self-sufficient GPU pack & CUDA session verification (`requirements-ai-gpu.txt`, `ai_packs.json`, `assets/ai_setup.py`, `ai_core/face.py`, `assets/motion_studio.py`, `routes_studio.py`):
+  - Pinned `onnxruntime-gpu[cuda,cudnn]==1.31.1` in `requirements-ai-gpu.txt` so matching NVIDIA CUDA 13 and cuDNN 9 runtime wheels install directly into the app environment and `onnxruntime.preload_dlls()` loads them without depending on PyTorch or ComfyUI; updated `ai_packs.json` sizes (`onnxruntime-gpu` `approx_mb: 1335`, `gpu` pack `approx_disk_mb: 8300`).
+  - Kept `_find_cuda_dll_dir()` ComfyUI fallback strictly as a last resort when neither local `nvidia` wheels nor local compatible `torch/lib` DLLs exist.
+  - Verified `session.get_providers()` on `analyzer`, `swapper`, and `restorer` after creating each `InferenceSession`; if `CUDAExecutionProvider` was requested but fell back to CPU, return a visible warning (`"CUDA was requested but is not active (running on CPU – slower)."`) in job status and result payloads instead of silently falling back.
+  - Updated `assets/ai_setup.py` `inspect_runtime('gpu')` to instantiate a real `CUDAExecutionProvider` `InferenceSession` and fail if `CUDAExecutionProvider` is not active in `session.get_providers()`.
+- Named custom-node patches & `patch_warnings` (`ai_core/engines.py`, `static/ai_setup.js`):
+  - Turned every replacement in `ComfyEngine._patch_custom_nodes()` into a named patch in `ComfyEngine._CUSTOM_NODE_PATCHES` returning `'applied_now'`, `'already_applied'`, or `'target_not_found'`; logged warnings and surfaced missing patch targets in `engines.status()['comfy']['patch_warnings']` and the AI Engines sheet.
+  - Pinned `ComfyEngine._EXTRA_NODE_PACKAGES` to exact validated versions (`accelerate==1.15.0`, `pytorch-lightning==2.6.6`, `scikit-image==0.26.0`, `soundfile==0.14.0`, `decord==0.6.0`, `onnxruntime-gpu==1.31.1`).
+- Non-blocking model storage verification (`ai_core/models.py`, `routes_ai.py`, `static/ai_setup.js`):
+  - `ai_core.models.storage()` now returns immediately with `verified: null` (`"Checking…"` in the UI) for unrecorded files and hashes them in a background thread (`_start_background_verify`) or via `POST /api/ai/storage/verify` (`Verify` button in Downloads & Storage).
+- Captions Whisper model helper (`captions.py`): replaced the five repeated `try: asr.whisper_model_name() except` blocks with a single `_whisper_name()` helper.
+- Third-party notices (`THIRD_PARTY_NOTICES.md`): added `curl-cffi`, `cffi`, `pycparser`, `soundfile`, `decord`, `mediapipe`, `pytorch-lightning`, and `accelerate` with their licenses.
+
 ## [v5.0.6] - 2026-11-04
 - Creative engine custom nodes (`ai_core/engines.py`, `ai_core/models.py`, `ai_core/catalog.json`):
   - Filtered `_CORE_PACKAGES` (`numpy`, `torch`, `torchvision`, `torchaudio`, `opencv-python`, `mediapipe`, `insightface`, `onnxruntime`, `onnxruntime-gpu`) out of custom-node `requirements.txt` installs so `ComfyUI-LivePortraitKJ`'s `numpy<=1.26.4` pin cannot downgrade NumPy 2 / PyTorch 2.11+cu130; unlinked `.ready` marker if custom-node dependency installation fails.

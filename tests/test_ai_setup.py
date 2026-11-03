@@ -52,8 +52,14 @@ class RuntimeChecks(unittest.TestCase):
                 ai_setup.verify_runtime('python.exe', '.')
 
     def test_gpu_pack_verification_requires_cuda_provider(self):
-        def runtime(providers):
-            module = SimpleNamespace(InferenceSession=object, get_available_providers=lambda: providers)
+        def runtime(providers, session_providers=None):
+            active = providers if session_providers is None else session_providers
+            session = SimpleNamespace(get_providers=lambda: active)
+            module = SimpleNamespace(
+                InferenceSession=lambda *args, **kwargs: session,
+                get_available_providers=lambda: providers,
+                preload_dlls=MagicMock(),
+            )
             return lambda name: module
         with patch.object(ai_setup.importlib, 'import_module', side_effect=runtime(['CPUExecutionProvider'])):
             failure = ai_setup.inspect_runtime('gpu')['onnxruntime']
@@ -61,9 +67,19 @@ class RuntimeChecks(unittest.TestCase):
         with patch.object(ai_setup.importlib, 'import_module',
                           side_effect=runtime(['CUDAExecutionProvider', 'CPUExecutionProvider'])):
             self.assertIsNone(ai_setup.inspect_runtime('gpu')['onnxruntime'])
+        # If CUDAExecutionProvider is listed in get_available_providers() but session creation falls back to CPU, verification fails.
+        with patch.object(ai_setup.importlib, 'import_module',
+                          side_effect=runtime(['CUDAExecutionProvider', 'CPUExecutionProvider'],
+                                              session_providers=['CPUExecutionProvider'])):
+            fallback_failure = ai_setup.inspect_runtime('gpu')['onnxruntime']
+        self.assertIn('fell back', fallback_failure)
         with patch.object(ai_setup.importlib, 'import_module', side_effect=runtime(['CPUExecutionProvider'])):
             self.assertIn('DmlExecutionProvider', ai_setup.inspect_runtime('directml')['onnxruntime'])
             self.assertIsNone(ai_setup.inspect_runtime('cpu')['onnxruntime'])
+
+    def test_gpu_pack_requirements_pin_self_sufficient_cuda_cudnn(self):
+        gpu_reqs = (ROOT / 'requirements-ai-gpu.txt').read_text(encoding='utf-8')
+        self.assertIn('onnxruntime-gpu[cuda,cudnn]==1.31.1', gpu_reqs)
 
     def test_status_uses_find_spec_without_importing(self):
         with patch.object(ai_setup.importlib.util, 'find_spec', side_effect=lambda name: None if name == 'keyring' else object()), \

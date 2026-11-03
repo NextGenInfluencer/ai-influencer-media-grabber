@@ -97,7 +97,10 @@ class JobRegistry:
         try:
             with job_process.cancellation_scope(job['_cancel'].is_set):
                 result = work(lambda progress=None, message=None: self._report(job, progress, message))
-            self._finish(job, status='completed', progress=1.0, message='Done', result=result)
+            warning = result.get('warning') if isinstance(result, dict) else None
+            done_msg = f'Done ({warning})' if warning else 'Done'
+            self._finish(job, status='completed', progress=1.0, message=done_msg, result=result,
+                         **({'warning': warning} if warning else {}))
         except AIUnavailable as exc:
             cancelled = job['_cancel'].is_set()
             self._finish(job, status='cancelled' if cancelled else 'failed', error=exc.message,
@@ -146,7 +149,8 @@ def comfy_progress(report, eta_seconds):
 
 def frame_progress(report):
     def update(done, total):
-        report(done / total if total else None, f'Swapping faces… frame {done} of {total}')
+        suffix = ' (running on CPU – slower)' if motion.face.active_warning() else ''
+        report(done / total if total else None, f'Swapping faces{suffix}… frame {done} of {total}')
     return update
 
 

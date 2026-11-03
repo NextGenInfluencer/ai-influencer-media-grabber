@@ -428,6 +428,10 @@
                 load();
                 refreshBadges();
             };
+            const verifyItem = item => async () => {
+                try { await api('/api/ai/storage/verify', {method: 'POST', body: {item_id: item.id}}); toast('Verified', item.name); } catch (error) { toast('Verify failed', error.message); }
+                load();
+            };
             const reclaimAll = async () => {
                 if (!window.confirm(`Delete ${reclaim.length} file(s) and free ${bytes(reclaimTotal)}? Only duplicates, obsolete models and stale partial downloads are listed here.`)) return;
                 for (const entry of reclaim) {
@@ -439,11 +443,12 @@
                 h('div', {class: 'ais-section'}, h('h3', {text: 'Installed'}),
                     installed.length ? h('div', {class: 'ais-card'}, installed.map(item => h('div', {class: 'ais-row'},
                         h('div', {class: 'ais-row-main'},
-                            h('div', {class: 'ais-row-title'}, item.name, chip(bytes(item.size_bytes)), item.verified ? chip('Verified', 'ok') : chip('Not verified'),
+                            h('div', {class: 'ais-row-title'}, item.name, chip(bytes(item.size_bytes)), item.verified === true ? chip('Verified', 'ok') : item.verified === null ? chip('Checking…') : chip('Not verified', 'warn'),
                                 item.non_commercial ? ncBadge() : null),
                             item.features?.length ? h('div', {class: 'ais-row-meta', text: `Used by: ${item.features.join(', ')}`}) : null,
                             item.missing_companions?.length ? h('div', {class: 'ais-note warn', text: `Needs ${item.missing_companions.join(', ')} to run`}) : null,
                             item.path ? h('div', {class: 'ais-path', text: item.path}) : null),
+                        item.verified !== true ? h('button', {class: 'ais-btn small', type: 'button', text: 'Verify', onclick: verifyItem(item)}) : null,
                         h('button', {class: 'ais-btn small danger', type: 'button', text: 'Remove', onclick: removeItem(item)}))))
                         : emptyState('📦', 'No AI models installed', 'Set up AI to pick models for this PC. Downloads, editing and manual captions work without them.',
                             h('button', {class: 'ais-btn primary', type: 'button', text: 'Set up AI', onclick: () => window.openAISetup()}))),
@@ -459,6 +464,9 @@
                 h('p', {class: 'ais-note'}, `Models: ${data.models_dir} · Engines: ${data.engines_dir} · Free: ${bytes(data.disk_free_bytes)}`));
             sheet.footer(h('button', {class: 'ais-btn', type: 'button', text: 'AI Engines', onclick: () => window.openAIEngines()}),
                 h('span', {class: 'ais-spacer'}), h('button', {class: 'ais-btn primary', type: 'button', text: 'Done', onclick: () => sheet.close()}));
+            if (!sheet.closed && installed.some(i => i.verified === null)) {
+                setTimeout(() => { if (!sheet.closed) load(); }, 1500);
+            }
         };
         await load();
     };
@@ -496,7 +504,8 @@
                 return h('div', {class: 'ais-row'}, h('div', {class: 'ais-row-main'},
                     h('div', {class: 'ais-row-title'}, info.name, localChip(true),
                         status.running ? chip('Running', 'ok') : status.installed ? chip('Installed') : chip('Not installed')),
-                    h('div', {class: 'ais-row-meta', text: [info.text, status.version ? `v${status.version}` : ''].filter(Boolean).join(' · ')})), ...actions);
+                    h('div', {class: 'ais-row-meta', text: [info.text, status.version ? `v${status.version}` : ''].filter(Boolean).join(' · ')}),
+                    status.patch_warnings?.length ? h('div', {class: 'ais-note warn', text: `Custom node patch warning: ${status.patch_warnings.join('; ')}`}) : null), ...actions);
             });
             const speechItems = (catalog.items || []).filter(item => item.kind === 'asr' && item.status?.installed);
             const roleRows = ['helper', 'translator', 'vision', 'speech'].map(role => {

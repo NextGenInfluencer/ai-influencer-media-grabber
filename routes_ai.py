@@ -127,6 +127,15 @@ def get_storage():
     return jsonify(models.storage())
 
 
+@bp.post('/storage/verify')
+def verify_storage():
+    body = _body()
+    item_id = body.get('item_id')
+    if item_id is not None and (not isinstance(item_id, str) or not catalog.exists(item_id)):
+        return _error('Unknown item.', 404)
+    return jsonify(models.verify_installed(item_id))
+
+
 @bp.post('/remove')
 def remove():
     body = _body()

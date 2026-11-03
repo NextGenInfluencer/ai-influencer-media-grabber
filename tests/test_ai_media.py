@@ -68,17 +68,58 @@ class FaceTests(IsolatedAIMixin, unittest.TestCase):
         with patch.dict(sys.modules, {'onnxruntime': None}):
             with self.assertRaises(AIUnavailable):
                 face.select_providers()
-        # When onnxruntime-gpu is built for CUDA 13 and ComfyUI's Python has cublasLt64_13.dll, preload_dlls gets directory=...
+        # When local nvidia runtime wheels are present, preload_dlls() is called directly without querying ComfyUI.
+        nv_root = self.root / 'site-packages' / 'nvidia'
+        nv_bin = nv_root / 'cu13' / 'bin' / 'x86_64'
+        nv_bin.mkdir(parents=True)
+        (nv_bin / 'cublasLt64_13.dll').write_bytes(b'dll')
+        nv_spec = types.SimpleNamespace(submodule_search_locations=[str(nv_root)])
+        cuda13_local = fake_ort(['CUDAExecutionProvider', 'CPUExecutionProvider'])
+        cuda13_local.cuda_version = '13.0'
+        with patch('importlib.util.find_spec', return_value=nv_spec), \
+                patch.object(engines.comfy, 'python', side_effect=AssertionError('should not query ComfyUI')), \
+                patch.dict(sys.modules, {'onnxruntime': cuda13_local}):
+            self.assertEqual(face.select_providers(), ['CUDAExecutionProvider', 'CPUExecutionProvider'])
+        cuda13_local.preload_dlls.assert_called_once_with()
+        # Only as a last resort when neither local torch nor local nvidia wheels have the DLL, fallback to ComfyUI.
         comfy_py = self.root / 'comfy' / 'python_embeded' / 'python.exe'
         torch_lib = comfy_py.parent / 'Lib' / 'site-packages' / 'torch' / 'lib'
         torch_lib.mkdir(parents=True)
         (torch_lib / 'cublasLt64_13.dll').write_bytes(b'dll')
         cuda13 = fake_ort(['CUDAExecutionProvider', 'CPUExecutionProvider'])
         cuda13.cuda_version = '13.0'
-        with patch.object(engines.comfy, 'python', return_value=comfy_py), \
+        with patch('importlib.util.find_spec', return_value=None), \
+                patch.object(engines.comfy, 'python', return_value=comfy_py), \
                 patch.dict(sys.modules, {'onnxruntime': cuda13}):
             self.assertEqual(face.select_providers(), ['CUDAExecutionProvider', 'CPUExecutionProvider'])
         cuda13.preload_dlls.assert_called_once_with(directory=str(torch_lib))
+
+    def test_cuda_session_fallback_surfaces_cpu_warning(self):
+        cpu_session = MagicMock()
+        cpu_session.get_providers.return_value = ['CPUExecutionProvider']
+        cuda_session = MagicMock()
+        cuda_session.get_providers.return_value = ['CUDAExecutionProvider', 'CPUExecutionProvider']
+        analyzer = types.SimpleNamespace(models={'det': types.SimpleNamespace(session=cuda_session)})
+        swapper = types.SimpleNamespace(session=cpu_session)
+        active_provider, warning = face._verify_session_providers(
+            analyzer, swapper, None, ['CUDAExecutionProvider', 'CPUExecutionProvider']
+        )
+        self.assertEqual(active_provider, 'CPUExecutionProvider')
+        self.assertIn('running on CPU – slower', warning)
+        active_ok, warning_ok = face._verify_session_providers(
+            analyzer, types.SimpleNamespace(session=cuda_session), cuda_session,
+            ['CUDAExecutionProvider', 'CPUExecutionProvider']
+        )
+        self.assertEqual(active_ok, 'CUDAExecutionProvider')
+        self.assertIsNone(warning_ok)
+        source, target = self._images()
+        output = self.root / 'out' / 'warn.png'
+        face._state['providers'] = ['CPUExecutionProvider']
+        face._state['warning'] = warning
+        self.addCleanup(face._release)
+        with patch.object(face, '_load', return_value=(FakeAnalyzer([make_face()]), FakeSwapper(), None)):
+            res = face.swap_image(target, source, output, restore=False)
+        self.assertIn('running on CPU – slower', res['warning'])
 
     def test_restore_requested_without_gfpgan_raises_model_missing(self):
         with patch.object(models, 'installed', return_value=False):

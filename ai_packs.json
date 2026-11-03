@@ -21,7 +21,7 @@
       "label": "AI Engine Pack - NVIDIA GPU (CUDA 12.6)",
       "requirements": "requirements-ai-gpu.txt",
       "onnx_provider": "CUDAExecutionProvider",
-      "approx_disk_mb": 5800,
+      "approx_disk_mb": 8300,
       "summary": "For NVIDIA GPUs with at least 6 GB of video memory. Speech, vision and face tools run on the GPU. Includes the opt-in cloud clients."
     }
   },
@@ -69,11 +69,11 @@
     },
     {
       "id": "onnxruntime-gpu",
-      "name": "ONNX Runtime (CUDA)",
+      "name": "ONNX Runtime (CUDA) with NVIDIA CUDA & cuDNN runtime",
       "packs": ["gpu"],
-      "approx_mb": 170,
+      "approx_mb": 1335,
       "purpose": "Runs the face analysis and face swap models on the NVIDIA GPU.",
-      "license": "MIT",
+      "license": "MIT (bundled NVIDIA CUDA/cuDNN libraries: NVIDIA CUDA Toolkit EULA)",
       "license_url": "https://github.com/microsoft/onnxruntime/blob/main/LICENSE",
       "source": "https://pypi.org/project/onnxruntime-gpu/"
     },

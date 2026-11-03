@@ -3,6 +3,7 @@
 Models are loaded from verified local files only. Missing faces raise
 ``AIUnavailable``; nothing is reported as swapped unless it really was.
 """
+import importlib.util
 import logging
 import shutil
 import tempfile
@@ -22,8 +23,37 @@ SAMPLE_FRAMES = 16
 RESTORE_BLEND = 0.85
 FFHQ_512 = ((0.37691676, 0.46864664), (0.62285697, 0.46912813), (0.50123859, 0.61331904),
             (0.39308822, 0.72541100), (0.61150205, 0.72490465))
-_state = {'providers': None, 'analyzer': None, 'swapper': None, 'restorer': None}
+_state = {'providers': None, 'active_provider': None, 'warning': None, 'analyzer': None, 'swapper': None, 'restorer': None}
 _lock = threading.RLock()
+
+
+def _has_local_cuda_dll(ort, target_dll):
+    ort_file = getattr(ort, '__file__', None)
+    if ort_file:
+        try:
+            site_pkgs = Path(ort_file).resolve().parents[1]
+            if (site_pkgs / 'torch' / 'lib' / target_dll).is_file():
+                return True
+            nvidia_dir = site_pkgs / 'nvidia'
+            if nvidia_dir.is_dir() and any(nvidia_dir.glob(f'**/{target_dll}')):
+                return True
+        except IndexError:
+            pass
+    for pkg in ('nvidia', 'torch'):
+        try:
+            spec = importlib.util.find_spec(pkg)
+        except (ImportError, ValueError):
+            spec = None
+        if not spec:
+            continue
+        locations = list(getattr(spec, 'submodule_search_locations', None) or [])
+        if getattr(spec, 'origin', None):
+            locations.append(str(Path(spec.origin).parent))
+        for loc in locations:
+            root = Path(loc)
+            if (root / 'lib' / target_dll).is_file() or (root.is_dir() and any(root.glob(f'**/{target_dll}'))):
+                return True
+    return False
 
 
 def _find_cuda_dll_dir(ort):
@@ -32,6 +62,8 @@ def _find_cuda_dll_dir(ort):
     if not major.isdigit():
         return None
     target_dll = f'cublasLt64_{major}.dll'
+    if _has_local_cuda_dll(ort, target_dll):
+        return None
     from . import engines
     comfy_py = engines.comfy.python()
     if comfy_py:
@@ -42,7 +74,7 @@ def _find_cuda_dll_dir(ort):
 
 
 def select_providers():
-    """CUDA (after torch loads its DLLs) → DirectML → CPU, based on the installed onnxruntime build."""
+    """CUDA (after preloading runtime DLLs) → DirectML → CPU, based on the installed onnxruntime build."""
     try:
         import onnxruntime as ort
     except ImportError as exc:
@@ -50,7 +82,9 @@ def select_providers():
     available = set(ort.get_available_providers())
     if 'CUDAExecutionProvider' in available:
         dll_dir = _find_cuda_dll_dir(ort)
-        if not dll_dir:
+        major = str(getattr(ort, 'cuda_version', '') or '').split('.', 1)[0]
+        has_local_dll = _has_local_cuda_dll(ort, f'cublasLt64_{major}.dll') if major.isdigit() else False
+        if not dll_dir and not has_local_dll:
             try:
                 import torch  # noqa: F401  (loads the CUDA/cuDNN DLLs onnxruntime-gpu links against)
             except ImportError:
@@ -68,7 +102,30 @@ def select_providers():
 
 def _release():
     with _lock:
-        _state.update(analyzer=None, swapper=None, restorer=None, providers=None)
+        _state.update(analyzer=None, swapper=None, restorer=None, providers=None, active_provider=None, warning=None)
+
+
+def active_warning():
+    return _state.get('warning')
+
+
+def _verify_session_providers(analyzer, swapper, restorer, requested):
+    sessions = []
+    models_map = getattr(analyzer, 'models', None)
+    if isinstance(models_map, dict):
+        sessions.extend(getattr(m, 'session', None) for m in models_map.values())
+    elif isinstance(models_map, (list, tuple)):
+        sessions.extend(getattr(m, 'session', None) for m in models_map)
+    sessions.append(getattr(swapper, 'session', None))
+    sessions.append(restorer)
+    active_lists = [list(s.get_providers()) for s in sessions if s is not None and callable(getattr(s, 'get_providers', None))]
+    primary = requested[0] if requested else 'CPUExecutionProvider'
+    if primary == 'CUDAExecutionProvider' and active_lists and any('CUDAExecutionProvider' not in p for p in active_lists):
+        fallback = next((p[0] for p in active_lists if p and 'CUDAExecutionProvider' not in p), 'CPUExecutionProvider')
+        warning = 'CUDA was requested but is not active (running on CPU – slower).'
+        log.warning('%s Active session providers: %s', warning, active_lists)
+        return fallback, warning
+    return (active_lists[0][0] if active_lists and active_lists[0] else primary), None
 
 
 gpu.register_evictor('face', _release)
@@ -95,11 +152,15 @@ def _load(restore):
         if restore and _state['restorer'] is None:
             import onnxruntime as ort
             _state['restorer'] = ort.InferenceSession(str(restorer_path), providers=providers)
+        active, warning = _verify_session_providers(_state['analyzer'], _state['swapper'],
+                                                    _state['restorer'] if restore else None, providers)
+        _state['active_provider'] = active
+        _state['warning'] = warning
         return _state['analyzer'], _state['swapper'], (_state['restorer'] if restore else None)
 
 
 def _vram():
-    return 2.5 if (_state['providers'] or ['CPU'])[0] == 'CUDAExecutionProvider' else 0.0
+    return 2.5 if (_state.get('active_provider') or (_state['providers'] or ['CPU'])[0]) == 'CUDAExecutionProvider' else 0.0
 
 
 def _largest(faces):
@@ -179,7 +240,8 @@ def swap_image(target, source, output, *, restore=True):
         raise ValueError('Could not write the output image.')
     gpu.touch('face')
     return {'output': str(output), 'faces_found': len(faces), 'faces_swapped': 1,
-            'provider': _state['providers'][0], 'restored': bool(restorer)}
+            'provider': _state.get('active_provider') or _state['providers'][0], 'restored': bool(restorer),
+            **({'warning': _state['warning']} if _state.get('warning') else {})}
 
 
 def _sample_reference(analyzer, video):
@@ -280,7 +342,8 @@ def swap_video(target_video, source_image, output, *, restore=True, progress=Non
         shutil.rmtree(work, ignore_errors=True)
     gpu.touch('face')
     return {'output': str(output), 'frames_total': done, 'frames_swapped': swapped, 'fps': fps, 'width': width,
-            'height': height, 'provider': _state['providers'][0], 'restored': bool(restorer)}
+            'height': height, 'provider': _state.get('active_provider') or _state['providers'][0], 'restored': bool(restorer),
+            **({'warning': _state['warning']} if _state.get('warning') else {})}
 
 
-__all__ = ['select_providers', 'swap_image', 'swap_video', 'restore_face']
+__all__ = ['select_providers', 'swap_image', 'swap_video', 'restore_face', 'active_warning']

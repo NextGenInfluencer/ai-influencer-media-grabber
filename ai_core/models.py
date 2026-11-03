@@ -27,6 +27,8 @@ KIND_ORDER = {'engine': 0, 'comfy_node': 1}
 _jobs = {}
 _jobs_lock = threading.Lock()
 _manifest_lock = threading.Lock()
+_verify_lock = threading.Lock()
+_verifying_paths = set()
 
 
 class _Cancelled(Exception):
@@ -689,10 +691,49 @@ def remove_reclaimable(path_or_id):
     raise ValueError('Only files listed under Reclaim space can be removed here.')
 
 
+def _verify_files_worker(paths_to_hash):
+    try:
+        for path in paths_to_hash:
+            try:
+                _file_sha(path)
+            except OSError:
+                pass
+    finally:
+        with _verify_lock:
+            _verifying_paths.difference_update(str(p) for p in paths_to_hash)
+
+
+def _start_background_verify(paths_to_hash):
+    with _verify_lock:
+        new_paths = [p for p in paths_to_hash if str(p) not in _verifying_paths]
+        if not new_paths:
+            return
+        _verifying_paths.update(str(p) for p in new_paths)
+    threading.Thread(target=_verify_files_worker, args=(new_paths,), name='verify-models', daemon=True).start()
+
+
+def verify_installed(item_id=None):
+    """Hash unverified installed model files and return {item_id: verified_bool}."""
+    items = [catalog.get(item_id)] if item_id else catalog.items()
+    results = {}
+    for item in items:
+        installed_ok, verified_ok, _ = _item_state(item)
+        if not installed_ok:
+            continue
+        if not verified_ok and not item.get('extract') and item.get('backend') != 'ollama':
+            found = [_present(item, entry) for entry in item.get('files', [])]
+            if found and all(path is not None for path in found):
+                verified_ok = all(not entry.get('sha256') or _file_sha(path) == entry['sha256']
+                                  for entry, path in zip(item['files'], found))
+        results[item['id']] = bool(verified_ok)
+    return results
+
+
 def storage():
     reclaim = reclaimable()
     states = status()
     installed = []
+    pending_paths = []
     for item in catalog.items():
         state = states[item['id']]
         if state['installed']:
@@ -700,12 +741,30 @@ def storage():
             if not verified and not item.get('extract') and item.get('backend') != 'ollama':
                 found = [_present(item, entry) for entry in item.get('files', [])]
                 if found and all(path is not None for path in found):
-                    verified = all(not entry.get('sha256') or _file_sha(path) == entry['sha256']
-                                   for entry, path in zip(item['files'], found))
+                    unrecorded = False
+                    mismatch = False
+                    for entry, path in zip(item['files'], found):
+                        expected = entry.get('sha256')
+                        if not expected:
+                            continue
+                        recorded = _recorded_sha(path)
+                        if recorded is None:
+                            unrecorded = True
+                            pending_paths.append(path)
+                        elif recorded != expected:
+                            mismatch = True
+                    if mismatch:
+                        verified = False
+                    elif unrecorded:
+                        verified = None
+                    else:
+                        verified = True
             installed.append({'id': item['id'], 'name': item['name'], 'kind': item['kind'], 'path': state['path'],
                               'size_bytes': item.get('size_bytes'), 'features': item.get('features', []),
                               'verified': verified, 'non_commercial': item['license'].get('non_commercial', False),
                               'missing_companions': [c for c in item.get('companions', []) if not states[c]['installed']]})
+    if pending_paths:
+        _start_background_verify(pending_paths)
     return {'installed': installed, 'reclaimable': reclaim, 'models_dir': str(paths.MODELS_DIR),
             'engines_dir': str(paths.ENGINES_DIR), 'disk_free_bytes': _disk_free(paths.MODELS_DIR)}
 
@@ -745,4 +804,4 @@ def installed(item_id):
 
 
 __all__ = ['status', 'notice', 'start_install', 'job', 'jobs', 'cancel', 'remove', 'reclaimable',
-           'remove_reclaimable', 'storage', 'ensure', 'installed', 'live_size', 'sha256_file']
+           'remove_reclaimable', 'storage', 'verify_installed', 'ensure', 'installed', 'live_size', 'sha256_file']

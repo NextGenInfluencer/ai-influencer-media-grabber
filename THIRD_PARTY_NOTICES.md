@@ -30,6 +30,8 @@ Versions are the ones pinned in `requirements*.txt` for this release.
 | **yt-dlp**, yt-dlp-ejs | Unlicense (yt-dlp-ejs also includes MIT and ISC parts) |
 | **gallery-dl** | **GPL-2.0-only** - runs as a separate process (`python -m gallery_dl`). Source: https://github.com/mikf/gallery-dl |
 | mutagen (used by yt-dlp for metadata) | GPL-2.0-or-later. Source: https://github.com/quodlibet/mutagen |
+| curl-cffi, cffi | MIT (curl-cffi bundles curl-impersonate / libcurl under MIT / curl license) |
+| pycparser | BSD-3-Clause |
 | shazamio, shazamio-core | MIT |
 | opencv-python-headless (OpenCV) | Apache-2.0 |
 | Pillow | MIT-CMU (HPND) |
@@ -51,7 +53,7 @@ Versions are the ones pinned in `requirements*.txt` for this release.
 | Font Awesome Free 6.4.0 | Icons CC BY 4.0, fonts SIL OFL 1.1, code MIT | `static/vendor/FONTAWESOME-LICENSE.txt` |
 | Bangers, Black Han Sans, Lobster, Montserrat, Noto Sans KR, Oswald, Roboto fonts | SIL Open Font License 1.1 | `static/fonts/*-OFL.txt` |
 
-## Optional: AI Engine Pack (installed only after you accept the notice)
+## Optional: AI Engine Pack & Creative Engine Node Dependencies (installed only after you accept the notice)
 
 The app shows the exact package list, approximate download size, source and license
 before installing (`ai_packs.json`). Nothing in the pack is downloaded silently.
@@ -61,9 +63,9 @@ before installing (`ai_packs.json`). Nothing in the pack is downloaded silently.
 | openai-whisper | MIT |
 | stable-ts | MIT |
 | PyTorch, torchvision, torchaudio | BSD-3-Clause. The CUDA build includes NVIDIA CUDA runtime libraries under the NVIDIA CUDA Toolkit EULA |
-| Hugging Face transformers, tokenizers, huggingface-hub | Apache-2.0 |
+| Hugging Face transformers, tokenizers, huggingface-hub, accelerate | Apache-2.0 |
 | InsightFace (library code) | MIT - **its pretrained models are non-commercial; see Models below** |
-| ONNX Runtime (CPU, DirectML, CUDA builds) | MIT |
+| ONNX Runtime (CPU, DirectML, CUDA builds) | MIT (with `onnxruntime-gpu[cuda,cudnn]`, includes NVIDIA CUDA & cuDNN runtime libraries under the NVIDIA CUDA Toolkit / cuDNN EULA) |
 | onnx | Apache-2.0 |
 | SciPy, scikit-image | BSD-3-Clause |
 | numba, llvmlite | BSD-2-Clause (llvmlite bundles LLVM: Apache-2.0 with LLVM exception) |
@@ -71,6 +73,8 @@ before installing (`ai_packs.json`). Nothing in the pack is downloaded silently.
 | keyring | MIT |
 | psutil | BSD-3-Clause |
 | fal-client, google-genai (GPU pack; opt-in cloud only) | Apache-2.0 |
+| soundfile (Creative engine custom node dependency) | BSD-3-Clause (bundles libsndfile under LGPL-2.1-or-later) |
+| decord, mediapipe, pytorch-lightning (Creative engine custom node dependencies) | Apache-2.0 |
 
 ## Separate programs the app can use
 
