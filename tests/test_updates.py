@@ -184,10 +184,11 @@ class UpdateTests(unittest.TestCase):
     def test_translation_keeps_timing(self):
         source = '1\n00:00:01,000 --> 00:00:02,000\nBonjour\n\n2\n00:00:03,000 --> 00:00:04,000\nSalut\n'
         calls = []
-        def generate(text, prompt, model):
-            calls.append(text)
-            return 'Hello'
-        result = translate_srt(source, generate, 'test')
+        def translate(lines, target, **options):
+            calls.extend(line['text'] for line in lines)
+            return {line['id']: {'text': 'Hello', 'note': '', 'route': 'translator'} for line in lines}
+        with patch('ai_core.translate.translate_lines', side_effect=translate):
+            result = translate_srt(source, 'English')
         self.assertEqual(calls, ['Bonjour', 'Salut'])
         self.assertIn('00:00:03,000 --> 00:00:04,000', result)
         self.assertEqual(result.count('Hello'), 2)
