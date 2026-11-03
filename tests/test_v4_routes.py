@@ -522,17 +522,23 @@ class TestV4Routes(unittest.TestCase):
         self.assertFalse(is_instagram_profile_url('https://www.instagram.com/reel/De6ogMclFBy/'))
         self.assertFalse(is_instagram_profile_url('https://www.youtube.com/watch?v=123'))
 
+        self.assertFalse(is_instagram_profile_url('https://www.instagram.com/j1aa11/p/De6ogMclFBy/'))
+        self.assertFalse(is_instagram_profile_url('https://www.instagram.com/j1aa11/reel/De6ogMclFBy/'))
+
         self.assertEqual(extract_instagram_username('https://www.instagram.com/j1aa11/'), 'j1aa11')
         self.assertEqual(extract_instagram_username('@_j1aa11'), '_j1aa11')
         self.assertEqual(extract_instagram_username('https://www.instagram.com/j1aa11/reels/'), 'j1aa11')
 
-        # Test extraction returns valid profile structure
-        with patch('yt_dlp.YoutubeDL'):
-            prof = extract_instagram_profile('https://www.instagram.com/j1aa11/')
+        # Listing goes through gallery-dl (mocked: no network) and returns a valid profile structure
+        from types import SimpleNamespace
+        completed = SimpleNamespace(returncode=0, stdout='[]', stderr='')
+        with patch('download_support.subprocess.run', return_value=completed) as run:
+            prof = extract_instagram_profile('https://www.instagram.com/j1aa11/', browser='firefox')
             self.assertTrue(prof.get('is_profile'))
             self.assertEqual(prof.get('username'), 'j1aa11')
             self.assertEqual(prof.get('platform'), 'instagram')
             self.assertIn('posts', prof)
+            self.assertIn('--dump-json', run.call_args.args[0])
 
 
 if __name__ == '__main__':
