@@ -648,6 +648,81 @@ def has_mixed_lyric_scripts(text):
     )) > 1
 
 
+SCRIPT_PATTERNS = (('el', re.compile(r'[\u0370-\u03ff\u1f00-\u1fff]')),
+                   ('ko', re.compile(r'[\u1100-\u11ff\u3130-\u318f\uac00-\ud7af]')),
+                   ('latin', re.compile(r'[a-zA-Z\u00c0-\u024f]')))
+LATIN_LANGUAGES = ('en', 'fr', 'es', 'de', 'it', 'pt', 'tr')
+
+
+def script_runs(text):
+    """Split a line into consecutive (script, tokens) runs; neutral tokens join their neighbour."""
+    runs = []
+    for token in text.split():
+        counts = {name: len(pattern.findall(token)) for name, pattern in SCRIPT_PATTERNS}
+        script = max(counts, key=counts.get) if any(counts.values()) else None
+        if runs and (script is None or runs[-1][0] in (script, None)):
+            if runs[-1][0] is None:
+                runs[-1][0] = script
+            runs[-1][1].append(token)
+        else:
+            runs.append([script, [token]])
+    return [(script or 'latin', tokens) for script, tokens in runs]
+
+
+def run_language(model, samples, script, language):
+    """Alignment language for one script run of a mixed line."""
+    if script in ('el', 'ko'):
+        return script
+    pair = composition_model.MIXED.get(language)
+    candidates = [code for code in (pair or LATIN_LANGUAGES) if code in LATIN_LANGUAGES]
+    if len(candidates) == 1:
+        return candidates[0]
+    if not candidates:
+        return 'en'
+    return detect_caption_language(model, samples, tuple(candidates))
+
+
+def refine_script_runs(model, samples, cue, words, coarse_language, language, duration):
+    """Re-align each script run of a mixed line in its own language over its coarse sub-range.
+
+    ``words`` come from a whole-line pass; each run is re-aligned inside the window
+    between the previous run's end and its coarse end. Raises ValueError when the runs
+    cannot be stitched in order, so the caller keeps the whole-line result.
+    """
+    runs = script_runs(cue['text'])
+    if len(runs) < 2 or len(words) != sum(len(tokens) for _, tokens in runs):
+        raise ValueError('Line has a single script.')
+    start, end = float(cue['start']), float(cue['end'])
+    refined, languages, cursor, index = [], [], start, 0
+    for position, (script, tokens) in enumerate(runs):
+        coarse = words[index:index + len(tokens)]
+        index += len(tokens)
+        chosen = run_language(model, samples, script, language)
+        languages.append(chosen)
+        if chosen == coarse_language and coarse[0]['start'] >= cursor - 1e-3:
+            refined.extend(copy.deepcopy(coarse))
+            cursor = coarse[-1]['end']
+            continue
+        a = start if position == 0 else max(cursor, coarse[0]['start'] - .15)
+        b = end if position == len(runs) - 1 else min(end, coarse[-1]['end'] + .15)
+        if b - a < .05 * len(tokens):
+            raise ValueError('Not enough audio for this language run.')
+        window = samples[max(0, round((a - start) * 16000)):min(len(samples), round((b - start) * 16000))]
+        text = ' '.join(tokens)
+        process.check_cancelled()
+        part = aligned_cues(align_caption_words(model, window, text, chosen), [text], a, duration, b - a, recover=True)[0]
+        if part['words'][0]['start'] < cursor - 1e-3:
+            raise ValueError('Language runs overlap.')
+        refined.extend(part['words'])
+        cursor = part['words'][-1]['end']
+    previous = start
+    for word in refined:
+        if word['start'] < previous - 1e-3 or word['end'] <= word['start'] or word['end'] > end + 1e-3:
+            raise ValueError('Stitched word timings are not in order.')
+        previous = word['end']
+    return refined, languages
+
+
 def aligned_cues(result, lines, offset, duration, limit, recover=False):
     """Rejoin token fragments while preserving supplied spelling and line breaks."""
     pieces = [w for s in result.get('segments', []) for w in s.get('words', [])
@@ -1857,6 +1932,14 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                                 aligned = aligned_cues(result, [cue['text']], cue['start'], d['duration'], cue['end']-cue['start'], recover=True)[0]
                                 words = aligned['words']
                                 notes = [aligned['karaoke']['note']] if aligned.get('karaoke',{}).get('state') == 'review' else []
+                                if (language == 'auto' or language in composition_model.MIXED) and has_mixed_lyric_scripts(cue['text']):
+                                    # Whole-line pass gives run boundaries; each script run is re-aligned in its own language.
+                                    try:
+                                        words, run_languages = refine_script_runs(model, samples, cue, words, chosen, language, d['duration'])
+                                        notes.append('Aligned per language (' + ' + '.join(dict.fromkeys(run_languages)) + ').')
+                                    except ValueError:
+                                        process.check_cancelled()
+                                        notes.append(f'Per-language alignment was inconsistent; kept the whole-line {chosen} timing.')
                                 if any(w['end']-w['start'] < .06 for w in words):
                                     notes.append('Very short word timings; check against the vocals.')
                                 if any(w['end']-w['start'] > 4.0 for w in words) and not any('stretched' in n for n in notes):

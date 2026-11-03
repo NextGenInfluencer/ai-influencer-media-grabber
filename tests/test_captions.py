@@ -315,10 +315,13 @@ class CaptionWorkflowTests(unittest.TestCase):
         with patch('captions.align_caption_words',return_value=result) as align:
             self.client.post(f'/api/captions/{pid}/karaoke',json={'revision':data['revision'],'index':0,'language':'auto'})
             after=self.wait(pid)
-            self.assertEqual(align.call_args.args[-1],'el')
+            # Whole line as Greek first, then the Latin run in its own language; the mocked
+            # Latin result does not match its text, so the whole-line timing is kept.
+            self.assertEqual([call.args[-1] for call in align.call_args_list],['el','en'])
         self.assertEqual(after['cues'][0]['text'],'Γεια\nhello')
         self.assertEqual(after['cues'][0]['karaoke']['state'],'review')
         self.assertIn('Mixed',after['cues'][0]['karaoke']['note'])
+        self.assertIn('kept the whole-line el timing',after['cues'][0]['karaoke']['note'])
         self.assertEqual(after['cues'][1],data['cues'][1])
         after['style']['karaoke']=True
         self.client.put('/api/captions/'+pid,json=after)

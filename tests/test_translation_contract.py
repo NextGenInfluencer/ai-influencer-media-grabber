@@ -45,6 +45,13 @@ class TranslationRecordTests(unittest.TestCase):
         cue['text'] = 'Different words'
         self.assertEqual(validate_edit(dict(cues=[cue]), 2)['cues'][0]['translations']['en']['status'], 'stale')
 
+    def test_script_runs_split_mixed_lines_and_attach_neutral_tokens(self):
+        from captions import script_runs
+        self.assertEqual(script_runs('(Yeah) Γεια σου, 123 my love 사랑해'),
+                         [('latin', ['(Yeah)']), ('el', ['Γεια', 'σου,', '123']), ('latin', ['my', 'love']), ('ko', ['사랑해'])])
+        self.assertEqual(script_runs('123 Γεια'), [('el', ['123', 'Γεια'])])
+        self.assertEqual(script_runs('Hello\nworld'), [('latin', ['Hello', 'world'])])
+
     def test_make_translation_is_the_server_writer(self):
         record = lyric_tracks.make_translation(' Hi ', 'Hello\n world', 'review', True, 'n' * 600)
         self.assertEqual(record['text'], 'Hi')
@@ -192,6 +199,34 @@ class TranslationWorkflowTests(unittest.TestCase):
         rows = self.j(self.client.post(f'/api/captions/{pid}/layout', json={
             'cue': again['cues'][1], 'style': {**again['style'], 'track_mode': 'both', 'layout_enabled': True}}))['rows']
         self.assertIn('Hello you', [r['text'] for r in rows])
+
+    def test_mixed_line_retry_aligns_each_script_run_in_its_language(self):
+        pid, data = self.karaoke_project()
+        data['cues'][1]['text'] = 'Γεια σου my love'
+        data['cues'][1]['translations'] = {'en': side_editor_record('Γεια σου my love', 'Hello you my love')}
+        saved = self.j(self.client.put('/api/captions/' + pid, json=data))
+        calls = []
+
+        def align(model, audio, text, language):
+            calls.append((text, language, round(len(audio) / 16000, 2)))
+            if text == 'Γεια σου my love':  # whole-line coarse pass
+                return {'segments': [{'words': [dict(word='Γεια', start=.05, end=.2), dict(word=' σου', start=.2, end=.4),
+                                                dict(word=' my', start=.4, end=.6), dict(word=' love', start=.6, end=.85)]}]}
+            self.assertEqual((text, language), ('my love', 'en'))
+            return {'segments': [{'words': [dict(word='my', start=.05, end=.2), dict(word=' love', start=.25, end=.5)]}]}
+        with patch('captions.align_caption_words', side_effect=align):
+            self.client.post(f'/api/captions/{pid}/karaoke', json={'revision': saved['revision'], 'index': 1, 'language': 'auto'})
+            after = self.wait(pid)
+        self.assertEqual([c[:2] for c in calls], [('Γεια σου my love', 'el'), ('my love', 'en')])
+        self.assertLess(calls[1][2], calls[0][2], 'Latin run is aligned over its own sub-range')
+        cue = after['cues'][1]
+        self.assertEqual([w['text'] for w in cue['words']], ['Γεια', 'σου', 'my', 'love'])
+        starts = [w['start'] for w in cue['words']]
+        self.assertEqual(starts, sorted(starts))
+        self.assertGreaterEqual(cue['words'][2]['start'], cue['words'][1]['end'])
+        self.assertIn('Aligned per language (el + en)', cue['karaoke']['note'])
+        self.assertEqual(cue['karaoke']['state'], 'review')
+        self.assertEqual(cue['translations'], saved['cues'][1]['translations'])
 
     def test_correct_lyrics_keeps_translations_of_unchanged_lines(self):
         pid, data = self.karaoke_project()
