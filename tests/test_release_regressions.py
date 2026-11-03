@@ -90,22 +90,26 @@ class ReleaseRegressions(unittest.TestCase):
             hwaccel.run_render(['ffmpeg','-c:v','h264_nvenc','out.mp4'],cwd=self.root,runner=run)
             self.assertEqual(run.call_count,1)
 
-    def test_current_app_starts_with_old_updater_manifest(self):
+    def test_current_app_starts_from_release_archive_with_and_without_manifest(self):
+        import json
+        import shutil
         import safe_update
         repo = Path(__file__).resolve().parents[1]
-        archive = io.BytesIO()
-        with zipfile.ZipFile(archive,'w',compression=zipfile.ZIP_DEFLATED) as z:
-            files = [repo/name for name in safe_update.FILES if (repo/name).is_file()]
-            for directory in safe_update.DIRECTORIES:
-                files.extend(p for p in (repo/directory).rglob('*') if p.is_file()
-                             and 'custom' not in p.parts and '__pycache__' not in p.parts)
-            for path in files:
-                z.write(path,'release/'+path.relative_to(repo).as_posix())
-        archive.seek(0)
-        # v3.1.3's allowlist dropped the new root-level encoder module.
-        with patch.object(safe_update,'FILES',safe_update.FILES-{'hwaccel.py'}):
-            stage_archive(self.root,archive,'3.1.4')
-        self.assertTrue((self.root/'.updates/pending.json').is_file())
+        files = safe_update.release_files(repo)
+        for include_manifest in (True, False):
+            with self.subTest(include_manifest=include_manifest):
+                archive = io.BytesIO()
+                with zipfile.ZipFile(archive,'w',compression=zipfile.ZIP_DEFLATED) as z:
+                    for name in files:
+                        if include_manifest or name != safe_update.MANIFEST_NAME:
+                            z.write(repo/name,'release/'+name)
+                archive.seek(0)
+                stage_archive(self.root,archive,'5.0.0')
+                staged = json.loads((self.root/'.updates/pending.json').read_text(encoding='utf-8'))['files']
+                # Every top-level module ships, including ones older clients did not list.
+                self.assertIn('storage_utils.py', staged)
+                self.assertIn('hwaccel.py', staged)
+                shutil.rmtree(self.root/'.updates')
 
     def test_sticker_animation_render_and_clean_preview(self):
         from PIL import Image
