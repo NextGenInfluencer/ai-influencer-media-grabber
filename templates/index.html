@@ -370,25 +370,35 @@ https://www.youtube.com/watch?v=..."></textarea>
                             </div>
                         </div>
 
-                        <!-- Browser Session -->
-                        <div class="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] flex items-center justify-between gap-2.5">
-                            <div class="min-w-0">
-                                <label class="block text-xs font-semibold text-zinc-200">Browser Session</label>
-                                <span class="text-[10px] text-zinc-500 block truncate">Auth &amp; cookies</span>
-                            </div>
-                            <div class="relative shrink-0 w-44">
-                                <select id="browser" name="browser" class="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-700/80 rounded-lg text-xs font-medium text-zinc-300 focus:outline-none focus:border-blue-500 appearance-none cursor-pointer pr-7 truncate">
-                                    <option value="none">Anonymous (Public)</option>
-                                    <option value="chrome">Chrome Profile</option>
-                                    <option value="firefox">Firefox Profile</option>
-                                    <option value="edge">Edge Profile</option>
-                                    <option value="safari">Safari Profile</option>
-                                    <option value="cookies.txt">Custom cookies.txt</option>
-                                </select>
-                                <div class="absolute inset-y-0 right-0 pr-2 flex items-center pointer-events-none text-zinc-500">
-                                    <i class="fa-solid fa-chevron-down text-[9px]"></i>
+                        <!-- Login Session (options served per platform by /api/cookies/options) -->
+                        <div class="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] flex flex-col gap-2">
+                            <div class="flex items-center justify-between gap-2.5">
+                                <div class="min-w-0">
+                                    <label for="browser" class="block text-xs font-semibold text-zinc-200">Login Session</label>
+                                    <span class="text-[10px] text-zinc-500 block truncate">For login-only &amp; private posts</span>
+                                </div>
+                                <div class="relative shrink-0 w-44">
+                                    <select id="browser" name="browser" class="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-700/80 rounded-lg text-xs font-medium text-zinc-300 focus:outline-none focus:border-blue-500 appearance-none cursor-pointer pr-7 truncate">
+                                        <option value="none">Anonymous (public posts)</option>
+                                    </select>
+                                    <div class="absolute inset-y-0 right-0 pr-2 flex items-center pointer-events-none text-zinc-500">
+                                        <i class="fa-solid fa-chevron-down text-[9px]"></i>
+                                    </div>
                                 </div>
                             </div>
+                            <div id="cookieImportRow" class="hidden items-center justify-between gap-2">
+                                <span id="cookieStatusChip" class="min-w-0 truncate px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/[0.04] border border-white/[0.08] text-zinc-400">No cookies.txt imported yet</span>
+                                <div class="flex items-center gap-1.5 shrink-0">
+                                    <button type="button" onclick="document.getElementById('cookieFileInput').click()" class="px-2.5 py-1 rounded-lg bg-[#0071e3] hover:bg-[#0077ed] text-white text-[11px] font-semibold shadow-sm transition active:scale-95 flex items-center gap-1.5" title="Import a Netscape cookies.txt file">
+                                        <i class="fa-solid fa-file-import text-[10px]"></i><span>Import…</span>
+                                    </button>
+                                    <button type="button" id="cookieRemoveBtn" onclick="removeImportedCookies()" class="hidden w-6 h-6 rounded-lg bg-white/[0.05] hover:bg-red-500/15 border border-white/[0.08] text-zinc-400 hover:text-red-300 items-center justify-center transition" title="Remove imported cookies">
+                                        <i class="fa-solid fa-trash-can text-[10px]"></i>
+                                    </button>
+                                </div>
+                                <input type="file" id="cookieFileInput" accept=".txt,text/plain" class="hidden" onchange="importCookiesFile(this)">
+                            </div>
+                            <p id="cookieHelpNote" class="hidden text-[10px] leading-snug text-zinc-500"></p>
                         </div>
 
                         <!-- Save Directory -->
@@ -2376,7 +2386,7 @@ https://www.youtube.com/watch?v=..."></textarea>
                         const res = await fetch('/api/preview', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ url })
+                            body: JSON.stringify({ url, browser: document.getElementById('browser').value })
                         });
                         const data = await res.json();
                         
@@ -2388,23 +2398,28 @@ https://www.youtube.com/watch?v=..."></textarea>
                             let domainIcon = 'fa-solid fa-link';
                             let domainColor = 'text-blue-400';
                             let platformName = 'Media Link';
-                            if (url.includes('instagram.com')) {
+                            const host = urlHostname(url);
+                            if (hostMatches(host, 'instagram.com')) {
                                 domainIcon = 'fa-brands fa-instagram';
                                 domainColor = 'text-pink-400';
                                 platformName = 'Instagram Reel';
-                            } else if (url.includes('tiktok.com')) {
+                            } else if (hostMatches(host, 'tiktok.com')) {
                                 domainIcon = 'fa-brands fa-tiktok';
                                 domainColor = 'text-cyan-400';
                                 platformName = 'TikTok Video';
-                            } else if (url.includes('youtube.com') || url.includes('youtu.be')) {
+                            } else if (hostMatches(host, 'youtube.com', 'youtu.be')) {
                                 domainIcon = 'fa-brands fa-youtube';
                                 domainColor = 'text-red-400';
                                 platformName = 'YouTube Video';
-                            } else if (url.includes('twitter.com') || url.includes('x.com')) {
+                            } else if (hostMatches(host, 'twitter.com', 'x.com')) {
                                 domainIcon = 'fa-brands fa-x-twitter';
                                 domainColor = 'text-zinc-300';
                                 platformName = 'X Media';
                             }
+                            const statusBadge = data.login_required
+                                ? '<span class="px-1.5 py-0.5 rounded text-[9px] font-medium bg-amber-500/10 text-amber-300 border border-amber-500/20">Login required</span>'
+                                : '<span class="px-1.5 py-0.5 rounded text-[9px] font-medium bg-blue-500/10 text-blue-300 border border-blue-500/20">Queued</span>';
+                            const detail = data.login_required ? escapeHtml(data.error) : escapeHtml(url);
 
                             actualCard.className = 'px-4 py-3 rounded-2xl bg-white/[0.02] border border-white/10 hover:border-white/15 transition-all flex items-center space-x-3.5';
                             actualCard.innerHTML = `
@@ -2414,9 +2429,10 @@ https://www.youtube.com/watch?v=..."></textarea>
                                 <div class="flex-1 min-w-0 pr-2">
                                     <div class="flex items-center space-x-2">
                                         <span class="text-xs font-semibold text-zinc-200 truncate">${platformName}</span>
-                                        <span class="px-1.5 py-0.5 rounded text-[9px] font-medium bg-blue-500/10 text-blue-300 border border-blue-500/20">Queued</span>
+                                        ${statusBadge}
                                     </div>
-                                    <div class="text-[10px] text-zinc-400 truncate mt-0.5 font-mono">${escapeHtml(url)}</div>
+                                    <div class="text-[10px] text-zinc-400 truncate mt-0.5 ${data.login_required ? '' : 'font-mono'}">${detail}</div>
+                                    ${data.login_required ? loginActionsHtml() : ''}
                                 </div>
                                 <div class="shrink-0 flex items-center space-x-1.5">
                                     <button onclick="document.getElementById('${previewId}').remove()" class="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-white/5 transition cursor-pointer" title="Dismiss">
@@ -2620,8 +2636,142 @@ https://www.youtube.com/watch?v=..."></textarea>
         }
 
         function generateUUID() {
+            if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
             return Math.random().toString(36).substring(2) + Date.now().toString(36);
         }
+
+        function urlHostname(url) {
+            try {
+                return new URL(url).hostname.toLowerCase();
+            } catch (e) {
+                return '';
+            }
+        }
+
+        function hostMatches(host, ...domains) {
+            return domains.some(domain => host === domain || host.endsWith('.' + domain));
+        }
+
+        // --- Login Session: platform-aware options, cookies.txt import & status ---
+        let cookieOptionsInfo = { options: [], note: '' };
+
+        function loginActionsHtml() {
+            const hasFirefox = cookieOptionsInfo.options.some(o => o.value === 'firefox');
+            return `
+                <div class="mt-2 flex items-center gap-1.5 flex-wrap">
+                    ${hasFirefox ? `<button type="button" onclick="chooseLoginSession('firefox')" class="px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.08] text-[11px] font-semibold text-zinc-200 hover:text-white flex items-center gap-1.5 transition"><i class="fa-brands fa-firefox-browser text-orange-400 text-[10px]"></i><span>Use Firefox</span></button>` : ''}
+                    <button type="button" onclick="chooseLoginSession('cookies.txt', true)" class="px-2.5 py-1 rounded-lg bg-[#0071e3] hover:bg-[#0077ed] text-white text-[11px] font-semibold flex items-center gap-1.5 transition active:scale-95"><i class="fa-solid fa-file-import text-[10px]"></i><span>Import cookies.txt</span></button>
+                </div>`;
+        }
+
+        function chooseLoginSession(value, openImport = false) {
+            const select = document.getElementById('browser');
+            if (!select || !Array.from(select.options).some(o => o.value === value)) return;
+            select.value = value;
+            select.dispatchEvent(new Event('change'));
+            showToast('Login Session', value === 'firefox' ? 'Using your Firefox login. Retry the download.' : 'Import your cookies.txt, then retry.');
+            if (openImport) document.getElementById('cookieFileInput')?.click();
+        }
+
+        function describeCookieStatus(status) {
+            if (!status || !status.exists) return 'No cookies.txt imported yet';
+            if (status.valid === false) return 'cookies.txt is unreadable · import it again';
+            const age = status.age_days === 0 ? 'today' : `${status.age_days} day${status.age_days === 1 ? '' : 's'} old`;
+            return `cookies.txt imported · ${status.domains} domain${status.domains === 1 ? '' : 's'} · ${age}`;
+        }
+
+        async function refreshCookieStatus() {
+            const chip = document.getElementById('cookieStatusChip');
+            const removeBtn = document.getElementById('cookieRemoveBtn');
+            try {
+                const status = await (await fetch('/api/cookies/status')).json();
+                if (chip) {
+                    chip.textContent = describeCookieStatus(status);
+                    chip.className = 'min-w-0 truncate px-2 py-0.5 rounded-full text-[10px] font-medium border ' +
+                        (status.exists && status.valid !== false ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-300' : 'bg-white/[0.04] border-white/[0.08] text-zinc-400');
+                }
+                if (removeBtn) {
+                    removeBtn.classList.toggle('hidden', !status.exists);
+                    removeBtn.classList.toggle('flex', !!status.exists);
+                }
+            } catch (e) {
+                if (chip) chip.textContent = 'Cookie status unavailable';
+            }
+        }
+
+        function updateCookieUi() {
+            const select = document.getElementById('browser');
+            const row = document.getElementById('cookieImportRow');
+            const note = document.getElementById('cookieHelpNote');
+            const usesFile = select && select.value === 'cookies.txt';
+            if (row) {
+                row.classList.toggle('hidden', !usesFile);
+                row.classList.toggle('flex', usesFile);
+            }
+            if (note) {
+                note.textContent = cookieOptionsInfo.note || '';
+                note.classList.toggle('hidden', !cookieOptionsInfo.note);
+            }
+        }
+
+        async function loadCookieOptions() {
+            const select = document.getElementById('browser');
+            if (!select) return;
+            try {
+                cookieOptionsInfo = await (await fetch('/api/cookies/options')).json();
+                const saved = localStorage.getItem('setting_browser');
+                select.innerHTML = '';
+                cookieOptionsInfo.options.forEach(option => {
+                    const el = document.createElement('option');
+                    el.value = option.value;
+                    el.textContent = option.label;
+                    select.appendChild(el);
+                });
+                select.value = cookieOptionsInfo.options.some(o => o.value === saved) ? saved : 'none';
+            } catch (e) {
+                console.error('Could not load login session options', e);
+            }
+            select.addEventListener('change', () => {
+                localStorage.setItem('setting_browser', select.value);
+                updateCookieUi();
+            });
+            updateCookieUi();
+            refreshCookieStatus();
+        }
+
+        async function importCookiesFile(input) {
+            const file = input.files && input.files[0];
+            input.value = '';
+            if (!file) return;
+            const body = new FormData();
+            body.append('file', file);
+            try {
+                const res = await fetch('/api/cookies/import', { method: 'POST', body });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || data.error) {
+                    showToast('Import Failed', data.error || `Server returned ${res.status}`);
+                    return;
+                }
+                chooseLoginSession('cookies.txt');
+                showToast('cookies.txt Imported', describeCookieStatus(data.status));
+            } catch (e) {
+                showToast('Import Failed', 'Could not reach the app server');
+            }
+            refreshCookieStatus();
+        }
+
+        async function removeImportedCookies() {
+            try {
+                const res = await fetch('/api/cookies', { method: 'DELETE' });
+                const data = await res.json().catch(() => ({}));
+                showToast('cookies.txt Removed', data.deleted ? 'Imported cookies were deleted from this PC' : 'Nothing to remove');
+            } catch (e) {
+                showToast('Remove Failed', 'Could not reach the app server');
+            }
+            refreshCookieStatus();
+        }
+
+        document.addEventListener('DOMContentLoaded', loadCookieOptions);
         
         // --- UX Polish: Clipboard, URL Detection & Folder Shortcuts ---
         async function pasteFromClipboard() {
@@ -2712,11 +2862,11 @@ https://www.youtube.com/watch?v=..."></textarea>
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ path: p })
                 });
-                const data = await res.json();
-                if (data.status === 'success' || data.success) {
+                const data = await res.json().catch(() => ({}));
+                if (res.ok && (data.status === 'success' || data.success)) {
                     showToast('Folder Opened', 'Showing directory in File Explorer');
                 } else {
-                    showToast('Explorer Notice', data.message || 'Could not open folder');
+                    showToast('Explorer Notice', data.error || data.message || 'Could not open folder');
                 }
             } catch (e) {
                 showToast('Explorer Error', 'Unable to open folder');
@@ -2760,8 +2910,9 @@ https://www.youtube.com/watch?v=..."></textarea>
         function retryDownloadTask(taskData, oldRow) {
             if (!taskData || !taskData.payload) return;
             if (oldRow) oldRow.remove();
-            const newTaskId = uuidv4();
-            const singleUrl = taskData.payload.url || 'Download';
+            const newTaskId = generateUUID();
+            const retryPayload = { ...taskData.payload, task_id: newTaskId };
+            const singleUrl = retryPayload.url || 'Download';
             const queueContainer = document.getElementById('queueContainer');
             const row = document.createElement('div');
             row.id = `task-${newTaskId}`;
@@ -2782,7 +2933,7 @@ https://www.youtube.com/watch?v=..."></textarea>
                 <span class="task-status text-[10px] font-bold uppercase tracking-widest text-zinc-500 block">Queued (Retry)</span>
             `;
             queueContainer.prepend(row);
-            downloadQueue.push({ taskId: newTaskId, payload: taskData.payload, cancelled: false });
+            downloadQueue.push({ taskId: newTaskId, payload: retryPayload, cancelled: false });
             updateQueueCount();
             processQueue();
         }
@@ -2901,6 +3052,12 @@ https://www.youtube.com/watch?v=..."></textarea>
                                     retryBtn.innerHTML = '<i class="fa-solid fa-rotate-right text-[10px]"></i> <span>Retry</span>';
                                     retryBtn.onclick = () => retryDownloadTask(taskData, row);
                                     row.appendChild(retryBtn);
+                                }
+                                if (data.login_required && !row.querySelector('.task-login-actions')) {
+                                    const loginActions = document.createElement('div');
+                                    loginActions.className = 'task-login-actions';
+                                    loginActions.innerHTML = loginActionsHtml();
+                                    row.appendChild(loginActions);
                                 }
                                 finished = true;
                                 break;
@@ -3566,7 +3723,7 @@ https://www.youtube.com/watch?v=..."></textarea>
         window.addEventListener('DOMContentLoaded', () => {
             // Restore settings
             const settingsIds = [
-                'browser', 'convResize', 'convCompress', 'convFormat', 
+                'convResize', 'convCompress', 'convFormat', 
                 'convAutoCrop', 'convTrackingMode', 'convBurnSubtitles', 'convExportSubtitles', 
                 'burnSubtitles', 'exportSubtitlesDownloader', 'injectExif',
                 'autoExtractPrompt', 'aiSummarize', 'llmModelDownloader', 'convTranslateLang', 'llmModelConverter'
@@ -4007,7 +4164,13 @@ https://www.youtube.com/watch?v=..."></textarea>
             
             try {
                 const res = await fetch('/api/install_ai', { method: 'POST' });
-                const data = await res.json();
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || data.error) {
+                    showToast('AI Pack Not Started', data.error || `Server returned ${res.status}`);
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-down"></i> <span>Download &amp; Install AI Pack</span>';
+                    return;
+                }
                 startAiStatusPolling();
                 await fetchAiStatus();
             } catch (err) {
