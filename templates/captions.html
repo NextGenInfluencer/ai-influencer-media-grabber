@@ -7,6 +7,8 @@
 <title>Captions & Video Studio — Media Grabber</title>
 <link rel="stylesheet" href="/static/captions.css?v=v5captions1">
 <link rel="stylesheet" href="/static/copilot.css?v=5.0">
+<link rel="stylesheet" href="/static/ai_setup.css?v=5.0">
+<script src="/static/ai_setup.js?v=5.0" defer></script>
 <script src="/static/captions.js?v=v5captions1" defer></script>
 <script src="/static/copilot.js?v=5.0" defer></script>
 </head>
@@ -353,22 +355,24 @@
               <label>Selected line translation<textarea id="translationText" rows="3" maxlength="2000" placeholder="Select any lyric line above to see or edit its translation…"></textarea></label>
               <label><input id="translationLocked" type="checkbox"> 🔒 Lock this line translation (protects it from AI overwrites)</label>
               <button id="approveManualTranslation" type="button">Save &amp; approve this line translation</button>
+              <button id="compareTranslation" type="button" title="Compare the Translator and Helper models on the selected line">A/B this line</button>
+              <div id="translationAB" class="translation-ab" hidden aria-live="polite"></div>
               <p id="translationState" class="hint" role="status" style="font-weight:600;color:#64b5f6;margin:6px 0;"></p>
               <label>Song context (optional)<textarea id="translationNotes" rows="2" maxlength="4000" placeholder="Story, theme, mood, speaker perspective…"></textarea></label>
               <label>Glossary (optional)<textarea id="translationGlossary" rows="2" maxlength="4000" placeholder="Names, slang, preferred terminology…"></textarea></label>
               <div class="row">
                 <button id="findTranslationModels" type="button">Find installed local models</button>
-                <button id="setupTranslationModel" type="button">Set up local translator (2.5 GB)</button>
+                <button id="setupTranslationModel" type="button">Set up local translator</button>
               </div>
-              <p class="hint">Requires the AI Engine Pack. Downloads Qwen3 once from Hugging Face; lyrics stay 100% private on your computer.</p>
-              <label>Local AI model<select id="translationModel"><option value="">Choose an installed model</option></select></label>
+              <p id="translationSetupHint" class="hint">Opens AI Setup with the recommended translator for this PC: size, license and source are shown before anything downloads. Lyrics stay on your computer.</p>
+              <label>Local AI model<select id="translationModel"><option value="">Auto (best for this PC)</option></select></label>
               <div class="row" style="margin-top:6px;">
                 <button id="translateAll" class="primary" type="button" title="Translate all lyric lines that aren't locked">🌐 Translate All Lines (AI)</button>
                 <button id="translateSelected" type="button">Translate selected line</button>
                 <button id="resumeTranslation" type="button">Resume translation</button>
                 <button id="reviewTranslation" type="button">Review proposal</button>
               </div>
-              <p class="hint">Built-in Qwen3 or local Ollama; no cloud upload. Always review translations before exporting.</p>
+              <p class="hint">Translator model for single-language lines, Helper for mixed-language lines, same-language lines copied as-is. Local only; no cloud upload. Always review translations before exporting.</p>
               <div class="row"><button id="translationSrt" type="button">Translated SRT</button><button id="bilingualSrt" type="button">Bilingual SRT</button><button id="styledAss" type="button">Styled ASS</button></div>
             </details>
             <h3>3. Karaoke Word-by-Word Timing</h3>

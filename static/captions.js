@@ -267,6 +267,16 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         $('status').textContent = text; $('status').classList.toggle('error', error);
         document.querySelectorAll('dialog[open] .dialogStatus').forEach(node=>{node.textContent=error?text:'';});
     };
+    /** Append a [Set up AI] action to the status line for a missing local model (never auto-downloads). */
+    function offerSetup(hint) {
+        if (!hint || typeof window.openAISetup !== 'function') return;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'status-setup';
+        button.textContent = 'Set up AI';
+        button.onclick = () => window.openAISetup(hint);
+        $('status').append(' ', button);
+    }
     const media = name => `/api/captions/${project.id}/media/${encodeURIComponent(name)}`;
     const draftKey = kind => `creator-${kind}-${project.id}`;
     function readDraft(kind) {try{return JSON.parse(localStorage.getItem(draftKey(kind)));}catch{return null;}}
@@ -283,7 +293,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         if (!response.ok) throw Object.assign(new Error(data.error || 'Request failed'), {status: response.status, setupHint: data.setup_hint});
         return data;
     }
-    const act = fn => async event => { try { await fn(event); } catch (e) { say(e.message, true); } };
+    const act = fn => async event => { try { await fn(event); } catch (e) { say(e.message, true); offerSetup(e.setupHint); } };
     function checkpoint() { history.push(snapshot()); if (history.length>80) history.shift(); future=[]; }
     function changed(redraw = true) {
         for(const cue of project.cues){if(!cue.id)cue.id='cue_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2);}
@@ -400,7 +410,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         const translationSettings=project.translation_settings||{};
         $('translationNotes').value=translationSettings.notes||'';
         $('translationGlossary').value=translationSettings.glossary||'';
-        const translationModel=translationSettings.model||'';
+        const translationModel=translationSettings.model==='qwen3-4b-local'?'qwen3-4b':(translationSettings.model||'');
         if(translationModel&&!Array.from($('translationModel').options).some(o=>o.value===translationModel)) {
             $('translationModel').add(new Option(translationModel,translationModel));
         }
@@ -423,6 +433,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
             edited:'Review timing while listening. Word timings are editable below.'
         })[project.timing] || 'Review timing while listening.';
         say(project.status,project.state==='error');
+        if(project.state==='error')offerSetup(project.setup_hint);
         drawTimeline();drawList();fillSelection();drawDownloads();drawCaption();drawKaraokeSummary();drawComposition();
         $('reviewLyrics').hidden=!project.lyric_proposal;
     }
@@ -2247,30 +2258,71 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
     for(const id of ['translationNotes','translationGlossary','translationModel'])$(id).onchange=()=>{
         if(project)edit(()=>{project.translation_settings={notes:$('translationNotes').value,glossary:$('translationGlossary').value,model:$('translationModel').value};},false);
     };
+    let translationSetup=null;
+    const ROLE_LABELS={helper:'Helper',translator:'Translator',vision:'Vision'};
     async function refreshTranslationModels(){
         try{
             const data=await api('/api/captions/translation-models');
             const currentVal=$('translationModel').value||(project?.translation_settings?.model||'');
-            const models=data.models||[];
-            if(!models.length)return;
-            const formatLabel=(m)=>{
-                if(m==='qwen3-4b-local')return 'Qwen 3 (4B Built-in CPU)';
-                if(m.includes('14b'))return `${m} (14B High Quality GPU)`;
-                if(m.includes('7b')||m.includes('8b'))return `${m} (Fast GPU)`;
-                return `${m} (Local Ollama)`;
-            };
-            $('translationModel').replaceChildren(
-                new Option('Choose an installed model',''),
-                ...models.map(m=>new Option(formatLabel(m),m))
-            );
-            if(currentVal&&models.includes(currentVal)){
-                $('translationModel').value=currentVal;
-            }
-        }catch(_){}
+            const auto=data.auto||{};
+            translationSetup=data.setup||null;
+            const autoLabel=auto.available?`Auto (best for this PC): ${auto.model} · Local`:'Auto (best for this PC): no translator installed';
+            const label=m=>`${m.name} · ${(m.roles||[]).map(r=>ROLE_LABELS[r]||r).join(' / ')} · ${m.backend==='builtin'?'Built-in':'Ollama'} · Local`;
+            $('translationModel').replaceChildren(new Option(autoLabel,''),...(data.models||[]).map(m=>new Option(label(m),m.name)));
+            if(currentVal&&(data.models||[]).some(m=>m.name===currentVal))$('translationModel').value=currentVal;
+            const size=translationSetup?.size_bytes?` (${(translationSetup.size_bytes/1e9).toFixed(1)} GB)`:'';
+            $('setupTranslationModel').textContent=translationSetup?`Set up ${translationSetup.name}${size}`:'Set up local translator';
+            $('setupTranslationModel').hidden=Boolean(auto.available&&!translationSetup);
+        }catch(e){say(e.message,true);}
     }
     refreshTranslationModels();
     $('findTranslationModels').onclick=act(async()=>{await refreshTranslationModels();say('Local translation models updated.');});
-    $('setupTranslationModel').onclick=act(()=>job('translation-setup',{}));
+    $('setupTranslationModel').onclick=()=>{
+        if(typeof window.openAISetup==='function')window.openAISetup(translationSetup?.item_id);
+    };
+    function renderTranslationAB(result){
+        const box=$('translationAB');
+        const card=(role,title)=>{
+            const side=result[role]||{};
+            const node=document.createElement('div');
+            node.className='ab-side';
+            const heading=document.createElement('strong');
+            heading.textContent=side.model?`${title} · ${side.model} · Local`:title;
+            const body=document.createElement('p');
+            body.textContent=side.error||side.text||'';
+            node.append(heading,body);
+            if(side.note){const note=document.createElement('small');note.textContent=side.note;node.append(note);}
+            if(side.text){
+                const use=document.createElement('button');
+                use.type='button';
+                use.textContent='Use this translation';
+                use.onclick=act(async()=>{
+                    const cue=project.cues.find(c=>c.id===result.cue_id);
+                    if(!cue)throw Error('This line no longer exists.');
+                    await writeTranslation(cue,result.language,side.text,{status:'approved',note:side.note||'',origin:'ai'});
+                    box.hidden=true;say(`${title} translation approved for this line.`);
+                });
+                node.append(use);
+            }else if(side.setup_hint){
+                const setup=document.createElement('button');
+                setup.type='button';setup.textContent='Set up';
+                setup.onclick=()=>window.openAISetup?.(side.setup_hint);
+                node.append(setup);
+            }
+            return node;
+        };
+        box.replaceChildren(card('translator','Translator'),card('helper','Helper'));
+        box.hidden=false;
+    }
+    $('compareTranslation').onclick=act(async()=>{
+        if(!project)throw Error('Open a project first.');
+        const cue=current();if(!cue)throw Error('Select a lyric line first.');
+        if(dirty)await save();
+        say('Comparing Translator and Helper on this line (local)…');
+        const result=await api(`/api/captions/${project.id}/translate-ab`,'POST',{cue_id:cue.id,language:project.style.translation_language||'en'});
+        renderTranslationAB(result);
+        say('Pick the version that reads best. Nothing is saved until you choose.');
+    });
     const translateJob=(selectedOnly=false,resume=false)=>act(async()=>{
         if(!project)throw Error('Open a project first.');
         if(selectedOnly&&!current())throw Error('Select a lyric line first.');

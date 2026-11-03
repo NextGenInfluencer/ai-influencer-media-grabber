@@ -261,12 +261,12 @@ class CaptionWorkflowTests(unittest.TestCase):
     def test_karaoke_preserves_lines_style_and_backup_and_flags_failures(self):
         pid,before=self.karaoke_project()
         languages=[]
-        def align(model,audio,text,language):
+        def align(audio,text,language):
             languages.append(language)
             if language=='el':raise ValueError('Uncertain words')
             return {'segments':[{'words':[dict(word='Hello',start=.05,end=.3),dict(word=' world',start=.4,end=.7)]}]}
         options=dict(revision=before['revision'],language='auto')
-        with patch('captions.align_caption_words',side_effect=align):
+        with patch('captions.asr.align_words',side_effect=align):
             self.assertEqual(self.client.post(f'/api/captions/{pid}/karaoke',json=options).status_code,202)
             after=self.wait(pid)
         self.assertEqual(languages,['en','el'])
@@ -284,7 +284,7 @@ class CaptionWorkflowTests(unittest.TestCase):
     def test_karaoke_single_retry_override_and_cancel_are_transactional(self):
         pid,before=self.karaoke_project()
         result={'segments':[{'words':[dict(word='Γεια',start=.05,end=.3),dict(word=' σου',start=.4,end=.7)]}]}
-        with patch('captions.align_caption_words',return_value=result) as align:
+        with patch('captions.asr.align_words',return_value=result) as align:
             self.client.post(f'/api/captions/{pid}/karaoke',json={'revision':before['revision'],'index':1,'language':'el'})
             after=self.wait(pid)
             self.assertEqual(align.call_count,1)
@@ -293,7 +293,7 @@ class CaptionWorkflowTests(unittest.TestCase):
         entered,release=threading.Event(),threading.Event()
         def blocked(*args):
             entered.set();release.wait(5);return result
-        with patch('captions.align_caption_words',side_effect=blocked):
+        with patch('captions.asr.align_words',side_effect=blocked):
             self.client.post(f'/api/captions/{pid}/karaoke',json={'revision':after['revision'],'index':1,'language':'el'})
             try:
                 self.assertTrue(entered.wait(5))
@@ -312,7 +312,7 @@ class CaptionWorkflowTests(unittest.TestCase):
         data['cues'][0]['text']='Γεια\nhello'
         data = self.j(self.client.put('/api/captions/' + pid, json=data))
         result={'segments':[{'words':[dict(word='Γεια',start=.05,end=.3),dict(word=' hello',start=.4,end=.7)]}]}
-        with patch('captions.align_caption_words',return_value=result) as align:
+        with patch('captions.asr.align_words',return_value=result) as align:
             self.client.post(f'/api/captions/{pid}/karaoke',json={'revision':data['revision'],'index':0,'language':'auto'})
             after=self.wait(pid)
             # Whole line as Greek first, then the Latin run in its own language; the mocked
@@ -368,10 +368,10 @@ class CaptionWorkflowTests(unittest.TestCase):
         options=dict(text='Hello world',language='en',start=.2,end=1.8)
         self.assertEqual(self.client.post(f'/api/captions/{pid}/align',json={**options,'language':''}).status_code,400)
         result={'segments':[{'words':[dict(word='Hello',start=.1,end=.5),dict(word=' world',start=.6,end=1)]}]}
-        with patch('captions.align_lyrics',side_effect=ValueError('Cannot align')):
+        with patch('captions.asr.align',side_effect=ValueError('Cannot align')):
             self.client.post(f'/api/captions/{pid}/align',json=options)
             self.assertEqual(self.wait(pid,'error')['cues'][0]['text'],'Keep me')
-        with patch('captions.align_lyrics',return_value=result):
+        with patch('captions.asr.align',return_value=result):
             self.client.post(f'/api/captions/{pid}/align',json=options)
             data=self.wait(pid)
             self.assertEqual(data['timing'],'aligned')
@@ -380,7 +380,7 @@ class CaptionWorkflowTests(unittest.TestCase):
         entered,release=threading.Event(),threading.Event()
         def blocked(*args):
             entered.set();release.wait(5);return result
-        with patch('captions.align_lyrics',side_effect=blocked):
+        with patch('captions.asr.align',side_effect=blocked):
             self.client.post(f'/api/captions/{pid}/align',json=options)
             try:
                 self.assertTrue(entered.wait(5));job_process.cancel_all()
@@ -422,12 +422,12 @@ class CaptionWorkflowTests(unittest.TestCase):
         coarse = {'segments':[{'words':[dict(word='Hello',start=.1,end=.8),dict(word='world',start=1,end=1.8)]}]}
         entered, release = threading.Event(), threading.Event()
         calls = []
-        def refine(model, samples, text, language):
+        def refine(samples, text, language):
             calls.append(text)
             if text == 'world':
                 entered.set(); release.wait(5)
             return {'segments':[{'words':[dict(word=text,start=.05,end=.5)]}]}
-        with patch('captions.align_lyrics', return_value=coarse), patch('captions.align_caption_words', side_effect=refine):
+        with patch('captions.asr.align', return_value=coarse), patch('captions.asr.align_words', side_effect=refine):
             self.client.post(f'/api/captions/{pid}/align', json=options)
             try:
                 self.assertTrue(entered.wait(5)); job_process.cancel_all()
@@ -437,12 +437,12 @@ class CaptionWorkflowTests(unittest.TestCase):
         self.assertEqual(failed['cues'], before['cues'])
         progress = self.root/'library'/'Caption Projects'/pid/'lyric-sync-progress.json'
         self.assertEqual(json.loads(progress.read_text())['completed'], 1)
-        with patch('captions.align_lyrics') as first_pass, patch('captions.align_caption_words', side_effect=refine) as refined:
+        with patch('captions.asr.align') as first_pass, patch('captions.asr.align_words', side_effect=refine) as refined:
             self.client.post(f'/api/captions/{pid}/align', json={**options, 'resume':True})
             proposed = self.wait(pid)
             first_pass.assert_not_called()
             self.assertEqual(refined.call_count, 1)
-            self.assertEqual(refined.call_args.args[2], 'world')
+            self.assertEqual(refined.call_args.args[1], 'world')
         self.assertEqual(proposed['cues'], before['cues'])
         self.assertEqual([c['text'] for c in proposed['lyric_proposal']['cues']], ['Hello','world'])
         self.client.post(f'/api/captions/{pid}/align', json={**options, 'revision':proposed['revision'], 'resume':True, 'text':'Different'})
@@ -453,7 +453,7 @@ class CaptionWorkflowTests(unittest.TestCase):
     def test_section_refinement_failure_retains_first_pass_for_review(self):
         pid, before = self.karaoke_project()
         coarse = {'segments':[{'words':[dict(word='Bonjour',start=.2,end=.8)]}]}
-        with patch('captions.align_lyrics', return_value=coarse), patch('captions.align_caption_words', side_effect=ValueError('No anchors')):
+        with patch('captions.asr.align', return_value=coarse), patch('captions.asr.align_words', side_effect=ValueError('No anchors')):
             self.client.post(f'/api/captions/{pid}/align', json=dict(text='Bonjour', language='fr', start=0, end=2, sections=True, review=True))
             result = self.wait(pid)
         self.assertEqual(result['cues'], before['cues'])
@@ -493,17 +493,17 @@ class CaptionWorkflowTests(unittest.TestCase):
         data['cues']=[dict(start=.1,end=.9,text='Bonjour mon amour',words=[]),dict(start=1,end=1.9,text='사랑해 hello',words=[])]
         data = self.j(self.client.put('/api/captions/' + pid, json=data))
         languages=[]
-        def align(model,audio,text,language):
+        def align(audio,text,language):
             languages.append(language)
             words=text.split()
             return {'segments':[{'words':[dict(word=w,start=.05+i*.2,end=.2+i*.2) for i,w in enumerate(words)]}]}
-        with patch('captions.detect_caption_language',return_value='fr') as detect, patch('captions.align_caption_words',side_effect=align):
+        with patch('captions.asr.detect_language',return_value='fr') as detect, patch('captions.asr.align_words',side_effect=align):
             self.client.post(f'/api/captions/{pid}/karaoke',json=dict(revision=data['revision'],language='en-fr-ko'))
             after=self.wait(pid)
             # The mixed Korean/Latin line is aligned as Korean, then its Latin run in the detected Latin language.
             self.assertEqual(languages,['fr','ko','fr'])
-            self.assertEqual(detect.call_args_list[0].args[2],('en','fr','ko'))
-            self.assertEqual(detect.call_args.args[2],('en','fr'))
+            self.assertEqual(detect.call_args_list[0].args[1],('en','fr','ko'))
+            self.assertEqual(detect.call_args.args[1],('en','fr'))
             self.assertIn('Aligned per language (ko + fr)',after['cues'][1]['karaoke']['note'])
             self.assertTrue(all(c['karaoke']['state']=='review' for c in after['cues']))
             self.client.post(f'/api/captions/{pid}/karaoke',json=dict(revision=after['revision'],language='ko',index=1))
@@ -524,7 +524,7 @@ class CaptionWorkflowTests(unittest.TestCase):
         self.assertEqual(after['cues'][0]['text'],'Hello world')
         self.assertEqual(after['cues'][1],data['cues'][1])
         aligned={'segments':[{'words':[dict(word='Bonjour',start=.1,end=.7)]}]}
-        with patch('captions.align_lyrics',return_value=aligned):
+        with patch('captions.asr.align',return_value=aligned):
             self.client.post(f'/api/captions/{pid}/align',json=dict(text='Bonjour',language='fr',start=0,end=.9))
             after=self.wait(pid)
         self.assertEqual(after['cues'][0]['text'],'Bonjour')
@@ -536,12 +536,12 @@ class CaptionWorkflowTests(unittest.TestCase):
         calls=[]
         def result(text):
             return {'segments':[{'words':[dict(word=w,start=.05+i*.25,end=.2+i*.25) for i,w in enumerate(text.split())]}]}
-        def align(model,audio,text,language):
+        def align(audio,text,language):
             calls.append(text)
             if len(calls)==2:
                 entered.set();release.wait(5)
             return result(text)
-        with patch('captions.align_caption_words',side_effect=align):
+        with patch('captions.asr.align_words',side_effect=align):
             self.client.post(f'/api/captions/{pid}/karaoke',json=dict(revision=before['revision'],language='auto'))
             try:
                 self.assertTrue(entered.wait(5));job_process.cancel_all()
@@ -551,7 +551,7 @@ class CaptionWorkflowTests(unittest.TestCase):
         self.assertEqual(cancelled['cues'],before['cues'])
         progress_path=self.root/'library'/'Caption Projects'/pid/'karaoke-progress.json'
         interrupted_progress=progress_path.read_bytes()
-        with patch('captions.align_caption_words',side_effect=lambda m,a,t,l:result(t)) as resumed:
+        with patch('captions.asr.align_words',side_effect=lambda a,t,l:result(t)) as resumed:
             self.client.post(f'/api/captions/{pid}/karaoke',json=dict(revision=cancelled['revision'],language='auto',resume=True))
             after=self.wait(pid)
         self.assertEqual(resumed.call_count,1)
@@ -625,7 +625,7 @@ class CaptionWorkflowTests(unittest.TestCase):
     def test_pasted_lyrics_partial_timing_replaces_text_and_keeps_restore_point(self):
         pid,before=self.karaoke_project()
         result={'segments':[{'words':[dict(word='Καλή',start=.1,end=.4),dict(word='μέρα',start=.4,end=.4),dict(word='ξανά',start=1,end=1.5)]}]}
-        with patch('captions.align_lyrics',return_value=result):
+        with patch('captions.asr.align',return_value=result):
             response=self.client.post(f'/api/captions/{pid}/align',json=dict(text='Καλή μέρα\nξανά',language='el',start=0,end=2))
             self.assertEqual(response.status_code,202,response.json)
             after=self.wait(pid)
@@ -678,8 +678,10 @@ class CaptionWorkflowTests(unittest.TestCase):
                     {'start':.1,'end':.6,'word':'Hello'},{'start':.8,'end':1.5,'word':'world'}]}]}
         app=Flask('caption_test')
         self.model=Model()
-        detector=patch('captions.detect_caption_language',return_value='en');detector.start();self.addCleanup(detector.stop)
-        register_captions(app,self.root/'library',lambda:None,lambda:None,lambda:None,lambda:self.model,lambda p:False)
+        detector=patch('captions.asr.detect_language',return_value='en');detector.start();self.addCleanup(detector.stop)
+        speech=patch('captions.asr.transcribe',side_effect=lambda audio,**options:self.model.transcribe(audio,**options))
+        speech.start();self.addCleanup(speech.stop)
+        register_captions(app,self.root/'library',lambda:None,lambda:None,lambda:None,lambda p:False)
         self.client=app.test_client()
 
     def tearDown(self):
@@ -758,7 +760,7 @@ class CaptionWorkflowTests(unittest.TestCase):
         location=self.root/'library'/'Caption Projects'/pid/'project.json'
         location.write_text(json.dumps(data),encoding='utf-8')
         restarted=Flask('restarted')
-        register_captions(restarted,self.root/'library',lambda:None,lambda:None,lambda:None,lambda:self.model,lambda p:False)
+        register_captions(restarted,self.root/'library',lambda:None,lambda:None,lambda:None,lambda p:False)
         data = self.j(restarted.test_client().get('/api/captions/' + pid))
         self.assertEqual(data['state'],'error')
         self.assertIn('interrupted',data['status'])

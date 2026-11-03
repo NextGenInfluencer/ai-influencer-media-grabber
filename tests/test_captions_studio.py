@@ -183,7 +183,7 @@ class RenderingTests(unittest.TestCase):
             entered.set()
             release.wait(5)
             return result
-        with patch('captions.align_caption_words', side_effect=blocked):
+        with patch('captions.asr.align_words', side_effect=blocked):
             self.client.post(f'/api/captions/{pid_a}/karaoke', json={'revision': a['revision'], 'index': 1, 'language': 'el'})
             try:
                 self.assertTrue(entered.wait(5))

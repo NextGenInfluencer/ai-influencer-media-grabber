@@ -25,7 +25,7 @@ class StabilityTests(unittest.TestCase):
         self.jobs = 0
         app = Flask('stability')
         register_captions(app, self.root, self.started, self.finished,
-                          lambda: None, lambda: None, lambda p: False)
+                          lambda: None, lambda p: False)
         self.client = app.test_client()
 
     def started(self):

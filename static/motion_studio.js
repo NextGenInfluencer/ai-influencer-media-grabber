@@ -75,7 +75,11 @@
   }
 
   window.motionStudio = {
-    open: (section = 'faceswap') => { window.location.href = `/video-studio#${section}`; },
+    // Face Swap Video changes a real person's likeness: show the one-time consent notice first.
+    open: async (section = 'faceswap') => {
+      if (!(await window.ensureNoticeAccepted('responsible_use'))) return;
+      window.location.href = `/video-studio#${section}`;
+    },
     snapFrame,
   };
 })();

@@ -138,7 +138,7 @@ class TranslationWorkflowTests(unittest.TestCase):
         self.assertEqual(saved['cues'][1]['translations']['en']['status'], 'approved')
         self.assertEqual(saved['cues'][0]['translations']['fr']['status'], 'approved')
         result = {'segments': [{'words': [dict(word='Γεια', start=.05, end=.3), dict(word=' σου', start=.4, end=.7)]}]}
-        with patch('captions.align_caption_words', return_value=result):
+        with patch('captions.asr.align_words', return_value=result):
             self.assertEqual(self.client.post(f'/api/captions/{pid}/karaoke',
                                               json={'revision': saved['revision'], 'index': 1, 'language': 'el'}).status_code, 202)
             after = self.wait(pid)
@@ -207,14 +207,14 @@ class TranslationWorkflowTests(unittest.TestCase):
         saved = self.j(self.client.put('/api/captions/' + pid, json=data))
         calls = []
 
-        def align(model, audio, text, language):
+        def align(audio, text, language):
             calls.append((text, language, round(len(audio) / 16000, 2)))
             if text == 'Γεια σου my love':  # whole-line coarse pass
                 return {'segments': [{'words': [dict(word='Γεια', start=.05, end=.2), dict(word=' σου', start=.2, end=.4),
                                                 dict(word=' my', start=.4, end=.6), dict(word=' love', start=.6, end=.85)]}]}
             self.assertEqual((text, language), ('my love', 'en'))
             return {'segments': [{'words': [dict(word='my', start=.05, end=.2), dict(word=' love', start=.25, end=.5)]}]}
-        with patch('captions.align_caption_words', side_effect=align):
+        with patch('captions.asr.align_words', side_effect=align):
             self.client.post(f'/api/captions/{pid}/karaoke', json={'revision': saved['revision'], 'index': 1, 'language': 'auto'})
             after = self.wait(pid)
         self.assertEqual([c[:2] for c in calls], [('Γεια σου my love', 'el'), ('my love', 'en')])

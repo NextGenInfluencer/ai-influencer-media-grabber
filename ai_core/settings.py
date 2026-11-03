@@ -1,22 +1,25 @@
-"""Persistent AI settings: profile override, role overrides, licenses, cloud opt-ins."""
+"""Persistent AI settings: profile override, role overrides, licenses, cloud opt-ins, notices."""
 import copy
 import json
 import os
-import tempfile
 import threading
 import time
-from pathlib import Path
+
+from storage_utils import atomic_write_json
 
 from . import paths
 
 ROLES = ('helper', 'translator', 'vision', 'speech')
 CLOUD_PROVIDERS = ('fal', 'gemini')
+NOTICES = ('responsible_use', 'download_copyright')
 DEFAULTS = {
     'profile_override': None,
     'roles': {role: None for role in ROLES},
     'accepted_licenses': [],
     'cloud': {provider: {'enabled': False} for provider in CLOUD_PROVIDERS},
     'idle_release_seconds': 300,
+    'notices': {notice: False for notice in NOTICES},
+    'setup_seen': False,
 }
 _lock = threading.RLock()
 
@@ -50,30 +53,9 @@ def load():
         return _merge(DEFAULTS, stored)
 
 
-def _write_atomic(path: Path, data):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    handle, temporary = tempfile.mkstemp(dir=path.parent, prefix='.ai_settings-', suffix='.tmp')
-    try:
-        with os.fdopen(handle, 'w', encoding='utf-8') as output:
-            json.dump(data, output, indent=2, ensure_ascii=False)
-        delay = 0.05
-        for attempt in range(5):
-            try:
-                os.replace(temporary, path)
-                return
-            except PermissionError:
-                if attempt == 4:
-                    raise
-                time.sleep(delay)
-                delay *= 2
-    finally:
-        if os.path.exists(temporary):
-            os.unlink(temporary)
-
-
 def save(data):
     with _lock:
-        _write_atomic(paths.SETTINGS_FILE, _merge(DEFAULTS, data))
+        atomic_write_json(paths.SETTINGS_FILE, _merge(DEFAULTS, data))
 
 
 def update(mutator):

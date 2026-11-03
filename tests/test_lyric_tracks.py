@@ -9,7 +9,7 @@ from pathlib import Path
 import imageio_ffmpeg
 from unittest.mock import patch
 from tests import test_captions
-from assets import lyric_tracks, lyric_translation
+from assets import lyric_tracks
 from captions import validate_edit, DEFAULT_STYLE, ass_text, layout_rows
 
 
@@ -169,11 +169,18 @@ class TrackTests(unittest.TestCase):
         self.assertEqual(lyric_tracks.export_cues([c],mode='both')[0]['text'],'Γεια\nσου\nHello')
 
     def test_structured_model_output_rejects_duplicates(self):
-        payload=dict(lines=[dict(id='one',text='Hello')],context='Hello',target='Greek',model='qwen3-4b-local')
-        with patch.object(lyric_translation,'models',return_value=['qwen3-4b-local']),patch.object(lyric_translation,'local_chat',return_value=json.dumps({'lines':[{'id':'wrong','text':'Γεια'}]})):
-            with self.assertRaises(ValueError): lyric_translation.translate(**payload)
-        with patch.object(lyric_translation,'models',return_value=['qwen3-4b-local']),patch.object(lyric_translation,'local_chat',return_value=json.dumps({'lines':[{'id':'one','text':'Γεια','note':''}]})):
-            self.assertEqual(lyric_translation.translate(**payload)['one']['text'],'Γεια')
+        from ai_core import translate as ai_translate
+        from ai_core.errors import AIUnavailable
+        choice = {'model': 'qwen3-4b', 'backend': 'builtin', 'prompt_format': None}
+        lines = [dict(id='one', text='Hello')]
+        def answer(lines_json):
+            return {'content': json.dumps({'lines': lines_json}), 'model': 'qwen3-4b', 'backend': 'builtin'}
+        with patch.object(ai_translate.llm, 'resolve', return_value=choice), \
+                patch.object(ai_translate.llm, 'chat', return_value=answer([{'id': '9', 'text': 'Γεια', 'note': ''}])):
+            with self.assertRaises(AIUnavailable): ai_translate.translate_lines(lines, 'el')
+        with patch.object(ai_translate.llm, 'resolve', return_value=choice), \
+                patch.object(ai_translate.llm, 'chat', return_value=answer([{'id': '1', 'text': 'Γεια', 'note': ''}])):
+            self.assertEqual(ai_translate.translate_lines(lines, 'el')['one']['text'], 'Γεια')
 
 
 class TrackWorkflowTests(unittest.TestCase):
@@ -189,8 +196,8 @@ class TrackWorkflowTests(unittest.TestCase):
         first['translations']={'en':dict(text='Hello world',source=lyric_tracks.source_hash(first['text']),status='approved',locked=True)}
         data['translation_settings']=dict(model='mock',notes='Tender song',glossary='')
         data=self.client.put('/api/captions/'+pid,json=data).json
-        def translate(lines,*args):return {line['id']:dict(text='Hello to you',note='Greeting') for line in lines}
-        with patch('captions.lyric_translation.translate',side_effect=translate) as model:
+        def translate(lines,*args,**kwargs):return {line['id']:dict(text='Hello to you',note='Greeting') for line in lines}
+        with patch('captions.ai_translate.translate_lines',side_effect=translate) as model:
             self.assertEqual(self.client.post(f'/api/captions/{pid}/translate',json=dict(revision=data['revision'],language='en')).status_code,202)
             proposed=self.wait(pid)
             self.assertEqual(len(model.call_args.args[0]),1)
@@ -210,7 +217,7 @@ class TrackWorkflowTests(unittest.TestCase):
     def test_bad_model_response_never_changes_saved_captions(self):
         pid,data=self.karaoke_project();data['translation_settings']=dict(model='mock')
         data=self.client.put('/api/captions/'+pid,json=data).json
-        with patch('captions.lyric_translation.translate',side_effect=ValueError('Incomplete response')):
+        with patch('captions.ai_translate.translate_lines',side_effect=ValueError('Incomplete response')):
             self.client.post(f'/api/captions/{pid}/translate',json=dict(revision=data['revision'],language='en'))
             failed=self.wait(pid,'error')
         self.assertEqual(failed['cues'],data['cues'])
@@ -220,10 +227,10 @@ class TrackWorkflowTests(unittest.TestCase):
         pid, data = self.karaoke_project()
         data['translation_settings'] = dict(model='mock')
         data = self.client.put('/api/captions/'+pid, json=data).json
-        def translate(lines, *args):
+        def translate(lines, *args, **kwargs):
             return {line['id']: dict(text='Draft translation', note='') for line in lines}
         def propose(saved):
-            with patch('captions.lyric_translation.translate', side_effect=translate):
+            with patch('captions.ai_translate.translate_lines', side_effect=translate):
                 self.client.post(f'/api/captions/{pid}/translate', json=dict(revision=saved['revision'], language='en'))
                 return self.wait(pid)
         proposed = propose(data)
@@ -256,20 +263,20 @@ class TrackWorkflowTests(unittest.TestCase):
         data['translation_settings'] = dict(model='mock')
         data = self.client.put('/api/captions/'+pid, json=data).json
         calls = []
-        def interrupted(lines, *args):
+        def interrupted(lines, *args, **kwargs):
             calls.append(lines)
             if len(calls) == 2:
                 raise ValueError('Model interrupted')
             return {line['id']: dict(text='Translated '+line['text'], note='') for line in lines}
-        with patch('captions.lyric_translation.translate', side_effect=interrupted):
+        with patch('captions.ai_translate.translate_lines', side_effect=interrupted):
             self.client.post(f'/api/captions/{pid}/translate', json=dict(revision=data['revision'], language='en'))
             failed = self.wait(pid, 'error')
         self.assertEqual(failed['cues'], data['cues'])
         self.assertEqual(sum(line['text']=='Chorus' for line in calls[0]), 1)
-        def resumed(lines, *args):
+        def resumed(lines, *args, **kwargs):
             self.assertEqual([line['text'] for line in lines], ['Final verse'])
             return {line['id']: dict(text='Ending', note='') for line in lines}
-        with patch('captions.lyric_translation.translate', side_effect=resumed) as model:
+        with patch('captions.ai_translate.translate_lines', side_effect=resumed) as model:
             self.client.post(f'/api/captions/{pid}/translate', json=dict(revision=failed['revision'], language='en', resume=True))
             ready = self.wait(pid)
             self.assertEqual(model.call_count, 1)

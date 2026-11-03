@@ -1,72 +1,43 @@
-"""Serialize model loading, inference, and idle unloading across worker threads."""
-from functools import wraps
-import threading
+"""App-level AI helpers shared by the downloader and media tools (models live in ``ai_core``)."""
 import re
-from job_process import check_cancelled
 
-model_lock = threading.RLock()
+MAX_CUE_CHARS = 3000
 
-def serialized(function):
-    @wraps(function)
-    def call(*args, **kwargs):
-        with model_lock:
-            check_cancelled()
-            result = function(*args, **kwargs)
-            check_cancelled()
-            return result
-    return call
 
-@serialized
-def transcribe(model, *args, **kwargs):
-    return model.transcribe(*args, **kwargs)
+def segments_to_srt(segments, timestamp):
+    """SRT text from Whisper-style ``segments``; ``timestamp`` formats seconds as HH:MM:SS,mmm."""
+    blocks = []
+    for segment in segments if isinstance(segments, list) else []:
+        if not isinstance(segment, dict):
+            continue
+        text = str(segment.get('text', '')).strip()
+        if not text:
+            continue
+        start, end = float(segment.get('start', 0.0)), float(segment.get('end', 0.0))
+        blocks.append(f'{len(blocks) + 1}\n{timestamp(start)} --> {timestamp(end)}\n{text}')
+    return '\n\n'.join(blocks) + ('\n\n' if blocks else '')
 
-@serialized
-def detect_caption_language(model, audio, candidates=None):
-    """Detect from the cue audio; Latin script alone cannot identify French/English."""
-    import whisper
-    mel = whisper.log_mel_spectrogram(whisper.pad_or_trim(audio), n_mels=model.dims.n_mels).to(model.device)
-    _, probabilities = model.detect_language(mel)
-    choices = {k: v for k, v in probabilities.items() if not candidates or k in candidates}
-    return max(choices, key=choices.get)
 
-@serialized
-def align_caption_words(model, audio, text, language):
-    try:
-        from stable_whisper.alignment import align_words
-    except ImportError as exc:
-        raise RuntimeError('Install the updated AI Pack in the Studio, then restart to enable karaoke timing.') from exc
-    result = align_words(model, audio, [dict(start=0, end=len(audio)/16000, text=text)],
-                         language=language, normalize_text=False, regroup=False, verbose=None,
-                         progress_callback=lambda *_: check_cancelled())
-    return result.to_dict()
-
-@serialized
-def align_lyrics(model, audio, text, language):
-    """Use the shared Whisper model without changing its transcription methods."""
-    try:
-        from stable_whisper.alignment import align
-    except ImportError as exc:
-        raise ValueError('Lyric timing needs the updated AI Pack. Install it from the Studio, then restart the app.') from exc
-    result = align(model, audio, text, language=language, original_split=True,
-                   regroup=False, verbose=None, remove_instant_words=False,
-                   progress_callback=lambda *_: check_cancelled())
-    if result is None:
-        raise ValueError('Could not align these lyrics. Check the words, language and selected audio range.')
-    return result.to_dict()
-
-def translate_srt(text, generate, model_id, language='English'):
-    """Translate bounded cue groups; keep original cue IDs and times outside the model."""
+def translate_srt(text, language='English'):
+    """Translate SRT cue text with the local translator; cue numbers and times never reach the model."""
+    from ai_core import translate
     cues = re.split(r'\n\s*\n', text.strip())
-    output = []
-    for cue in cues:
+    parsed = []
+    for index, cue in enumerate(cues):
         lines = cue.splitlines()
         if len(lines) < 3 or '-->' not in lines[1]:
             raise ValueError('Invalid subtitle cue')
         original = '\n'.join(lines[2:])
-        if len(original) > 3000:
+        if len(original) > MAX_CUE_CHARS:
             raise ValueError('Subtitle cue is too long to translate safely')
-        translated = generate(original, f'Translate this subtitle to {language}. Return only the translated text, without timestamps or commentary.', model_id)
-        if not translated or '-->' in translated or translated.startswith(('Error:', 'AI Engine')):
+        parsed.append((str(index), lines[:2], original))
+    context = '\n'.join(original for _, _, original in parsed)[:12000]
+    answer = translate.translate_lines([{'id': cue_id, 'text': original} for cue_id, _, original in parsed],
+                                       language, context=context)
+    output = []
+    for cue_id, header, _ in parsed:
+        translated = str(answer.get(cue_id, {}).get('text', '')).strip()
+        if not translated or '-->' in translated:
             raise RuntimeError('Subtitle translation failed; original subtitles were preserved')
-        output.append('\n'.join(lines[:2] + [translated.strip()]))
+        output.append('\n'.join(header + [translated]))
     return '\n\n'.join(output) + '\n\n'
