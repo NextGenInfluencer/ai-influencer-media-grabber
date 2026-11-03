@@ -2389,6 +2389,7 @@ https://www.youtube.com/watch?v=..."></textarea>
                         actualCard.classList.remove('animate-pulse');
                         
                         if (data.error) {
+                            processedUrls.delete(url);
                             let domainIcon = 'fa-solid fa-link';
                             let domainColor = 'text-blue-400';
                             let platformName = 'Media Link';
@@ -2727,6 +2728,7 @@ https://www.youtube.com/watch?v=..."></textarea>
             }
             select.addEventListener('change', () => {
                 localStorage.setItem('setting_browser', select.value);
+                processedUrls.clear();
                 updateCookieUi();
             });
             updateCookieUi();
@@ -3309,6 +3311,7 @@ https://www.youtube.com/watch?v=..."></textarea>
             });
 
             document.getElementById('url').value = '';
+            processedUrls.clear();
             updateQueueCount();
             processQueue();
         });

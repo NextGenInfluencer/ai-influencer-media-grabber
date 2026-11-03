@@ -143,6 +143,14 @@ class RuntimeChecks(unittest.TestCase):
             for path in ROOT.glob('requirements*.txt'):
                 self.assertNotIn(unused, path.read_text(encoding='utf-8').lower(), path.name)
 
+    def test_core_requirements_include_ytdlp_tls_impersonation(self):
+        core = (ROOT / 'requirements.txt').read_text(encoding='utf-8')
+        self.assertIn('curl-cffi==0.16.3', core)
+        self.assertIn('cffi==2.1.1', core)
+        self.assertIn('pycparser==3.12', core)
+        from yt_dlp.networking import _curlcffi
+        self.assertTrue(hasattr(_curlcffi, 'CurlCFFIRH'))
+
     def test_cli_verify_and_install(self):
         with patch.object(ai_setup, 'inspect_runtime', return_value={name: None for name in ai_setup.MODULES}), \
                 patch('builtins.print'):

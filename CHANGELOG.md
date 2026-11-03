@@ -1,5 +1,9 @@
 # Changelog
 
+## [v5.0.5] - 2026-11-03
+- Downloader (`requirements.txt`): added `curl-cffi==0.16.3`, `cffi==2.1.1` and `pycparser==3.12` so `yt-dlp` has native Chrome TLS impersonation for TikTok and X extraction.
+- Downloader UI (`templates/index.html`): clear cached `processedUrls` when a URL preview fails, when the login session (`#browser`) changes, or when the download form is submitted so re-previewing after importing cookies or switching to Firefox works immediately.
+
 ## [v5.0.4] - 2026-11-03
 - Translation routing (`ai_core/translate.py`): expanded `STOPWORDS['en']` with core English words (`a`, `an`, `no`, `not`, `by`, `into`, `about`, `where`, `when`, `who`, `how`, `why`, `out`, `up`, `down`, `back`, `through`, `like`, `from`, `at`, `as`, `but`, `or`, `if`, `never`, `always`, `nothing`, `nobody`, `somebody`, `everything`) and broke Latin stopword ties in favor of `target_code` so English lyric lines containing `'a'` or `'no'` are not misclassified as Portuguese/Spanish.
 - Captions translation (`captions.py`): restricted chorus pre-seeding in `translate_project` to lines outside `pending_ids` so re-translating unlocked already-approved lines calls `ai_translate.translate_lines` instead of returning cached chorus text.
