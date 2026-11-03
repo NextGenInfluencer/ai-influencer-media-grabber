@@ -9,6 +9,7 @@ from PIL import Image, ImageOps
 import uuid
 import hashlib
 import threading
+import storage_utils
 
 _registry_lock = threading.Lock()
 
@@ -73,7 +74,7 @@ def clean_video(file_path, ffmpeg_exe=None, inject_exif=False):
     try:
         result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8', errors='replace')
         if result.returncode == 0 and os.path.exists(temp_output) and os.path.getsize(temp_output) > 0:
-            os.replace(temp_output, file_path)
+            storage_utils.replace_with_retry(temp_output, file_path)
             return True, "Success"
         else:
             err = result.stderr[-200:] if result.stderr else "Unknown FFmpeg error"
@@ -159,14 +160,7 @@ def clean_photo(file_path, inject_exif=False):
                 scrambled_img.save(temp_output, 'PNG', **save_options)
             else:
                 scrambled_img.save(temp_output, **save_options)
-        for attempt in range(5):
-            try:
-                os.replace(temp_output, file_path)
-                break
-            except (PermissionError, OSError):
-                if attempt == 4:
-                    raise
-                time.sleep(0.04)
+        storage_utils.replace_with_retry(temp_output, file_path)
         return True, 'Success'
     except Exception as e:
         return False, str(e)

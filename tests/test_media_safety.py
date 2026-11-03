@@ -182,10 +182,28 @@ class MediaTests(unittest.TestCase):
         file = self.home / 'rotated.jpg'
         exif = Image.Exif(); exif[274] = 6
         Image.new('RGB', (120, 80), 'red').save(file, exif=exif)
-        self.assertTrue(cleaner.clean_photo(str(file))[0])
+        ok, msg = cleaner.clean_photo(str(file))
+        self.assertTrue(ok, msg)
         with Image.open(file) as im:
             self.assertGreater(im.height, im.width)
             self.assertIsNone(im.getexif().get(274))
+
+    def test_clean_photo_retries_transient_permission_error(self):
+        file = self.home / 'retry.jpg'
+        Image.new('RGB', (64, 64), 'green').save(file)
+        real_replace = os.replace
+        attempts = {'count': 0}
+
+        def flaky_replace(src, dst):
+            if attempts['count'] == 0:
+                attempts['count'] += 1
+                raise PermissionError(5, 'Access is denied')
+            return real_replace(src, dst)
+
+        with patch('storage_utils.os.replace', side_effect=flaky_replace), patch('storage_utils.time.sleep'):
+            ok, msg = cleaner.clean_photo(str(file))
+        self.assertTrue(ok, msg)
+        self.assertEqual(attempts['count'], 1)
 
     def test_small_photo(self):
         file = self.home / 'tiny.png'

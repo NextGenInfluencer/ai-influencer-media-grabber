@@ -60,4 +60,8 @@ Interpreter on the dev PC: `.venv\Scripts\python.exe` (Python 3.10; CI uses 3.13
 
 | Step | Machine | Result | Time / VRAM | Notes |
 |---|---|---|---|---|
-| | | | | |
+| 0.1 Python unittest suite (`.venv`, Python 3.10.11) | Desktop PC (RTX 3080 12 GB, 32 GB RAM) | PASS (after v5.0.2 fixes) | 99.4 s | Caught transient Windows `PermissionError` in `test_orientation_applied` exposing missing `import time` in `cleaner.clean_photo` retry loop; fixed in v5.0.2 via `storage_utils.replace_with_retry` + regression test. 457 tests OK. |
+| 0.2 JS unit tests (`test_caption_timing.js`, `test_stream.js`) | Desktop PC (RTX 3080 12 GB, 32 GB RAM) | PASS | 16 s | All timing, draft isolation, SSE split-boundary/UTF-8 checks passed. |
+| 0.3 `node --check` on `static\*.js` | Desktop PC (RTX 3080 12 GB, 32 GB RAM) | PASS | 22 s | No syntax errors across all static JS files. |
+| 0.4 `npm ci; npm run lint:inline` | Desktop PC (RTX 3080 12 GB, 32 GB RAM) | PASS | 31 s | ESLint `no-undef` passed on extracted inline template scripts. |
+| 0.5 Python 3.13.9 venv (`.venv313`) + `coverage report` | Desktop PC (RTX 3080 12 GB, 32 GB RAM) | PASS (after v5.0.2 fixes) | 102.5 s | Initial run failed on `test_detect_nvidia_via_nvidia_smi` (`ModuleNotFoundError: No module named 'psutil'` when only `requirements.txt` is installed) and `test_zip_engine_extracts_atomically_with_marker` (`PermissionError: [WinError 5] Access is denied` on `os.replace` of `.extracting`). Fixed in v5.0.2 (`ai_core/hardware.py` OS RAM fallback + `ai_core/models.py` & `cleaner.py` `storage_utils.replace_with_retry` + 3 regression tests). 457 tests OK, 80% total coverage (`fail_under = 65`). Note: `py -3.13` launcher alias is not registered on this PC; `.venv313` created via `C:\Users\lefte\miniconda3\python.exe -m venv .venv313`. |

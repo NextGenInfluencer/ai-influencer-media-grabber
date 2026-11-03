@@ -12,6 +12,7 @@ from pathlib import Path, PurePosixPath
 
 import requests
 
+import storage_utils
 from . import catalog, paths, settings
 from .errors import AIUnavailable, ConsentRequired, ModelMissing
 
@@ -65,7 +66,7 @@ def _write_manifest(data):
     target.parent.mkdir(parents=True, exist_ok=True)
     temporary = target.with_name(f'.verified-{uuid.uuid4().hex}.tmp')
     temporary.write_text(json.dumps(data, indent=1), encoding='utf-8')
-    os.replace(temporary, target)
+    storage_utils.replace_with_retry(temporary, target)
 
 
 def _stat_key(path):
@@ -482,7 +483,7 @@ def _download(entry, destination, job_ref, cancelled):
         raise AIUnavailable(f'{destination.name} failed SHA-256 verification and was discarded. Retry the install.')
     if cancelled():
         raise _Cancelled()
-    os.replace(part, destination)
+    storage_utils.replace_with_retry(part, destination)
     _record_sha(destination, actual)
 
 
@@ -526,7 +527,7 @@ def _extract(item, archive, cancelled):
         (staging / MARKER).write_text(json.dumps({'item_id': item['id'], 'sha256': item.get('sha256')}), encoding='utf-8')
         if target.exists():
             shutil.rmtree(target)
-        os.replace(staging, target)
+        storage_utils.replace_with_retry(staging, target)
     finally:
         shutil.rmtree(staging, ignore_errors=True)
     archive.unlink(missing_ok=True)

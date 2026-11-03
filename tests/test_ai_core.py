@@ -51,15 +51,21 @@ class HardwareProfileTests(IsolatedAIMixin, unittest.TestCase):
 
     def test_detect_nvidia_via_nvidia_smi(self):
         memory = MagicMock(total=32 * 1024 ** 3)
+        fake_psutil = MagicMock(virtual_memory=MagicMock(return_value=memory))
         with patch.object(hardware.shutil, 'which', return_value='nvidia-smi'), \
                 patch.object(hardware, '_run', return_value='NVIDIA GeForce RTX 3060, 6144\nNVIDIA GeForce RTX 3080, 12288\n'), \
-                patch('psutil.virtual_memory', return_value=memory), \
+                patch.dict('sys.modules', {'psutil': fake_psutil}), \
                 patch.object(hardware, 'ai_pack_installed', return_value=True):
             info = hardware.detect(refresh=True)
         self.assertEqual((info['gpu_vendor'], info['gpu_name'], info['vram_gb']), ('nvidia', 'NVIDIA GeForce RTX 3080', 12.0))
         self.assertEqual(info['ram_gb'], 32.0)
         self.assertEqual(len(info['gpus']), 2)
         self.assertEqual(hardware.profile(info), 'gpu_high')
+
+    def test_ram_gb_without_psutil_uses_os_fallback(self):
+        with patch.dict('sys.modules', {'psutil': None}):
+            ram = hardware._ram_gb()
+        self.assertGreater(ram, 0.0)
 
     def test_detect_other_gpu_uses_cim_and_recommends_laptop(self):
         def run(args, timeout=6):
@@ -446,6 +452,30 @@ class InstallTests(IsolatedAIMixin, unittest.TestCase):
         self.assertFalse((paths.ENGINES_DIR / 'downloads' / 'x.zip').exists())
         self.assertTrue(models.status()['engine-x']['verified'])
         self.assertEqual(models.remove('engine-x')['removed'], [str(target.resolve())])
+
+    def test_zip_engine_retries_transient_windows_permission_error_on_replace(self):
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, 'w') as bundle:
+            bundle.writestr('top/ollama.exe', b'exe')
+        data = buffer.getvalue()
+        item = _fake_item('engine-x', data, kind='engine', backend='engine', install_root='engines',
+                          path='downloads/x.zip', extract={'format': 'zip', 'to': 'x', 'strip_components': 1})
+        self.use_catalog([item])
+        real_replace = os.replace
+        attempts = {'extract': 0}
+
+        def flaky_replace(src, dst):
+            if str(src).endswith('.extracting') and attempts['extract'] == 0:
+                attempts['extract'] += 1
+                raise PermissionError(5, 'Access is denied')
+            return real_replace(src, dst)
+
+        with patch.object(models.requests, 'get', return_value=response([data])), \
+                patch('storage_utils.os.replace', side_effect=flaky_replace), \
+                patch('storage_utils.time.sleep'):
+            job = self.wait_job(models.start_install('engine-x', accept_license=True))
+        self.assertEqual(job['state'], 'done', job)
+        self.assertEqual(attempts['extract'], 1)
 
     def test_zip_with_traversal_is_rejected(self):
         buffer = io.BytesIO()

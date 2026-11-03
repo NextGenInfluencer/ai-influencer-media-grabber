@@ -1,5 +1,10 @@
 # Changelog
 
+## [v5.0.2] - 2026-11-03
+- Hardware detection: added standard-library OS RAM fallback (`GlobalMemoryStatusEx` on Windows, `sysconf` on POSIX) when `psutil` is not installed (Essentials / core environment), and fixed `HardwareProfileTests` so tests do not require `psutil` in base environments.
+- Model & engine installer: use `storage_utils.replace_with_retry` when swapping downloaded files, extracted engine directories and `.verified.json` into place on Windows to tolerate transient antivirus/indexer file locks (`[WinError 5] Access is denied`).
+- AI Cleaner: fixed a `NameError` (`time` not imported) in `cleaner.clean_photo` when retrying a transient Windows file-replace lock, and unified photo/video atomic replacement on `storage_utils.replace_with_retry`.
+
 ## [v5.0.1] - 2026-11-03
 - AI Setup: fixed stray "null" text next to model names in the checklist.
 - AI Setup: the vocal isolation model is no longer pre-selected in profile bundles until its runtime library ships in an AI pack (it stays installable from the catalog).
