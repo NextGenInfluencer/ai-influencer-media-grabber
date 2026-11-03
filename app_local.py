@@ -4,7 +4,14 @@ if __name__ == '__main__':
     import os as _os, sys as _sys
     from safe_update import apply_pending
     if apply_pending(_os.path.dirname(_os.path.abspath(__file__))):
-        _os.execv(_sys.executable, [_sys.executable, __file__] + _sys.argv[1:])
+        if _os.name == 'nt':
+            import subprocess as _sp
+            _target = _os.path.abspath(__file__)
+            _cmd = [_sys.executable, _target] + _sys.argv[1:]
+            _sp.Popen(_cmd, cwd=_os.path.dirname(_target))
+            _sys.exit(0)
+        else:
+            _os.execv(_sys.executable, [_sys.executable, __file__] + _sys.argv[1:])
 
 import os
 import re
@@ -785,7 +792,7 @@ def shazam_file(audio_path):
         print("Shazam error:", e)
         return None
 
-APP_VERSION = "4.2.1"
+APP_VERSION = "4.2.2"
 SERVER_START_TIME = time.time()
 
 # --- Active Job & Auto-Shutdown Watchdog State ---

@@ -2826,8 +2826,27 @@ https://www.youtube.com/watch?v=..."></textarea>
         async function restartUpdatedApp() {
             const response = await fetch('/api/restart', { method: 'POST' });
             if (!response.ok) { showToast('Restart unavailable', 'Wait for active jobs to stop.'); return; }
-            showToast('Restarting', 'The update will be applied before the app opens.');
-            setTimeout(() => location.reload(), 6000);
+            showToast('Restarting', 'Applying update and rebooting engine...');
+            
+            // Poll for server to come back online, then reload seamlessly
+            let attempts = 0;
+            const maxAttempts = 35;
+            const interval = setInterval(async () => {
+                attempts++;
+                try {
+                    const health = await fetch('/api/health_check', { cache: 'no-store' });
+                    if (health.ok) {
+                        clearInterval(interval);
+                        location.reload();
+                    }
+                } catch (e) {
+                    // Server is rebooting
+                }
+                if (attempts >= maxAttempts) {
+                    clearInterval(interval);
+                    location.reload();
+                }
+            }, 1000);
         }
         async function cancelDownload(taskId) {
             if (activeDownloads[taskId]) {
