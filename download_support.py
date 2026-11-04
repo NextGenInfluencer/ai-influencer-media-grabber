@@ -885,3 +885,351 @@ def read_json_with_recovery(path, default_factory: Callable[[], Any], validate: 
     atomic_write_json(target, data)
     print(f'[storage] Restored {target.name} from backup')
     return data
+
+
+# --- Download engine updates (yt-dlp & gallery-dl only) ---------------------------------------
+
+ALLOWED_ENGINE_PACKAGES: tuple[str, str] = ('yt-dlp', 'gallery-dl')
+ENGINE_CHECK_INTERVAL_SECONDS: int = 7 * 86400  # 1 week
+ENGINE_METADATA: dict[str, dict[str, Any]] = {
+    'yt-dlp': {
+        'module': 'yt_dlp',
+        'license': 'Unlicense',
+        'approx_size_mb': 3.3,
+        'size_bytes': 3_460_000,
+        'source': 'PyPI (https://pypi.org/project/yt-dlp/)',
+        'pypi_json': 'https://pypi.org/pypi/yt-dlp/json',
+    },
+    'gallery-dl': {
+        'module': 'gallery_dl',
+        'license': 'GPL-2.0-only',
+        'approx_size_mb': 0.6,
+        'size_bytes': 630_000,
+        'source': 'PyPI (https://pypi.org/project/gallery-dl/)',
+        'pypi_json': 'https://pypi.org/pypi/gallery-dl/json',
+    },
+}
+
+_ENGINE_VERSION_PROBE = (
+    'import importlib.metadata as m, json; '
+    'print(json.dumps({"yt-dlp": m.version("yt-dlp"), "gallery-dl": m.version("gallery-dl")}))'
+)
+
+_ENGINE_VERIFY_SCRIPT = (
+    'import json, yt_dlp, yt_dlp.version, gallery_dl, gallery_dl.extractor, gallery_dl.job; '
+    'ydl = yt_dlp.YoutubeDL({"simulate": True, "quiet": True, "no_warnings": True}); '
+    'fn = ydl.prepare_filename({"id": "dry", "title": "dry", "ext": "mp4"}); '
+    'ex = gallery_dl.extractor.find("https://www.instagram.com/p/C0000000000/"); '
+    'assert fn and ex is not None and hasattr(gallery_dl.job, "SimulationJob"); '
+    'print(json.dumps({"yt-dlp": yt_dlp.version.__version__, "gallery-dl": gallery_dl.__version__}))'
+)
+
+
+def engine_state_path() -> Path:
+    return data_dir() / 'download_engines.json'
+
+
+def validate_engine_packages(packages: Any = None) -> tuple[str, ...]:
+    """Validate that only ``yt-dlp`` and ``gallery-dl`` are requested; never touch other packages."""
+    if packages is None:
+        return ALLOWED_ENGINE_PACKAGES
+    if isinstance(packages, str):
+        items = [packages]
+    elif isinstance(packages, (list, tuple, set, frozenset)):
+        items = list(packages)
+    else:
+        raise ValueError('Download engine packages must be a list of package names.')
+    if not items:
+        raise ValueError('At least one download engine package must be specified.')
+    chosen: set[str] = set()
+    for item in items:
+        if not isinstance(item, str):
+            raise ValueError(f'Invalid package name {item!r}: only yt-dlp and gallery-dl are allowed.')
+        clean = item.strip()
+        if clean not in ALLOWED_ENGINE_PACKAGES:
+            raise ValueError(f'Disallowed package {item!r}: only yt-dlp and gallery-dl may be updated.')
+        chosen.add(clean)
+    return tuple(pkg for pkg in ALLOWED_ENGINE_PACKAGES if pkg in chosen)
+
+
+def _engine_version_tuple(version_str: str) -> tuple[int, ...]:
+    if not version_str:
+        return (0,)
+    parts: list[int] = []
+    for piece in str(version_str).strip().lstrip('vV').replace('-', '.').split('.'):
+        digits = ''.join(ch for ch in piece if ch.isdigit())
+        if digits:
+            parts.append(int(digits))
+    return tuple(parts) or (0,)
+
+
+def _run_engine_cmd(cmd: list[str], runner=None, timeout: int = 120):
+    run = runner or subprocess.run
+    kwargs: dict[str, Any] = {
+        'capture_output': True,
+        'text': True,
+        'encoding': 'utf-8',
+        'errors': 'replace',
+        'timeout': timeout,
+    }
+    if os.name == 'nt' and runner is None and hasattr(subprocess, 'CREATE_NO_WINDOW'):
+        kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
+    return run(cmd, **kwargs)
+
+
+def get_installed_engine_versions(python_exe: str | None = None, runner=None) -> dict[str, str]:
+    """Return installed versions of ``yt-dlp`` and ``gallery-dl`` in the target Python."""
+    exe = python_exe or sys.executable
+    if runner is None and os.path.normcase(os.path.abspath(exe)) == os.path.normcase(os.path.abspath(sys.executable)):
+        try:
+            import importlib.metadata as meta
+            return {
+                'yt-dlp': meta.version('yt-dlp'),
+                'gallery-dl': meta.version('gallery-dl'),
+            }
+        except Exception:
+            pass
+    proc = _run_engine_cmd([exe, '-I', '-c', _ENGINE_VERSION_PROBE], runner=runner, timeout=30)
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout or '').strip()
+        raise RuntimeError(f'Could not read installed download engine versions: {detail[-300:]}')
+    data = json.loads((proc.stdout or '').strip().splitlines()[-1])
+    return {'yt-dlp': str(data['yt-dlp']), 'gallery-dl': str(data['gallery-dl'])}
+
+
+def verify_download_engines(python_exe: str | None = None, runner=None) -> dict[str, str]:
+    """Verify ``yt-dlp`` and ``gallery-dl`` by importing them and running dry ``--version`` and simulate checks."""
+    exe = python_exe or sys.executable
+    probe = _run_engine_cmd([exe, '-I', '-c', _ENGINE_VERIFY_SCRIPT], runner=runner, timeout=45)
+    if probe.returncode != 0:
+        detail = ((probe.stderr or '') + '\n' + (probe.stdout or '')).strip()
+        raise RuntimeError(f'Download engine import/simulate check failed: {detail[-400:]}')
+    try:
+        lines = [line.strip() for line in (probe.stdout or '').splitlines() if line.strip()]
+        versions = json.loads(lines[-1]) if lines else {}
+    except ValueError as exc:
+        raise RuntimeError(f'Download engine verification returned invalid JSON: {exc}') from exc
+    for pkg in ALLOWED_ENGINE_PACKAGES:
+        if not versions.get(pkg):
+            raise RuntimeError(f'Download engine verification did not return a version for {pkg}')
+        mod = ENGINE_METADATA[pkg]['module']
+        cli = _run_engine_cmd([exe, '-m', mod, '--version'], runner=runner, timeout=30)
+        if cli.returncode != 0 or not (cli.stdout or '').strip():
+            detail = ((cli.stderr or '') + '\n' + (cli.stdout or '')).strip()
+            raise RuntimeError(f'{pkg} --version check failed: {detail[-300:]}')
+    return {'yt-dlp': str(versions['yt-dlp']), 'gallery-dl': str(versions['gallery-dl'])}
+
+
+def _load_engine_state() -> dict[str, Any]:
+    return read_json_with_recovery(
+        engine_state_path(),
+        lambda: {'last_checked_at': 0.0, 'last_updated_at': 0.0, 'latest_versions': {}, 'package_info': {}, 'last_result': None},
+        lambda d: isinstance(d, dict),
+    )
+
+
+def _save_engine_state(state: dict[str, Any]) -> None:
+    write_json_with_backup(engine_state_path(), state, lambda d: isinstance(d, dict))
+
+
+def weekly_check_due(now: float | None = None) -> bool:
+    """True when at least 7 days have elapsed since the last download-engine update check."""
+    ts = time.time() if now is None else float(now)
+    state = _load_engine_state()
+    last_checked = float(state.get('last_checked_at') or 0.0)
+    return last_checked <= 0.0 or (ts - last_checked) >= ENGINE_CHECK_INTERVAL_SECONDS
+
+
+def download_engines_status(*, python_exe: str | None = None, runner=None, now: float | None = None) -> dict[str, Any]:
+    """Return current download engine versions and cached weekly-check state without network calls."""
+    ts = time.time() if now is None else float(now)
+    state = _load_engine_state()
+    try:
+        current = get_installed_engine_versions(python_exe=python_exe, runner=runner)
+    except Exception:
+        current = {'yt-dlp': getattr(yt_dlp.version, '__version__', 'unknown'), 'gallery-dl': 'unknown'}
+    latest_map = dict(state.get('latest_versions') or {})
+    pkg_info_map = dict(state.get('package_info') or {})
+    packages: dict[str, dict[str, Any]] = {}
+    has_update = False
+    for pkg in ALLOWED_ENGINE_PACKAGES:
+        meta = ENGINE_METADATA[pkg]
+        cur_v = current.get(pkg, '')
+        lat_v = latest_map.get(pkg) or cur_v
+        saved_info = pkg_info_map.get(pkg) if isinstance(pkg_info_map.get(pkg), dict) else {}
+        pkg_has_update = bool(lat_v and cur_v and _engine_version_tuple(lat_v) > _engine_version_tuple(cur_v))
+        if pkg_has_update:
+            has_update = True
+        packages[pkg] = {
+            'name': pkg,
+            'current_version': cur_v,
+            'latest_version': lat_v,
+            'has_update': pkg_has_update,
+            'license': saved_info.get('license') or meta['license'],
+            'size_bytes': int(saved_info.get('size_bytes') or meta['size_bytes']),
+            'approx_size_mb': meta['approx_size_mb'],
+            'source': meta['source'],
+        }
+    last_checked = float(state.get('last_checked_at') or 0.0)
+    return {
+        'allowed_packages': list(ALLOWED_ENGINE_PACKAGES),
+        'current_versions': current,
+        'latest_versions': {pkg: packages[pkg]['latest_version'] for pkg in ALLOWED_ENGINE_PACKAGES},
+        'packages': packages,
+        'has_update': has_update,
+        'last_checked_at': last_checked,
+        'last_updated_at': float(state.get('last_updated_at') or 0.0),
+        'check_interval_seconds': ENGINE_CHECK_INTERVAL_SECONDS,
+        'weekly_check_due': last_checked <= 0.0 or (ts - last_checked) >= ENGINE_CHECK_INTERVAL_SECONDS,
+        'last_result': state.get('last_result'),
+    }
+
+
+def check_download_engines(force: bool = False, *, now: float | None = None,
+                           python_exe: str | None = None, runner=None) -> dict[str, Any]:
+    """Check PyPI for newer ``yt-dlp`` / ``gallery-dl`` versions when ``force`` is True or weekly check is due."""
+    ts = time.time() if now is None else float(now)
+    status = download_engines_status(python_exe=python_exe, runner=runner, now=ts)
+    if not force and not status['weekly_check_due']:
+        return {**status, 'checked_now': False, 'error': None}
+
+    state = _load_engine_state()
+    latest_versions = dict(state.get('latest_versions') or {})
+    pkg_info = dict(state.get('package_info') or {})
+    errors: list[str] = []
+    for pkg in ALLOWED_ENGINE_PACKAGES:
+        meta = ENGINE_METADATA[pkg]
+        try:
+            resp = requests.get(meta['pypi_json'], headers={'User-Agent': 'AI-Influencer-Media-Grabber'}, timeout=6)
+            resp.raise_for_status()
+            payload = resp.json()
+            info = payload.get('info') or {}
+            ver = str(info.get('version') or '').strip()
+            if ver:
+                latest_versions[pkg] = ver
+            wheel_bytes = 0
+            for item in payload.get('urls') or []:
+                if isinstance(item, dict) and item.get('packagetype') == 'bdist_wheel' and item.get('size'):
+                    wheel_bytes = int(item['size'])
+                    break
+            pkg_info[pkg] = {
+                'license': meta['license'],
+                'size_bytes': wheel_bytes or meta['size_bytes'],
+            }
+        except Exception as exc:
+            errors.append(f'{pkg}: {exc}')
+
+    if not errors or latest_versions:
+        state['last_checked_at'] = ts
+        state['latest_versions'] = latest_versions
+        state['package_info'] = pkg_info
+        _save_engine_state(state)
+
+    updated_status = download_engines_status(python_exe=python_exe, runner=runner, now=ts)
+    return {
+        **updated_status,
+        'checked_now': True,
+        'error': '; '.join(errors) if errors else None,
+    }
+
+
+def update_download_engines(packages: Any = None, *, python_exe: str | None = None,
+                            runner=None, now: float | None = None) -> dict[str, Any]:
+    """Update only ``yt-dlp`` and ``gallery-dl`` with pip, verify import + dry checks, and roll back on failure."""
+    targets = validate_engine_packages(packages)
+    exe = python_exe or sys.executable
+    ts = time.time() if now is None else float(now)
+    previous_versions = get_installed_engine_versions(python_exe=exe, runner=runner)
+
+    pip_cmd = [
+        exe, '-m', 'pip', 'install', '--upgrade', '--no-deps',
+        '--only-binary', ':all:', '--disable-pip-version-check', *targets,
+    ]
+    failure_reason: str | None = None
+    verified_versions: dict[str, str] = {}
+    try:
+        proc = _run_engine_cmd(pip_cmd, runner=runner, timeout=180)
+        if proc.returncode != 0:
+            detail = ((proc.stderr or '') + '\n' + (proc.stdout or '')).strip()
+            failure_reason = f'pip install failed (exit {proc.returncode}): {detail[-300:]}'
+        else:
+            verified_versions = verify_download_engines(python_exe=exe, runner=runner)
+    except Exception as exc:
+        failure_reason = str(exc)
+
+    state = _load_engine_state()
+    if failure_reason is not None:
+        rollback_pins = [f'{pkg}=={previous_versions[pkg]}' for pkg in targets if previous_versions.get(pkg)]
+        rollback_ok = False
+        restored_versions = dict(previous_versions)
+        if rollback_pins:
+            rb_cmd = [
+                exe, '-m', 'pip', 'install', '--no-deps',
+                '--only-binary', ':all:', '--disable-pip-version-check', *rollback_pins,
+            ]
+            try:
+                rb_proc = _run_engine_cmd(rb_cmd, runner=runner, timeout=180)
+                if rb_proc.returncode == 0:
+                    restored_versions = verify_download_engines(python_exe=exe, runner=runner)
+                    rollback_ok = all(restored_versions.get(pkg) == previous_versions.get(pkg) for pkg in targets)
+            except Exception:
+                rollback_ok = False
+        summary = ', '.join(f'{pkg} {restored_versions.get(pkg, "unknown")}' for pkg in targets)
+        result = {
+            'ok': False,
+            'rolled_back': bool(rollback_pins),
+            'rollback_ok': rollback_ok,
+            'packages': list(targets),
+            'previous_versions': previous_versions,
+            'current_versions': restored_versions,
+            'updated': {},
+            'verified': rollback_ok,
+            'timestamp': ts,
+            'error': failure_reason,
+            'message': f'Download engine update failed ({failure_reason}). Rolled back to {summary}.',
+        }
+        state['last_result'] = result
+        _save_engine_state(state)
+        return result
+
+    import importlib
+    importlib.invalidate_caches()
+    updated = {
+        pkg: {'from': previous_versions.get(pkg, ''), 'to': verified_versions.get(pkg, '')}
+        for pkg in targets
+        if previous_versions.get(pkg) != verified_versions.get(pkg)
+    }
+    if updated:
+        parts = [f'{pkg} ({chg["from"]} → {chg["to"]})' for pkg, chg in updated.items()]
+        unchanged = [f'{pkg} {verified_versions[pkg]}' for pkg in targets if pkg not in updated]
+        msg = 'Updated ' + ', '.join(parts)
+        if unchanged:
+            msg += '; ' + ', '.join(unchanged) + ' already up to date'
+        msg += '. Verified import and dry checks.'
+    else:
+        summary = ', '.join(f'{pkg} {verified_versions.get(pkg, "")}' for pkg in targets)
+        msg = f'Download engines are already up to date ({summary}). Verified import and dry checks.'
+
+    result = {
+        'ok': True,
+        'rolled_back': False,
+        'rollback_ok': None,
+        'packages': list(targets),
+        'previous_versions': previous_versions,
+        'current_versions': verified_versions,
+        'updated': updated,
+        'verified': True,
+        'timestamp': ts,
+        'error': None,
+        'message': msg,
+    }
+    state['last_checked_at'] = ts
+    state['last_updated_at'] = ts
+    latest_versions = dict(state.get('latest_versions') or {})
+    for pkg, ver in verified_versions.items():
+        if not latest_versions.get(pkg) or _engine_version_tuple(ver) >= _engine_version_tuple(latest_versions[pkg]):
+            latest_versions[pkg] = ver
+    state['latest_versions'] = latest_versions
+    state['last_result'] = result
+    _save_engine_state(state)
+    return result

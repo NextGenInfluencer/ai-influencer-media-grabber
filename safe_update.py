@@ -188,11 +188,22 @@ def _normalised_text(path):
     return path.read_text(encoding='utf-8-sig').replace('\r\n', '\n').strip()
 
 
+ALLOWED_ENGINE_PACKAGES = ('yt-dlp', 'gallery-dl')
+_ENGINE_PIN_RE = re.compile(r'^(yt-dlp|gallery-dl)==[A-Za-z0-9._+-]+$')
+
+
+def _normalised_dependency_text(name, path):
+    text = _normalised_text(path)
+    if name != 'requirements.txt':
+        return text
+    return '\n'.join(_ENGINE_PIN_RE.sub(r'\1==<download-engine>', line.strip()) for line in text.split('\n'))
+
+
 def _check_dependencies(root, stage):
     """Never mutate a live Python environment. Dependency migrations require the installer."""
     for name in DEPENDENCY_FILES:
         staged, live = stage / name, root / name
-        if staged.exists() and live.exists() and _normalised_text(staged) != _normalised_text(live):
+        if staged.exists() and live.exists() and _normalised_dependency_text(name, staged) != _normalised_dependency_text(name, live):
             raise ValueError('This release changes dependencies. Install it using the release installer.')
 
 

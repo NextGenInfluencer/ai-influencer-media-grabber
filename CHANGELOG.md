@@ -1,5 +1,13 @@
 # Changelog
 
+## [v5.0.9] - 2026-11-04
+- In-app download engine updates & weekly check (`download_support.py`, `app_local.py`, `templates/index.html`, `safe_update.py`):
+  - Added `update_download_engines()`, `verify_download_engines()`, `check_download_engines()`, and `weekly_check_due()` (7-day interval persisted in `download_engines.json`), plus `/api/download_engines/status`, `/api/download_engines/check`, and `/api/download_engines/update`.
+  - Enforced a strict allow-list (`ALLOWED_ENGINE_PACKAGES = ('yt-dlp', 'gallery-dl')`) and `--no-deps --only-binary :all:` so only `yt-dlp` and `gallery-dl` can ever be updated and no other packages are touched.
+  - Verified updates by importing `yt_dlp` and `gallery_dl` in an isolated subprocess, running a dry simulate check (`YoutubeDL({'simulate': True}).prepare_filename(...)` and `gallery_dl.extractor.find(...)`), and running `python -m yt_dlp --version` and `python -m gallery_dl --version`; automatically rolled back to the previous pinned versions (`yt-dlp==<prev>`, `gallery-dl==<prev>`) and re-verified if installation or verification fails.
+  - Added the in-app **Update download engines** action (in the Downloader toolbar, More Tools menu, and Software Update modal) displaying package sizes, licenses, current/latest versions, and live update/rollback results.
+  - Updated `safe_update._check_dependencies()` so OTA releases may update `yt-dlp` and `gallery-dl` pins in `requirements.txt` while continuing to refuse any other dependency or AI pack changes without the full installer.
+
 ## [v5.0.8] - 2026-11-04
 - Built-in CPU LLM stability (`ai_core/llm.py`):
   - Reset `llama_cpp.Llama` KV-cache state (`model.reset()`) before each `create_chat_completion` call and set `repeat_penalty=1.15` so consecutive structured-output calls (`translate_lines`) on `qwen3-1.7b` do not loop into phrase repetition and truncate JSON at `max_tokens`.

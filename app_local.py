@@ -42,7 +42,9 @@ from download_support import (MAX_COOKIE_FILE_BYTES, CookieError, LoginRequiredE
                               extract_instagram_preview, ffmpeg_filter_path, friendly_download_error,
                               gallery_download, host_matches, import_cookie_bytes, is_instagram_profile_url,
                               is_instagram_url, migrate_legacy_cookies, platform_folder,
-                              read_json_with_recovery, wants_playlist, write_json_with_backup)
+                              read_json_with_recovery, wants_playlist, write_json_with_backup,
+                              check_download_engines, download_engines_status,
+                              update_download_engines, validate_engine_packages)
 from ai_runtime import segments_to_srt, translate_srt
 from ai_core import asr
 from ai_core.errors import AIUnavailable
@@ -715,7 +717,7 @@ def shazam_file(audio_path):
         print("Shazam error:", e)
         return None
 
-APP_VERSION = "5.0.8"
+APP_VERSION = "5.0.9"
 SERVER_START_TIME = time.time()
 
 # --- Active Job & Auto-Shutdown Watchdog State ---
@@ -2594,6 +2596,38 @@ def api_update_status():
     resp = dict(app_updater_state)
     resp["completed"] = (app_updater_state.get("status") == "complete")
     return jsonify(resp)
+
+
+@app.route('/api/download_engines/status', methods=['GET'])
+def api_download_engines_status():
+    if request.args.get('check') == '1' or request.args.get('force') == '1':
+        return jsonify(check_download_engines(force=(request.args.get('force') == '1')))
+    return jsonify(download_engines_status())
+
+
+@app.route('/api/download_engines/check', methods=['POST'])
+def api_download_engines_check():
+    data = request.get_json(silent=True) or {}
+    force = bool(data.get('force')) or request.args.get('force') == '1'
+    return jsonify(check_download_engines(force=force))
+
+
+@app.route('/api/download_engines/update', methods=['POST'])
+def api_download_engines_update():
+    data = request.get_json(silent=True) or {}
+    try:
+        validate_engine_packages(data.get('packages'))
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    if is_busy():
+        return jsonify({"ok": False, "error": "Finish active jobs before updating download engines."}), 409
+    if not _maintenance_lock.acquire(blocking=False):
+        return jsonify({"ok": False, "error": _MAINTENANCE_BUSY}), 409
+    try:
+        result = update_download_engines(packages=data.get('packages'))
+    finally:
+        _maintenance_lock.release()
+    return jsonify(result), (200 if result.get("ok") else 500)
 
 def open_desktop_window(url="http://127.0.0.1:5000"):
     candidates = [

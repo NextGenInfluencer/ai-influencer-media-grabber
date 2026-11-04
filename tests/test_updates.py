@@ -192,3 +192,173 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(calls, ['Bonjour', 'Salut'])
         self.assertIn('00:00:03,000 --> 00:00:04,000', result)
         self.assertEqual(result.count('Hello'), 2)
+
+    def test_ota_allows_only_download_engine_pin_bumps_in_requirements(self):
+        (self.root / 'requirements.txt').write_text('Flask==3.0.0\nyt-dlp==2026.10.21\ngallery-dl==1.32.19\nyt-dlp-ejs==0.8.0\n')
+        stage_archive(self.root, self.archive({
+            'requirements.txt': 'Flask==3.0.0\nyt-dlp==2026.11.04\ngallery-dl==1.32.25\nyt-dlp-ejs==0.8.0\n'
+        }), 'v5')
+        self.assertTrue((self.root / '.updates/pending.json').exists())
+        self.assertTrue(apply_pending(self.root))
+        for bad_req in (
+            'Flask==3.1.0\nyt-dlp==2026.11.04\ngallery-dl==1.32.25\nyt-dlp-ejs==0.8.0\n',
+            'Flask==3.0.0\nyt-dlp==2026.11.04\ngallery-dl==1.32.25\nyt-dlp-ejs==0.9.0\n',
+            'Flask==3.0.0\nyt-dlp==2026.11.04\n',
+            'Flask==3.0.0\nyt-dlp==2026.11.04\ngallery-dl==1.32.25\nyt-dlp-ejs==0.8.0\nrequests==2.99.0\n',
+        ):
+            with self.assertRaisesRegex(ValueError, 'installer'):
+                stage_archive(self.root, self.archive({'requirements.txt': bad_req}), 'v6')
+
+
+class DownloadEngineUpdateTests(unittest.TestCase):
+    def setUp(self):
+        import os
+        (Path(__file__).resolve().parents[1] / 'audit_artifacts').mkdir(exist_ok=True)
+        self.temp = tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parents[1] / 'audit_artifacts')
+        self._old_data_dir = os.environ.get('MEDIA_GRABBER_DATA_DIR')
+        os.environ['MEDIA_GRABBER_DATA_DIR'] = self.temp.name
+
+    def tearDown(self):
+        import os
+        if self._old_data_dir is None:
+            os.environ.pop('MEDIA_GRABBER_DATA_DIR', None)
+        else:
+            os.environ['MEDIA_GRABBER_DATA_DIR'] = self._old_data_dir
+        self.temp.cleanup()
+
+    def test_only_yt_dlp_and_gallery_dl_are_allowed(self):
+        import download_support as ds
+        self.assertEqual(ds.validate_engine_packages(), ('yt-dlp', 'gallery-dl'))
+        self.assertEqual(ds.validate_engine_packages(['gallery-dl']), ('gallery-dl',))
+        for disallowed in ('flask', 'requests', 'torch', 'yt-dlp-ejs', 'yt-dlp==2026.10.21', '--extra-index-url', '', 123):
+            with self.assertRaises(ValueError):
+                ds.validate_engine_packages([disallowed])
+            with self.assertRaises(ValueError):
+                ds.update_download_engines([disallowed])
+        with self.assertRaises(ValueError):
+            ds.validate_engine_packages([])
+
+    def test_real_verify_download_engines_dry_check(self):
+        import download_support as ds
+        versions = ds.verify_download_engines()
+        self.assertTrue(versions.get('yt-dlp'))
+        self.assertTrue(versions.get('gallery-dl'))
+
+    def test_update_download_engines_succeeds_and_verifies(self):
+        import subprocess
+        import download_support as ds
+        calls = []
+        state = {'yt-dlp': '2026.10.21', 'gallery-dl': '1.32.19'}
+
+        def fake_runner(cmd, **kwargs):
+            calls.append(cmd)
+            if '-m' in cmd and 'pip' in cmd and '--upgrade' in cmd:
+                state['yt-dlp'] = '2026.11.04'
+                state['gallery-dl'] = '1.32.20'
+                return subprocess.CompletedProcess(cmd, 0, 'Successfully installed', '')
+            if '-c' in cmd:
+                return subprocess.CompletedProcess(cmd, 0, json.dumps(state), '')
+            if cmd[-2:] == ['yt_dlp', '--version']:
+                return subprocess.CompletedProcess(cmd, 0, state['yt-dlp'] + '\n', '')
+            if cmd[-2:] == ['gallery_dl', '--version']:
+                return subprocess.CompletedProcess(cmd, 0, state['gallery-dl'] + '\n', '')
+            raise AssertionError(f'Unexpected command: {cmd}')
+
+        res = ds.update_download_engines(runner=fake_runner, now=1000.0)
+        self.assertTrue(res['ok'])
+        self.assertFalse(res['rolled_back'])
+        self.assertEqual(res['previous_versions'], {'yt-dlp': '2026.10.21', 'gallery-dl': '1.32.19'})
+        self.assertEqual(res['current_versions'], {'yt-dlp': '2026.11.04', 'gallery-dl': '1.32.20'})
+        self.assertEqual(res['updated']['yt-dlp'], {'from': '2026.10.21', 'to': '2026.11.04'})
+        pip_calls = [c for c in calls if 'pip' in c]
+        self.assertEqual(len(pip_calls), 1)
+        self.assertIn('--no-deps', pip_calls[0])
+        self.assertEqual(pip_calls[0][-2:], ['yt-dlp', 'gallery-dl'])
+
+    def test_update_rolls_back_to_previous_versions_on_verification_failure(self):
+        import subprocess
+        import download_support as ds
+        calls = []
+        state = {'yt-dlp': '2026.10.21', 'gallery-dl': '1.32.19', 'broken': False}
+
+        def fake_runner(cmd, **kwargs):
+            calls.append(cmd)
+            if '-m' in cmd and 'pip' in cmd:
+                if '--upgrade' in cmd:
+                    state['yt-dlp'] = '2026.11.99'
+                    state['broken'] = True
+                else:
+                    # Rollback pin install
+                    assert 'yt-dlp==2026.10.21' in cmd and 'gallery-dl==1.32.19' in cmd
+                    state['yt-dlp'] = '2026.10.21'
+                    state['gallery-dl'] = '1.32.19'
+                    state['broken'] = False
+                return subprocess.CompletedProcess(cmd, 0, 'ok', '')
+            if state['broken']:
+                return subprocess.CompletedProcess(cmd, 1, '', 'ImportError: broken release')
+            if '-c' in cmd:
+                return subprocess.CompletedProcess(cmd, 0, json.dumps({'yt-dlp': state['yt-dlp'], 'gallery-dl': state['gallery-dl']}), '')
+            if cmd[-2:] == ['yt_dlp', '--version']:
+                return subprocess.CompletedProcess(cmd, 0, state['yt-dlp'] + '\n', '')
+            if cmd[-2:] == ['gallery_dl', '--version']:
+                return subprocess.CompletedProcess(cmd, 0, state['gallery-dl'] + '\n', '')
+            raise AssertionError(f'Unexpected command: {cmd}')
+
+        res = ds.update_download_engines(runner=fake_runner, now=2000.0)
+        self.assertFalse(res['ok'])
+        self.assertTrue(res['rolled_back'])
+        self.assertTrue(res['rollback_ok'])
+        self.assertEqual(res['current_versions'], {'yt-dlp': '2026.10.21', 'gallery-dl': '1.32.19'})
+        self.assertIn('Rolled back', res['message'])
+
+    def test_weekly_check_schedule_and_pypi_comparison(self):
+        import download_support as ds
+        from unittest.mock import MagicMock
+
+        def fake_get(url, **kwargs):
+            resp = MagicMock()
+            resp.raise_for_status.return_value = None
+            if 'yt-dlp' in url:
+                resp.json.return_value = {'info': {'version': '2099.01.01'}, 'urls': [{'packagetype': 'bdist_wheel', 'size': 3500000}]}
+            else:
+                resp.json.return_value = {'info': {'version': '1.32.19'}, 'urls': [{'packagetype': 'bdist_wheel', 'size': 620000}]}
+            return resp
+
+        with patch('download_support.requests.get', side_effect=fake_get) as mock_get:
+            first = ds.check_download_engines(force=False, now=10_000.0)
+            self.assertTrue(first['checked_now'])
+            self.assertTrue(first['has_update'])
+            self.assertTrue(first['packages']['yt-dlp']['has_update'])
+            self.assertEqual(mock_get.call_count, 2)
+
+            # Within 7 days: skipped without hitting PyPI
+            second = ds.check_download_engines(force=False, now=10_000.0 + 3 * 86400)
+            self.assertFalse(second['checked_now'])
+            self.assertFalse(second['weekly_check_due'])
+            self.assertEqual(mock_get.call_count, 2)
+
+            # After 7 days: weekly check runs again
+            third = ds.check_download_engines(force=False, now=10_000.0 + 7 * 86400 + 1)
+            self.assertTrue(third['checked_now'])
+            self.assertEqual(mock_get.call_count, 4)
+
+    def test_download_engine_routes_enforce_allowlist_and_return_status(self):
+        import app_local
+        client = app_local.app.test_client()
+        client.get('/')
+        with client.session_transaction() as sess:
+            headers = {'X-Media-Token': sess['api_token']}
+        st = client.get('/api/download_engines/status', headers=headers)
+        self.assertEqual(st.status_code, 200)
+        body = st.get_json()
+        self.assertEqual(body['allowed_packages'], ['yt-dlp', 'gallery-dl'])
+
+        bad = client.post('/api/download_engines/update', headers=headers, json={'packages': ['yt-dlp', 'flask']})
+        self.assertEqual(bad.status_code, 400)
+        self.assertFalse(bad.get_json()['ok'])
+
+        with patch('app_local.update_download_engines', return_value={'ok': True, 'rolled_back': False, 'message': 'Updated'}) as upd:
+            ok = client.post('/api/download_engines/update', headers=headers, json={'packages': ['yt-dlp', 'gallery-dl']})
+        self.assertEqual(ok.status_code, 200)
+        self.assertTrue(ok.get_json()['ok'])
+        upd.assert_called_once_with(packages=['yt-dlp', 'gallery-dl'])
