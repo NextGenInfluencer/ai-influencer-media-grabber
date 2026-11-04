@@ -1,17 +1,17 @@
-# Hand-off: state of the project after v5.0.8
+# Hand-off: state of the project after v5.0.14
 
 Read this file first, then `AGENTS.md` (workspace rules), `docs/v5-architecture.md` (module contract) and `docs/v5-validation.md` (test checklist).
 
 ## What this app is
 A **public, free Windows app** for AI-influencer creators. The core rule is that the creator never has to open another app. It installs small and works fully without AI: downloader, Media Tools, AI Cleaner, Captions Studio, gallery. AI is **opt-in**: the app detects the PC, recommends a profile, and downloads nothing without showing the size, source and license first. It must run on laptops without a GPU (smaller models) as well as on the owner's RTX 3080 12 GB PC (best free models). **Nothing may be faked:** if a capability is missing, say so (`AIUnavailable` → HTTP 424 + `setup_hint` → "Not available on this PC" + Set up AI).
 
-## Current state (main @ v5.0.8, v5.0.8 published and validated)
-- Automated: 474 Python tests pass (`$env:PYTHONIOENCODING='utf-8'; .venv\Scripts\python.exe -m unittest discover -s tests`). JS unit tests, `node --check`, and ESLint `no-undef` on inline template scripts pass.
+## Current state (main @ v5.0.14, v5.0.14 published and validated)
+- Automated: 486 Python tests pass (`$env:PYTHONIOENCODING='utf-8'; .venv\Scripts\python.exe -m unittest discover -s tests`). JS unit tests, `node --check`, and ESLint `no-undef` on inline template scripts pass.
 - **Validated on real hardware (`docs/v5-validation.md` sections 0–2 passed):**
   - Section 0 (automated suites + Python 3.13 coverage): PASS.
   - Section 1 (Desktop PC — RTX 3080 12 GB, 32 GB RAM): PASS across Setup & notices, Captions Studio, Downloader, AI Studio (all 6 local ComfyUI workflows + GPU Face Swap with CUDA 13), Copilot, and Setup.exe upgrade over v4.2.3.
   - Section 2 (Laptop — Intel Core i5-8250U, 16 GB RAM, Intel UHD Graphics 620): PASS across Laptop/DirectML pack setup, built-in CPU LLM (`qwen3-1.7b`) Copilot & offline lyric translation, Whisper CPU transcription (`base` / `small`), DirectML Face Swap with live ETA, and Essentials non-AI workflows.
-- GitHub Release **v5.0.8** is published and validated on both PC and laptop.
+- GitHub Release **v5.0.14** is published (`v5.0.8` hardware validation passed on both PC and laptop; all 5 post-v5.0.8 open items shipped in `v5.0.9–v5.0.14`).
 
 ## Architecture in one minute
 - `ai_core/`: everything AI.
