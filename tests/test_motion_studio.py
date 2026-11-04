@@ -107,6 +107,21 @@ class MotionStudioTests(unittest.TestCase):
         self.assertEqual(apply_audio.call_args.kwargs, {'mode': 'mute', 'audio': None})
         self.assertEqual(result['provider'], 'CUDAExecutionProvider')
 
+    def test_face_swap_capabilities_and_progress_expose_eta(self):
+        import routes_studio
+        with patch.object(routes_studio.hardware, 'current_profile', return_value='laptop'):
+            caps = routes_studio.capabilities()
+        self.assertEqual(caps['features']['face_swap']['cost']['eta_seconds'], 180)
+        with patch.object(routes_studio.hardware, 'current_profile', return_value='gpu_high'):
+            caps_gpu = routes_studio.capabilities()
+        self.assertEqual(caps_gpu['features']['face_swap']['cost']['eta_seconds'], 60)
+        updates = []
+        progress = routes_studio.frame_progress(lambda frac, msg: updates.append((frac, msg)))
+        progress(10, 40)
+        self.assertEqual(updates[-1][0], 0.25)
+        self.assertIn('Swapping faces… frame 10 of 40 (', updates[-1][1])
+        self.assertIn('left)', updates[-1][1])
+
 
 class DirectorMathTests(unittest.TestCase):
     def test_beat_onsets_find_energy_jumps(self):

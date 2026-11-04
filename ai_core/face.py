@@ -328,7 +328,7 @@ def swap_video(target_video, source_image, output, *, restore=True, progress=Non
                     previous_kps = None
                 writer.send(np.ascontiguousarray(frame).tobytes())
                 done += 1
-                if progress and (done % 10 == 0 or done == total):
+                if progress:
                     progress(done, total)
         writer.close()
         if not swapped:

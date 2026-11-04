@@ -23,3 +23,12 @@ class JobTests(unittest.TestCase):
         result = list(job_process.media_entries({'_type': 'playlist', 'entries': [None, {'id': 'one'},
                       {'_type': 'multi_video', 'entries': [{'id': 'two'}]}]}))
         self.assertEqual([entry['id'] for entry in result], ['one', 'two'])
+
+    def test_kill_tree_falls_back_to_process_kill_when_taskkill_times_out(self):
+        from unittest.mock import MagicMock, patch
+        process = MagicMock(pid=12345)
+        process.poll.return_value = None
+        with patch.object(job_process.os, 'name', 'nt'),                 patch.object(job_process._subprocess, 'run',
+                             side_effect=job_process._subprocess.TimeoutExpired('taskkill', 2)):
+            job_process._kill_tree(process)
+        process.kill.assert_called_once()

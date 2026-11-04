@@ -145,6 +145,10 @@ class FakeLlama:
     def __init__(self, pieces):
         self.pieces = pieces
         self.kwargs = None
+        self.reset_calls = 0
+
+    def reset(self):
+        self.reset_calls += 1
 
     def create_chat_completion(self, **kwargs):
         self.kwargs = kwargs
@@ -169,6 +173,8 @@ class BuiltinRouterTests(IsolatedAIMixin, unittest.TestCase):
             result = llm.chat('helper', [{'role': 'user', 'content': 'hi'}], schema={'type': 'object'})
         self.assertEqual(result, {'content': '{"a": 1}', 'tool_calls': [], 'model': 'qwen3-1.7b', 'backend': 'builtin'})
         self.assertEqual(fake.kwargs['response_format'], {'type': 'json_object', 'schema': {'type': 'object'}})
+        self.assertEqual(fake.kwargs['repeat_penalty'], 1.15)
+        self.assertEqual(fake.reset_calls, 1)
         self.assertTrue(fake.kwargs['messages'][-1]['content'].endswith('/no_think'))
 
     def test_tool_calls_are_emulated_with_json_schema(self):

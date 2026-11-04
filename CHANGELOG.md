@@ -1,5 +1,20 @@
 # Changelog
 
+## [v5.0.8] - 2026-11-04
+- Built-in CPU LLM stability (`ai_core/llm.py`):
+  - Reset `llama_cpp.Llama` KV-cache state (`model.reset()`) before each `create_chat_completion` call and set `repeat_penalty=1.15` so consecutive structured-output calls (`translate_lines`) on `qwen3-1.7b` do not loop into phrase repetition and truncate JSON at `max_tokens`.
+  - Registered `atexit.register(_unload_builtin)` and guarded `model.close()` so interpreter shutdown never emits `Exception ignored in: <function Llama.__del__>`.
+- Whisper audio decoding without system `ffmpeg` (`ai_core/asr.py`):
+  - Added `_load_audio()` in `ai_core/asr.py` to decode input audio files to 16 kHz mono `float32` numpy arrays via `imageio_ffmpeg.get_ffmpeg_exe()` before passing to `stable_whisper` / `openai-whisper`, fixing `[WinError 2] The system cannot find the file specified` on laptops without `ffmpeg.exe` on `PATH`.
+- Laptop hardware detection & catalog recommendations (`ai_core/hardware.py`, `ai_core/catalog.py`, `ai_core/models.py`):
+  - Added Win32 `EnumDisplayDevicesW` fallback (`_display_devices()`) when PowerShell `Get-CimInstance Win32_VideoController` returns empty on Windows laptops, and added `paths.APP_DIR` fallback in `_disk_free_gb()` / `_disk_free()`.
+  - Rounded detected system RAM (`round(ram) >= need`) in `catalog.recommended()` so 16 GB laptops reporting `15.9 GB` usable RAM after integrated GPU reservation receive the 16 GB model recommendations (`qwen3-4b`, `whisper-small`).
+  - Matched `_item_state('engine-ollama')` in `ai_core/models.py` with `OllamaEngine.status()['installed']` when an external Ollama server is already running.
+- Face Swap ETA & per-frame progress (`routes_studio.py`, `ai_core/face.py`, `assets/motion_studio.py`):
+  - Added `eta_seconds` (`180` on `laptop`, `60` on `gpu_*`) to `_requirements('face_swap')` and passed `eta_seconds` to `jobs.start('face_swap_video', ...)`.
+  - Updated `swap_video()` and `frame_progress()` to emit progress on every frame with live remaining time (`Swapping faces… frame X of Y (~Z s left)`), measuring steady-state per-frame duration from frame 1 completion so cold model initialization does not skew the remaining-time estimate.
+- Subprocess termination timeout (`job_process.py`, `ai_core/engines.py`): added a 2-second timeout and `(SubprocessError, OSError)` guard around `taskkill /PID ... /T /F` before calling `process.kill()`.
+
 ## [v5.0.7] - 2026-11-04
 - Self-sufficient GPU pack & CUDA session verification (`requirements-ai-gpu.txt`, `ai_packs.json`, `assets/ai_setup.py`, `ai_core/face.py`, `assets/motion_studio.py`, `routes_studio.py`):
   - Pinned `onnxruntime-gpu[cuda,cudnn]==1.31.1` in `requirements-ai-gpu.txt` so matching NVIDIA CUDA 13 and cuDNN 9 runtime wheels install directly into the app environment and `onnxruntime.preload_dlls()` loads them without depending on PyTorch or ComfyUI; updated `ai_packs.json` sizes (`onnxruntime-gpu` `approx_mb: 1335`, `gpu` pack `approx_disk_mb: 8300`).

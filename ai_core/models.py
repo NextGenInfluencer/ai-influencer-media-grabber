@@ -168,7 +168,8 @@ def _item_state(item, ollama_names=None):
     if item['id'] == 'engine-ollama':
         from . import engines
         executable = engines.ollama.executable()
-        return bool(executable), bool(executable), (str(executable) if executable else None)
+        ok = bool(executable) or engines.ollama.running()
+        return ok, ok, (str(executable) if executable else (engines.ollama.base_url if ok else None))
     if item.get('extract'):
         target = _extract_target(item)
         if item['id'] == 'engine-comfyui':
@@ -262,13 +263,15 @@ def _closure(item_id):
 
 
 def _disk_free(path):
-    target = Path(path)
-    while not target.exists() and target != target.parent:
-        target = target.parent
-    try:
-        return shutil.disk_usage(target).free
-    except OSError:
-        return 0
+    for candidate in (path, paths.APP_DIR):
+        target = Path(candidate)
+        while not target.exists() and target != target.parent:
+            target = target.parent
+        try:
+            return shutil.disk_usage(target).free
+        except OSError:
+            continue
+    return 0
 
 
 def notice(item_id):

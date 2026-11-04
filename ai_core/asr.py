@@ -106,8 +106,30 @@ def _progress(*_):
     check_cancelled()
 
 
+def _load_audio(audio):
+    """Decode existing audio files to 16 kHz mono float32 via imageio-ffmpeg so system ffmpeg is not required."""
+    if not isinstance(audio, (str, Path)):
+        return audio
+    path = Path(audio)
+    if not path.is_file():
+        return audio
+    import imageio_ffmpeg
+    import job_process
+    import numpy as np
+    cmd = [
+        imageio_ffmpeg.get_ffmpeg_exe(), '-nostdin', '-threads', '0',
+        '-i', str(path), '-f', 's16le', '-ac', '1', '-acodec', 'pcm_s16le',
+        '-ar', str(SAMPLE_RATE), '-'
+    ]
+    result = job_process.run(cmd, capture_output=True)
+    if result.returncode != 0:
+        raise AIUnavailable('Could not decode audio for speech recognition.')
+    return np.frombuffer(result.stdout, np.int16).flatten().astype(np.float32) / 32768.0
+
+
 def transcribe(audio, *, language=None, word_timestamps=True, vad=True):
     model = get_model()
+    audio = _load_audio(audio)
     use_vad = bool(vad) and _silero_cached()
     meta = {'model': _state['name'], 'device': _state['device'], 'vad': use_vad,
             'condition_on_previous_text': False}
@@ -168,6 +190,7 @@ def _alignment(function_name):
 def align(audio, text, language):
     align_fn = _alignment('align')
     model = get_model()
+    audio = _load_audio(audio)
     with gpu.lease('whisper', _vram()), _lock:
         result = align_fn(model, audio, text, language=language, original_split=True, regroup=False, verbose=None,
                           remove_instant_words=False, progress_callback=_progress)
@@ -180,6 +203,7 @@ def align(audio, text, language):
 def align_words(audio, text, language):
     align_fn = _alignment('align_words')
     model = get_model()
+    audio = _load_audio(audio)
     duration = len(audio) / SAMPLE_RATE if hasattr(audio, '__len__') else None
     segments = [dict(start=0, end=duration, text=text)]
     with gpu.lease('whisper', _vram()), _lock:

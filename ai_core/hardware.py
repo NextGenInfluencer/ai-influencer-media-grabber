@@ -57,14 +57,46 @@ def _vendor(name):
     return 'other'
 
 
+def _display_devices():
+    """Adapter names via Win32 EnumDisplayDevicesW when CIM is unavailable."""
+    if os.name != 'nt':
+        return []
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class _DISPLAY_DEVICEW(ctypes.Structure):
+            _fields_ = [
+                ('cb', wintypes.DWORD),
+                ('DeviceName', wintypes.WCHAR * 32),
+                ('DeviceString', wintypes.WCHAR * 128),
+                ('StateFlags', wintypes.DWORD),
+                ('DeviceID', wintypes.WCHAR * 128),
+                ('DeviceKey', wintypes.WCHAR * 128),
+            ]
+
+        device = _DISPLAY_DEVICEW(cb=ctypes.sizeof(_DISPLAY_DEVICEW))
+        adapters, seen, index = [], set(), 0
+        while ctypes.windll.user32.EnumDisplayDevicesW(None, index, ctypes.byref(device), 0):
+            index += 1
+            name = (device.DeviceString or '').strip()
+            if name and name not in seen:
+                seen.add(name)
+                adapters.append({'vendor': _vendor(name), 'name': name, 'vram_gb': 0.0})
+        return adapters
+    except (AttributeError, OSError):
+        return []
+
+
 def _other_gpus():
-    """Names of non-NVIDIA adapters via CIM (wmic is deprecated on Windows)."""
+    """Names of non-NVIDIA adapters via CIM (wmic is deprecated on Windows) or Win32 display devices."""
     if os.name != 'nt':
         return []
     output = _run(['powershell', '-NoProfile', '-NonInteractive', '-Command',
                    'Get-CimInstance Win32_VideoController | ForEach-Object { $_.Name }'], timeout=10)
-    return [{'vendor': _vendor(line), 'name': line.strip(), 'vram_gb': 0.0}
-            for line in output.splitlines() if line.strip()]
+    adapters = [{'vendor': _vendor(line), 'name': line.strip(), 'vram_gb': 0.0}
+                for line in output.splitlines() if line.strip()]
+    return adapters or _display_devices()
 
 
 def _ram_gb():
@@ -104,13 +136,15 @@ def _ram_gb():
 
 
 def _disk_free_gb():
-    target = paths.DATA_DIR
-    while not target.exists() and target != target.parent:
-        target = target.parent
-    try:
-        return round(shutil.disk_usage(target).free / 1024 ** 3, 1)
-    except OSError:
-        return 0.0
+    for candidate in (paths.DATA_DIR, paths.APP_DIR):
+        target = paths.Path(candidate)
+        while not target.exists() and target != target.parent:
+            target = target.parent
+        try:
+            return round(shutil.disk_usage(target).free / 1024 ** 3, 1)
+        except OSError:
+            continue
+    return 0.0
 
 
 def ai_pack_installed():

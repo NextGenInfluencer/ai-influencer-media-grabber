@@ -61,7 +61,7 @@ def recommended(profile, role, info=None):
 
     def fits(item_id):
         need = get(item_id).get('min_system_ram_gb') or 0
-        return ram >= need
+        return round(ram) >= need
     return [i for i in ids if fits(i)] + [i for i in ids if not fits(i)]
 
 

@@ -499,6 +499,23 @@ class SpeechTests(IsolatedAIMixin, unittest.TestCase):
             with job_process.cancellation_scope(lambda: True):
                 asr._progress(1, 2)
 
+    def test_load_audio_decodes_existing_file_via_imageio_ffmpeg(self):
+        import wave
+        wav_path = self.root / 'sample.wav'
+        with wave.open(str(wav_path), 'wb') as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(16000)
+            wf.writeframes((np.ones(1600, dtype=np.int16) * 8192).tobytes())
+        samples = asr._load_audio(str(wav_path))
+        self.assertIsInstance(samples, np.ndarray)
+        self.assertEqual(samples.dtype, np.float32)
+        self.assertEqual(samples.shape, (1600,))
+        self.assertAlmostEqual(float(samples[0]), 0.25, places=2)
+        with patch.object(job_process, 'run', return_value=types.SimpleNamespace(returncode=1, stdout=b'', stderr=b'err')):
+            with self.assertRaisesRegex(AIUnavailable, 'Could not decode audio'):
+                asr._load_audio(wav_path)
+
     def test_most_voiced_window_and_candidate_language(self):
         samples = np.zeros(16000 * 90, dtype=np.float32)
         samples[16000 * 50:16000 * 80] = 0.5

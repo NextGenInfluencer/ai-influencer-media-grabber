@@ -99,6 +99,40 @@ class HardwareProfileTests(IsolatedAIMixin, unittest.TestCase):
         self.assertEqual(hardware._vendor('Qualcomm Adreno'), 'qualcomm')
         self.assertEqual(hardware._vendor('Basic Display'), 'other')
 
+    def test_detect_other_gpu_falls_back_to_win32_display_devices_when_cim_empty(self):
+        with patch.object(hardware.shutil, 'which', return_value=None), patch.object(hardware.os, 'name', 'nt'),                 patch.object(hardware, '_run', return_value=''),                 patch.object(hardware, '_display_devices', return_value=[
+                    {'vendor': 'intel', 'name': 'Intel(R) UHD Graphics 620', 'vram_gb': 0.0}]),                 patch.object(hardware, 'ai_pack_installed', return_value=True):
+            info = hardware.detect(refresh=True)
+        self.assertEqual((info['gpu_vendor'], info['gpu_name']), ('intel', 'Intel(R) UHD Graphics 620'))
+        self.assertEqual(hardware.profile(info), 'laptop')
+        self.assertTrue(hardware.directml_candidate(info))
+
+    def test_recommended_treats_15_9_gb_usable_ram_as_16_gb(self):
+        self.assertEqual(catalog.recommended('laptop', 'helper', {'ram_gb': 15.9}), ['qwen3-4b', 'qwen3-1.7b'])
+        self.assertEqual(catalog.recommended('laptop', 'speech', {'ram_gb': 15.9}), ['whisper-small', 'whisper-base'])
+        self.assertEqual(catalog.recommended('laptop', 'helper', {'ram_gb': 8.0}), ['qwen3-1.7b', 'qwen3-4b'])
+        self.assertEqual(catalog.recommended('laptop', 'speech', {'ram_gb': 8.0}), ['whisper-base', 'whisper-small'])
+
+    def test_disk_free_falls_back_to_app_dir_on_permission_error(self):
+        usage = MagicMock(free=64 * 1024 ** 3)
+        calls = []
+
+        def disk_usage(target):
+            calls.append(Path(target))
+            if len(calls) == 1:
+                raise PermissionError(5, 'Access is denied')
+            return usage
+        with patch.object(hardware.shutil, 'disk_usage', side_effect=disk_usage):
+            self.assertEqual(hardware._disk_free_gb(), 64.0)
+        calls.clear()
+        with patch.object(models.shutil, 'disk_usage', side_effect=disk_usage):
+            self.assertEqual(models._disk_free(paths.MODELS_DIR), 64 * 1024 ** 3)
+
+    def test_engine_ollama_counts_as_installed_when_server_running_without_binary(self):
+        with patch.object(engines.ollama, 'executable', return_value=None),                 patch.object(engines.ollama, 'running', return_value=True),                 patch.object(engines.ollama, 'tags', return_value=[]):
+            state = models.status()['engine-ollama']
+        self.assertTrue(state['installed'] and state['verified'])
+
 
 class CatalogSchemaTests(unittest.TestCase):
     def test_every_item_is_complete_and_pinned(self):

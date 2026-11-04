@@ -32,7 +32,11 @@ def _terminate(process):
     if process is None or process.poll() is not None:
         return
     if os.name == 'nt':
-        subprocess.run(['taskkill', '/PID', str(process.pid), '/T', '/F'], capture_output=True, creationflags=_NO_WINDOW)
+        try:
+            subprocess.run(['taskkill', '/PID', str(process.pid), '/T', '/F'], capture_output=True, timeout=2,
+                           creationflags=_NO_WINDOW)
+        except (subprocess.SubprocessError, OSError):
+            pass
     if process.poll() is None:
         process.kill()
     try:

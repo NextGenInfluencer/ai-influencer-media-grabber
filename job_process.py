@@ -41,6 +41,19 @@ def cancellation_scope(cancelled):
     finally:
         _context.cancelled = old
 
+def _kill_tree(process):
+    if process is None or process.poll() is not None:
+        return
+    if os.name == 'nt':
+        try:
+            _subprocess.run(['taskkill', '/PID', str(process.pid), '/T', '/F'], capture_output=True, timeout=2,
+                            creationflags=_subprocess.CREATE_NO_WINDOW)
+        except (_subprocess.SubprocessError, OSError):
+            pass
+    if process.poll() is None:
+        process.kill()
+
+
 class Popen(_subprocess.Popen):
     def __init__(self, *args, **kwargs):
         check_cancelled()
@@ -52,13 +65,7 @@ class Popen(_subprocess.Popen):
             def watch():
                 while self.poll() is None:
                     if cancelled():
-                        if os.name == 'nt':
-                            _subprocess.run(['taskkill', '/PID', str(self.pid), '/T', '/F'], capture_output=True,
-                                            creationflags=_subprocess.CREATE_NO_WINDOW)
-                            if self.poll() is None:
-                                self.kill()
-                        else:
-                            self.kill()
+                        _kill_tree(self)
                         return
                     threading.Event().wait(0.2)
             threading.Thread(target=watch, daemon=True).start()
@@ -72,10 +79,7 @@ def run(args, *, input=None, capture_output=False, timeout=None, check=False, **
         try:
             stdout, stderr = process.communicate(input, timeout=timeout)
         except BaseException:
-            if os.name == 'nt' and process.poll() is None:
-                _subprocess.run(['taskkill', '/PID', str(process.pid), '/T', '/F'],
-                                capture_output=True, creationflags=_subprocess.CREATE_NO_WINDOW)
-            process.kill()
+            _kill_tree(process)
             process.communicate()
             raise
         check_cancelled()

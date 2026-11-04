@@ -3,6 +3,7 @@
 Nothing here fabricates output. Any failure raises ``AIUnavailable`` so callers
 can show an honest "not available" state.
 """
+import atexit
 import json
 import os
 import re
@@ -252,9 +253,13 @@ def _unload_builtin():
         model = _builtin['model']
         _builtin.update(path=None, model=None)
         if model is not None and hasattr(model, 'close'):
-            model.close()
+            try:
+                model.close()
+            except Exception:
+                pass
 
 
+atexit.register(_unload_builtin)
 gpu.register_evictor('builtin', _unload_builtin)
 
 
@@ -312,12 +317,14 @@ def _builtin_chat(choice, messages, tools, schema, images, max_tokens, temperatu
     path = models.ensure(item['id'])
     response_schema = _tool_schema(tools) if tools else schema
     kwargs = {'messages': _builtin_messages(messages, tools, item), 'temperature': temperature,
-              'max_tokens': max_tokens, 'stream': True}
+              'repeat_penalty': 1.15, 'max_tokens': max_tokens, 'stream': True}
     if response_schema:
         kwargs['response_format'] = {'type': 'json_object', 'schema': response_schema}
     parts = []
     with gpu.model_lock('builtin'):
         model = _load_builtin(path, item)
+        if hasattr(model, 'reset'):
+            model.reset()
         check_cancelled()
         stream = model.create_chat_completion(**kwargs)
         try:

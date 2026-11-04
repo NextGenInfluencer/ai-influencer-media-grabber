@@ -148,9 +148,24 @@ def comfy_progress(report, eta_seconds):
 
 
 def frame_progress(report):
+    started = time.monotonic()
+    first_frame_at = None
+
     def update(done, total):
+        nonlocal first_frame_at
+        now = time.monotonic()
+        if first_frame_at is None and done == 1:
+            first_frame_at = now
+        eta_text = ''
+        if done and total and total > done:
+            if first_frame_at is not None and done > 1 and now - first_frame_at > 0.05:
+                per_frame = (now - first_frame_at) / (done - 1)
+            else:
+                per_frame = max(0.01, now - started) / done
+            remaining = max(1, int(round(per_frame * (total - done))))
+            eta_text = f' (~{remaining} s left)' if remaining < 90 else f' (~{round(remaining / 60)} min left)'
         suffix = ' (running on CPU – slower)' if motion.face.active_warning() else ''
-        report(done / total if total else None, f'Swapping faces{suffix}… frame {done} of {total}')
+        report(done / total if total else None, f'Swapping faces{suffix}… frame {done} of {total}{eta_text}')
     return update
 
 
@@ -170,8 +185,11 @@ def _requirements(feature):
     else:
         items = list(spec['items'])
         primary = [catalog.get(i) for i in items]
+        profile = hardware.current_profile()
+        eta = (max([i.get('eta_seconds') or 0 for i in primary] or [0])
+               or (60 if profile.startswith('gpu') else 180)) if items else None
         cost = {'local': True, 'vram_gb': max([i.get('vram_gb') or 0 for i in primary] or [0]),
-                'ram_gb': max([i.get('ram_gb') or 0 for i in primary] or [0]), 'eta_seconds': None,
+                'ram_gb': max([i.get('ram_gb') or 0 for i in primary] or [0]), 'eta_seconds': eta,
                 'models': [i['name'] for i in primary]}
     missing = [i for i in items if not models.installed(i)]
     return {'available': bool(items) and not missing, 'missing': missing, 'cost': cost,
@@ -507,9 +525,10 @@ def register_studio_routes(app, *, save_dir, allowed_path, app_version, job_star
         if not state['available']:
             raise AIUnavailable('Face swap models are not installed on this PC.', setup_hint=state['setup_hint'])
         restore = data.get('restore') is not False
+        eta = state['cost'].get('eta_seconds') or 180
         return accepted(jobs.start('face_swap_video', lambda report: motion.face_swap_video(
             video, source, restore=restore, audio_mode=mode, audio=audio, progress=frame_progress(report)),
-            label='Face Swap Video'))
+            label='Face Swap Video', eta_seconds=eta))
 
     @bp.post('/api/motion/swap-identity')
     def swap_identity():

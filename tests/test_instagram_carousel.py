@@ -28,6 +28,9 @@ def fake_process_ie_result(ydl, entry, download=True):
 class TestInstagramCarousel(unittest.TestCase):
     def setUp(self):
         self.test_dir = Path(tempfile.mkdtemp(prefix='test_ig_out_'))
+        init_patch = patch('download_support.InstagramMediaIE._real_initialize')
+        init_patch.start()
+        self.addCleanup(init_patch.stop)
 
     def tearDown(self):
         shutil.rmtree(self.test_dir, ignore_errors=True)

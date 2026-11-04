@@ -240,7 +240,7 @@ def face_swap_video(video, source, *, restore=True, audio_mode='original', audio
     output = _output('motion_swap', '.mp4')
     info = face.swap_video(str(video), str(source), str(output), restore=restore, progress=progress)
     final = apply_audio(output, mode=audio_mode, audio=audio)
-    return _result(final, provider=info.get('provider'), ai=True, local=True,
+    return _result(final, provider=info.get('provider'), frames_total=info.get('frames_total'), frames_swapped=info.get('frames_swapped'), restored=info.get('restored'), ai=True, local=True,
                    **({'warning': info['warning']} if info.get('warning') else {}))
 
 
