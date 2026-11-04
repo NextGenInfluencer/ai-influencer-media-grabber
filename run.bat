@@ -8,7 +8,9 @@ echo ==============================================
 
 if not exist ".venv" (
     echo Creating Python virtual environment...
-    python -m venv .venv
+    py -3.13 -m venv .venv >nul 2>nul
+    if not exist ".venv\Scripts\python.exe" if exist "%USERPROFILE%\miniconda3\python.exe" "%USERPROFILE%\miniconda3\python.exe" -m venv .venv
+    if not exist ".venv\Scripts\python.exe" python -m venv .venv
     if errorlevel 1 exit /b 1
 )
 

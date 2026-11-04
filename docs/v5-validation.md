@@ -2,14 +2,14 @@
 
 Run this checklist on the real machines and record results in the table at the end. The automated suites passed during development (454 Python tests, JS checks), but **nothing below has been exercised on real hardware, real accounts or a real browser yet.** Report every failure with the exact error text, the step and screenshots; do not "fix" by faking output.
 
-Interpreter on the dev PC: `.venv\Scripts\python.exe` (Python 3.10; CI uses 3.13). Data isolation for tests: `tests/_isolation.py`.
+Interpreter on the dev PC: `.venv\Scripts\python.exe` (Python 3.13.9, matching CI and the installer). Data isolation for tests: `tests/_isolation.py`.
 
 ## 0. Automated suites (any machine)
 1. `$env:PYTHONIOENCODING='utf-8'; .venv\Scripts\python.exe -m unittest discover -s tests` → expect 454 OK.
 2. `node tests/test_caption_timing.js` and `node tests/test_stream.js` → pass.
 3. `Get-ChildItem static\*.js | % { node --check $_.FullName }` → no output.
 4. `npm ci; npm run lint:inline` → ESLint no-undef passes on inline template scripts.
-5. Python 3.13 venv: `py -3.13 -m venv .venv313; .venv313\Scripts\python -m pip install -r requirements.txt coverage; .venv313\Scripts\python -m coverage run -m unittest discover -s tests; .venv313\Scripts\python -m coverage report` → passes `fail_under` in `.coveragerc`.
+5. Python 3.13 venv coverage: `.venv\Scripts\python.exe -m coverage run -m unittest discover -s tests; .venv\Scripts\python.exe -m coverage report` → passes `fail_under` in `.coveragerc`.
 
 ## 1. Desktop PC (RTX 3080 12 GB, 32 GB RAM)
 **Setup & notices**

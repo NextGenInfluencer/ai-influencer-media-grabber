@@ -48,5 +48,5 @@ A **public, free Windows app** for AI-influencer creators. The core rule is that
 1. ~~**Download engine updates without a full installer:**~~ **(Done in v5.0.9)**
 2. ~~**Vocal isolation:**~~ **(Done in v5.0.10)**
 3. ~~**OTA cleanup:**~~ **(Done in v5.0.11)**
-4. **Move the PC dev venv to Python 3.13 (`.venv`)** and confirm the full suite passes.
+4. ~~**Move the PC dev venv to Python 3.13 (`.venv`) and confirm the full suite passes:**~~ **(Done in v5.0.12)**
 5. **Retake the README screenshots in `assets/`** from the v5 UI.

@@ -3,7 +3,7 @@
   "private": true,
   "description": "Development-only tooling (CI lint and JS tests). Not part of the application or its releases.",
   "scripts": {
-    "lint:inline": "python tools/extract_inline_js.py && eslint build/inline-js",
+    "lint:inline": "node -e \"const {execFileSync}=require('child_process'),fs=require('fs');const py=fs.existsSync('.venv/Scripts/python.exe')?'.venv/Scripts/python.exe':fs.existsSync('.venv/bin/python')?'.venv/bin/python':'python';execFileSync(py,['tools/extract_inline_js.py'],{stdio:'inherit'})\" && eslint build/inline-js",
     "test:js": "node tests/test_caption_timing.js && node tests/test_stream.js"
   },
   "devDependencies": {

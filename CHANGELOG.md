@@ -1,5 +1,11 @@
 # Changelog
 
+## [v5.0.12] - 2026-11-04
+- Dev `.venv` standardized on Python 3.13 (`run.bat`, `package.json`, `docs/v5-validation.md`, `tests/test_release_regressions.py`):
+  - Standardized the PC development virtual environment (`.venv`) on Python `3.13.9` with all core and GPU AI binary wheels installed and verified (`CUDAExecutionProvider`, `audio_separator`, `coverage`), matching the laptop and the Windows installer runtime (`python-3.13.16-embed-amd64`).
+  - Updated `run.bat` to prefer Python 3.13 when creating `.venv` and updated `package.json` (`lint:inline`) to invoke `.venv/Scripts/python.exe` before falling back to system `python`.
+  - Removed stale `.cpython-310.pyc` bytecode artifacts, updated `.venv/.core-requirements.sha256`, and verified the full 485-test Python suite, `coverage report` (`fail_under = 65`), JS unit tests, `node --check`, and `npm run lint:inline`.
+
 ## [v5.0.11] - 2026-11-04
 - OTA cleanup of obsolete app files with backup & rollback (`safe_update.py`, `tests/test_updates.py`):
   - Added `_obsolete_files()` during `stage_archive()` to detect existing app files in the install tree that are no longer selected by the incoming release manifest and archive, recording them in `.updates/pending.json` (`removed`).

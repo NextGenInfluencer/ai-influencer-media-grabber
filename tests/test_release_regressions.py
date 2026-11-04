@@ -137,3 +137,13 @@ class ReleaseRegressions(unittest.TestCase):
             cue=dict(start=1,end=3,text=text,words=[dict(text=w,start=1+i*.5,end=1.4+i*.5) for i,w in enumerate(words)])
             result=match_lyrics_to_transcription([cue],[text],4)
             self.assertEqual(result[0]['words'],cue['words'])
+
+    def test_dev_venv_uses_python_313(self):
+        import json
+        import sys
+        root = Path(__file__).resolve().parents[1]
+        venv_py = root / '.venv' / 'Scripts' / 'python.exe'
+        if venv_py.is_file() and Path(sys.executable).resolve() == venv_py.resolve():
+            self.assertGreaterEqual(sys.version_info[:2], (3, 13))
+        pkg = json.loads((root / 'package.json').read_text(encoding='utf-8'))
+        self.assertIn('.venv/Scripts/python.exe', pkg['scripts']['lint:inline'])
