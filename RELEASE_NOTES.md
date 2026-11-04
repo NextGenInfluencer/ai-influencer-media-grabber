@@ -1,3 +1,16 @@
+# v5.0.13 — In-app download engine updates, vocal isolation for lyrics, and cleaner updates
+
+**Updating:** Users already on **v5.0.8+** can update to v5.0.13 for Downloader, Captions Studio, and OTA cleanup improvements, or run the full installer (`AI-Influencer-Media-Grabber-v5.0.13-Setup.exe`) to refresh the GPU AI Pack constraints for vocal isolation. Users on **v4.x or earlier** must run the full installer. Your media, history, characters, caption projects and credentials are preserved.
+
+### What's new in v5.0.9 – v5.0.13
+- **Update download engines without a full installer (v5.0.9):** Click **Update download engines** in the Downloader toolbar (or **`⋯` → Update download engines**) to update `yt-dlp` and `gallery-dl` directly inside the app's Python runtime when social platforms change. The app checks weekly, shows package sizes and licenses before updating, verifies both tools with a dry run, and automatically rolls back to the previous working versions if a check ever fails.
+- **Vocal isolation for song alignment on Python 3.13 (v5.0.10):** Restored `audio-separator` (`UVR Kim Vocal 2`, MIT) to the 12 GB+ GPU AI Pack using 100% prebuilt binary wheels on Python 3.13. Isolating vocals before syncing lyrics improves line-boundary timing accuracy by ~11% on dense mixed Greek/English songs and eliminates collapsed word timestamps across backing instrumentation.
+- **Automatic cleanup of obsolete app files on update (v5.0.11):** In-app updates now back up and remove retired application code files that are no longer in the release manifest (and restore them on rollback if an update is interrupted), while strictly protecting all user media, `history.json`, cookies, settings, custom fonts, models, and engines.
+- **Unified Python 3.13 runtime & refreshed v5 visual tour (v5.0.12 – v5.0.13):** Standardized development, testing, and the Windows installer on Python 3.13 across PC and laptop, and refreshed all `README.md` screenshots from the v5 UI.
+
+**Download & verify:** Download `AI-Influencer-Media-Grabber-v5.0.13-Setup.exe` (`118,981,724` bytes) and verify against `SHA256SUMS-v5.0.13.txt` (`e7c60f2e814a98644d9e56dc2418a65448c95765d768cd4c2e6263ff26fbed22`). See `CHANGELOG.md` for the full list.
+
+## Previous release notes
 # v5.0.8 — Everything real, every PC, nothing downloads without asking
 
 **Full installer required.** Existing users must run the full installer (`AI-Influencer-Media-Grabber-v5.0.8-Setup.exe`) because v5 updates core and AI dependencies; the in-app source updater will not apply dependency-changing upgrades. Your media, history, characters, caption projects and credentials are preserved.
