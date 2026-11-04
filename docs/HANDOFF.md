@@ -1,14 +1,17 @@
-# Hand-off: state of the project after v5.0.1
+# Hand-off: state of the project after v5.0.8
 
 Read this file first, then `AGENTS.md` (workspace rules), `docs/v5-architecture.md` (module contract) and `docs/v5-validation.md` (test checklist).
 
 ## What this app is
 A **public, free Windows app** for AI-influencer creators. The core rule is that the creator never has to open another app. It installs small and works fully without AI: downloader, Media Tools, AI Cleaner, Captions Studio, gallery. AI is **opt-in**: the app detects the PC, recommends a profile, and downloads nothing without showing the size, source and license first. It must run on laptops without a GPU (smaller models) as well as on the owner's RTX 3080 12 GB PC (best free models). **Nothing may be faked:** if a capability is missing, say so (`AIUnavailable` → HTTP 424 + `setup_hint` → "Not available on this PC" + Set up AI).
 
-## Current state (main @ v5.0.1, tags v5.0.0 / v5.0.1 pushed)
-- Automated: 454 Python tests pass (`$env:PYTHONIOENCODING='utf-8'; .venv\Scripts\python.exe -m unittest discover -s tests`). JS checks pass.
-- **Not yet validated on real hardware, in a browser, or with real accounts.** This is the main open work: run `docs/v5-validation.md`.
-- GitHub Release (with Setup.exe) not yet published. The in-app updater only sees Releases, not tags.
+## Current state (main @ v5.0.8, v5.0.8 published and validated)
+- Automated: 474 Python tests pass (`$env:PYTHONIOENCODING='utf-8'; .venv\Scripts\python.exe -m unittest discover -s tests`). JS unit tests, `node --check`, and ESLint `no-undef` on inline template scripts pass.
+- **Validated on real hardware (`docs/v5-validation.md` sections 0–2 passed):**
+  - Section 0 (automated suites + Python 3.13 coverage): PASS.
+  - Section 1 (Desktop PC — RTX 3080 12 GB, 32 GB RAM): PASS across Setup & notices, Captions Studio, Downloader, AI Studio (all 6 local ComfyUI workflows + GPU Face Swap with CUDA 13), Copilot, and Setup.exe upgrade over v4.2.3.
+  - Section 2 (Laptop — Intel Core i5-8250U, 16 GB RAM, Intel UHD Graphics 620): PASS across Laptop/DirectML pack setup, built-in CPU LLM (`qwen3-1.7b`) Copilot & offline lyric translation, Whisper CPU transcription (`base` / `small`), DirectML Face Swap with live ETA, and Essentials non-AI workflows.
+- GitHub Release **v5.0.8** is published and validated on both PC and laptop.
 
 ## Architecture in one minute
 - `ai_core/`: everything AI.
@@ -42,14 +45,8 @@ A **public, free Windows app** for AI-influencer creators. The core rule is that
 7. UI follows the Apple-Pro style in `AGENTS.md`.
 
 ## Known open items (priority order)
-1. Run `docs/v5-validation.md` on the PC, then on the laptop (section 2), and fix what fails. Highest-risk areas:
-   - the ComfyUI workflows (never run against a real ComfyUI)
-   - the Copilot drawer in the browser
-   - Shazam after the shazamio 0.9 upgrade
-   - IG profile listing with an imported cookies.txt
-   - face swap on GPU/DirectML
-2. The dev machine shows AI "not installed" until the AI pack is reinstalled (new required module `keyring`).
-3. Vocal isolation: `audio-separator` is in no pack (Python 3.13 install issues). The model `uvr-kim-vocal-2` is in the catalog but not in bundles. Add it back once the library installs cleanly.
-4. OTA cannot delete files that a release removes.
-5. Dev venv is Python 3.10; the installer and CI use 3.13. Move the dev venv to 3.13.
-6. Publish a GitHub Release with `dist\AI-Influencer-Media-Grabber-vX.Y.Z-Setup.exe` (`python build_staging.py`, needs Inno Setup 6) and a SHA256 file.
+1. **Download engine updates without a full installer:** add an in-app "Update download engines" action (and a weekly check) that updates only `yt-dlp` and `gallery-dl` in the app's Python with `pip`. Verify by importing them and running a dry `--version` / simulate check. Roll back to the previous versions on failure, and show the result in the UI. Allow only these two packages; never touch others. The OTA updater must still refuse other dependency changes.
+2. **Vocal isolation:** get `audio-separator` (or a maintained alternative with a compatible license) installing on Python 3.13 with only binary wheels. Add it to the GPU pack, put `uvr-kim-vocal-2` back into the `gpu_high` / `gpu_ultra` bundles, and verify that `ai_core.asr.isolate_vocals` improves alignment on the Greek/English song.
+3. **OTA cleanup:** remove app files that are no longer in the new release manifest, with a backup. Never touch user data, `history.json`, cookies, custom fonts, models or engines.
+4. **Move the PC dev venv to Python 3.13 (`.venv`)** and confirm the full suite passes.
+5. **Retake the README screenshots in `assets/`** from the v5 UI.
