@@ -8,7 +8,10 @@
 - **Safer updates that remove old files:** In-app updates now back up and remove retired application code files that are no longer in the release manifest (and restore them on rollback if an update is interrupted), while strictly protecting all user media, `history.json`, cookies, settings, custom fonts, models, and engines.
 - **Fixes:** Standardized the development, test, and installer environments on Python 3.13 across PC and laptop; removed machine-specific fallback paths from `run.bat` with a clear Python 3.13 install hint; and refreshed all `README.md` screenshots from the v5 UI.
 
-**Download & verify:** Download `AI-Influencer-Media-Grabber-v5.0.14-Setup.exe` (`118,974,813` bytes) and verify against `SHA256SUMS-v5.0.14.txt` (`6dc91907d5de1d0d90ecd4ab6c57d48cfc7b710d54a6a7093c248005d74c02a6`). See `CHANGELOG.md` for the full list.
+**Download & verify:**
+- **Installer:** `AI-Influencer-Media-Grabber-v5.0.14-Setup.exe` (`118,974,813` bytes, standard user installer — no Admin/UAC prompt required)
+- **SHA-256 (`SHA256SUMS-v5.0.14.txt`):** `6dc91907d5de1d0d90ecd4ab6c57d48cfc7b710d54a6a7093c248005d74c02a6` (`Get-FileHash .\AI-Influencer-Media-Grabber-v5.0.14-Setup.exe -Algorithm SHA256`)
+- **Security Scans:** [View VirusTotal Analysis](https://www.virustotal.com/gui/file/6dc91907d5de1d0d90ecd4ab6c57d48cfc7b710d54a6a7093c248005d74c02a6) · **0 threats found** by Microsoft Defender Antivirus (`MpCmdRun.exe -Scan -ScanType 3`, engine `4.18.26100.4`, definitions `1.463.122.0`). See [`SECURITY.md`](SECURITY.md) and `CHANGELOG.md` for details.
 
 ## Previous release notes
 # v5.0.8 — Everything real, every PC, nothing downloads without asking

@@ -9,7 +9,7 @@
 
 Everything runs locally on your PC inside a fast, Apple macOS-inspired desktop interface — with no monthly cloud subscriptions, no upload size limits, and full hardware GPU acceleration.
 
-[📥 Download Latest Windows Installer (`Setup.exe`)](https://github.com/NextGenInfluencer/ai-influencer-media-grabber/releases/latest) · [📋 Release Notes](RELEASE_NOTES.md) · [🕓 Changelog](CHANGELOG.md) · [🎤 Lyrics & Translation Guide](docs/creator-lyrics-guide.md)
+[📥 Download Latest Windows Installer (`Setup.exe`)](https://github.com/NextGenInfluencer/ai-influencer-media-grabber/releases/latest) · [🛡️ Security & Verification](SECURITY.md) · [📋 Release Notes](RELEASE_NOTES.md) · [🕓 Changelog](CHANGELOG.md) · [🎤 Lyrics & Translation Guide](docs/creator-lyrics-guide.md)
 
 ---
 
@@ -191,6 +191,11 @@ You do **not** need to install Python, Node.js, or FFmpeg manually when using th
 1. Go to the [**GitHub Releases page**](https://github.com/NextGenInfluencer/ai-influencer-media-grabber/releases/latest) and download **`AI-Influencer-Media-Grabber-v5.0.14-Setup.exe`**.
 2. Run the installer. It installs into `%LOCALAPPDATA%\AI Influencer Media Grabber` and creates a **Desktop** and **Start Menu** shortcut (`AI Influencer Media Grabber`).
 3. Double-click the shortcut to launch the app. All core features (Downloader, YouTube-to-MP3, Media Tools, Trimmer, Face-Tracking Crop, AI Cleaner, Kling Prep, Carousel Studio, Gallery, History, and Creator Studio video editing) work immediately out of the box.
+
+> **🛡️ Download Verification & Windows SmartScreen (`v5.0.14`)**
+> - **SHA-256 (`AI-Influencer-Media-Grabber-v5.0.14-Setup.exe`)**: `6dc91907d5de1d0d90ecd4ab6c57d48cfc7b710d54a6a7093c248005d74c02a6` ([`SHA256SUMS-v5.0.14.txt`](https://github.com/NextGenInfluencer/ai-influencer-media-grabber/releases/download/v5.0.14/SHA256SUMS-v5.0.14.txt))
+> - **VirusTotal & Defender**: [View VirusTotal Scan Report](https://www.virustotal.com/gui/file/6dc91907d5de1d0d90ecd4ab6c57d48cfc7b710d54a6a7093c248005d74c02a6) · **0 threats found** by Microsoft Defender Antivirus (`MpCmdRun.exe`).
+> - **No Admin Rights Needed**: The installer runs at standard user privilege (`PrivilegesRequired=lowest`) and installs into `%LOCALAPPDATA%\AI Influencer Media Grabber`. If Windows SmartScreen displays *"Windows protected your PC"* (standard for free open-source apps without a commercial EV certificate), verify the SHA-256 hash with `Get-FileHash .\AI-Influencer-Media-Grabber-v5.0.14-Setup.exe -Algorithm SHA256` and click **More info → Run anyway**. See [SECURITY.md](SECURITY.md).
 
 ---
 
