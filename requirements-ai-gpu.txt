@@ -4,7 +4,7 @@
 # Includes the opt-in cloud clients (never used without the user's own key).
 -r requirements-ai-common.txt
 --extra-index-url https://download.pytorch.org/whl/cu126
---only-binary=torch,torchvision,torchaudio,onnxruntime-gpu
+--only-binary=torch,torchvision,torchaudio,onnxruntime-gpu,audioop-lts,beartype,einops,julius,librosa,scikit-learn,joblib,decorator,soundfile,pooch,soxr,ml-collections,absl-py,onnx2torch,pydub,resampy,rotary-embedding-torch,samplerate,six,audioread,narwhals,threadpoolctl,cloudpickle,platformdirs,standard-aifc,standard-sunau,standard-chunk
 
 torch==2.11.0+cu126
 torchvision==0.26.0+cu126
@@ -13,3 +13,31 @@ onnxruntime-gpu[cuda,cudnn]==1.31.1
 # Opt-in cloud providers (fal.ai Kling/LivePortrait, Gemini image edit)
 fal-client==1.0.3
 google-genai==2.34.0
+# Runtime dependencies of audio-separator (vocal isolation; package in requirements-ai-nodeps.txt)
+audioop-lts==0.2.2
+beartype==0.18.5
+einops==0.8.2
+julius==0.2.8
+librosa==1.0.0
+scikit-learn==1.9.1
+joblib==1.6.0
+decorator==5.3.1
+soundfile==0.14.0
+pooch==1.9.0
+soxr==1.1.0
+ml-collections==1.1.0
+absl-py==2.5.1
+onnx2torch==1.5.15
+pydub==0.25.1
+resampy==0.4.3
+rotary-embedding-torch==0.6.5
+samplerate==0.2.4
+six==1.17.0
+audioread==3.1.0
+narwhals==2.28.0
+threadpoolctl==3.7.0
+cloudpickle==3.1.2
+platformdirs==4.14.3
+standard-aifc==3.13.0
+standard-sunau==3.13.0
+standard-chunk==3.13.0

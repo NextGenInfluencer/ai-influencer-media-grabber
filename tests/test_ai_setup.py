@@ -80,6 +80,12 @@ class RuntimeChecks(unittest.TestCase):
     def test_gpu_pack_requirements_pin_self_sufficient_cuda_cudnn(self):
         gpu_reqs = (ROOT / 'requirements-ai-gpu.txt').read_text(encoding='utf-8')
         self.assertIn('onnxruntime-gpu[cuda,cudnn]==1.31.1', gpu_reqs)
+        self.assertIn('librosa==1.0.0', gpu_reqs)
+        self.assertIn('onnx2torch==1.5.15', gpu_reqs)
+        nodeps_reqs = (ROOT / 'requirements-ai-nodeps.txt').read_text(encoding='utf-8')
+        self.assertIn('audio-separator==0.48.0', nodeps_reqs)
+        packs = ai_setup.load_packs(ROOT)
+        self.assertTrue(any(item['id'] == 'audio-separator' and 'gpu' in item['packs'] for item in packs['items']))
 
     def test_status_uses_find_spec_without_importing(self):
         with patch.object(ai_setup.importlib.util, 'find_spec', side_effect=lambda name: None if name == 'keyring' else object()), \

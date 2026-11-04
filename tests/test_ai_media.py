@@ -579,6 +579,13 @@ class SpeechTests(IsolatedAIMixin, unittest.TestCase):
             result = asr.isolate_vocals('song.wav')
         self.assertEqual(result.read_bytes(), b'v')
         separator_cls.return_value.load_model.assert_called_once_with(model_filename='Kim_Vocal_2.onnx')
+        self.assertTrue((model_path.parent / 'download_checks.json').is_file())
+        mdx_meta = json.loads((model_path.parent / 'mdx_model_data.json').read_text(encoding='utf-8'))
+        self.assertIn(asr._KIM_VOCAL_2_MD5, mdx_meta)
+        self.assertEqual(mdx_meta[asr._KIM_VOCAL_2_MD5]['primary_stem'], 'Vocals')
+        bundles = catalog.section('bundles')
+        self.assertIn('uvr-kim-vocal-2', bundles['gpu_high'])
+        self.assertIn('uvr-kim-vocal-2', bundles['gpu_ultra'])
 
 
 class VisionTests(IsolatedAIMixin, unittest.TestCase):

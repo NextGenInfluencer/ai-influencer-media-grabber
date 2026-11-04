@@ -1,5 +1,8 @@
 """Speech: stable-ts Whisper from local files only, VAD, language detection, alignment."""
 import importlib.util
+import json
+import os
+import shutil
 import logging
 import sys
 import threading
@@ -213,12 +216,83 @@ def align_words(audio, text, language):
     return result.to_dict()
 
 
+_KIM_VOCAL_2_MD5 = '970b3f9492014d18fefeedfe4773cb42'
+_KIM_VOCAL_2_META = {
+    'compensate': 1.009,
+    'mdx_dim_f_set': 3072,
+    'mdx_dim_t_set': 8,
+    'mdx_n_fft_scale_set': 7680,
+    'primary_stem': 'Vocals',
+}
+
+
+def _ensure_ffmpeg_on_path():
+    if shutil.which('ffmpeg'):
+        return
+    try:
+        import imageio_ffmpeg
+        src = Path(imageio_ffmpeg.get_ffmpeg_exe())
+        if not src.is_file():
+            return
+        bin_dir = paths.DATA_DIR / 'bin'
+        bin_dir.mkdir(parents=True, exist_ok=True)
+        dst = bin_dir / ('ffmpeg.exe' if os.name == 'nt' else 'ffmpeg')
+        if not dst.is_file():
+            try:
+                os.link(src, dst)
+            except OSError:
+                shutil.copy2(src, dst)
+        os.environ['PATH'] = str(bin_dir) + os.pathsep + os.environ.get('PATH', '')
+    except Exception as exc:
+        log.debug('Could not expose imageio_ffmpeg on PATH: %s', exc)
+
+
+def _ensure_separator_metadata(model_dir):
+    """Seed UVR lookup files locally so audio-separator never contacts GitHub during inference."""
+    model_dir = Path(model_dir)
+    model_dir.mkdir(parents=True, exist_ok=True)
+    checks_path = model_dir / 'download_checks.json'
+    if not checks_path.is_file():
+        checks_path.write_text(json.dumps({
+            'vr_download_list': {},
+            'mdx_download_list': {'MDX-Net Model: Kim Vocal 2': 'Kim_Vocal_2.onnx'},
+            'mdx_download_vip_list': {},
+            'demucs_download_list': {},
+            'mdx23c_download_list': {},
+            'mdx23c_download_vip_list': {},
+            'roformer_download_list': {},
+        }, indent=2), encoding='utf-8')
+    vr_path = model_dir / 'vr_model_data.json'
+    if not vr_path.is_file():
+        vr_path.write_text('{}\n', encoding='utf-8')
+    mdx_path = model_dir / 'mdx_model_data.json'
+    mdx_data = {}
+    if mdx_path.is_file():
+        try:
+            mdx_data = json.loads(mdx_path.read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            mdx_data = {}
+    if _KIM_VOCAL_2_MD5 not in mdx_data:
+        mdx_data[_KIM_VOCAL_2_MD5] = dict(_KIM_VOCAL_2_META)
+        mdx_path.write_text(json.dumps(mdx_data, indent=2), encoding='utf-8')
+
+
 def isolate_vocals(path):
     """Separate the vocal stem with audio-separator and the catalog's UVR model."""
     if importlib.util.find_spec('audio_separator') is None:
         raise AIUnavailable('Vocal isolation needs the GPU AI pack (audio-separator).', setup_hint='ai_pack')
     model_path = models.ensure('uvr-kim-vocal-2')
-    from audio_separator.separator import Separator
+    _ensure_ffmpeg_on_path()
+    _ensure_separator_metadata(model_path.parent)
+    try:
+        from audio_separator.separator import Separator
+    except ImportError as exc:
+        raise AIUnavailable('Vocal isolation needs the GPU AI pack (audio-separator).', setup_hint='ai_pack') from exc
+    try:
+        from . import face
+        face.select_providers()
+    except Exception:
+        pass
     output_dir = paths.DATA_DIR / 'cache' / 'vocals' / uuid.uuid4().hex
     output_dir.mkdir(parents=True, exist_ok=True)
     with gpu.lease('separator', catalog.get('uvr-kim-vocal-2').get('vram_gb', 2)):

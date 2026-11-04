@@ -73,6 +73,12 @@ before installing (`ai_packs.json`). Nothing in the pack is downloaded silently.
 | keyring | MIT |
 | psutil | BSD-3-Clause |
 | fal-client, google-genai (GPU pack; opt-in cloud only) | Apache-2.0 |
+| audio-separator, julius, pydub, rotary-embedding-torch, six, platformdirs, narwhals (GPU pack; vocal isolation) | MIT |
+| librosa, soxr, resampy (GPU pack; vocal isolation) | ISC |
+| scikit-learn, joblib, soundfile, pooch, decorator, threadpoolctl, cloudpickle (GPU pack; vocal isolation) | BSD-3-Clause (soundfile bundles libsndfile under LGPL-2.1-or-later) |
+| onnx2torch, ml-collections, absl-py (GPU pack; vocal isolation) | Apache-2.0 |
+| beartype, einops, audioread, samplerate (GPU pack; vocal isolation) | MIT / BSD-2-Clause |
+| audioop-lts, standard-aifc, standard-sunau, standard-chunk (GPU pack; Python 3.13 audio shims) | PSF-2.0 |
 | soundfile (Creative engine custom node dependency) | BSD-3-Clause (bundles libsndfile under LGPL-2.1-or-later) |
 | decord, mediapipe, pytorch-lightning (Creative engine custom node dependencies) | Apache-2.0 |
 

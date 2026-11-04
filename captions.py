@@ -2135,6 +2135,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             def work(d, f):
                 # Decode once, then read bounded cue slices rather than loading a full song into RAM.
                 audio_file = f / 'karaoke.wav'
+                vocal_file = None
                 pending = copy.deepcopy(d['cues'])
                 progress_file = f / 'karaoke-progress.json'
                 signature = hashlib.sha256(json.dumps([d['source'], language, pending],ensure_ascii=False).encode()).hexdigest()
@@ -2218,6 +2219,8 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                     progress_file.unlink(missing_ok=True)
                 finally:
                     audio_file.unlink(missing_ok=True)
+                    if vocal_file is not None:
+                        shutil.rmtree(vocal_file.parent, ignore_errors=True)
             return launch(data, 'Adding karaoke timing while preserving subtitle lines…', work)
 
     @bp.post('/api/captions/<pid>/restore-karaoke')
@@ -2296,6 +2299,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                 raise ValueError('Choose range boundaries between caption lines so existing captions can be preserved.')
             def work(d, f):
                 audio_file = f / 'alignment.wav'
+                vocal_file = None
                 try:
                     ffmpeg(['-ss', str(start), '-i', d['source'], '-t', str(end-start),
                             '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', audio_file.name], f)
@@ -2303,6 +2307,11 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                         samples = np.frombuffer(audio.readframes(audio.getnframes()), dtype='<i2').astype(np.float32) / 32768
                     if not samples.size or np.max(np.abs(samples)) < .0001:
                         raise ValueError('The selected audio range is silent. Choose a range with vocals.')
+                    if options.get('isolate_vocals'):
+                        d['status'] = 'Isolating vocals for cleaner lyric alignment…'
+                        write(d)
+                        vocal_file = asr.isolate_vocals(audio_file)
+                        samples = asr._load_audio(vocal_file)
                     progress_file = f / 'lyric-sync-progress.json'
                     signature = hashlib.sha256(json.dumps([lyric_signature(d), lines, language, start, end]).encode()).hexdigest()
                     completed = 0
@@ -2394,6 +2403,8 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                         d['_completion_notice'] = f'Lyrics updated{speech_tag}. {flagged} lines need timing review.'
                 finally:
                     audio_file.unlink(missing_ok=True)
+                    if vocal_file is not None:
+                        shutil.rmtree(vocal_file.parent, ignore_errors=True)
             w_name = _whisper_name()
             align_label = f'Matching your lyrics to the audio{f" with Whisper {w_name}" if w_name else ""} (existing captions are kept if this fails)…'
             return launch(data, align_label, work)

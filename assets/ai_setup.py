@@ -32,6 +32,7 @@ MODULES = {
 }
 # Opt-in cloud clients (GPU pack only); reported, never required.
 OPTIONAL_MODULES = {
+    'audio_separator': 'audio_separator',
     'fal_client': 'fal_client',
     'google_genai': 'google.genai',
 }

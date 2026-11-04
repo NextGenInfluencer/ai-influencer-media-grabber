@@ -45,8 +45,8 @@ A **public, free Windows app** for AI-influencer creators. The core rule is that
 7. UI follows the Apple-Pro style in `AGENTS.md`.
 
 ## Known open items (priority order)
-1. **Download engine updates without a full installer:** add an in-app "Update download engines" action (and a weekly check) that updates only `yt-dlp` and `gallery-dl` in the app's Python with `pip`. Verify by importing them and running a dry `--version` / simulate check. Roll back to the previous versions on failure, and show the result in the UI. Allow only these two packages; never touch others. The OTA updater must still refuse other dependency changes.
-2. **Vocal isolation:** get `audio-separator` (or a maintained alternative with a compatible license) installing on Python 3.13 with only binary wheels. Add it to the GPU pack, put `uvr-kim-vocal-2` back into the `gpu_high` / `gpu_ultra` bundles, and verify that `ai_core.asr.isolate_vocals` improves alignment on the Greek/English song.
+1. ~~**Download engine updates without a full installer:**~~ **(Done in v5.0.9)**
+2. ~~**Vocal isolation:**~~ **(Done in v5.0.10)**
 3. **OTA cleanup:** remove app files that are no longer in the new release manifest, with a backup. Never touch user data, `history.json`, cookies, custom fonts, models or engines.
 4. **Move the PC dev venv to Python 3.13 (`.venv`)** and confirm the full suite passes.
 5. **Retake the README screenshots in `assets/`** from the v5 UI.

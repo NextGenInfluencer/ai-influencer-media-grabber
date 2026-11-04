@@ -1,5 +1,11 @@
 # Changelog
 
+## [v5.0.10] - 2026-11-04
+- Vocal isolation on Python 3.13 with binary wheels (`requirements-ai-gpu.txt`, `requirements-ai-nodeps.txt`, `requirements-ai-common.txt`, `ai_packs.json`, `assets/ai_setup.py`, `ai_core/catalog.json`, `ai_core/asr.py`, `captions.py`, `THIRD_PARTY_NOTICES.md`):
+  - Pinned binary-wheel runtime dependencies for `audio-separator==0.48.0` in `requirements-ai-gpu.txt` (`librosa==1.0.0`, `onnx2torch==1.5.15`, `samplerate==0.2.4`, `soundfile==0.14.0`, `scikit-learn==1.9.1`, `soxr==1.1.0`, `resampy==0.4.3`, `julius==0.2.8`, `pydub==0.25.1`, `rotary-embedding-torch==0.6.5`, and Python 3.13 standard-library audio shims) and added `audio-separator==0.48.0` to `requirements-ai-nodeps.txt` (`--only-binary=:all: --no-deps`) so it installs 100% from binary wheels on Python 3.13 without pulling `onnx-weekly` or non-commercial `diffq-fixed`.
+  - Added the `audio-separator` item to `ai_packs.json` (`gpu` pack) and `OPTIONAL_MODULES` in `assets/ai_setup.py`, and restored `uvr-kim-vocal-2` (`Kim_Vocal_2.onnx`, MIT) to the `gpu_high` and `gpu_ultra` bundles in `ai_core/catalog.json`.
+  - Hardened `ai_core.asr.isolate_vocals()` to expose `imageio_ffmpeg.get_ffmpeg_exe()` on `PATH`, pre-seed local UVR lookup metadata (`download_checks.json`, `vr_model_data.json`, `mdx_model_data.json`) so inference never contacts GitHub offline, and preload CUDA runtime DLLs for `CUDAExecutionProvider`; verified on the 57-line Greek/English song (`08. Ανάσα (Breath) [feat. Airi Oh].wav`) where vocal isolation reduced cue boundary MAE from `0.693s` to `0.616s` (`-11.1%`) and eliminated all collapsed (`< 0.06s`) word timings (`4` → `0`).
+
 ## [v5.0.9] - 2026-11-04
 - In-app download engine updates & weekly check (`download_support.py`, `app_local.py`, `templates/index.html`, `safe_update.py`):
   - Added `update_download_engines()`, `verify_download_engines()`, `check_download_engines()`, and `weekly_check_due()` (7-day interval persisted in `download_engines.json`), plus `/api/download_engines/status`, `/api/download_engines/check`, and `/api/download_engines/update`.

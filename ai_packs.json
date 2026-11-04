@@ -138,6 +138,16 @@
       "source": "https://pypi.org/"
     },
     {
+      "id": "audio-separator",
+      "name": "audio-separator with librosa, onnx2torch and soundfile",
+      "packs": ["gpu"],
+      "approx_mb": 18,
+      "purpose": "Isolates vocals from instrumentals before lyric alignment on music tracks.",
+      "license": "MIT (librosa: ISC; scikit-learn, soundfile: BSD-3-Clause; onnx2torch: Apache-2.0)",
+      "license_url": "https://github.com/nomadkaraoke/python-audio-separator/blob/main/LICENSE",
+      "source": "https://pypi.org/project/audio-separator/"
+    },
+    {
       "id": "cloud-clients",
       "name": "fal.ai and Google Gen AI clients",
       "packs": ["gpu"],

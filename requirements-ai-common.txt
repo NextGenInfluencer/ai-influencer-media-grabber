@@ -28,7 +28,9 @@ keyring==25.7.0
 # Hardware / memory detection
 psutil==7.2.2
 
-# Not included: audio-separator (vocal isolation). On Python 3.13 its current releases
-# depend on nightly onnx-weekly builds that clash with the onnx package above, and older
-# releases need a C compiler (diffq). Vocal isolation reports "not installed" until a
-# compatible wheel exists.
+# Vocal isolation (audio-separator==0.48.0) is installed in the GPU pack: its binary-wheel
+# runtime dependencies are pinned in requirements-ai-gpu.txt and the package itself is installed
+# from requirements-ai-nodeps.txt so its onnx-weekly / diffq-fixed metadata does not override onnx.
+
+
+

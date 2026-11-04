@@ -105,6 +105,7 @@
    "qwen3:14b",
    "translategemma:12b",
    "whisper-large-v3-turbo",
+   "uvr-kim-vocal-2",
    "qwen2.5vl:7b",
    "insightface-buffalo-l",
    "inswapper-128",
@@ -121,6 +122,7 @@
    "qwen3:32b",
    "translategemma:27b",
    "whisper-large-v3",
+   "uvr-kim-vocal-2",
    "qwen2.5vl:32b",
    "insightface-buffalo-l",
    "inswapper-128",
@@ -400,7 +402,7 @@
     "gpu_mid"
    ],
    "name": "Qwen3 8B",
-   "purpose": "Helper and Copilot for 6\u201310 GB GPUs.",
+   "purpose": "Helper and Copilot for 6–10 GB GPUs.",
    "features": [
     "Copilot",
     "Mixed-language lines",
@@ -446,7 +448,7 @@
     "gpu_high"
    ],
    "name": "Qwen3 14B",
-   "purpose": "Helper and Copilot for 10\u201320 GB GPUs.",
+   "purpose": "Helper and Copilot for 10–20 GB GPUs.",
    "features": [
     "Copilot",
     "Mixed-language lines",
@@ -578,7 +580,7 @@
     "gpu_high"
    ],
    "name": "TranslateGemma 12B",
-   "purpose": "Dedicated lyric translator for 10\u201320 GB GPUs.",
+   "purpose": "Dedicated lyric translator for 10–20 GB GPUs.",
    "features": [
     "Lyric translation"
    ],
@@ -2059,7 +2061,7 @@
     "gpu_ultra"
    ],
    "name": "Wan 2.1 I2V 14B 480p (GGUF Q4_0)",
-   "purpose": "Higher-quality image-to-video (slow: ~15\u201330 min per 5 s on 12 GB).",
+   "purpose": "Higher-quality image-to-video (slow: ~15–30 min per 5 s on 12 GB).",
    "features": [
     "Animate (quality)"
    ],

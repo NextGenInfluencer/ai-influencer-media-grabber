@@ -8,3 +8,6 @@
 # requirements.txt and requirements-ai-common.txt.
 --only-binary=:all:
 insightface==2.1
+# audio-separator declares onnx-weekly, onnx2torch-py313, diffq-fixed and samplerate==0.1.0;
+# the GPU pack provides standard binary wheels (onnx==1.23.2, onnx2torch==1.5.15, samplerate==0.2.4).
+audio-separator==0.48.0
