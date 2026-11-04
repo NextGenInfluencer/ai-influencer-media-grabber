@@ -147,3 +147,15 @@ class ReleaseRegressions(unittest.TestCase):
             self.assertGreaterEqual(sys.version_info[:2], (3, 13))
         pkg = json.loads((root / 'package.json').read_text(encoding='utf-8'))
         self.assertIn('.venv/Scripts/python.exe', pkg['scripts']['lint:inline'])
+
+    def test_readme_screenshots_are_v5_retina_pngs(self):
+        import struct
+        root = Path(__file__).resolve().parents[1]
+        for name in ('ui_downloader.png', 'ui_converter.png', 'ui_cleaner.png', 'ui_gallery_preview.png', 'ui_gallery.png', 'ui_captions.png'):
+            path = root / 'assets' / name
+            self.assertTrue(path.is_file(), f'Missing screenshot: {name}')
+            data = path.read_bytes()
+            self.assertEqual(data[:8], b'\x89PNG\r\n\x1a\n', f'{name} is not a valid PNG')
+            width, height = struct.unpack('>II', data[16:24])
+            self.assertGreaterEqual(width, 1920, f'{name} width too small: {width}')
+            self.assertGreaterEqual(height, 1080, f'{name} height too small: {height}')

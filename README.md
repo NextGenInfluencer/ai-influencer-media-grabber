@@ -188,7 +188,7 @@ Always visible on the right side of the main workspace:
 
 You do **not** need to install Python, Node.js, or FFmpeg manually when using the Windows installer — they are bundled inside.
 
-1. Go to the [**GitHub Releases page**](https://github.com/NextGenInfluencer/ai-influencer-media-grabber/releases/latest) and download **`AI-Influencer-Media-Grabber-v5.0.0-Setup.exe`**.
+1. Go to the [**GitHub Releases page**](https://github.com/NextGenInfluencer/ai-influencer-media-grabber/releases/latest) and download **`AI-Influencer-Media-Grabber-v5.0.13-Setup.exe`**.
 2. Run the installer. It installs into `%LOCALAPPDATA%\AI Influencer Media Grabber` and creates a **Desktop** and **Start Menu** shortcut (`AI Influencer Media Grabber`).
 3. Double-click the shortcut to launch the app. All core features (Downloader, YouTube-to-MP3, Media Tools, Trimmer, Face-Tracking Crop, AI Cleaner, Kling Prep, Carousel Studio, Gallery, History, and Creator Studio video editing) work immediately out of the box.
 
@@ -255,7 +255,7 @@ node tests/test_caption_timing.js
 node --check static/captions.js
 npm ci; npm run lint:inline   # ESLint no-undef on inline template scripts
 
-# Build portable staging directory + Inno Setup 6 installer (dist/AI-Influencer-Media-Grabber-v5.0.0-Setup.exe)
+# Build portable staging directory + Inno Setup 6 installer (dist/AI-Influencer-Media-Grabber-v5.0.13-Setup.exe)
 python build_staging.py
 ```
 

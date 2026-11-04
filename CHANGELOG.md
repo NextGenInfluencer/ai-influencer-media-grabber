@@ -1,5 +1,10 @@
 # Changelog
 
+## [v5.0.13] - 2026-11-04
+- Retook all `README.md` screenshots in `assets/` from the live v5 UI (`assets/ui_downloader.png`, `assets/ui_converter.png`, `assets/ui_cleaner.png`, `assets/ui_gallery_preview.png`, `assets/ui_gallery.png`, `assets/ui_captions.png`, `README.md`, `tests/test_release_regressions.py`):
+  - Replaced legacy `v1.9` / pre-v5 screenshots with high-DPI (`2340×1440` retina PNG) captures of the v5 interface in an isolated demo data directory (no personal media or paths): Downloader tab (with `Update download engines`, GPU/NVENC & `qwen3:14b` badges, and 9 pipeline tiles), Media Tools tab, AI Cleaner tab, Output Gallery tab, and Captions Studio 4-zone multitrack editor (showing bilingual Greek/English lyric cues, active word-level karaoke highlight, dual-language track editor, and spectrum visualizer).
+  - Added `test_readme_screenshots_are_v5_retina_pngs` in `tests/test_release_regressions.py` verifying all 6 `assets/ui_*.png` files are valid retina PNGs (`>= 1920×1080`).
+
 ## [v5.0.12] - 2026-11-04
 - Dev `.venv` standardized on Python 3.13 (`run.bat`, `package.json`, `docs/v5-validation.md`, `tests/test_release_regressions.py`):
   - Standardized the PC development virtual environment (`.venv`) on Python `3.13.9` with all core and GPU AI binary wheels installed and verified (`CUDAExecutionProvider`, `audio_separator`, `coverage`), matching the laptop and the Windows installer runtime (`python-3.13.16-embed-amd64`).

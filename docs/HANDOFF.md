@@ -49,4 +49,4 @@ A **public, free Windows app** for AI-influencer creators. The core rule is that
 2. ~~**Vocal isolation:**~~ **(Done in v5.0.10)**
 3. ~~**OTA cleanup:**~~ **(Done in v5.0.11)**
 4. ~~**Move the PC dev venv to Python 3.13 (`.venv`) and confirm the full suite passes:**~~ **(Done in v5.0.12)**
-5. **Retake the README screenshots in `assets/`** from the v5 UI.
+5. ~~**Retake the README screenshots in `assets/` from the v5 UI:**~~ **(Done in v5.0.13)**
