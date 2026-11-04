@@ -32,7 +32,11 @@ BACKUPS_TO_KEEP = 2
 ALLOWED_DIRECTORIES = frozenset({'assets', 'static', 'templates', 'docs', 'ai_core'})
 ALLOWED_TOP_LEVEL_SUFFIXES = frozenset({'.py', '.bat', '.sh', '.vbs', '.txt', '.json', '.md'})
 # User data that lives next to the code in portable installs; never overwritten.
-PROTECTED_NAMES = frozenset({'history.json', 'cookies.txt'})
+PROTECTED_NAMES = frozenset({'history.json', 'cookies.txt', 'favorites.json', 'settings.json',
+                             'ai_settings.json', 'download_engines.json'})
+PROTECTED_ROOT_PREFIXES = ('models/', 'engines/', 'cookies/', 'downloads/', 'Caption Projects/',
+                           'library/', 'user_data/', 'caption_fonts/', 'python_runtime/',
+                           'node_runtime/', '.venv/', 'venv/', '.updates/', '.git/', 'tests/')
 NEVER_UPDATED_PREFIXES = ('static/fonts/custom/',)  # User uploads are never part of an update.
 DEPENDENCY_FILES = ('requirements.txt', 'requirements-ai.txt', 'requirements-ai-common.txt', 'requirements-ai-cpu.txt',
                     'requirements-ai-directml.txt', 'requirements-ai-gpu.txt', 'requirements-ai-nodeps.txt')
@@ -81,6 +85,24 @@ def _clean_entry(entry):
             or any(p in ('.', '..') or p.startswith('.') for p in parts)):
         raise ValueError(f'Unsafe release manifest entry: {entry!r}')
     return '/'.join(parts)
+
+
+def _is_protected(relative):
+    """Return True if ``relative`` is user data, custom fonts, cookies, history, models or engines."""
+    norm = str(relative).replace('\\', '/').lstrip('/')
+    low = norm.lower()
+    if any(low.startswith(prefix.lower()) for prefix in NEVER_UPDATED_PREFIXES + PROTECTED_ROOT_PREFIXES):
+        return True
+    first, _, rest = norm.partition('/')
+    first_low = first.lower()
+    if not rest:
+        if first_low in PROTECTED_NAMES:
+            return True
+        if (first_low.startswith('history.') and first_low.endswith('.json')) or 'cookie' in first_low:
+            return True
+        if first_low.startswith(('favorites.', 'settings.')):
+            return True
+    return not _allowed(norm)
 
 
 def _allowed(relative):
@@ -167,6 +189,30 @@ def release_files(root, manifest=None):
         if manifest.selects(relative):
             selected.add(relative)
     return sorted(selected)
+
+
+def _obsolete_files(root, selected):
+    """App files currently in ``root`` that are absent from the staged release's selected files."""
+    root = Path(root).resolve()
+    keep = {rel.lower() for rel in selected}
+    candidates = set(release_files(root, parse_manifest(DEFAULT_MANIFEST)))
+    live_manifest = root / MANIFEST_NAME
+    if live_manifest.is_file():
+        try:
+            candidates.update(release_files(root, load_manifest(live_manifest)))
+        except (OSError, ValueError):
+            pass
+    obsolete = []
+    for relative in sorted(candidates):
+        if relative.lower() in keep:
+            continue
+        if relative in DEPENDENCY_FILES or relative == MANIFEST_NAME:
+            continue
+        if _is_protected(relative):
+            continue
+        if (root / relative).is_file():
+            obsolete.append(relative)
+    return obsolete
 
 
 def _archive_manifest(source, prefix):
@@ -265,7 +311,8 @@ def _stage_archive(root, archive, version):
             details = (probe.stderr + '\n' + probe.stdout).strip()
             raise ValueError('Updated app failed its startup check: ' + details[-1000:])
         shutil.rmtree(stage / '.validation-data', ignore_errors=True)
-        atomic_json(updates / 'pending.json', {'stage': stage.name, 'files': selected, 'version': version})
+        removed = _obsolete_files(root, selected)
+        atomic_json(updates / 'pending.json', {'stage': stage.name, 'files': selected, 'removed': removed, 'version': version})
     except BaseException:
         shutil.rmtree(stage, ignore_errors=True)
         raise
@@ -294,9 +341,16 @@ def apply_pending(root):
         for relative, existed in reversed(record['files']):
             destination = target(root, relative)
             if existed:
+                destination.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(target(backup, relative), destination)
             else:
                 destination.unlink(missing_ok=True)
+        for relative in record.get('removed', ()):
+            saved = target(backup, relative)
+            if saved.exists():
+                destination = target(root, relative)
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(saved, destination)
         journal.unlink()
         pending.unlink(missing_ok=True)
     if journal.exists():
@@ -309,7 +363,11 @@ def apply_pending(root):
     stage = target(updates, plan['stage'])
     backup = updates / ('backup-' + uuid.uuid4().hex)
     backup.mkdir()
-    record = {'backup': backup.name, 'files': []}
+    removed = [
+        relative for relative in plan.get('removed', ())
+        if not _is_protected(relative) and relative not in plan['files']
+    ]
+    record = {'backup': backup.name, 'files': [], 'removed': []}
     for relative in plan['files']:
         destination = target(root, relative)
         saved = target(backup, relative)
@@ -317,6 +375,13 @@ def apply_pending(root):
             saved.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(destination, saved)
         record['files'].append([relative, destination.exists()])
+    for relative in removed:
+        destination = target(root, relative)
+        saved = target(backup, relative)
+        if destination.is_file():
+            saved.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(destination, saved)
+            record['removed'].append(relative)
     atomic_json(journal, record)
     try:
         for relative in plan['files']:
@@ -325,6 +390,18 @@ def apply_pending(root):
             temporary = destination.with_name(destination.name + '.update-tmp')
             shutil.copy2(target(stage, relative), temporary)
             os.replace(temporary, destination)
+        for relative in record['removed']:
+            if _is_protected(relative):
+                continue
+            destination = target(root, relative)
+            destination.unlink(missing_ok=True)
+            parent = destination.parent
+            while parent != root and parent.relative_to(root).as_posix() not in ALLOWED_DIRECTORIES:
+                try:
+                    parent.rmdir()
+                except OSError:
+                    break
+                parent = parent.parent
         pending.unlink()
         journal.unlink()
     except BaseException:

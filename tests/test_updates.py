@@ -209,6 +209,103 @@ class UpdateTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'installer'):
                 stage_archive(self.root, self.archive({'requirements.txt': bad_req}), 'v6')
 
+    def test_ota_cleanup_removes_obsolete_app_files_with_backup(self):
+        (self.root / 'obsolete_module.py').write_text('OLD = 1', encoding='utf-8')
+        (self.root / 'static/legacy').mkdir(parents=True, exist_ok=True)
+        (self.root / 'static/legacy/old_widget.js').write_text('console.log("old");', encoding='utf-8')
+        (self.root / 'ai_core').mkdir(parents=True, exist_ok=True)
+        (self.root / 'ai_core/deprecated_helper.py').write_text('DEPRECATED = True', encoding='utf-8')
+
+        archive = self.archive({
+            'release_manifest.json': self.manifest(directories=['templates', 'static', 'ai_core']),
+            'static/app.js': 'console.log("v5");',
+            'ai_core/__init__.py': '',
+        })
+        stage_archive(self.root, archive, 'v5.0.11')
+        pending = json.loads((self.root / '.updates/pending.json').read_text(encoding='utf-8'))
+        self.assertEqual(
+            pending['removed'],
+            ['ai_core/deprecated_helper.py', 'obsolete_module.py', 'static/legacy/old_widget.js'],
+        )
+        # Staging alone must not delete live obsolete files yet
+        self.assertTrue((self.root / 'obsolete_module.py').is_file())
+        self.assertTrue((self.root / 'static/legacy/old_widget.js').is_file())
+
+        self.assertTrue(apply_pending(self.root))
+        self.assertFalse((self.root / 'obsolete_module.py').exists())
+        self.assertFalse((self.root / 'static/legacy/old_widget.js').exists())
+        self.assertFalse((self.root / 'static/legacy').exists())
+        self.assertFalse((self.root / 'ai_core/deprecated_helper.py').exists())
+        self.assertTrue((self.root / 'static/app.js').is_file())
+
+        backups = list((self.root / '.updates').glob('backup-*'))
+        self.assertEqual(len(backups), 1)
+        backup = backups[0]
+        self.assertEqual((backup / 'obsolete_module.py').read_text(encoding='utf-8'), 'OLD = 1')
+        self.assertEqual((backup / 'static/legacy/old_widget.js').read_text(encoding='utf-8'), 'console.log("old");')
+        self.assertEqual((backup / 'ai_core/deprecated_helper.py').read_text(encoding='utf-8'), 'DEPRECATED = True')
+
+    def test_ota_cleanup_restores_removed_files_on_rollback(self):
+        (self.root / 'obsolete_module.py').write_text('OLD = 1', encoding='utf-8')
+        (self.root / 'static/legacy').mkdir(parents=True, exist_ok=True)
+        (self.root / 'static/legacy/old_widget.js').write_text('console.log("old");', encoding='utf-8')
+
+        updates = self.root / '.updates'
+        (updates / 'backup-prev/static/legacy').mkdir(parents=True, exist_ok=True)
+        (updates / 'backup-prev/app_local.py').write_text('VERSION = "old"', encoding='utf-8')
+        (updates / 'backup-prev/obsolete_module.py').write_text('OLD = 1', encoding='utf-8')
+        (updates / 'backup-prev/static/legacy/old_widget.js').write_text('console.log("old");', encoding='utf-8')
+        (self.root / 'obsolete_module.py').unlink()
+        (self.root / 'static/legacy/old_widget.js').unlink()
+        (self.root / 'static/legacy').rmdir()
+        (updates / 'journal.json').write_text(json.dumps({
+            'backup': 'backup-prev',
+            'files': [['app_local.py', True]],
+            'removed': ['obsolete_module.py', 'static/legacy/old_widget.js'],
+        }), encoding='utf-8')
+
+        self.assertTrue(apply_pending(self.root))
+        self.assertEqual((self.root / 'obsolete_module.py').read_text(encoding='utf-8'), 'OLD = 1')
+        self.assertEqual((self.root / 'static/legacy/old_widget.js').read_text(encoding='utf-8'), 'console.log("old");')
+
+    def test_ota_cleanup_never_touches_user_data_history_cookies_fonts_models_or_engines(self):
+        protected_files = {
+            'history.json': '[{"id": "1"}]',
+            'history.backup.json': '[{"id": "0"}]',
+            'cookies.txt': '# Netscape HTTP Cookie File',
+            'youtube_cookies.txt': '# YouTube cookies',
+            'cookies/site.txt': '# cookie dir',
+            'favorites.json': '["fav1"]',
+            'settings.json': '{"theme": "dark"}',
+            'ai_settings.json': '{"tier": "gpu_high"}',
+            'download_engines.json': '{"last_check_ts": 123}',
+            'static/fonts/custom/UserFont.ttf': 'TTF_BYTES',
+            'caption_fonts/StudioFont.otf': 'OTF_BYTES',
+            'models/whisper-large-v3/model.bin': 'MODEL_WEIGHTS',
+            'engines/ffmpeg.exe': 'FFMPEG_BIN',
+            'downloads/clip.mp4': 'VIDEO_BYTES',
+            'Caption Projects/project1.json': '{"cues": []}',
+            'user_data/profile.json': '{"user": "pro"}',
+        }
+        for rel, content in protected_files.items():
+            full = self.root / rel
+            full.parent.mkdir(parents=True, exist_ok=True)
+            full.write_text(content, encoding='utf-8')
+        (self.root / 'obsolete_v4_helper.py').write_text('LEGACY = True', encoding='utf-8')
+
+        archive = self.archive({
+            'release_manifest.json': self.manifest(directories=['templates', 'static', 'ai_core']),
+            'static/main.js': 'console.log("ok");',
+        })
+        stage_archive(self.root, archive, 'v5.0.11')
+        self.assertTrue(apply_pending(self.root))
+
+        self.assertFalse((self.root / 'obsolete_v4_helper.py').exists())
+        for rel, content in protected_files.items():
+            full = self.root / rel
+            self.assertTrue(full.is_file(), f'Protected file was removed: {rel}')
+            self.assertEqual(full.read_text(encoding='utf-8'), content, f'Protected file was modified: {rel}')
+
 
 class DownloadEngineUpdateTests(unittest.TestCase):
     def setUp(self):

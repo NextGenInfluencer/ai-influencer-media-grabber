@@ -1,5 +1,12 @@
 # Changelog
 
+## [v5.0.11] - 2026-11-04
+- OTA cleanup of obsolete app files with backup & rollback (`safe_update.py`, `tests/test_updates.py`):
+  - Added `_obsolete_files()` during `stage_archive()` to detect existing app files in the install tree that are no longer selected by the incoming release manifest and archive, recording them in `.updates/pending.json` (`removed`).
+  - Updated `apply_pending()` to back up every obsolete file to `.updates/backup-<uuid>` and record it in `journal.json` before unlinking it and pruning any resulting empty nested subdirectories inside `ALLOWED_DIRECTORIES`.
+  - Updated `rollback()` so failed or interrupted updates restore removed obsolete files alongside modified files from the backup.
+  - Enforced strict protection guards (`_is_protected()`, `PROTECTED_NAMES`, `PROTECTED_ROOT_PREFIXES`, `NEVER_UPDATED_PREFIXES`) so user data, `history.json`, cookies, settings, custom fonts (`static/fonts/custom/`, `caption_fonts/`), models, engines, downloads, and projects are never touched.
+
 ## [v5.0.10] - 2026-11-04
 - Vocal isolation on Python 3.13 with binary wheels (`requirements-ai-gpu.txt`, `requirements-ai-nodeps.txt`, `requirements-ai-common.txt`, `ai_packs.json`, `assets/ai_setup.py`, `ai_core/catalog.json`, `ai_core/asr.py`, `captions.py`, `THIRD_PARTY_NOTICES.md`):
   - Pinned binary-wheel runtime dependencies for `audio-separator==0.48.0` in `requirements-ai-gpu.txt` (`librosa==1.0.0`, `onnx2torch==1.5.15`, `samplerate==0.2.4`, `soundfile==0.14.0`, `scikit-learn==1.9.1`, `soxr==1.1.0`, `resampy==0.4.3`, `julius==0.2.8`, `pydub==0.25.1`, `rotary-embedding-torch==0.6.5`, and Python 3.13 standard-library audio shims) and added `audio-separator==0.48.0` to `requirements-ai-nodeps.txt` (`--only-binary=:all: --no-deps`) so it installs 100% from binary wheels on Python 3.13 without pulling `onnx-weekly` or non-commercial `diffq-fixed`.
