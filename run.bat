@@ -9,9 +9,11 @@ echo ==============================================
 if not exist ".venv" (
     echo Creating Python virtual environment...
     py -3.13 -m venv .venv >nul 2>nul
-    if not exist ".venv\Scripts\python.exe" if exist "%USERPROFILE%\miniconda3\python.exe" "%USERPROFILE%\miniconda3\python.exe" -m venv .venv
     if not exist ".venv\Scripts\python.exe" python -m venv .venv
-    if errorlevel 1 exit /b 1
+    if not exist ".venv\Scripts\python.exe" (
+        echo [ERROR] Could not create .venv. Install Python 3.13 from python.org and tick 'Add python.exe to PATH'.
+        exit /b 1
+    )
 )
 
 echo Activating virtual environment...

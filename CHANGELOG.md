@@ -1,5 +1,10 @@
 # Changelog
 
+## [v5.0.14] - 2026-11-04
+- Startup script cleanup (`run.bat`, `tests/test_release_regressions.py`):
+  - Removed the `%USERPROFILE%\miniconda3` fallback from `run.bat` so `.venv` creation tries `py -3.13 -m venv .venv`, falls back to `python -m venv .venv`, and prints a clear actionable message (`Install Python 3.13 from python.org and tick 'Add python.exe to PATH'`) with exit code `1` if neither produces `.venv\Scripts\python.exe`.
+  - Extended `test_dev_venv_uses_python_313` in `tests/test_release_regressions.py` to assert that `run.bat`, `run.sh`, and all launcher scripts contain no `miniconda3` or user-specific paths.
+
 ## [v5.0.13] - 2026-11-04
 - Retook all `README.md` screenshots in `assets/` from the live v5 UI (`assets/ui_downloader.png`, `assets/ui_converter.png`, `assets/ui_cleaner.png`, `assets/ui_gallery_preview.png`, `assets/ui_gallery.png`, `assets/ui_captions.png`, `README.md`, `tests/test_release_regressions.py`):
   - Replaced legacy `v1.9` / pre-v5 screenshots with high-DPI (`2340×1440` retina PNG) captures of the v5 interface in an isolated demo data directory (no personal media or paths): Downloader tab (with `Update download engines`, GPU/NVENC & `qwen3:14b` badges, and 9 pipeline tiles), Media Tools tab, AI Cleaner tab, Output Gallery tab, and Captions Studio 4-zone multitrack editor (showing bilingual Greek/English lyric cues, active word-level karaoke highlight, dual-language track editor, and spectrum visualizer).

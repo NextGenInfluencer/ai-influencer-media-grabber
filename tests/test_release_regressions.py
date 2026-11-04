@@ -147,6 +147,13 @@ class ReleaseRegressions(unittest.TestCase):
             self.assertGreaterEqual(sys.version_info[:2], (3, 13))
         pkg = json.loads((root / 'package.json').read_text(encoding='utf-8'))
         self.assertIn('.venv/Scripts/python.exe', pkg['scripts']['lint:inline'])
+        for script_name in ('run.bat', 'run.sh', 'install_ai.bat', 'build_installer.bat', 'create_shortcut.bat', 'create_desktop_shortcut.ps1', 'launch-silent.vbs'):
+            text = (root / script_name).read_text(encoding='utf-8').lower()
+            for forbidden in ('miniconda', 'anaconda', 'c:\\users\\', 'c:/users/', '/users/'):
+                self.assertNotIn(forbidden, text, f'{script_name} contains machine-specific path {forbidden!r}')
+        run_bat = (root / 'run.bat').read_text(encoding='utf-8')
+        self.assertIn('py -3.13 -m venv .venv', run_bat)
+        self.assertIn("Install Python 3.13 from python.org and tick 'Add python.exe to PATH'", run_bat)
 
     def test_readme_screenshots_are_v5_retina_pngs(self):
         import struct
