@@ -1,3 +1,29 @@
+# v5.0.8 — Everything real, every PC, nothing downloads without asking
+
+**Full installer required.** Existing users must run the full installer (`AI-Influencer-Media-Grabber-v5.0.8-Setup.exe`) because v5 updates core and AI dependencies; the in-app source updater will not apply dependency-changing upgrades. Your media, history, characters, caption projects and credentials are preserved.
+
+### What's new in v5.0
+- **Nothing fake anymore.** Features that need models you have not installed say so ("Not available on this PC") and offer **Set up AI** instead of producing stand-in output.
+- **AI Setup wizard.** The app detects your hardware and recommends a profile (Laptop/CPU, GPU 6–10 GB, 12–16 GB, 24 GB+). Every download shows its live size, source, license and whether it runs locally or in the cloud. Non-commercial licenses must be accepted explicitly. Manage everything in **Downloads & Storage**.
+- **Better local AI.** One router picks the best installed model per job: Helper (Copilot), Translator (TranslateGemma when installed), Vision and Speech (Whisper large-v3-turbo on 12 GB GPUs). Laptops use the built-in engine with smaller models.
+- **Mixed-language songs.** Lines already in the target language are kept, mixed lines are translated only where needed, and **A/B this line** compares two models.
+- **Translations no longer disappear after editing.** Affected projects are repaired automatically (a backup is written first). Lines that need review stay visible with **Keep** / **Retranslate**.
+- **AI Studio.** Real FLUX keyframes, Wan animation, LatentSync lip-sync, LivePortrait and GPU face swap (with the Creative engine installed). Kling and Nano Banana are available as opt-in cloud actions with a cost confirmation.
+- **Copilot.** Streams answers, uses real tools and shows a proposal before changing anything.
+- **Instagram & cookies.** Fixed empty profile downloads reported as complete, reels without audio and altered photos. On Windows use Firefox or **Import cookies.txt** (Chrome/Edge cookies cannot be read on Windows because of App-Bound Encryption).
+
+### Fixes & hardware validation in v5.0.1 – v5.0.8
+- **Laptop & CPU reliability (v5.0.2, v5.0.8):** Built-in CPU translator resets cleanly between lines so consecutive translations never loop or cut off; Whisper uses the bundled FFmpeg when `ffmpeg` is not on Windows `PATH`; 16 GB laptops with integrated graphics (`15.9 GB` usable RAM) and Windows display adapters are detected accurately; RAM detection works before any AI pack is installed; already-running Ollama servers are recognized automatically.
+- **GPU Face Swap & AI Pack (v5.0.6 – v5.0.8):** The GPU AI Pack now bundles matching CUDA 13 & cuDNN 9 libraries out of the box (10× faster GFPGAN video face swaps), verifies that GPU acceleration is active (warning clearly if it ever falls back to CPU), and shows live frame-by-frame progress with remaining time.
+- **Creative Engine stability (v5.0.6, v5.0.7):** Patched LivePortrait and LatentSync custom nodes for Python 3.13, modern PyTorch/MediaPipe and offline model loading; prevented custom nodes from downgrading core GPU packages; kept ComfyUI alive during long (>15 min) video renders.
+- **Captions & lyric translation fixes (v5.0.4, v5.0.7):** Short English lyric lines with words like "a" or "no" are no longer misdetected as Spanish/Portuguese; re-translating unlocked chorus lines always runs a fresh translation; Translation Review shows the model route per line; transcription and alignment status shows the active Whisper model.
+- **Downloader & Windows polish (v5.0.1 – v5.0.5):** Added Chrome TLS impersonation (`curl-cffi`) for TikTok and X downloads; refreshed URL previews immediately after importing cookies or changing login mode; added retry logic for transient Windows antivirus file locks during model installs and AI Cleaner runs; verified existing models in the background without blocking **Downloads & Storage**.
+
+**Limits:** Kling and Nano Banana are cloud-only and cost credits. Wan 14B takes about 15–30 minutes per 5 s clip on a 12 GB GPU. Laptop AI is slower and less capable. Lyric timing still needs a listening review.
+
+**Download & verify:** Download `AI-Influencer-Media-Grabber-v5.0.8-Setup.exe` (`119,196,855` bytes) and verify against `SHA256SUMS-v5.0.8.txt` (`f40a229f6dea25f110864f44023362035e55279f6eaf0aa939c79d713150f672`). See `CHANGELOG.md` for the full list.
+
+## Previous release notes
 # v5.0.0 — Everything real, every PC, nothing downloads without asking
 
 **Full installer required.** Download `AI-Influencer-Media-Grabber-v5.0.0-Setup.exe`. Your media, history, characters, caption projects and credentials are preserved.
