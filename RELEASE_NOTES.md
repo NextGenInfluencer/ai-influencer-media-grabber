@@ -11,6 +11,11 @@
 - **1-Click AI Video Dubbing, Timing Modes, & Dynamic Auto-Ducking:** Speak from **Original Captions**, **Translated Track (AI Dubbing)**, or a **New Script**; choose **Sync Captions to Voice** or **Fit Voice into Existing Timings** (pitch-preserving `atempo`); enable **Auto-Duck Background** (`sidechaincompress` dips background audio only while the narrator speaks); and roll back anytime with **↩ Restore Original Audio**.
 - **Studio AI Copilot Voice Awareness:** Copilot now knows your project's narrator state, audits lines that are too fast for natural speech (`> 18` chars/sec), recommends voices by language, and proposes project narration, dubbing, per-line regeneration, or audio restore cards.
 
+**Download & verify:**
+- **Installer:** `AI-Influencer-Media-Grabber-v5.0.15-Setup.exe` (`119,009,012` bytes, standard user installer — no Admin/UAC prompt required)
+- **SHA-256 (`SHA256SUMS-v5.0.15.txt`):** `5fe71dbc60879fcdaccde3f77e6518fc8ac2ca3353de2aca3c0391d975617ebf` (`Get-FileHash .\AI-Influencer-Media-Grabber-v5.0.15-Setup.exe -Algorithm SHA256`)
+- **Security Scans:** **0 threats found** by Microsoft Defender Antivirus (`MpCmdRun.exe -Scan -ScanType 3`). See [`SECURITY.md`](SECURITY.md) and `CHANGELOG.md` for details.
+
 ## Previous release notes
 # v5.0.14 — Download engine updates, vocal isolation for lyrics, and safer updates (v5.0.9–v5.0.14)
 

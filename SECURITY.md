@@ -4,28 +4,28 @@ AI Influencer Media Grabber is a **100% open-source, local-first Windows desktop
 
 ---
 
-## 1. Verifying Your Download (`v5.0.14`)
+## 1. Verifying Your Download (`v5.0.15`)
 
-Before or after running **`AI-Influencer-Media-Grabber-v5.0.14-Setup.exe`**, you can verify its cryptographic checksum and independent antivirus scan results:
+Before or after running **`AI-Influencer-Media-Grabber-v5.0.15-Setup.exe`**, you can verify its cryptographic checksum and independent antivirus scan results:
 
 | Field | Value |
 |---|---|
-| **Installer Filename** | `AI-Influencer-Media-Grabber-v5.0.14-Setup.exe` |
-| **Exact Size** | `118,974,813` bytes (`113.5 MB`) |
-| **SHA-256 Checksum** | `6dc91907d5de1d0d90ecd4ab6c57d48cfc7b710d54a6a7093c248005d74c02a6` |
-| **Checksum File** | [`SHA256SUMS-v5.0.14.txt`](https://github.com/NextGenInfluencer/ai-influencer-media-grabber/releases/download/v5.0.14/SHA256SUMS-v5.0.14.txt) |
-| **VirusTotal Report** | [View Live VirusTotal Analysis (`6dc91907...c02a6`)](https://www.virustotal.com/gui/file/6dc91907d5de1d0d90ecd4ab6c57d48cfc7b710d54a6a7093c248005d74c02a6) |
-| **Microsoft Defender Scan** | **0 threats found** (`MpCmdRun.exe -Scan -ScanType 3`, engine `4.18.26100.4`, definitions `1.463.122.0`) |
+| **Installer Filename** | `AI-Influencer-Media-Grabber-v5.0.15-Setup.exe` |
+| **Exact Size** | `119,009,012` bytes (`113.5 MB`) |
+| **SHA-256 Checksum** | `5fe71dbc60879fcdaccde3f77e6518fc8ac2ca3353de2aca3c0391d975617ebf` |
+| **Checksum File** | [`SHA256SUMS-v5.0.15.txt`](https://github.com/NextGenInfluencer/ai-influencer-media-grabber/releases/download/v5.0.15/SHA256SUMS-v5.0.15.txt) |
+| **Microsoft Defender Scan** | **0 threats found** (`MpCmdRun.exe -Scan -ScanType 3`) |
+| **Previous `v5.0.14` VirusTotal Report** | [View VirusTotal Analysis (`6dc91907...c02a6`)](https://www.virustotal.com/gui/file/6dc91907d5de1d0d90ecd4ab6c57d48cfc7b710d54a6a7093c248005d74c02a6) |
 | **Windows Privileges** | **Standard User (`PrivilegesRequired=lowest`)** — never requests Administrator (UAC) elevation |
 
 ### Verify in Windows PowerShell (1 command)
 Open PowerShell in your `Downloads` folder and run:
 ```powershell
-Get-FileHash .\AI-Influencer-Media-Grabber-v5.0.14-Setup.exe -Algorithm SHA256
+Get-FileHash .\AI-Influencer-Media-Grabber-v5.0.15-Setup.exe -Algorithm SHA256
 ```
 Confirm the output matches:
 ```text
-6DC91907D5DE1D0D90ECD4AB6C57D48CFC7B710D54A6A7093C248005D74C02A6
+5FE71DBC60879FCDACCDE3F77E6518FC8AC2CA3353DE2ACA3C0391D975617EBF
 ```
 
 ### Why does Windows SmartScreen show "Windows protected your PC"?

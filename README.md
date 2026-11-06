@@ -129,6 +129,9 @@ A dedicated 4-zone desktop video editor for building music videos, lyric videos,
   - Translate lyrics locally with song context, glossaries, ambiguity notes and chorus reuse. **Auto** picks the best installed model for your PC: lines already in the target language are kept, single-language lines go to the Translator (TranslateGemma when installed), mixed-language lines (e.g. Greek + English) go to the Helper. **A/B this line** compares both. Lyrics are never sent to the cloud.
   - Model translations arrive as a reviewable proposal. Lines whose original changed show **⚠ Needs review** with **Keep** / **Retranslate**, and exports warn before leaving any line out.
   - Export **Original**, **Translated**, or **Bilingual (Original + Translation)** videos (`MP4`), styled subtitles (`ASS`), or `SRT` with bundled open-license fonts (**Montserrat**, **Roboto**, **Noto Sans KR**, **Oswald**, **Lobster**, **Bangers**) and smart glyph fallback (`Roboto` for Greek, `Noto Sans KR` for Korean).
+- **🎙️ Studio AI Narrator, Voiceover & 1-Click AI Dubbing**:
+  - Generate natural voiceovers from **Original Captions**, **Translated Track (AI Dubbing)**, or a **New Script** using **Microsoft Edge Neural & DragonHD** (14 languages including Greek & English, built-in and free), **Kokoro-82M Local ONNX** (100% offline with custom **Voice Blending**), or **ElevenLabs API** (Bring Your Own Key with emotion/style controls).
+  - Edit and re-synthesize any individual line (`🔊 Regenerate Line Voice`) with locked `-16 LUFS` mastering and **Vocal Tone Presets**, **Dynamic Auto-Ducking** (`sidechaincompress`), and 1-click **Restore Original Audio** rollback.
 
 ---
 
@@ -188,14 +191,14 @@ Always visible on the right side of the main workspace:
 
 You do **not** need to install Python, Node.js, or FFmpeg manually when using the Windows installer — they are bundled inside.
 
-1. Go to the [**GitHub Releases page**](https://github.com/NextGenInfluencer/ai-influencer-media-grabber/releases/latest) and download **`AI-Influencer-Media-Grabber-v5.0.14-Setup.exe`**.
+1. Go to the [**GitHub Releases page**](https://github.com/NextGenInfluencer/ai-influencer-media-grabber/releases/latest) and download **`AI-Influencer-Media-Grabber-v5.0.15-Setup.exe`**.
 2. Run the installer. It installs into `%LOCALAPPDATA%\AI Influencer Media Grabber` and creates a **Desktop** and **Start Menu** shortcut (`AI Influencer Media Grabber`).
 3. Double-click the shortcut to launch the app. All core features (Downloader, YouTube-to-MP3, Media Tools, Trimmer, Face-Tracking Crop, AI Cleaner, Kling Prep, Carousel Studio, Gallery, History, and Creator Studio video editing) work immediately out of the box.
 
-> **🛡️ Download Verification & Windows SmartScreen (`v5.0.14`)**
-> - **SHA-256 (`AI-Influencer-Media-Grabber-v5.0.14-Setup.exe`)**: `6dc91907d5de1d0d90ecd4ab6c57d48cfc7b710d54a6a7093c248005d74c02a6` ([`SHA256SUMS-v5.0.14.txt`](https://github.com/NextGenInfluencer/ai-influencer-media-grabber/releases/download/v5.0.14/SHA256SUMS-v5.0.14.txt))
-> - **VirusTotal & Defender**: [View VirusTotal Scan Report](https://www.virustotal.com/gui/file/6dc91907d5de1d0d90ecd4ab6c57d48cfc7b710d54a6a7093c248005d74c02a6) · **0 threats found** by Microsoft Defender Antivirus (`MpCmdRun.exe`).
-> - **No Admin Rights Needed**: The installer runs at standard user privilege (`PrivilegesRequired=lowest`) and installs into `%LOCALAPPDATA%\AI Influencer Media Grabber`. If Windows SmartScreen displays *"Windows protected your PC"* (standard for free open-source apps without a commercial EV certificate), verify the SHA-256 hash with `Get-FileHash .\AI-Influencer-Media-Grabber-v5.0.14-Setup.exe -Algorithm SHA256` and click **More info → Run anyway**. See [SECURITY.md](SECURITY.md).
+> **🛡️ Download Verification & Windows SmartScreen (`v5.0.15`)**
+> - **SHA-256 (`AI-Influencer-Media-Grabber-v5.0.15-Setup.exe`)**: `5fe71dbc60879fcdaccde3f77e6518fc8ac2ca3353de2aca3c0391d975617ebf` ([`SHA256SUMS-v5.0.15.txt`](https://github.com/NextGenInfluencer/ai-influencer-media-grabber/releases/download/v5.0.15/SHA256SUMS-v5.0.15.txt))
+> - **Defender & Security**: **0 threats found** by Microsoft Defender Antivirus (`MpCmdRun.exe`).
+> - **No Admin Rights Needed**: The installer runs at standard user privilege (`PrivilegesRequired=lowest`) and installs into `%LOCALAPPDATA%\AI Influencer Media Grabber`. If Windows SmartScreen displays *"Windows protected your PC"* (standard for free open-source apps without a commercial EV certificate), verify the SHA-256 hash with `Get-FileHash .\AI-Influencer-Media-Grabber-v5.0.15-Setup.exe -Algorithm SHA256` and click **More info → Run anyway**. See [SECURITY.md](SECURITY.md).
 
 ---
 
@@ -260,7 +263,7 @@ node tests/test_caption_timing.js
 node --check static/captions.js
 npm ci; npm run lint:inline   # ESLint no-undef on inline template scripts
 
-# Build portable staging directory + Inno Setup 6 installer (dist/AI-Influencer-Media-Grabber-v5.0.14-Setup.exe)
+# Build portable staging directory + Inno Setup 6 installer (dist/AI-Influencer-Media-Grabber-v5.0.15-Setup.exe)
 python build_staging.py
 ```
 
