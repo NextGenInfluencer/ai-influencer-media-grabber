@@ -13,7 +13,8 @@
   const CHIPS = {
     captions: [['Audit subtitles', 'Audit my subtitles for reading speed, timing and missing translations.'],
       ['Fix fast lines', 'Suggest shorter translations for lines that are too fast to read.'],
-      ['Translate', 'Translate all lines into English.']],
+      ['Translate', 'Translate all lines into English.'],
+      ['🎙️ Narrate', 'Audit my lines for voiceover pacing and propose generating a warm podcast narration track.']],
     downloader: [['Find media', 'Find my recent TikTok videos in the gallery.'], ['Open folder', 'Open my downloads folder.']],
     studio: [['Plan storyboard', 'Plan a storyboard for the selected song.'], ['Scene ideas', 'Suggest a look for the chorus scenes.']],
   };

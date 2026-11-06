@@ -1,3 +1,17 @@
+# v5.0.15 — Studio AI Narrator & Voiceover Studio, 1-Click AI Dubbing, and Copilot Voice Tools
+
+**In-app update available for v5.0.10–v5.0.14 users** (no core or AI Pack dependency changes). Users upgrading from v5.0.8 or earlier must run the full installer because v5.0.10 updated the GPU AI Pack dependency files. Your media, history, characters, caption projects, and credentials are preserved.
+
+### What's new in v5.0.15
+- **🎙️ Studio AI Narrator & Voiceover (3 Engines):**
+  - **Microsoft Edge Neural & DragonHD (Built-in, Free):** Instant neural voices across all 14 Studio languages (including Greek `Athina` & `Nestoras` and English DragonHD `Ava`, `Andrew`, `Emma`, `Brian`) with exact word-level karaoke synchronization and real rate/pitch prosody controls.
+  - **Kokoro-82M Local AI (100% Offline):** Optional one-click local ONNX voice engine (`~340 MB` on-demand install) with 24 voices and **Voice Blending** (mix any two voices by percentage to create a custom signature voice).
+  - **ElevenLabs API (Bring Your Own Key):** Optional integration with your personal ElevenLabs voices, word-level timestamps, stability, similarity, style/emotion exaggeration, and multi-line stitching continuity.
+- **Per-Line Regeneration & Vocal Color Lock:** Edit any single caption line and click **🔊 Regenerate Line Voice** in the Inspector to re-synthesize only that line at `-16 LUFS` (`44.1 kHz` stereo) with 4 **Vocal Tone Presets** (`Natural Studio`, `Warm Podcast`, `Crisp Creator`, `Deep Cinema`) and `15 ms` cosine fades—keeping identical vocal color across the video.
+- **1-Click AI Video Dubbing, Timing Modes, & Dynamic Auto-Ducking:** Speak from **Original Captions**, **Translated Track (AI Dubbing)**, or a **New Script**; choose **Sync Captions to Voice** or **Fit Voice into Existing Timings** (pitch-preserving `atempo`); enable **Auto-Duck Background** (`sidechaincompress` dips background audio only while the narrator speaks); and roll back anytime with **↩ Restore Original Audio**.
+- **Studio AI Copilot Voice Awareness:** Copilot now knows your project's narrator state, audits lines that are too fast for natural speech (`> 18` chars/sec), recommends voices by language, and proposes project narration, dubbing, per-line regeneration, or audio restore cards.
+
+## Previous release notes
 # v5.0.14 — Download engine updates, vocal isolation for lyrics, and safer updates (v5.0.9–v5.0.14)
 
 **Full installer required.** Existing users must run the full installer (`AI-Influencer-Media-Grabber-v5.0.14-Setup.exe`) because v5.0.10 updates the GPU AI Pack dependency files for vocal isolation; the in-app source updater refuses dependency-changing upgrades. Your media, history, characters, caption projects and credentials are preserved.

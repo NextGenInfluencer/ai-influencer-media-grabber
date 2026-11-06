@@ -1,5 +1,18 @@
 # Changelog
 
+## [v5.0.15] - 2026-11-06
+- Studio AI Narrator & Voiceover Studio + Copilot Integration (`narrator.py`, `captions.py`, `copilot.py`, `templates/captions.html`, `static/captions.js`, `static/copilot.js`, `tests/test_narrator.py`, `tests/test_copilot.py`):
+  - **3-Engine Narrator Architecture (`narrator.py`):**
+    - **Microsoft Edge Neural & DragonHD (`edge`):** Zero-dependency async WebSocket client (`aiohttp` + `certifi`) with `Sec-MS-GEC` v2 DRM token generation (`generate_sec_ms_gec_v2()`), 14 Studio languages (including Greek `el-GR-AthinaNeural` / `el-GR-NestorasNeural` and English DragonHD `Ava` / `Andrew` / `Emma` / `Brian`), exact `WordBoundary` karaoke timings, and real SSML `rate_pct` / `pitch_hz` prosody.
+    - **Kokoro-82M Local ONNX (`kokoro`):** 100% offline open-weight TTS (`kokoro-v1.0.onnx` + `voices-v1.0.bin`) with safe on-demand installation (`--no-deps` so `onnxruntime-gpu` is preserved) and **Voice Blending** (`blend_voice` + `blend_ratio`).
+    - **ElevenLabs API (`elevenlabs`):** Optional Bring-Your-Own-Key support (`Caption Projects/narrator_keys.json` outside git) with `/v1/voices` catalog discovery, `/with-timestamps` character-to-word alignment, `stability`, `similarity_boost`, `style` (emotion), and `previous_text` / `next_text` context continuity.
+  - **Per-Line Audio Mastering, Vocal Color Lock, & Dynamic Ducking (`captions.py`, `narrator.py`):**
+    - Each caption line (`cue['id']`) is synthesized to `narr_line_<id>.wav` and normalized to `44.1 kHz` stereo `-16 LUFS` (`loudnorm`) with `15 ms` cosine fades and 4 **Vocal Tone Presets** (`natural`, `warm_podcast`, `crisp_creator`, `deep_cinema`).
+    - Added `/api/captions/<pid>/narrate-line` to re-synthesize a single edited line using the project's locked voice/tone settings and re-assemble the master track without touching other lines.
+    - Added **Timing Modes** (`sync_captions` vs `fit_captions` with pitch-preserving `atempo` `0.85–1.25`), **Speak From** (`original`, `translation` for **1-Click AI Video Dubbing**, and `script`), **Dynamic Auto-Ducking** (`sidechaincompress`), and non-destructive 1-click rollback (`/api/captions/<pid>/restore-narration` backed by `narration_backup`).
+  - **Studio AI Copilot Integration (`copilot.py`, `static/copilot.js`, `static/captions.js`):**
+    - Added `list_narrator_voices` (`instant`), `narrate_project` (`proposal` with `Local` vs `Cloud TTS` badge), `narrate_line` (`proposal`), and `restore_narration` (`proposal`), plus `'narration'` speaking-rate checks (`> 18` chars/sec) in `audit_subtitles` and a `🎙️ Narrate` quick-action chip.
+
 ## [v5.0.14] - 2026-11-04
 - Startup script cleanup (`run.bat`, `tests/test_release_regressions.py`):
   - Removed the `%USERPROFILE%\miniconda3` fallback from `run.bat` so `.venv` creation tries `py -3.13 -m venv .venv`, falls back to `python -m venv .venv`, and prints a clear actionable message (`Install Python 3.13 from python.org and tick 'Add python.exe to PATH'`) with exit code `1` if neither produces `.venv\Scripts\python.exe`.

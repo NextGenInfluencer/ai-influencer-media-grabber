@@ -24,6 +24,7 @@ web_downloads/
 converter_debug.log
 *.pyc
 ai_models/
+models/
 *.gguf
 *.mp4
 *.mov

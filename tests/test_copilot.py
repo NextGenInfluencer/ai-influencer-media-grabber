@@ -129,6 +129,40 @@ class CopilotAgentTests(unittest.TestCase):
         self.assertNotIn('generate_social_post', copilot.TOOLS)
         self.assertNotIn('generate_flow_prompt', copilot.TOOLS)
 
+    def test_narrator_tools_and_proposals(self):
+        # 1. Instant tool list_narrator_voices
+        kind, catalog = copilot.execute_tool('list_narrator_voices', {'language': 'el'}, CONTEXT, SERVICES)
+        self.assertEqual(kind, 'result')
+        self.assertTrue(any(v['id'] == 'el-GR-AthinaNeural' for v in catalog['voices']['edge']))
+
+        # 2. Narration pacing check in audit_subtitles
+        audit = copilot.audit_subtitles(CONTEXT, focus='narration')
+        self.assertTrue(any(i['type'] == 'narration_pacing' for i in audit['issues']))
+
+        # 3. narrate_project proposal (honest Cloud TTS vs Local badge)
+        prop_edge = copilot.build_proposal(
+            'narrate_project',
+            {'engine': 'edge', 'voice': 'el-GR-AthinaNeural', 'tone': 'warm_podcast', 'timing_mode': 'sync_captions'},
+            CONTEXT,
+        )
+        self.assertEqual(prop_edge['action'], 'narrate_project')
+        self.assertFalse(prop_edge['local'])
+        self.assertEqual(prop_edge['badge'], 'Cloud TTS')
+        self.assertEqual(prop_edge['args']['tone'], 'warm_podcast')
+
+        # 4. narrate_line proposal with diff
+        prop_line = copilot.build_proposal('narrate_line', {'line': 2, 'text': 'Hello studio world'}, CONTEXT)
+        self.assertEqual(prop_line['action'], 'narrate_line')
+        self.assertEqual(prop_line['args']['cue_id'], 'c2')
+        self.assertEqual(prop_line['diff'][0]['after'], 'Hello studio world')
+
+        # 5. restore_narration requires backup
+        with self.assertRaisesRegex(ValueError, 'pre-narration backup'):
+            copilot.build_proposal('restore_narration', {}, CONTEXT)
+        ctx_with_backup = {'page': 'captions', 'project': {**PROJECT, 'has_narration_backup': True}}
+        prop_restore = copilot.build_proposal('restore_narration', {}, ctx_with_backup)
+        self.assertEqual(prop_restore['action'], 'restore_narration')
+
 
 class CopilotRouteTests(unittest.TestCase):
     @classmethod

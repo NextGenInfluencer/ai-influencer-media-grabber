@@ -43,9 +43,11 @@ STR, NUM, INT, BOOL = {'type': 'string'}, {'type': 'number'}, {'type': 'integer'
 # kind: 'instant' executes now on real data; 'proposal' needs the user's Apply.
 TOOLS = {
     'list_capabilities': ('List what the Copilot and this PC can actually do right now.', _schema(), 'instant', PAGES, 0, None),
-    'audit_subtitles': ('Check caption lines for reading speed, missing translations, overlaps and very short or long lines.',
-                        _schema({'focus': {'type': 'string', 'enum': ['all', 'reading_speed', 'missing_translations', 'timing']}}),
+    'audit_subtitles': ('Check caption lines for reading speed, narration pacing, missing translations, overlaps and very short or long lines.',
+                        _schema({'focus': {'type': 'string', 'enum': ['all', 'reading_speed', 'missing_translations', 'timing', 'narration']}}),
                         'instant', ('captions',), 0, None),
+    'list_narrator_voices': ('List available AI Narrator voices, vocal tone presets, local Kokoro status, and ElevenLabs key status.',
+                             _schema({'language': STR}), 'instant', ('captions',), 0, None),
     'read_caption_lines': ('Read caption lines by 1-based line number (use when lines were omitted from the context).',
                            _schema({'start_line': INT, 'end_line': INT}, ['start_line']), 'instant', ('captions',), 0, None),
     'search_gallery': ('Search downloaded and created media in the gallery by words in the file name, folder or uploader.',
@@ -75,6 +77,19 @@ TOOLS = {
     'set_font': ('Propose changing the caption font family.', _schema({'font': STR}, ['font']), 'proposal',
                  ('captions',), 0, None),
     'render_export': ('Propose exporting the captions project as an MP4.', _schema(), 'proposal', ('captions',), 120, None),
+    'narrate_project': ('Propose generating an AI voiceover narration track for the open captions project.',
+                        _schema({'engine': {'type': 'string', 'enum': ['edge', 'kokoro', 'elevenlabs']},
+                                 'voice': STR,
+                                 'tone': {'type': 'string', 'enum': ['natural', 'warm_podcast', 'crisp_creator', 'deep_cinema']},
+                                 'timing_mode': {'type': 'string', 'enum': ['sync_captions', 'fit_captions']},
+                                 'track': {'type': 'string', 'enum': ['original', 'translation', 'script']},
+                                 'ducking': BOOL,
+                                 'background_volume': NUM}),
+                        'proposal', ('captions',), 30, None),
+    'narrate_line': ('Propose regenerating the AI voiceover audio for a single 1-based caption line number (keeping the project voice and vocal tone locked).',
+                     _schema({'line': INT, 'text': STR}, ['line']), 'proposal', ('captions',), 5, None),
+    'restore_narration': ('Propose restoring the project to its original pre-narration audio and caption timings.',
+                          _schema(), 'proposal', ('captions',), 0, None),
     'generate_storyboard': ('Propose planning a music-video storyboard with the AI Director.',
                             _schema({'concept': STR, 'num_scenes': INT}), 'proposal', ('studio',), 60, 'helper'),
     'generate_keyframe': ('Propose rendering a keyframe image for a storyboard scene.',
@@ -179,6 +194,13 @@ def context_text(context):
         cues, language = _cues(context), _translation_language(context)
         parts.append(f'Captions project "{project.get("name", "")}", {len(cues)} lines, duration '
                      f'{project.get("duration", 0)} s, translation language {language}.')
+        narr = project.get('narrator') if isinstance(project.get('narrator'), dict) else None
+        has_narr_backup = bool(project.get('has_narration_backup') or project.get('narration_backup'))
+        if narr or has_narr_backup:
+            n_cfg = narr or {}
+            parts.append(f'Narrator config: engine={n_cfg.get("engine", "edge")}, voice={n_cfg.get("voice", "en-US-AvaMultilingualNeural")}, '
+                         f'tone={n_cfg.get("tone", "natural")}, timing_mode={n_cfg.get("timing_mode", "sync_captions")}, '
+                         f'narration_backup={"available" if has_narr_backup else "none"}.')
         lines, used, omitted = [], 0, None
         for number, cue in enumerate(cues, 1):
             line = _cue_line(number, cue, language)
@@ -222,6 +244,9 @@ def audit_subtitles(context, focus='all'):
         if focus in ('all', 'reading_speed') and duration > 0 and len(text) / duration > 20:
             issues.append({'line': number, 'type': 'reading_speed', 'cps': round(len(text) / duration, 1),
                            'message': 'More than 20 characters per second.'})
+        if focus in ('all', 'narration') and duration > 0 and len(text) / duration > 18:
+            issues.append({'line': number, 'type': 'narration_pacing', 'cps': round(len(text) / duration, 1),
+                           'message': 'Too dense for natural voiceover (>18 chars/sec); shorten text or use sync_captions.'})
         if focus in ('all', 'timing'):
             if 0 < duration < 0.7:
                 issues.append({'line': number, 'type': 'too_short', 'message': f'Only {duration:.2f} s on screen.'})
@@ -270,10 +295,10 @@ def list_instagram_profile(url):
 
 # ---------------------------------------------------------------- proposals
 
-def _proposal(name, args, context, summary, diff=None):
+def _proposal(name, args, context, summary, diff=None, *, local=True, badge='Local'):
     eta = TOOLS[name][4]
     return {'action': name, 'args': args, 'summary': summary, 'diff': diff, 'eta_seconds': eta or None,
-            'local': True, 'badge': 'Local'}
+            'local': local, 'badge': badge}
 
 
 def build_proposal(name, args, context):
@@ -335,6 +360,60 @@ def build_proposal(name, args, context):
         if not url.lower().startswith(('http://', 'https://')):
             raise ValueError('Give a full http(s) link.')
         return _proposal(name, {'url': url, 'format': args.get('format') or 'video'}, context, f'Download {url}.')
+    if name == 'narrate_project':
+        import narrator
+        project = context.get('project') if isinstance(context.get('project'), dict) else {}
+        base_narr = project.get('narrator') if isinstance(project.get('narrator'), dict) else {}
+        cfg = narrator.validate_narrator_settings({**base_narr, **args})
+        if cfg['engine'] == 'kokoro' and not narrator.kokoro_status()['installed']:
+            raise ValueError('Local Kokoro-82M voice pack is not installed yet. Click "Install Local Kokoro AI" in the Narrator panel first, or use the "edge" engine.')
+        is_local = cfg['engine'] == 'kokoro'
+        badge = 'Local' if is_local else 'Cloud TTS'
+        return _proposal(
+            name,
+            {
+                'engine': cfg['engine'],
+                'voice': cfg['voice'],
+                'tone': cfg['tone'],
+                'timing_mode': cfg['timing_mode'],
+                'track': cfg['track'],
+                'ducking': cfg['ducking'],
+                'background_volume': cfg['background_volume'],
+            },
+            context,
+            f"Generate AI voiceover ({cfg['engine']} · {cfg['voice']} · {cfg['tone']} tone, {cfg['timing_mode']}) for {len(cues)} caption lines.",
+            local=is_local,
+            badge=badge,
+        )
+    if name == 'narrate_line':
+        import narrator
+        line = int(args.get('line', 0))
+        if not 1 <= line <= len(cues):
+            raise ValueError(f'Line {line} does not exist.')
+        cue = cues[line - 1]
+        new_text = str(args.get('text') or cue.get('text') or '').strip()
+        if not new_text:
+            raise ValueError('Caption line text cannot be empty.')
+        project = context.get('project') if isinstance(context.get('project'), dict) else {}
+        base_narr = project.get('narrator') if isinstance(project.get('narrator'), dict) else {}
+        engine = base_narr.get('engine', 'edge')
+        is_local = engine == 'kokoro'
+        badge = 'Local' if is_local else 'Cloud TTS'
+        diff = [{'line': line, 'field': 'text', 'before': cue.get('text', ''), 'after': new_text}] if new_text != cue.get('text', '') else None
+        return _proposal(
+            name,
+            {'line': line, 'cue_id': cue.get('id'), 'text': new_text},
+            context,
+            f'Regenerate AI voiceover for line #{line} while keeping the project voice and vocal tone locked.',
+            diff,
+            local=is_local,
+            badge=badge,
+        )
+    if name == 'restore_narration':
+        project = context.get('project') if isinstance(context.get('project'), dict) else {}
+        if not (project.get('has_narration_backup') or project.get('narration_backup')):
+            raise ValueError('No pre-narration backup is available for this project.')
+        return _proposal(name, {}, context, 'Restore the original pre-narration audio track and caption timings.')
     summaries = {
         'transcribe_project': 'Transcribe the project audio with the local speech model (replaces unsaved draft lines).',
         'sync_lyrics': 'Open lyric sync to time your pasted lyrics to the song.',
@@ -362,6 +441,11 @@ def execute_tool(name, args, context, services):
         return 'result', capabilities(context.get('page'))
     if name == 'audit_subtitles':
         return 'result', audit_subtitles(context, args.get('focus') or 'all')
+    if name == 'list_narrator_voices':
+        import narrator
+        import os
+        cap_root = Path(os.environ.get('MEDIA_GRABBER_DATA_DIR') or Path.home() / 'Documents' / 'Media Grabber') / 'Caption Projects'
+        return 'result', narrator.catalog_payload(cap_root, Path(__file__).resolve().parent, language=str(args.get('language') or ''))
     if name == 'read_caption_lines':
         return 'result', read_caption_lines(context, args.get('start_line', 1), args.get('end_line'))
     if name == 'search_gallery':

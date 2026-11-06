@@ -473,14 +473,145 @@
           </div>
         </section>
 
-        <!-- PANE 5: AUDIO FX, CLEANUP & SONG TRIM -->
+        <!-- PANE 5: AUDIO FX, CLEANUP, AI NARRATOR & SONG TRIM -->
         <section class="dockPane" data-dock-pane="audio">
           <div class="paneHeader">
-            <h2>🎵 Audio FX, Cleanup &amp; Trim</h2>
+            <h2>🎙️ AI Narrator, Audio FX &amp; Trim</h2>
+          </div>
+
+          <div class="subCard stackForm" id="narratorCard">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+              <h3 style="margin:0;">1. AI Narrator &amp; Voiceover Studio</h3>
+              <span id="narratorEngineBadge" style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:rgba(10,132,255,0.18);color:#60a5fa;border:1px solid rgba(10,132,255,0.35);">Neural TTS</span>
+            </div>
+            <p class="hint" style="margin:2px 0 6px;">Generate broadcast-mastered voiceover (-16 LUFS) synced to your captions, dub translated subtitles, or re-generate a single line with locked vocal color.</p>
+
+            <label>Voice Engine
+              <select id="narratorEngine" aria-label="Narrator voice engine">
+                <option value="edge" selected>🌐 Microsoft Neural (Free · 14 Languages)</option>
+                <option value="kokoro">💻 Kokoro-82M Local AI (100% Offline)</option>
+                <option value="elevenlabs">✨ ElevenLabs Studio (API Key)</option>
+              </select>
+            </label>
+
+            <div class="row">
+              <label style="width:120px;">Language
+                <select id="narratorLanguage" aria-label="Voice language filter">
+                  <option value="">All languages</option>
+                  {% for code, label in languages.items() %}<option value="{{ code }}">{{ label }}</option>{% endfor %}
+                </select>
+              </label>
+              <label style="flex:1;">Voice
+                <select id="narratorVoice" aria-label="Narrator voice"></select>
+              </label>
+            </div>
+
+            <div class="row">
+              <button id="previewNarratorVoice" type="button" style="flex:1;">🔊 Sample Selected Voice</button>
+              <audio id="narratorSampleAudio" hidden></audio>
+            </div>
+
+            <div id="narratorKokoroControls" class="stackForm" hidden style="padding:8px 10px;border-radius:8px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.28);">
+              <div id="kokoroInstallBanner" hidden>
+                <p class="hint" style="margin:0 0 6px;color:#a7f3d0;">Kokoro-82M runs 100% offline on your GPU/CPU. Download the voice pack once (~196 MB) to unlock 24 local voices &amp; custom voice blending.</p>
+                <button id="installKokoroBtn" class="primary" type="button" style="width:100%;">⬇️ Install Local Kokoro-82M Voice Pack</button>
+              </div>
+              <div class="row">
+                <label style="flex:1;">Speed (×)
+                  <input id="narratorSpeed" type="number" min="0.5" max="2.0" step="0.05" value="1.0">
+                </label>
+                <label style="flex:1;">Blend With Voice
+                  <select id="narratorBlendVoice">
+                    <option value="">None (Single Voice)</option>
+                  </select>
+                </label>
+              </div>
+              <label>Blend Ratio (0 = Primary, 0.5 = 50/50 Mix)
+                <input id="narratorBlendRatio" type="range" min="0" max="0.8" step="0.05" value="0">
+              </label>
+            </div>
+
+            <div id="narratorEdgeControls" class="row">
+              <label style="flex:1;">Speed (%)
+                <input id="narratorRatePct" type="number" min="-40" max="50" step="5" value="0">
+              </label>
+              <label style="flex:1;">Pitch (Hz)
+                <input id="narratorPitchHz" type="number" min="-15" max="15" step="1" value="0">
+              </label>
+            </div>
+
+            <div id="narratorElevenControls" class="stackForm" hidden style="padding:8px 10px;border-radius:8px;background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.28);">
+              <div class="row">
+                <input id="elevenlabsApiKey" type="password" maxlength="220" placeholder="Paste ElevenLabs xi-api-key…" aria-label="ElevenLabs API key" style="flex:1;">
+                <button id="saveElevenlabsKey" type="button">Save Key</button>
+              </div>
+              <div class="row">
+                <label style="flex:1;">Stability
+                  <input id="narratorStability" type="number" min="0" max="1" step="0.05" value="0.50">
+                </label>
+                <label style="flex:1;">Similarity
+                  <input id="narratorSimilarity" type="number" min="0" max="1" step="0.05" value="0.75">
+                </label>
+                <label style="flex:1;">Style
+                  <input id="narratorStyle" type="number" min="0" max="1" step="0.05" value="0.15">
+                </label>
+              </div>
+            </div>
+
+            <label>Vocal Tone Mastering (Locked Per Project)
+              <select id="narratorTone" aria-label="Vocal tone mastering preset">
+                <option value="natural" selected>Natural Clean (Balanced -16 LUFS)</option>
+                <option value="warm_podcast">Warm Podcast Mic (Rich Low-Mid + Smooth Highs)</option>
+                <option value="crisp_creator">Crisp Creator / TikTok Pop (Presence &amp; Punch)</option>
+                <option value="deep_cinema">Deep Cinema / Documentary (Chest Resonance)</option>
+              </select>
+            </label>
+
+            <div class="row">
+              <label style="flex:1;">Speak From
+                <select id="narratorTrack" aria-label="Narration source track">
+                  <option value="original" selected>Original Captions</option>
+                  <option value="translation">Translated Subtitles (AI Dubbing)</option>
+                  <option value="script">New Script (Create Captions + Voice)</option>
+                </select>
+              </label>
+              <label style="flex:1;">Timing Sync
+                <select id="narratorTimingMode" aria-label="Narration timing synchronization mode">
+                  <option value="sync_captions" selected>Sync Captions to Voice</option>
+                  <option value="fit_captions">Fit Voice to Captions</option>
+                </select>
+              </label>
+            </div>
+
+            <div id="narratorScriptWrap" hidden>
+              <label>Voiceover Script (one caption line per row)
+                <textarea id="narratorScript" rows="4" maxlength="25000" placeholder="Paste or type your script lines here…"></textarea>
+              </label>
+            </div>
+
+            <div class="row">
+              <label style="flex:1;">Voice Vol
+                <input id="narratorVolume" type="number" min="0.1" max="2.0" step="0.05" value="1.0">
+              </label>
+              <label style="flex:1;">Bg Audio Vol
+                <input id="narratorBgVolume" type="number" min="0.0" max="2.0" step="0.05" value="0.25">
+              </label>
+              <label style="flex:1;">Pause (s)
+                <input id="narratorLinePause" type="number" min="0.05" max="2.0" step="0.05" value="0.20">
+              </label>
+            </div>
+
+            <label><input id="narratorDucking" type="checkbox" checked> Dynamic Sidechain Ducking (dip background audio only while speaking)</label>
+
+            <div class="row" style="margin-top:4px;">
+              <button id="narrateProjectBtn" class="primary" type="button" style="flex:1;">🎙️ Generate Voiceover for All Captions</button>
+              <button id="restoreNarrationBtn" type="button" hidden title="Restore original pre-narration audio and caption timings">↶ Undo Narration</button>
+            </div>
+            <p id="narratorStatusNote" class="hint" role="status" style="margin:2px 0 0;"></p>
           </div>
 
           <div class="subCard stackForm style">
-            <h3>1. Voice Cleanup &amp; TikTok/CapCut Audio FX</h3>
+            <h3>2. Voice Cleanup &amp; TikTok/CapCut Audio FX</h3>
             <label><input id="noise_cancel" type="checkbox"> AI / FFT Noise Cancellation</label>
             <label><input id="voice_isolation" type="checkbox"> Voice Isolation &amp; Clarity Boost</label>
             <label>Audio Effect
@@ -501,7 +632,7 @@
           </div>
 
           <div class="subCard stackForm">
-            <h3>2. Song Trim, Volume &amp; Fades</h3>
+            <h3>3. Song Trim, Volume &amp; Fades</h3>
             <p id="compositionAssets" class="hint"></p>
             <label>Replace song<input id="compAudio" type="file" accept=".mp3,.wav,.m4a,.flac,.ogg,.mp4,.mov,.mkv,.webm"></label>
             <div class="row">
@@ -894,6 +1025,8 @@
             <div class="toolbar" style="margin:6px 0;">
               <button id="karaokeLine" type="button">🎤 Retry line karaoke</button>
               <button id="markReviewed" type="button">✓ Mark reviewed</button>
+              <button id="narrateLineBtn" type="button" title="Re-synthesize only this line using the project's locked voice and vocal tone">🔊 Regenerate Line Voice</button>
+              <button id="playLineVoiceBtn" type="button" title="Play the cached voiceover audio for this line">▶ Line Voice</button>
             </div>
             <details>
               <summary>Word-by-word karaoke timings</summary>

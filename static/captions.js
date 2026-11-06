@@ -1292,6 +1292,7 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         $('openStockBrowser').disabled=busy;
         $('restoreComposition').disabled=busy||!project?.composition_backup;
         $('recoverEdits').disabled=busy||!readDraft('captions');
+        if(typeof syncNarratorState==='function') syncNarratorState();
         if($('sequenceBar')) $('sequenceBar').hidden=!studio;
         syncSequenceFromProject(false);
         drawSequenceLists();
@@ -2610,6 +2611,268 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         setTimeout(()=>location.reload(),2500);
     });
     checkRestart();setInterval(checkRestart,30000);
+
+    // ------------------------------------------------------------------
+    // Studio AI Narrator & Voiceover Wiring
+    // ------------------------------------------------------------------
+    let narratorCatalog = null;
+    let narratorFilledPid = null;
+
+    function readNarratorForm() {
+        return {
+            engine: $('narratorEngine')?.value || 'edge',
+            language: $('narratorLanguage')?.value || 'en',
+            voice: $('narratorVoice')?.value || 'en-US-AvaMultilingualNeural',
+            tone: $('narratorTone')?.value || 'natural',
+            track: $('narratorTrack')?.value || 'original',
+            timing_mode: $('narratorTimingMode')?.value || 'sync_captions',
+            rate_pct: Number($('narratorRatePct')?.value || 0),
+            pitch_hz: Number($('narratorPitchHz')?.value || 0),
+            speed: Number($('narratorSpeed')?.value || 1.0),
+            blend_voice: $('narratorBlendVoice')?.value || '',
+            blend_ratio: Number($('narratorBlendRatio')?.value || 0),
+            stability: Number($('narratorStability')?.value ?? 0.50),
+            similarity_boost: Number($('narratorSimilarity')?.value ?? 0.75),
+            style: Number($('narratorStyle')?.value ?? 0.15),
+            narrator_volume: Number($('narratorVolume')?.value ?? 1.0),
+            background_volume: Number($('narratorBgVolume')?.value ?? 0.25),
+            line_pause: Number($('narratorLinePause')?.value ?? 0.20),
+            ducking: Boolean($('narratorDucking')?.checked ?? true),
+        };
+    }
+
+    function updateNarratorEngineVisibility() {
+        const eng = $('narratorEngine')?.value || 'edge';
+        if ($('narratorEdgeControls')) $('narratorEdgeControls').hidden = eng !== 'edge';
+        if ($('narratorKokoroControls')) $('narratorKokoroControls').hidden = eng !== 'kokoro';
+        if ($('narratorElevenControls')) $('narratorElevenControls').hidden = eng !== 'elevenlabs';
+        if ($('kokoroInstallBanner')) {
+            $('kokoroInstallBanner').hidden = Boolean(narratorCatalog?.kokoro?.installed);
+        }
+        if ($('narratorEngineBadge')) {
+            const labels = { edge: 'Microsoft Neural', kokoro: 'Kokoro Local AI', elevenlabs: 'ElevenLabs API' };
+            $('narratorEngineBadge').textContent = labels[eng] || 'Neural TTS';
+        }
+        if ($('narratorScriptWrap')) {
+            $('narratorScriptWrap').hidden = ($('narratorTrack')?.value || 'original') !== 'script';
+        }
+    }
+
+    function populateNarratorVoices(preferredVoice = '') {
+        if (!$('narratorVoice') || !narratorCatalog) return;
+        const eng = $('narratorEngine')?.value || 'edge';
+        const lang = ($('narratorLanguage')?.value || '').toLowerCase();
+        const prev = preferredVoice || $('narratorVoice').value;
+        let list = [];
+        if (eng === 'edge') {
+            const all = narratorCatalog.voices?.edge_all || narratorCatalog.voices?.edge || [];
+            list = lang ? all.filter(v => v.lang === lang) : all;
+            if (!list.length) list = all;
+        } else if (eng === 'kokoro') {
+            const all = narratorCatalog.voices?.kokoro_all || narratorCatalog.voices?.kokoro || [];
+            list = lang ? all.filter(v => v.lang === lang) : all;
+            if (!list.length) list = all;
+        } else {
+            list = narratorCatalog.voices?.elevenlabs || [];
+        }
+        $('narratorVoice').replaceChildren(
+            ...(list.length
+                ? list.map(v => new Option(`${v.name} (${v.accent || v.lang?.toUpperCase() || ''} · ${v.gender || ''}) — ${v.tag || ''}`, v.id))
+                : [new Option(eng === 'elevenlabs' ? 'Save your ElevenLabs API key below to load voices…' : 'No voices found', '')])
+        );
+        if (prev && [...$('narratorVoice').options].some(o => o.value === prev)) {
+            $('narratorVoice').value = prev;
+        }
+        if ($('narratorBlendVoice')) {
+            const kAll = narratorCatalog.voices?.kokoro_all || [];
+            const prevBlend = $('narratorBlendVoice').value;
+            $('narratorBlendVoice').replaceChildren(
+                new Option('None (Single Voice)', ''),
+                ...kAll.map(v => new Option(`${v.name} (${v.accent} ${v.gender})`, v.id))
+            );
+            if (prevBlend && [...$('narratorBlendVoice').options].some(o => o.value === prevBlend)) {
+                $('narratorBlendVoice').value = prevBlend;
+            }
+        }
+        updateNarratorEngineVisibility();
+    }
+
+    function fillNarratorForm(cfg) {
+        if (!cfg || !$('narratorEngine')) return;
+        if (cfg.engine) $('narratorEngine').value = cfg.engine;
+        if (cfg.language !== undefined && $('narratorLanguage')) $('narratorLanguage').value = cfg.language || '';
+        populateNarratorVoices(cfg.voice || '');
+        if (cfg.tone && $('narratorTone')) $('narratorTone').value = cfg.tone;
+        if (cfg.track && $('narratorTrack')) $('narratorTrack').value = cfg.track;
+        if (cfg.timing_mode && $('narratorTimingMode')) $('narratorTimingMode').value = cfg.timing_mode;
+        if (cfg.rate_pct !== undefined && $('narratorRatePct')) $('narratorRatePct').value = cfg.rate_pct;
+        if (cfg.pitch_hz !== undefined && $('narratorPitchHz')) $('narratorPitchHz').value = cfg.pitch_hz;
+        if (cfg.speed !== undefined && $('narratorSpeed')) $('narratorSpeed').value = cfg.speed;
+        if (cfg.blend_voice !== undefined && $('narratorBlendVoice')) $('narratorBlendVoice').value = cfg.blend_voice;
+        if (cfg.blend_ratio !== undefined && $('narratorBlendRatio')) $('narratorBlendRatio').value = cfg.blend_ratio;
+        if (cfg.stability !== undefined && $('narratorStability')) $('narratorStability').value = cfg.stability;
+        if (cfg.similarity_boost !== undefined && $('narratorSimilarity')) $('narratorSimilarity').value = cfg.similarity_boost;
+        if (cfg.style !== undefined && $('narratorStyle')) $('narratorStyle').value = cfg.style;
+        if (cfg.narrator_volume !== undefined && $('narratorVolume')) $('narratorVolume').value = cfg.narrator_volume;
+        if (cfg.background_volume !== undefined && $('narratorBgVolume')) $('narratorBgVolume').value = cfg.background_volume;
+        if (cfg.line_pause !== undefined && $('narratorLinePause')) $('narratorLinePause').value = cfg.line_pause;
+        if (cfg.ducking !== undefined && $('narratorDucking')) $('narratorDucking').checked = Boolean(cfg.ducking);
+        updateNarratorEngineVisibility();
+    }
+
+    function syncNarratorState() {
+        const hasBackup = Boolean(project?.narration_backup);
+        if ($('restoreNarrationBtn')) {
+            $('restoreNarrationBtn').hidden = !hasBackup;
+            $('restoreNarrationBtn').disabled = busy || !hasBackup;
+        }
+        if ($('narrateProjectBtn')) $('narrateProjectBtn').disabled = busy || !project;
+        if ($('narrateLineBtn')) $('narrateLineBtn').disabled = busy || !project || !current();
+        if ($('playLineVoiceBtn')) $('playLineVoiceBtn').disabled = busy || !project || !current();
+        if (project && project.id !== narratorFilledPid) {
+            narratorFilledPid = project.id;
+            if (project.narrator) fillNarratorForm(project.narrator);
+        }
+        if ($('narratorStatusNote') && project?.narrator) {
+            const n = project.narrator;
+            $('narratorStatusNote').textContent = `Active project voice: ${n.voice} (${n.engine} · ${n.tone} tone)${hasBackup ? ' · Pre-narration backup saved' : ''}`;
+        } else if ($('narratorStatusNote')) {
+            $('narratorStatusNote').textContent = '';
+        }
+    }
+
+    async function loadNarratorCatalog() {
+        try {
+            narratorCatalog = await api('/api/captions/narrator/voices');
+            populateNarratorVoices(project?.narrator?.voice || narratorCatalog.defaults?.voice || '');
+            if (project?.narrator) fillNarratorForm(project.narrator);
+        } catch (_) {}
+    }
+
+    if ($('narratorEngine')) $('narratorEngine').onchange = () => populateNarratorVoices();
+    if ($('narratorLanguage')) $('narratorLanguage').onchange = () => populateNarratorVoices();
+    if ($('narratorTrack')) $('narratorTrack').onchange = () => updateNarratorEngineVisibility();
+
+    if ($('previewNarratorVoice')) {
+        $('previewNarratorVoice').onclick = act(async () => {
+            const btn = $('previewNarratorVoice');
+            const orig = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Synthesizing sample…';
+            try {
+                const cfg = readNarratorForm();
+                const cueSample = current()?.text || '';
+                const res = await fetch('/api/captions/narrator/preview', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Media-Token': token },
+                    body: JSON.stringify({ settings: cfg, language: cfg.language, text: cueSample.slice(0, 220) }),
+                });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw Error(err.error || 'Could not synthesize voice sample.');
+                }
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const audioEl = $('narratorSampleAudio');
+                if (audioEl) {
+                    audioEl.src = url;
+                    await audioEl.play().catch(() => {});
+                }
+                say(`Playing sample for ${cfg.voice} (${cfg.tone} tone).`);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = orig;
+            }
+        });
+    }
+
+    if ($('installKokoroBtn')) {
+        $('installKokoroBtn').onclick = act(async () => {
+            const btn = $('installKokoroBtn');
+            btn.disabled = true;
+            btn.textContent = 'Downloading Kokoro-82M voice pack (~196 MB)…';
+            say('Installing local Kokoro-82M ONNX voice engine…');
+            try {
+                const res = await api('/api/captions/narrator/settings', 'POST', { action: 'install_kokoro' });
+                narratorCatalog = res.catalog || narratorCatalog;
+                populateNarratorVoices('af_heart');
+                say('Kokoro-82M local voice engine installed and ready for offline narration!');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '⬇️ Install Local Kokoro-82M Voice Pack';
+                updateNarratorEngineVisibility();
+            }
+        });
+    }
+
+    if ($('saveElevenlabsKey')) {
+        $('saveElevenlabsKey').onclick = act(async () => {
+            const key = ($('elevenlabsApiKey')?.value || '').trim();
+            narratorCatalog = await api('/api/captions/narrator/settings', 'POST', { elevenlabs_key: key });
+            if ($('elevenlabsApiKey')) $('elevenlabsApiKey').value = '';
+            populateNarratorVoices();
+            say(key ? 'ElevenLabs API key saved and voices loaded.' : 'ElevenLabs API key cleared.');
+        });
+    }
+
+    if ($('narrateProjectBtn')) {
+        $('narrateProjectBtn').onclick = act(async () => {
+            if (!project) throw Error('Open a project first.');
+            const cfg = readNarratorForm();
+            const script = ($('narratorScript')?.value || '').trim();
+            video.pause();
+            checkpoint();
+            await job('narrate', { settings: cfg, script });
+        });
+    }
+
+    if ($('restoreNarrationBtn')) {
+        $('restoreNarrationBtn').onclick = act(async () => {
+            if (!project?.narration_backup) return;
+            if (!confirm('Restore the project to its original pre-narration audio and caption timings?')) return;
+            await save();
+            checkpoint();
+            project = await api(`/api/captions/${project.id}/restore-narration`, 'POST', { revision: project.revision });
+            dirty = false;
+            refresh();
+            say('Restored original pre-narration audio and captions.');
+        });
+    }
+
+    if ($('narrateLineBtn')) {
+        $('narrateLineBtn').onclick = act(async () => {
+            if (!project) throw Error('Open a project first.');
+            const cue = current();
+            if (!cue) throw Error('Select a caption line first.');
+            const cfg = readNarratorForm();
+            video.pause();
+            checkpoint();
+            await job('narrate-line', { cue_id: cue.id, text: $('text')?.value || cue.text, settings: cfg });
+        });
+    }
+
+    if ($('playLineVoiceBtn')) {
+        $('playLineVoiceBtn').onclick = act(async () => {
+            if (!project) throw Error('Open a project first.');
+            const cue = current();
+            if (!cue) throw Error('Select a caption line first.');
+            const res = await fetch(`/api/captions/${project.id}/narrate-line/${encodeURIComponent(cue.id)}/audio?t=${Date.now()}`);
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw Error(err.error || 'No voiceover audio generated for this line yet. Click "🔊 Regenerate Line Voice" first.');
+            }
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const audioEl = $('narratorSampleAudio');
+            if (audioEl) {
+                audioEl.src = url;
+                await audioEl.play().catch(() => {});
+            }
+            say(`Playing isolated voiceover slice for line #${selected + 1}.`);
+        });
+    }
+
+    loadNarratorCatalog();
     setBusy(false);tick();
     (async()=>{
         await loadCustomFonts();
@@ -2628,6 +2891,8 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
         window.copilotContext = () => ({page: 'captions', project: project ? {
             id: project.id, name: project.name, duration: project.duration,
             style: {translation_language: project.style?.translation_language || 'en', font: project.style?.font},
+            narrator: project.narrator || readNarratorForm(),
+            has_narration_backup: Boolean(project.narration_backup),
             cues: project.cues.map(c => ({id: c.id, start: c.start, end: c.end, text: c.text, translations: c.translations || {}})),
         } : null});
         const setSelect = (id, value) => {
@@ -2668,6 +2933,39 @@ if(typeof module!=="undefined" && module.exports) module.exports=CaptionTiming;
                 if (!project) throw Error('Open a project first.');
                 $('export').click();
                 return 'Export started.';
+            },
+            narrate_project: async (args = {}) => {
+                if (!project) throw Error('Open a project first.');
+                const merged = { ...readNarratorForm(), ...(project.narrator || {}), ...args };
+                fillNarratorForm(merged);
+                switchDock('audio');
+                await job('narrate', { settings: merged, script: args.script || '' });
+                return 'Studio voiceover synthesis started — progress is shown in the editor.';
+            },
+            narrate_line: async ({ line, cue_id, text } = {}) => {
+                if (!project) throw Error('Open a project first.');
+                const idx = typeof line === 'number' && line >= 1 && line <= project.cues.length
+                    ? line - 1
+                    : project.cues.findIndex(c => c.id === cue_id);
+                if (idx < 0 || !project.cues[idx]) throw Error('That caption line does not exist.');
+                select(idx);
+                const cue = project.cues[idx];
+                const finalText = text ? String(text).trim() : cue.text;
+                if (finalText && finalText !== cue.text) {
+                    window.updateCueText(idx + 1, finalText);
+                }
+                const cfg = { ...readNarratorForm(), ...(project.narrator || {}) };
+                await job('narrate-line', { cue_id: cue.id, text: finalText, settings: cfg });
+                return `Regenerating voiceover for line #${idx + 1} with locked vocal tone.`;
+            },
+            restore_narration: async () => {
+                if (!project?.narration_backup) throw Error('No pre-narration backup is available for this project.');
+                await save();
+                checkpoint();
+                project = await api(`/api/captions/${project.id}/restore-narration`, 'POST', { revision: project.revision });
+                dirty = false;
+                refresh();
+                return 'Restored original pre-narration audio and caption timings.';
             },
         };
         window.applyPresetByName = (name) => {

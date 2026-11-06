@@ -30,6 +30,7 @@ import job_process as process
 from ai_core import asr, catalog as ai_catalog, hardware as ai_hardware, llm as ai_llm, translate as ai_translate
 from ai_core.errors import AIUnavailable, ConsentRequired, ModelMissing
 import creator_composition as composition_model
+import narrator
 
 DEFAULT_STYLE = dict(font='Arial', size=5, color='#ffffff', highlight='#ffdc55',
                      outline=2, position=85, background=False, karaoke=False,
@@ -251,8 +252,9 @@ def prune_renders(project, folder, keep_checks=3):
     dropped = set(checks[:-keep_checks] if keep_checks else checks)
     project['exports'] = [name for name in exports if name not in dropped]
     backup = project.get('composition_backup') or {}
+    narr_backup = project.get('narration_backup') or {}
     keep = {project.get('source'), project.get('preview'), project.get('last_render'),
-            backup.get('source'), backup.get('preview'), *project['exports']}
+            backup.get('source'), backup.get('preview'), narr_backup.get('source'), narr_backup.get('preview'), *project['exports']}
     removed = []
     for path in Path(folder).iterdir():
         if GENERATED_RENDER.fullmatch(path.name) and path.name not in keep and path.is_file():
@@ -1710,7 +1712,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
         d['peaks'] = [round(float(np.max(np.abs(c))),4) for c in np.array_split(values,min(4000,len(values))) if len(c)] if len(values) else []
 
     def composition_snapshot(d):
-        keys = ('studio','source','preview','duration','width','height','peaks','cues','style','timing','karaoke_backup','composition')
+        keys = ('studio','source','preview','duration','width','height','peaks','cues','style','timing','karaoke_backup','composition','narrator')
         return {key:copy.deepcopy(d[key]) for key in keys if key in d}
 
     def composition_work(pid, assets, settings, added):
@@ -1949,7 +1951,9 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                     source = composition_model.local_asset(old_folder,dict(file=name))
                     if source.is_file(): shutil.copy2(source,target/name)
                 d.update(name=(d['name']+' — copy')[:200],revision=0,exports=[],state='ready',status='Project duplicated')
-                for key in ('composition_backup','last_render'): d.pop(key,None)
+                for key in ('composition_backup','narration_backup','last_render'): d.pop(key,None)
+                for wav in old_folder.glob('narr_*.wav'):
+                    if wav.is_file(): shutil.copy2(wav, target / wav.name)
                 write(d)
             except Exception:
                 shutil.rmtree(target)
@@ -1975,6 +1979,8 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                 data['studio'] = composition_model.schema(data['studio']['assets'], data['studio']['settings'], data['style'])
             if 'storyboard' in incoming and isinstance(incoming['storyboard'], list):
                 data['storyboard'] = incoming['storyboard'][:60]
+            if isinstance(incoming.get('narrator'), dict):
+                data['narrator'] = narrator.validate_narrator_settings(incoming['narrator'])
             data['revision'] += 1
             data['timing'] = incoming.get('timing', 'edited')
             if data['timing'] not in {'manual', 'estimated', 'automatic', 'aligned', 'imported', 'edited'}:
@@ -3016,6 +3022,384 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             filename=safe_filename,
             url=f'/api/captions/fonts/file/{safe_filename}'
         )
+
+    # ------------------------------------------------------------------
+    # Studio AI Narrator & Voiceover Endpoints
+    # ------------------------------------------------------------------
+
+    def _finalize_narration_project(d, f, cues, cfg, placements, narration_backup):
+        """Assemble the voice bus, mix with pre-narration background audio, and update project preview/waveforms."""
+        voice_bus = f / 'narr_voice_bus.wav'
+        narrator.build_voice_bus_wav(placements, d['duration'], voice_bus, narrator_volume=cfg['narrator_volume'])
+        orig_source = (narration_backup or {}).get('source') or d['source']
+        bg_media = f / orig_source
+        master_wav = f / 'narration_master.wav'
+        narrator.mix_voice_with_background(
+            voice_bus,
+            bg_media if bg_media.is_file() else None,
+            d['duration'],
+            master_wav,
+            background_volume=cfg['background_volume'],
+            ducking=cfg['ducking'],
+            cwd=f,
+        )
+        token = uuid.uuid4().hex[:12]
+        output = f'composition_{token}.mp4'
+        preview = f'preview_{token}.mp4'
+        ffmpeg([
+            '-i', d['source'],
+            '-i', master_wav.name,
+            '-map', '0:v:0', '-map', '1:a:0',
+            '-c:v', 'copy',
+            '-c:a', 'aac', '-b:a', '256k',
+            '-t', f"{float(d['duration']):.3f}",
+            '-movflags', '+faststart',
+            output,
+        ], f)
+        preview_and_peaks(d, f, output, preview)
+        process.check_cancelled()
+        lyric_tracks.ensure_ids(cues, d['id'])
+        validated = validate_edit(dict(cues=cues, style=d['style']), d['duration'])
+        if d.get('studio'):
+            studio = copy.deepcopy(d['studio'])
+            studio['assets']['audio'] = dict(file=master_wav.name, kind='audio', duration=d['duration'])
+            if d.get('composition') and isinstance(d['composition'], dict):
+                for k, v in [('start', 0.0), ('end', d['duration']), ('offset', 0.0), ('volume', 1.0),
+                             ('fade_in', 0.0), ('fade_out', 0.0), ('background_volume', 0.0)]:
+                    studio['settings'][k] = v
+                    d['composition'][k] = v
+            d['studio'] = composition_model.schema(studio['assets'], studio['settings'], d['style'])
+        d.update(
+            cues=validated['cues'],
+            source=output,
+            preview=preview,
+            narrator=cfg,
+            narration_backup=narration_backup,
+            timing='aligned',
+        )
+        prune_renders(d, f)
+
+    @bp.get('/api/captions/narrator/voices')
+    def narrator_voices():
+        lang = str(request.args.get('language') or '').strip()
+        return jsonify(narrator.catalog_payload(root, Path(__file__).resolve().parent, language=lang))
+
+    @bp.post('/api/captions/narrator/settings')
+    def narrator_settings():
+        payload = request.get_json() or {}
+        if not isinstance(payload, dict):
+            raise ValueError('Invalid narrator settings request.')
+        action = str(payload.get('action') or '').strip()
+        if action == 'install_kokoro':
+            process.begin_job()
+            job_started()
+            try:
+                status = narrator.install_kokoro_local(Path(__file__).resolve().parent)
+                return jsonify(kokoro=status, catalog=narrator.catalog_payload(root, Path(__file__).resolve().parent))
+            finally:
+                process.end_job()
+                job_finished()
+        if 'elevenlabs_key' in payload:
+            narrator.save_narrator_key(root, str(payload.get('elevenlabs_key') or ''))
+        return jsonify(narrator.catalog_payload(root, Path(__file__).resolve().parent))
+
+    @bp.post('/api/captions/narrator/preview')
+    def narrator_preview():
+        payload = request.get_json() or {}
+        if not isinstance(payload, dict):
+            raise ValueError('Invalid narrator preview request.')
+        cfg = narrator.validate_narrator_settings(payload.get('settings') if isinstance(payload.get('settings'), dict) else payload)
+        lang_code = str(payload.get('language') or cfg.get('language') or 'en').split('-', 1)[0].lower()
+        sample_text = str(payload.get('text') or narrator.PREVIEW_SAMPLES.get(lang_code) or narrator.PREVIEW_SAMPLES['en']).strip()[:300]
+        keys = narrator.read_narrator_keys(root)
+        raw_bytes, raw_ext, _ = narrator.synthesize_line_raw(
+            sample_text,
+            cfg,
+            api_key=keys.get('elevenlabs', ''),
+            app_root=Path(__file__).resolve().parent,
+        )
+        with tempfile.TemporaryDirectory(prefix='.narr-prev-') as tmp:
+            tdir = Path(tmp)
+            out_wav = tdir / 'preview.wav'
+            narrator.master_line_audio(raw_bytes, raw_ext, out_wav, tone=cfg['tone'], atempo=1.0, cwd=tdir)
+            wav_data = out_wav.read_bytes()
+        return send_file(io.BytesIO(wav_data), mimetype='audio/wav', download_name='narrator_preview.wav')
+
+    @bp.post('/api/captions/<pid>/narrate')
+    def narrate_project_route(pid):
+        payload = request.get_json() or {}
+        if not isinstance(payload, dict):
+            raise ValueError('Invalid narration request.')
+        with lock:
+            data = read(pid)
+            if data['state'] == 'busy':
+                return jsonify(error='Wait for the current task to finish.'), 409
+            if 'revision' in payload and payload['revision'] != data['revision']:
+                return jsonify(error='Project changed. Reload before generating narration.'), 409
+            raw_settings = payload.get('settings') if isinstance(payload.get('settings'), dict) else payload
+            cfg = narrator.validate_narrator_settings({**(data.get('narrator') or {}), **raw_settings})
+            script_text = str(payload.get('script') or '').strip()
+            if cfg['track'] == 'script':
+                lines = lyric_lines(script_text)
+                if not lines:
+                    raise ValueError('Enter or paste at least one script line to narrate.')
+                if len(lines) > 500:
+                    raise ValueError('Script narration supports up to 500 lines per project.')
+            else:
+                if not data.get('cues'):
+                    raise ValueError('Add captions first, or switch "Speak From" to "New Script" to generate captions and voiceover together.')
+                if cfg['track'] == 'translation':
+                    tr_lang = data.get('style', {}).get('translation_language', 'en')
+                    has_any_tr = any(
+                        str((c.get('translations') or {}).get(tr_lang, {}).get('text') or '').strip()
+                        for c in data['cues']
+                    )
+                    if not has_any_tr:
+                        raise ValueError(f'Translate your captions to {tr_lang.upper()} first before narrating the translation track.')
+
+            def work(d, f):
+                keys = narrator.read_narrator_keys(root)
+                app_root = Path(__file__).resolve().parent
+                pre_snapshot = d.get('narration_backup') or composition_snapshot(read(pid))
+                duration = float(d['duration'])
+                if cfg['track'] == 'script':
+                    raw_lines = lyric_lines(script_text)
+                    working_cues = [
+                        dict(
+                            id=uuid.uuid5(uuid.NAMESPACE_URL, f"{d['id']}:script:{idx}:{txt}").hex,
+                            start=0.0,
+                            end=0.5,
+                            text=txt,
+                            words=[],
+                        )
+                        for idx, txt in enumerate(raw_lines)
+                    ]
+                else:
+                    working_cues = copy.deepcopy(d['cues'])
+                    lyric_tracks.ensure_ids(working_cues, d['id'])
+
+                tr_lang = d.get('style', {}).get('translation_language', 'en')
+                spoken_texts = []
+                for cue in working_cues:
+                    if cfg['track'] == 'translation':
+                        t_val = str((cue.get('translations') or {}).get(tr_lang, {}).get('text') or '').strip()
+                        spoken_texts.append(t_val or cue['text'])
+                    else:
+                        spoken_texts.append(cue['text'])
+
+                synthesized = []
+                line_wavs = []
+                natural_durs = []
+                total_lines = len(working_cues)
+                for idx, (cue, spk_text) in enumerate(zip(working_cues, spoken_texts)):
+                    process.check_cancelled()
+                    d['status'] = f'Synthesizing voiceover line {idx + 1}/{total_lines}…'
+                    write(d)
+                    prev_t = spoken_texts[idx - 1] if idx > 0 else ''
+                    next_t = spoken_texts[idx + 1] if idx + 1 < total_lines else ''
+                    raw_bytes, raw_ext, raw_words = narrator.synthesize_line_raw(
+                        spk_text,
+                        cfg,
+                        previous_text=prev_t,
+                        next_text=next_t,
+                        api_key=keys.get('elevenlabs', ''),
+                        app_root=app_root,
+                    )
+                    wav_path = f / f"narr_line_{cue['id']}.wav"
+                    nat_dur = narrator.master_line_audio(raw_bytes, raw_ext, wav_path, tone=cfg['tone'], atempo=1.0, cwd=f)
+                    synthesized.append((raw_bytes, raw_ext, raw_words))
+                    line_wavs.append(wav_path)
+                    natural_durs.append(nat_dur)
+
+                placements = []
+                if cfg['timing_mode'] == 'fit_captions' and cfg['track'] != 'script':
+                    for idx, cue in enumerate(working_cues):
+                        raw_bytes, raw_ext, raw_words = synthesized[idx]
+                        wav_path = line_wavs[idx]
+                        nat_dur = natural_durs[idx]
+                        slot = max(0.15, float(cue['end']) - float(cue['start']))
+                        next_bound = (float(working_cues[idx + 1]['start']) - 0.02) if idx + 1 < total_lines else duration
+                        max_span = max(0.1, next_bound - float(cue['start']))
+                        actual_dur = nat_dur
+                        if nat_dur > slot + 0.03:
+                            tempo = min(1.25, max(1.0, nat_dur / max(0.15, min(slot, max_span))))
+                            if tempo > 1.01:
+                                actual_dur = narrator.master_line_audio(raw_bytes, raw_ext, wav_path, tone=cfg['tone'], atempo=tempo, cwd=f)
+                        cue['end'] = round(min(next_bound, max(float(cue['end']), float(cue['start']) + min(actual_dur, max_span))), 3)
+                        if cue['end'] <= cue['start']:
+                            cue['end'] = round(min(duration, cue['start'] + 0.08), 3)
+                        cue['words'] = narrator.scale_word_timings_to_cue(raw_words, cue['text'], cue['start'], cue['end'])
+                        placements.append((cue['start'], wav_path))
+                else:
+                    # sync_captions mode (or script generation): align caption start/end & word timings to the spoken audio
+                    pause = float(cfg['line_pause'])
+                    total_spoken = sum(natural_durs)
+                    if total_spoken + 0.03 * total_lines > duration - 0.05:
+                        tempo = min(1.25, (total_spoken + 0.03 * total_lines) / max(0.4, duration - 0.08))
+                        if tempo > 1.01:
+                            for idx in range(total_lines):
+                                raw_bytes, raw_ext, _ = synthesized[idx]
+                                natural_durs[idx] = narrator.master_line_audio(raw_bytes, raw_ext, line_wavs[idx], tone=cfg['tone'], atempo=tempo, cwd=f)
+                            total_spoken = sum(natural_durs)
+                        pause = min(pause, max(0.02, (duration - 0.08 - total_spoken) / max(1, total_lines)))
+
+                    cursor = 0.12 if cfg['track'] == 'script' else max(0.0, min(float(working_cues[0]['start']), max(0.0, duration - total_spoken - 0.05)))
+                    raw_intervals = []
+                    for idx, cue in enumerate(working_cues):
+                        if cfg['track'] != 'script' and idx > 0:
+                            desired_start = max(cursor + 0.03, float(cue['start']))
+                            remaining_needed = sum(natural_durs[idx:]) + 0.03 * (total_lines - idx)
+                            start_t = min(desired_start, max(cursor + 0.02, duration - remaining_needed))
+                        else:
+                            start_t = cursor
+                        end_t = start_t + natural_durs[idx]
+                        raw_intervals.append([start_t, end_t])
+                        cursor = end_t + pause
+
+                    if raw_intervals and raw_intervals[-1][1] > duration:
+                        scale = (duration - 0.02) / max(0.1, raw_intervals[-1][1])
+                        prev_e = 0.0
+                        for item in raw_intervals:
+                            s_scaled = max(prev_e + (0.01 if prev_e > 0 else 0.0), round(item[0] * scale, 3))
+                            e_scaled = min(round(duration, 3), max(round(s_scaled + 0.05, 3), round(item[1] * scale, 3)))
+                            item[0], item[1] = s_scaled, e_scaled
+                            prev_e = e_scaled
+
+                    for idx, (cue, (s_t, e_t)) in enumerate(zip(working_cues, raw_intervals)):
+                        cue['start'] = round(max(0.0, s_t), 3)
+                        cue['end'] = round(min(duration, max(cue['start'] + 0.05, e_t)), 3)
+                        cue['words'] = narrator.scale_word_timings_to_cue(synthesized[idx][2], cue['text'], cue['start'], cue['end'])
+                        placements.append((cue['start'], line_wavs[idx]))
+
+                d['status'] = 'Mastering and mixing voiceover track…'
+                write(d)
+                _finalize_narration_project(d, f, working_cues, cfg, placements, pre_snapshot)
+                d['_completion_notice'] = f'Studio narration ready ({total_lines} lines).'
+
+            return launch(data, 'Synthesizing studio voiceover…', work)
+
+    @bp.post('/api/captions/<pid>/narrate-line')
+    def narrate_line_route(pid):
+        payload = request.get_json() or {}
+        if not isinstance(payload, dict):
+            raise ValueError('Invalid line narration request.')
+        cue_id = str(payload.get('cue_id') or '').strip()
+        if not cue_id:
+            raise ValueError('Select a caption line to regenerate.')
+        with lock:
+            data = read(pid)
+            if data['state'] == 'busy':
+                return jsonify(error='Wait for the current task to finish.'), 409
+            if 'revision' in payload and payload['revision'] != data['revision']:
+                return jsonify(error='Project changed. Reload before regenerating this line.'), 409
+            lyric_tracks.ensure_ids(data.get('cues', []), data['id'])
+            target_idx = next((i for i, c in enumerate(data.get('cues', [])) if c.get('id') == cue_id), None)
+            if target_idx is None:
+                raise ValueError('Could not find the selected caption line.')
+            raw_settings = payload.get('settings') if isinstance(payload.get('settings'), dict) else {}
+            cfg = narrator.validate_narrator_settings({**(data.get('narrator') or {}), **raw_settings})
+            new_text = str(payload.get('text') if payload.get('text') is not None else data['cues'][target_idx]['text']).strip()
+            if not new_text:
+                raise ValueError('Caption line text cannot be empty.')
+
+            def work(d, f):
+                keys = narrator.read_narrator_keys(root)
+                app_root = Path(__file__).resolve().parent
+                pre_snapshot = d.get('narration_backup') or composition_snapshot(read(pid))
+                cues = copy.deepcopy(d['cues'])
+                lyric_tracks.ensure_ids(cues, d['id'])
+                idx = next((i for i, c in enumerate(cues) if c.get('id') == cue_id), target_idx)
+                cue = cues[idx]
+                cue['text'] = new_text
+                tr_lang = d.get('style', {}).get('translation_language', 'en')
+                if cfg['track'] == 'translation':
+                    t_val = str((cue.get('translations') or {}).get(tr_lang, {}).get('text') or '').strip()
+                    spk_text = t_val or cue['text']
+                else:
+                    spk_text = cue['text']
+                prev_t = cues[idx - 1]['text'] if idx > 0 else ''
+                next_t = cues[idx + 1]['text'] if idx + 1 < len(cues) else ''
+                d['status'] = f'Regenerating voiceover for line #{idx + 1}…'
+                write(d)
+                raw_bytes, raw_ext, raw_words = narrator.synthesize_line_raw(
+                    spk_text,
+                    cfg,
+                    previous_text=prev_t,
+                    next_text=next_t,
+                    api_key=keys.get('elevenlabs', ''),
+                    app_root=app_root,
+                )
+                wav_path = f / f"narr_line_{cue['id']}.wav"
+                nat_dur = narrator.master_line_audio(raw_bytes, raw_ext, wav_path, tone=cfg['tone'], atempo=1.0, cwd=f)
+                duration = float(d['duration'])
+                next_bound = (float(cues[idx + 1]['start']) - 0.02) if idx + 1 < len(cues) else duration
+                max_span = max(0.08, next_bound - float(cue['start']))
+                slot = max(0.15, float(cue['end']) - float(cue['start']))
+                actual_dur = nat_dur
+                if cfg['timing_mode'] == 'fit_captions' and nat_dur > slot + 0.03:
+                    tempo = min(1.25, max(1.0, nat_dur / max(0.15, min(slot, max_span))))
+                    if tempo > 1.01:
+                        actual_dur = narrator.master_line_audio(raw_bytes, raw_ext, wav_path, tone=cfg['tone'], atempo=tempo, cwd=f)
+                    cue['end'] = round(min(next_bound, max(float(cue['end']), float(cue['start']) + min(actual_dur, max_span))), 3)
+                else:
+                    if actual_dur > max_span and actual_dur / max(0.15, max_span) <= 1.25:
+                        tempo = min(1.25, actual_dur / max(0.15, max_span))
+                        actual_dur = narrator.master_line_audio(raw_bytes, raw_ext, wav_path, tone=cfg['tone'], atempo=tempo, cwd=f)
+                    cue['end'] = round(min(next_bound, max(float(cue['start']) + 0.05, float(cue['start']) + min(actual_dur, max_span))), 3)
+                cue['words'] = narrator.scale_word_timings_to_cue(raw_words, cue['text'], cue['start'], cue['end'])
+
+                # Collect all line WAV placements (synthesizing any missing line WAVs if user hadn't narrated full project yet)
+                placements = []
+                for i, c in enumerate(cues):
+                    c_wav = f / f"narr_line_{c['id']}.wav"
+                    if not c_wav.is_file():
+                        r_b, r_ext, r_w = narrator.synthesize_line_raw(
+                            c['text'],
+                            cfg,
+                            api_key=keys.get('elevenlabs', ''),
+                            app_root=app_root,
+                        )
+                        narrator.master_line_audio(r_b, r_ext, c_wav, tone=cfg['tone'], atempo=1.0, cwd=f)
+                        if not c.get('words'):
+                            c['words'] = narrator.scale_word_timings_to_cue(r_w, c['text'], c['start'], c['end'])
+                    placements.append((c['start'], c_wav))
+
+                d['status'] = f'Re-mixing master audio track for line #{idx + 1}…'
+                write(d)
+                _finalize_narration_project(d, f, cues, cfg, placements, pre_snapshot)
+                d['_completion_notice'] = f'Regenerated voiceover for line #{idx + 1} with locked vocal tone.'
+
+            return launch(data, f'Regenerating line #{target_idx + 1} voiceover…', work)
+
+    @bp.get('/api/captions/<pid>/narrate-line/<cue_id>/audio')
+    def get_narrated_line_audio(pid, cue_id):
+        if not re.fullmatch(r'[a-zA-Z0-9_-]{8,80}', str(cue_id or '')):
+            return jsonify(error='Invalid caption identifier.'), 400
+        f = folder(pid)
+        wav_path = f / f'narr_line_{cue_id}.wav'
+        if not wav_path.is_file():
+            return jsonify(error='No generated voiceover audio for this line yet. Click Regenerate Line Voice first.'), 404
+        return send_file(wav_path, mimetype='audio/wav')
+
+    @bp.post('/api/captions/<pid>/restore-narration')
+    def restore_narration(pid):
+        incoming = request.get_json() or {}
+        with lock:
+            d = read(pid)
+            if d['state'] == 'busy' or ('revision' in incoming and incoming.get('revision') != d['revision']):
+                return jsonify(error='Reload the project before restoring pre-narration audio.'), 409
+            backup = d.get('narration_backup')
+            if not backup:
+                raise ValueError('No pre-narration backup is available for this project.')
+            f = folder(pid)
+            for key in ('studio', 'source', 'preview', 'duration', 'width', 'height', 'peaks', 'cues', 'style', 'timing', 'karaoke_backup', 'composition', 'narrator'):
+                d.pop(key, None)
+            d.update(copy.deepcopy(backup), state='ready', status='Original pre-narration audio and captions restored')
+            d.pop('narration_backup', None)
+            d['revision'] += 1
+            prune_renders(d, f)
+            write(d)
+            return jsonify(d)
 
     # A stopped process cannot resume its background thread after app restart.
     for path in root.glob('*/project.json'):
