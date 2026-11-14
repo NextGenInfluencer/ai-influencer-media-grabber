@@ -1,3 +1,21 @@
+# v5.3.0 — Agentic Media Command Center, Zero-AI Laptop Mode, Multi-Track MP3 Studio & Live Preview
+
+**In-app update available for v5.0.10–v5.0.15 users** (no core or AI Pack dependency changes). Users upgrading from v5.0.8 or earlier must run the full installer because v5.0.10 updated the GPU AI Pack dependency files. Your media, history, characters, caption projects, and credentials are preserved.
+
+### What's new in v5.3.0
+- **Obsidian Agentic Command Center & Zero-AI Laptop Mode:** Pinned command rail across Downloader, Media Tools, Metadata Cleaner, Gallery, History, Studio, and Settings, paired with a **Zero-AI / Laptop Mode** toggle so laptop and non-GPU users can run all core downloader, cropping, cleaner, and Creator Studio features with 0 MB VRAM and zero AI clutter.
+- **On-Demand GPU VRAM Guard:** Opening Copilot, checking status, or idling uses **0 MB GPU VRAM**. Ollama/Translator models load strictly on invocation and can be released anytime with 1 click (`Free All GPU VRAM`).
+- **Futuristic Short-Form Captions & Viral Reflow:** Added *Hormozi*, *Neon Cyber*, *Glass Pill*, and *Minimal Luxe* styles, *Bounce* kinetic entrance animation, *Mirror*/*Pulse* audio visualizers, one-click `Reflow 2–3w`, `Smooth Gaps`, and text-transform helpers.
+- **CapCut-Style Multi-Track MP3 Mixer + Live Browser Preview:** Stage an MP3 background track under your video or narration with volume balance, trim/offset/loop/fade controls, voice auto-ducking, instant in-browser stage sync & standalone **`▶ Audition MP3`**, and automatic **Baked Mix** anti-double-play protection.
+- **Proactive 0 MB VRAM Action Cards:** Contextual 1-click *Apply / Skip* action cards surface next steps (reflow fast cues, smooth micro-gaps, open audio mixer, prep 9:16 vertical crops, or trace media lineage) with zero model wakeups.
+- **Media Lineage Map & Split-Screen Tooling/AI Configurator:** Visual **🧬 Lineage Map** in Gallery (`Source URL → Raw Media → Derived Assets → Studio Exports`) and a 2-column Settings view combining auto-detected binary status tiles (`yt-dlp`, `gallery-dl`, `FFmpeg`, `Whisper`, `Ollama`, `ComfyUI`) with a live `pipeline.config.json` inspector.
+
+**Download & verify:**
+- **Installer:** `AI-Influencer-Media-Grabber-v5.3.0-Setup.exe` (`__INSTALLER_BYTES__` bytes, standard user installer — no Admin/UAC prompt required)
+- **SHA-256 (`SHA256SUMS-v5.3.0.txt`):** `__INSTALLER_SHA256__` (`Get-FileHash .\AI-Influencer-Media-Grabber-v5.3.0-Setup.exe -Algorithm SHA256`)
+- **Security Scans:** `__DEFENDER_SCAN__`. See [`SECURITY.md`](SECURITY.md) and `CHANGELOG.md` for details.
+
+## Previous release notes
 # v5.0.15 — Studio AI Narrator & Voiceover Studio, 1-Click AI Dubbing, and Copilot Voice Tools
 
 **In-app update available for v5.0.10–v5.0.14 users** (no core or AI Pack dependency changes). Users upgrading from v5.0.8 or earlier must run the full installer because v5.0.10 updated the GPU AI Pack dependency files. Your media, history, characters, caption projects, and credentials are preserved.

@@ -1,75 +1,61 @@
 /* AI Influencer Studio Copilot - Apple macOS Pro Design System */
 
 #copilotTrigger {
-  position: fixed;
-  bottom: 20px;
-  right: 24px;
-  z-index: 9990;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
-  background: rgba(22, 25, 38, 0.82);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 9999px;
-  color: #f1f5f9;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35), 0 0 16px rgba(168, 85, 247, 0.25);
-  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
-  user-select: none;
-}
-#copilotTrigger:hover {
-  transform: translateY(-2px) scale(1.02);
-  background: rgba(30, 34, 52, 0.92);
-  border-color: rgba(168, 85, 247, 0.45);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45), 0 0 20px rgba(168, 85, 247, 0.4);
-}
-#copilotTrigger .badge {
-  background: rgba(168, 85, 247, 0.25);
-  color: #c084fc;
-  font-size: 10px;
-  font-weight: 700;
-  padding: 2px 6px;
-  border-radius: 6px;
-  border: 1px solid rgba(168, 85, 247, 0.3);
+  display: none !important;
 }
 
-/* Slide-Over Drawer */
+/* Slide-Over Backdrop + Drawer */
+.copilotBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9994;
+  background: rgba(5, 7, 12, 0.42);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.25s ease, visibility 0.25s ease;
+}
+.copilotBackdrop.open {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
 #copilotDrawer {
   position: fixed;
   top: 0;
   right: 0;
   bottom: 0;
-  width: 410px;
-  max-width: 92vw;
+  width: 420px;
+  max-width: 94vw;
   z-index: 9995;
-  background: rgba(13, 15, 24, 0.92);
+  background: rgba(13, 15, 22, 0.96);
   backdrop-filter: blur(32px);
   -webkit-backdrop-filter: blur(32px);
-  border-left: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: -12px 0 36px rgba(0, 0, 0, 0.55);
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: none;
   display: flex;
   flex-direction: column;
   transform: translateX(100%);
-  transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+  visibility: hidden;
+  pointer-events: none;
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.28s ease;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
   color: #e2e8f0;
 }
 #copilotDrawer.open {
   transform: translateX(0);
+  visibility: visible;
+  pointer-events: auto;
+  box-shadow: -12px 0 36px rgba(0, 0, 0, 0.6);
 }
 
 /* Header */
 .copilotHeader {
-  padding: 14px 18px;
+  padding: 12px 14px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.02);
 }
@@ -77,6 +63,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+  flex: 1;
 }
 .copilotTitleGroup h3 {
   margin: 0;
@@ -84,6 +72,7 @@
   font-weight: 700;
   letter-spacing: -0.01em;
   color: #ffffff;
+  white-space: nowrap;
 }
 .copilotModelSelect {
   color-scheme: dark;
@@ -95,26 +84,128 @@
   border-radius: 8px;
   outline: none;
   cursor: pointer;
-  max-width: 170px;
+  min-width: 0;
+  flex: 1;
+  max-width: 155px;
 }
 .copilotModelSelect option {
   background-color: #161822 !important;
   color: #f1f5f9 !important;
   padding: 6px 10px;
 }
-.copilotCloseBtn {
-  background: transparent;
-  border: none;
-  color: #94a3b8;
-  font-size: 18px;
+.copilotHeaderActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.copilotUnloadBtn {
+  background: rgba(249, 115, 22, 0.16);
+  border: 1px solid rgba(249, 115, 22, 0.42);
+  color: #fdba74;
+  font-size: 11px;
+  font-weight: 600;
   cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 6px;
+  padding: 5px 9px;
+  border-radius: 8px;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+.copilotUnloadBtn:hover:not(:disabled) {
+  background: rgba(249, 115, 22, 0.28);
+  color: #ffffff;
+}
+.copilotUnloadBtn:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+.copilotCloseBtn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #e2e8f0;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 5px 9px;
+  border-radius: 8px;
+  white-space: nowrap;
   transition: all 0.15s ease;
 }
 .copilotCloseBtn:hover {
   color: #ffffff;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+/* Live VRAM Status Bar */
+.copilotVramBar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 14px;
+  font-size: 10.5px;
+  line-height: 1.3;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.copilotVramBar.idle {
+  background: rgba(16, 185, 129, 0.08);
+  color: #a7f3d0;
+}
+.copilotVramBar.loaded {
+  background: rgba(249, 115, 22, 0.12);
+  color: #fed7aa;
+}
+.copilotVramDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: #10b981;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.65);
+}
+.copilotVramBar.loaded .copilotVramDot {
+  background: #f97316;
+  box-shadow: 0 0 6px rgba(249, 115, 22, 0.75);
+}
+.copilotVramText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.copilotStopBtn {
+  background: rgba(239, 68, 68, 0.22);
+  border: 1px solid rgba(239, 68, 68, 0.48);
+  border-radius: 10px;
+  color: #fecaca;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 0 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+.copilotStopBtn:hover {
+  background: rgba(239, 68, 68, 0.36);
+  color: #ffffff;
+}
+.copilotStopBtn[hidden] {
+  display: none;
+}
+
+.copilot-proactive-zone {
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(9, 10, 15, 0.45);
+  max-height: 235px;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+.copilot-proactive-zone[hidden] {
+  display: none !important;
 }
 
 /* Messages List */

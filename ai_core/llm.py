@@ -172,6 +172,24 @@ def _normalize_tool_calls(raw):
     return calls
 
 
+def _same_ollama_tag(a, b):
+    """Compare Ollama model tags treating implicit ':latest' tags as equivalent."""
+    a_s, b_s = str(a or '').strip(), str(b or '').strip()
+    if not a_s or not b_s:
+        return False
+    return a_s == b_s or f'{a_s}:latest' == b_s or a_s == f'{b_s}:latest'
+
+
+def _evict_other_ollama_models(target_tag):
+    """Ensure switching between Ollama roles (e.g. Copilot <-> Translator) never leaves two models in VRAM."""
+    for other in engines.ollama.loaded_models():
+        if not _same_ollama_tag(other, target_tag):
+            try:
+                engines.ollama.unload(other)
+            except requests.RequestException:
+                pass
+
+
 def _ollama_chat(choice, messages, tools, schema, images, max_tokens, temperature, on_token):
     tag = choice['model']
     engines.ollama.ensure_running()
@@ -215,7 +233,11 @@ def _ollama_chat(choice, messages, tools, schema, images, max_tokens, temperatur
         tool_calls.extend(_normalize_tool_calls(message.get('tool_calls')))
         state['done'] = event.get('done') is True
 
-    with gpu.lease('ollama', choice.get('vram_gb') or 0):
+    lease_name = f'ollama:{tag}'
+    vram_gb = float(choice.get('vram_gb') or 4.0)
+    gpu.register_evictor(lease_name, lambda t=tag: engines.ollama.unload(t) if engines.ollama.running() else None)
+    with gpu.lease(lease_name, vram_gb):
+        _evict_other_ollama_models(tag)
         try:
             with requests.post(engines.ollama.base_url + '/api/chat', json=payload, stream=True,
                                timeout=(10, 180), allow_redirects=False) as response:

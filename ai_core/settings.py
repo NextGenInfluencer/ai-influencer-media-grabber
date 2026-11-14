@@ -18,6 +18,7 @@ DEFAULTS = {
     'accepted_licenses': [],
     'cloud': {provider: {'enabled': False} for provider in CLOUD_PROVIDERS},
     'idle_release_seconds': 300,
+    'hide_ai_ui': False,
     'notices': {notice: False for notice in NOTICES},
     'setup_seen': False,
 }
@@ -97,3 +98,7 @@ def idle_release_seconds():
         return max(10.0, float(load().get('idle_release_seconds', 300)))
     except (TypeError, ValueError):
         return 300.0
+
+
+def hide_ai_ui():
+    return load().get('hide_ai_ui') is True

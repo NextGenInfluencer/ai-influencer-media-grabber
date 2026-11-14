@@ -116,6 +116,61 @@ class PreviewExportParityTests(unittest.TestCase):
         keys = source[source.index('const compositionKeys='):source.index('let previousComposition')]
         self.assertNotIn('visualizer', keys)
 
+    def test_futuristic_styles_word_box_bounce_blur_and_visualizer_parity(self):
+        from captions import layout_rows, validate_edit, visualizer_bars
+        cue = dict(
+            start=0.0, end=2.0, text='Kinetic viral pill',
+            words=[
+                dict(start=0.0, end=0.6, text='Kinetic'),
+                dict(start=0.6, end=1.2, text='viral'),
+                dict(start=1.2, end=2.0, text='pill'),
+            ],
+        )
+        style = {
+            **DEFAULT_STYLE,
+            'outline_color': '#112233',
+            'shadow': 3,
+            'shadow_color': '#445566',
+            'background': True,
+            'background_color': '#abcdef',
+            'background_opacity': 50,
+            'word_box': True,
+            'word_pop': True,
+            'karaoke': True,
+            'animation': 'bounce',
+            'highlight': '#ffdc55',
+            'visualizer': True,
+            'visualizer_style': 'mirror',
+        }
+        checked = validate_edit(dict(cues=[cue], style=style), 5.0)
+        self.assertEqual(checked['style']['outline_color'], '#112233')
+        self.assertTrue(checked['style']['word_box'])
+        self.assertEqual(checked['style']['visualizer_style'], 'mirror')
+
+        # Ensure layout_rows word_boxes never mutates row['words'] dicts.
+        rows = layout_rows(cue, style, 1080, 1920)
+        self.assertTrue(rows and 'word_boxes' in rows[0])
+        self.assertEqual([set(w.keys()) for w in rows[0]['words']], [{'start', 'end', 'text'}] * 3)
+
+        bounce_ass = ass_text(dict(cues=[cue], width=1080, height=1920, duration=3.0, peaks=[0.2, 0.8, 0.5], style=style))
+        self.assertIn('332211', bounce_ass)
+        self.assertIn('665544', bounce_ass)
+        self.assertIn('EFCDAB', bounce_ass)
+        self.assertIn(r'\fscx112\fscy112', bounce_ass)
+        self.assertIn(r'\alpha&H18&\p1', bounce_ass)
+
+        blur_ass = ass_text(dict(cues=[cue], width=1080, height=1920, duration=3.0, style={**style, 'animation': 'blur_in', 'word_box': False}))
+        self.assertIn(r'\blur', blur_ass)
+
+        # Verify Python and Node visualizer_bars parity for mirror and pulse.
+        peaks = [0.1, 0.5, 0.9, 0.3, 0.7]
+        for vstyle, vpos in (('mirror', 'center'), ('pulse', 'bottom')):
+            st = {**DEFAULT_STYLE, 'visualizer_style': vstyle, 'visualizer_position': vpos, 'visualizer_height': 20, 'visualizer_sensitivity': 1.2}
+            py_bars = [list(r) for r in visualizer_bars(peaks, 4.0, 1.5, 640, 360, st)]
+            js_cmd = f"const {{visualizerBars}}=require('./static/captions.js');console.log(JSON.stringify(visualizerBars({json.dumps(peaks)},4,1.5,640,360,{json.dumps(st)})));"
+            js_res = subprocess.run(['node', '-e', js_cmd], cwd=ROOT, capture_output=True, text=True, check=True)
+            self.assertEqual(json.loads(js_res.stdout), py_bars, f'{vstyle} bars must match between Python and JS')
+
 
 class RenderingTests(unittest.TestCase):
     setUp = test_captions.CaptionWorkflowTests.setUp
@@ -273,6 +328,42 @@ class StoryboardBridgeTests(unittest.TestCase):
         self.assertTrue(after['source'].startswith('composition_'))
         self.assertTrue((folder / after['source']).is_file())
         self.assertTrue((stock / 'scene_1.mp4').is_file(), 'Library media is copied, never moved')
+
+    def test_multi_audio_composition_adds_music_track_without_replacing_primary_audio(self):
+        pid, data = self.karaoke_project()
+        orig_audio = data['studio']['assets']['audio']['file']
+        with tempfile.TemporaryDirectory() as td:
+            beat = Path(td) / 'beat.wav'
+            subprocess.run([
+                imageio_ffmpeg.get_ffmpeg_exe(), '-y', '-f', 'lavfi',
+                '-i', 'sine=frequency=520:duration=2', '-ar', '44100', str(beat)
+            ], capture_output=True, check=True)
+            settings = {**data['studio']['settings'], 'music_volume': 0.4, 'music_offset': 0.5, 'music_ducking': True}
+            resp = self.client.post(f'/api/captions/{pid}/composition', data={
+                'revision': str(data['revision']),
+                'settings': json.dumps(settings),
+                'music': (io.BytesIO(beat.read_bytes()), 'beat.wav'),
+                'clear_music': 'false',
+            }, content_type='multipart/form-data')
+            self.assertEqual(resp.status_code, 202, resp.data)
+            after = self.wait(pid)
+            self.assertEqual(after['state'], 'ready', after.get('status'))
+            self.assertEqual(after['studio']['assets']['audio']['file'], orig_audio)
+            self.assertIn('music', after['studio']['assets'])
+            self.assertEqual([c['asset'] for c in after['studio']['tracks'][1]['clips']], ['audio', 'music'])
+
+            # Clearing the added music track keeps primary audio intact
+            clear_resp = self.client.post(f'/api/captions/{pid}/composition', data={
+                'revision': str(after['revision']),
+                'settings': json.dumps(after['studio']['settings']),
+                'clear_music': 'true',
+            }, content_type='multipart/form-data')
+            self.assertEqual(clear_resp.status_code, 202, clear_resp.data)
+            cleared = self.wait(pid)
+            self.assertEqual(cleared['state'], 'ready', cleared.get('status'))
+            self.assertEqual(cleared['studio']['assets']['audio']['file'], orig_audio)
+            self.assertNotIn('music', cleared['studio']['assets'])
+            self.assertEqual([c['asset'] for c in cleared['studio']['tracks'][1]['clips']], ['audio'])
 
 
 if __name__ == '__main__':

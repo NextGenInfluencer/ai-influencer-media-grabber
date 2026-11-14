@@ -101,10 +101,19 @@ def rows(cue, style, width, height, font_path, resolve_runs=None, locate_font=No
     words=iter(cue.get('words',[]))
     for row in result:
         row['words']=[]
+        row['word_boxes']=[]
         if row['track']=='original':
-            for token in row['text'].split():
+            size_px=height*row['size']/100
+            spacing_px=height*row['letter_spacing']/100
+            anchor={'left':0,'center':0.5,'right':1}[row['alignment']]
+            row_left=row['x']-row['width']*anchor
+            for match in re.finditer(r'\S+',row['text']):
+                token=match.group(0)
                 word=next(words,None)
                 if word is not None:
                     if word['text']!=token: raise ValueError('Word timing text differs from layout text.')
                     row['words'].append(copy.deepcopy(word))
+                    word_w=measure(token,size_px,spacing_px)
+                    x_offset=(measure(row['text'][:match.end()],size_px,spacing_px)-word_w) if match.start()>0 else 0.0
+                    row['word_boxes'].append(dict(start=word['start'],end=word['end'],x=row_left+x_offset,width=word_w,text=word['text']))
     return result

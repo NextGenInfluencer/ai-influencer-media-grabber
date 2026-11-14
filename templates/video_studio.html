@@ -5,10 +5,12 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="media-token" content="{{ api_token }}">
 <title>AI Studio — Media Grabber</title>
-<link rel="stylesheet" href="/static/video_studio.css?v=5.0">
+<link rel="stylesheet" href="/static/video_studio.css?v=5.1.1">
 <link rel="stylesheet" href="/static/copilot.css?v=5.0">
 <link rel="stylesheet" href="/static/ai_setup.css?v=5.0">
+<link rel="stylesheet" href="/static/app_shell.css?v=5.1.1">
 <script src="/static/ai_setup.js?v=5.0" defer></script>
+<script src="/static/app_shell.js?v=5.1.1" defer></script>
 <script src="/static/video_studio.js?v=5.0" defer></script>
 <script src="/static/copilot.js?v=5.0" defer></script>
 <script src="/static/characters.js?v=5.0" defer></script>
@@ -17,7 +19,8 @@
 
 <header class="studioHeader">
   <div class="headerLeft">
-    <a href="/" class="backLink" aria-label="Back to Media Grabber">‹ Home</a>
+    <a href="/#downloader" class="header-home-btn" title="Back to Media Grabber">‹ Home</a>
+    <a href="/captions" class="header-home-btn" title="Open Captions Studio">Captions</a>
     <div>
       <h1>AI Studio</h1>
       <p class="subtitle">Storyboard, keyframes, motion and performance — generated on this PC or with your own cloud key.</p>
@@ -29,14 +32,21 @@
     <button class="tab" role="tab" data-tab="faceswap" aria-selected="false">Face Swap Video</button>
   </nav>
   <div class="headerRight">
+    <div class="vram-guard-mount" data-ai-ui></div>
     <span id="profileChip" class="chip" title="Hardware profile detected by AI Setup">Profile…</span>
     <span id="engineChip" class="chip" title="Creative engine (ComfyUI) status">Engine…</span>
     <button id="activePersonaBtn" class="chip button" type="button" title="Choose or edit the creator persona">
       Persona: <strong id="activePersonaName">—</strong>
     </button>
+    <button type="button" class="shell-copilot-btn" data-ai-ui onclick="window.copilot&&window.copilot.toggle()" title="Open AI Copilot (Ctrl+K)">✨ Copilot</button>
     <button id="setupAiBtn" class="primary small" type="button">Set up AI</button>
   </div>
 </header>
+
+<div data-only-hide-ai style="margin:12px 20px 0;padding:12px 16px;border-radius:12px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:12.5px;color:#d1fae5;">
+  <span><strong>Laptop / Zero-AI Mode is active.</strong> Re-enable AI UI if you want to generate storyboards, keyframes, or face swaps on demand.</span>
+  <button type="button" class="primary small" onclick="window.setZeroAIMode(false)">Enable AI Features</button>
+</div>
 
 <main>
   <!-- Storyboard -->

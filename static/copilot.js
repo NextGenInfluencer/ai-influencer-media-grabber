@@ -20,7 +20,7 @@
   };
   const NAV = {
     captions: '/captions', video_studio: '/video-studio', ai_setup: '/#ai-setup', downloader: '/#downloader',
-    converter: '/#converter', cleaner: '/#cleaner', gallery: '/#gallery', history: '/#history',
+    converter: '/#converter', cleaner: '/#cleaner', gallery: '/#gallery', history: '/#history', settings: '/#settings',
   };
   const state = { open: false, busy: false, model: '', helper: null, messages: [], controller: null };
 
@@ -48,42 +48,185 @@
 
   // ------------------------------------------------------------------ drawer
 
+  function formatResidentModels(data) {
+    const gpuMap = data?.gpu || {};
+    const names = [];
+    for (const [name, info] of Object.entries(gpuMap)) {
+      const label = name.startsWith('ollama:') ? name.slice('ollama:'.length) : name;
+      const gb = Number(info?.vram_gb || 0);
+      names.push(gb > 0 ? `${label} (${gb.toFixed(1)} GB)` : label);
+    }
+    for (const model of Array.isArray(data?.ollama_loaded) ? data.ollama_loaded : []) {
+      if (!names.some((n) => n === model || n.startsWith(`${model} (`))) names.push(model);
+    }
+    return names;
+  }
+
+  function updateVramBar(itemsOrNames, overrideText = '') {
+    const bar = document.getElementById('copilotVramBar');
+    if (!bar) return;
+    if (overrideText) {
+      bar.className = 'copilotVramBar idle';
+      bar.replaceChildren(el('span', { class: 'copilotVramDot' }), el('span', { class: 'copilotVramText', text: overrideText }));
+      return;
+    }
+    const labels = (itemsOrNames || []).map((item) => (typeof item === 'string' ? item : item.label || item.displayName || item.name)).filter(Boolean);
+    if (labels.length) {
+      bar.className = 'copilotVramBar loaded';
+      bar.replaceChildren(
+        el('span', { class: 'copilotVramDot' }),
+        el('span', { class: 'copilotVramText', text: `Loaded in VRAM: ${labels.join(', ')} · Auto-swaps with Translator` })
+      );
+    } else {
+      bar.className = 'copilotVramBar idle';
+      bar.replaceChildren(
+        el('span', { class: 'copilotVramDot' }),
+        el('span', { class: 'copilotVramText', text: 'Standby · 0 MB VRAM — Loads only when you send a prompt' })
+      );
+    }
+  }
+
+  async function refreshCopilotVram() {
+    if (document.documentElement.dataset.hideAi === 'true') return;
+    try {
+      const response = await fetch('/api/ai/engines', { headers: headers(false) });
+      if (!response.ok) return;
+      const data = await response.json();
+      updateVramBar(formatResidentModels(data));
+    } catch {
+      /* ignore transient fetch failure */
+    }
+  }
+
+  function stopStream() {
+    if (state.busy && state.controller) {
+      state.controller.abort();
+    }
+  }
+
+  function setBusyUi(busy) {
+    state.busy = busy;
+    const sendBtn = document.getElementById('copilotSendBtn');
+    const stopBtn = document.getElementById('copilotStopBtn');
+    if (sendBtn) sendBtn.disabled = busy;
+    if (stopBtn) stopBtn.hidden = !busy;
+  }
+
+  async function unloadAndFreeVram() {
+    const btn = document.getElementById('copilotUnloadBtn');
+    stopStream();
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Freeing…';
+    }
+    try {
+      let result = null;
+      if (typeof window.releaseGpuVram === 'function') {
+        result = await window.releaseGpuVram();
+      } else {
+        const res = await fetch('/api/ai/gpu/release', { method: 'POST', headers: headers() });
+        result = await res.json().catch(() => null);
+      }
+      if (result) updateVramBar(formatResidentModels(result));
+      else await refreshCopilotVram();
+      if (result?.freed !== false) {
+        updateVramBar([], 'GPU VRAM Freed (0 MB active) — Standby');
+      }
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = '⚡ Unload AI';
+      }
+    }
+  }
+
+  function refreshProactiveCards() {
+    const mount = document.getElementById('copilotProactiveCards');
+    if (!mount || typeof window.ActionCards === 'undefined') return;
+    const provider = window.copilotProactiveProvider;
+    const info = typeof provider === 'function' ? provider() : null;
+    if (!info || !Array.isArray(info.cards) || !info.cards.length) {
+      mount.replaceChildren();
+      mount.hidden = true;
+      return;
+    }
+    window.ActionCards.renderStrip(
+      mount,
+      info.scope || PAGE,
+      info.cards,
+      async (action, payload) => {
+        if (typeof info.onApply === 'function') {
+          const msg = await info.onApply(action, payload);
+          const status = document.getElementById('copilotStatus');
+          if (status && typeof msg === 'string' && msg) {
+            status.replaceChildren(el('p', { class: 'copilotProposalStatus', text: `✓ ${msg}` }));
+          }
+          refreshProactiveCards();
+        }
+      },
+      { headerLabel: '⚡ Smart Recommendations', maxCards: 3 }
+    );
+  }
+
   function createDrawer() {
     if (document.getElementById('copilotDrawer')) return;
-    const trigger = el('button', { id: 'copilotTrigger', type: 'button', 'aria-label': 'Open AI Copilot (Ctrl+K)' },
-      el('span', { text: '✨ AI Copilot' }), el('span', { class: 'badge', text: 'Ctrl+K' }));
+    const backdrop = el('div', { id: 'copilotBackdrop', class: 'copilotBackdrop', 'aria-hidden': 'true' });
     const drawer = el('aside', { id: 'copilotDrawer', 'aria-label': 'AI Copilot' },
       el('div', { class: 'copilotHeader' },
         el('div', { class: 'copilotTitleGroup' }, el('h3', { text: 'Copilot' }),
           el('select', { id: 'copilotModelSelect', class: 'copilotModelSelect', 'aria-label': 'Helper model' })),
-        el('button', { id: 'copilotCloseBtn', class: 'copilotCloseBtn', type: 'button', 'aria-label': 'Close Copilot', text: '✕' })),
+        el('div', { class: 'copilotHeaderActions' },
+          el('button', { id: 'copilotUnloadBtn', class: 'copilotUnloadBtn', type: 'button', title: 'Stop generation and unload AI models from GPU VRAM', text: '⚡ Unload AI' }),
+          el('button', { id: 'copilotCloseBtn', class: 'copilotCloseBtn', type: 'button', 'aria-label': 'Close Copilot', text: '✕ Close' }))),
+      el('div', { id: 'copilotVramBar', class: 'copilotVramBar idle' }),
       el('div', { id: 'copilotStatus', class: 'copilotStatus' }),
+      el('div', { id: 'copilotProactiveCards', class: 'copilot-proactive-zone', hidden: true }),
       el('div', { id: 'copilotMessages', class: 'copilotMessages', 'aria-live': 'polite' }),
       el('div', { class: 'copilotChips' }, ...(CHIPS[PAGE] || []).map(([label, prompt]) =>
         el('button', { type: 'button', class: 'copilotChip', text: label, onclick: () => submit(prompt) })),
       el('button', { type: 'button', class: 'copilotChip', text: 'What can you do?', onclick: () => submit('What can you do on this PC?') })),
       el('form', { id: 'copilotForm', class: 'copilotInputArea' },
         el('textarea', { id: 'copilotInput', rows: '1', placeholder: 'Ask or give a command…', 'aria-label': 'Message the Copilot' }),
+        el('button', { id: 'copilotStopBtn', class: 'copilotStopBtn', type: 'button', hidden: true, title: 'Stop generating response', text: '⏹ Stop' }),
         el('button', { id: 'copilotSendBtn', class: 'copilotSendBtn', type: 'submit', 'aria-label': 'Send', text: '↑' })));
-    document.body.append(trigger, drawer);
-    trigger.onclick = toggle;
+    document.body.append(backdrop, drawer);
+    backdrop.onclick = close;
     document.getElementById('copilotCloseBtn').onclick = close;
+    document.getElementById('copilotUnloadBtn').onclick = unloadAndFreeVram;
+    document.getElementById('copilotStopBtn').onclick = stopStream;
     document.getElementById('copilotForm').onsubmit = (event) => { event.preventDefault(); submit(); };
     document.getElementById('copilotInput').onkeydown = (event) => {
       if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); submit(); }
     };
-    window.addEventListener('keydown', (event) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); toggle(); }
-      else if (event.key === 'Escape' && state.open) close();
+    window.addEventListener('vram-updated', (event) => {
+      if (state.open) {
+        updateVramBar(event.detail?.items || []);
+        refreshProactiveCards();
+      }
     });
+    window.addEventListener('zero-ai-changed', () => { if (state.open) refreshProactiveCards(); });
+    window.addEventListener('grabber:download-complete', () => { if (state.open) refreshProactiveCards(); });
+    window.addEventListener('keydown', (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        if (document.documentElement.dataset.hideAi === 'true') return;
+        event.preventDefault();
+        toggle();
+      } else if (event.key === 'Escape' && state.open) {
+        close();
+      }
+    });
+    updateVramBar([]);
     render();
   }
 
   function toggle() {
     state.open = !state.open;
     document.getElementById('copilotDrawer')?.classList.toggle('open', state.open);
+    document.getElementById('copilotBackdrop')?.classList.toggle('open', state.open);
     if (state.open) {
+      refreshProactiveCards();
       loadModels();
+      refreshCopilotVram();
       setTimeout(() => document.getElementById('copilotInput')?.focus(), 150);
     }
   }
@@ -91,6 +234,7 @@
   function close() {
     state.open = false;
     document.getElementById('copilotDrawer')?.classList.remove('open');
+    document.getElementById('copilotBackdrop')?.classList.remove('open');
   }
 
   async function loadModels() {
@@ -265,8 +409,7 @@
     state.messages.push({ role: 'user', content });
     const reply = { role: 'assistant', content: '', tools: [], proposals: [] };
     state.messages.push(reply);
-    state.busy = true;
-    document.getElementById('copilotSendBtn').disabled = true;
+    setBusyUi(true);
     render();
     const history = state.messages.filter((m) => m !== reply && (m.role === 'user' || (m.role === 'assistant' && m.content)))
       .map((m) => ({ role: m.role, content: m.content }));
@@ -290,14 +433,17 @@
         render();
       }
     } catch (error) {
-      if (error.name !== 'AbortError') {
+      if (error.name === 'AbortError') {
+        if (!reply.content) reply.content = 'Generation stopped.';
+      } else {
         reply.error = error.message;  // shown verbatim; never replaced by canned text
         reply.setup_hint = error.setup_hint;
       }
     } finally {
-      state.busy = false;
-      document.getElementById('copilotSendBtn').disabled = false;
+      state.controller = null;
+      setBusyUi(false);
       render();
+      setTimeout(() => { window.refreshVramGuard?.(); refreshCopilotVram(); }, 600);
     }
   }
 
@@ -324,7 +470,12 @@
     }
   }
 
-  window.copilot = { open: () => { if (!state.open) toggle(); }, ask: submit };
+  window.copilot = {
+    open: () => { if (document.documentElement.dataset.hideAi === 'true') return; if (!state.open) toggle(); },
+    close,
+    toggle: () => { if (document.documentElement.dataset.hideAi === 'true') return; toggle(); },
+    ask: submit,
+  };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', createDrawer);
   else createDrawer();
 })();

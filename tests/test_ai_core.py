@@ -904,6 +904,34 @@ class EngineTests(IsolatedAIMixin, unittest.TestCase):
                     'mediapipe', 'pytorch-lightning', 'accelerate'):
             self.assertIn(pkg, notices, pkg)
 
+    def test_ollama_chat_evicts_other_ollama_models_before_running(self):
+        from ai_core import llm
+        unloaded = []
+        leases = []
+        real_lease = llm.gpu.lease
+
+        def fake_lease(holder, vram_gb=0.0):
+            leases.append((holder, vram_gb))
+            return real_lease(holder, vram_gb)
+
+        loaded = ['translategemma:4b']
+        with patch.object(llm.engines.ollama, 'ensure_running'), \
+                patch.object(llm, 'require_local_ollama_model'), \
+                patch.object(llm.engines.ollama, 'loaded_models', side_effect=lambda: list(loaded)), \
+                patch.object(llm.engines.ollama, 'unload', side_effect=lambda name: unloaded.append(name)), \
+                patch.object(llm.gpu, 'lease', side_effect=fake_lease), \
+                patch.object(llm.requests, 'post', return_value=response([b'{"message":{"content":"ok"},"done":true}\n'])) as post_mock:
+            text, tool_calls = llm._ollama_chat(
+                {'model': 'qwen3:8b', 'vram_gb': 5.0},
+                [{'role': 'user', 'content': 'hi'}],
+                None, None, None, 32, 0.2, None,
+            )
+        self.assertEqual(text, 'ok')
+        self.assertEqual(tool_calls, [])
+        self.assertEqual(unloaded, ['translategemma:4b'])
+        self.assertEqual(leases[0][0], 'ollama:qwen3:8b')
+        self.assertTrue(post_mock.called)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -34,7 +34,7 @@ const element=id=>{if(!nodes.has(id))nodes.set(id,new Element());return nodes.ge
 let animation;
 const requests=[];
 const project={id:'test',revision:0,duration:185.5,width:1080,height:1920,state:'ready',status:'Ready',timing:'imported',peaks:[],exports:[],style:{font:'Verdana',size:5,color:'#ffffff',highlight:'#ffdc55',outline:2,position:65,background:false,karaoke:true},cues:[{start:30.52,end:32.53,text:'Feeling getting so much warmer',words:[]}]};
-const ctx={document:{getElementById:element,querySelector:()=>({content:'test'}),querySelectorAll:()=>[],createElement:()=>new Element(),addEventListener(){}},window:{innerWidth:1200,addEventListener(){}},requestAnimationFrame:fn=>{animation=fn;},setTimeout:()=>1,clearTimeout(){},setInterval(){},FormData:class{},Option:class{},fetch:async(url,options)=>{requests.push({url,options});return {ok:true,json:async()=>url==='/api/captions'&&options?.method!=='POST'?[]:url==='/api/gallery'?[]:options?.method==='PUT'?{revision:1}:structuredClone(project)};},console};
+const ctx={document:{documentElement:{dataset:{}},getElementById:element,querySelector:()=>({content:'test'}),querySelectorAll:()=>[],createElement:()=>new Element(),addEventListener(){}},window:{innerWidth:1200,addEventListener(){}},Event:class{constructor(t){this.type=t;}},requestAnimationFrame:fn=>{animation=fn;},setTimeout:()=>1,clearTimeout(){},setInterval(){},FormData:class{},Option:class{},fetch:async(url,options)=>{requests.push({url,options});return {ok:true,json:async()=>url==='/api/captions'&&options?.method!=='POST'?[]:url==='/api/gallery'?[]:url==='/api/captions/translation-models'?{models:[],auto:{available:false}}:options?.method==='PUT'?{revision:1}:structuredClone(project)};},console};
 vm.createContext(ctx);vm.runInContext(fs.readFileSync(require.resolve('../static/captions.js'),'utf8'),ctx);
 (async()=>{
     await new Promise(resolve=>setImmediate(resolve));
@@ -56,6 +56,12 @@ vm.createContext(ctx);vm.runInContext(fs.readFileSync(require.resolve('../static
     assert.equal(cum[1].style.color,'#ffdc55');
     assert.equal(cum[1].style.transform,'scale(1.15)');
     assert.equal(cum[0].style.transform,undefined);
+    element('word_box').checked=true;element('word_box').onchange();
+    animation();
+    const wb=element('caption').children[0].children.filter(x=>typeof x==='object');
+    assert.equal(wb[1].style.backgroundColor,'#ffdc55');
+    assert.equal(wb[1].style.color,'#090a0f');
+    element('word_box').checked=false;element('word_box').onchange();
     const firstEnd=element('words').children[0].children[2];
     const shortened=Number(firstEnd.value)-.05;
     firstEnd.value=String(shortened);firstEnd.onchange();
@@ -138,10 +144,14 @@ vm.createContext(ctx);vm.runInContext(fs.readFileSync(require.resolve('../static
     assert.equal(element('lyrics').value,'','Switching to project without lyrics draft must clear lyrics box');
     project.id='new-project';element('projects').value='new-project';await element('projects').onchange();
     assert.match(element('activeStickerNotice').textContent,/Sticker removed/,'Returning to project restores pending sticker state');
-    console.log('Composition success/failure draft lifecycle passed.');
+    assert.equal(requests.some(x=>x.url==='/api/captions/translation-models'),false,'Translation models must load lazily, not eagerly on open');
+    element('openTranslatorBtn').onclick();
+    await new Promise(resolve=>setImmediate(resolve));
+    assert.equal(requests.some(x=>x.url==='/api/captions/translation-models'),true,'Opening AI Translator loads models on demand');
+    console.log('Composition success/failure draft lifecycle and lazy translation check passed.');
 })().catch(e=>{console.error(e);process.exitCode=1;});
 
-const {splitSequence}=require('../static/captions.js');
+const {splitSequence, chunkCues, transformCuesText, closeGapsAndFixOverlaps, entranceScale}=require('../static/captions.js');
 const split=splitSequence([{asset:'background',duration:2,speed:2,source_start:1}],6,3,true);
 assert.equal(split.length,4);assert.equal(split[1].duration,1);assert.equal(split[2].source_start,3);
 assert.equal(split.reduce((n,c)=>n+c.duration,0),6);
@@ -154,3 +164,96 @@ assert.equal(phraseParts[0].end,2.3);assert.equal(phraseParts[0].words.length,2)
 assert.equal(phraseParts[1].translations.en.status,'stale');assert.equal(originalCue.translations.en.status,'approved');
 const mergedPhrase=require('../static/captions.js').mergeCaptions(...phraseParts);
 assert.equal(mergedPhrase.words.length,3);assert.equal(mergedPhrase.translations.en.status,'stale');
+
+// Step 5: Futuristic style, visualizer, bounce curve, and viral caption helper checks.
+assert.equal(visualizerBars([0.2,0.8,0.5],10,5,640,360,{visualizer_style:'mirror',visualizer_position:'center'}).length,80);
+assert.equal(visualizerBars([0.2,0.8,0.5],10,5,640,360,{visualizer_style:'pulse',visualizer_position:'bottom'}).length,32);
+assert.ok(Math.abs(entranceScale('bounce',0)-0.65)<1e-6);
+assert.ok(Math.abs(entranceScale('bounce',0.28*0.6)-1.12)<1e-6);
+assert.ok(Math.abs(entranceScale('bounce',0.28)-1.0)<1e-6);
+
+const longCue={id:'chunk_src_1',start:0,end:5,text:'One, two three four five.',words:[{text:'One,',start:0,end:0.8},{text:'two',start:0.9,end:1.8},{text:'three',start:1.9,end:2.8},{text:'four',start:2.9,end:3.8},{text:'five.',start:3.9,end:4.9}],translations:{en:{text:'One',source:'x',status:'approved',locked:false}}};
+const chunked=chunkCues([longCue],3,(c,idx)=>`${c.id}_part_${idx}`);
+assert.equal(chunked.length,2);
+assert.equal(chunked[0].text,'One, two three');
+assert.equal(chunked[1].text,'four five.');
+assert.equal(chunked[0].id,'chunk_src_1');
+assert.equal(chunked[1].id,'chunk_src_1_part_1');
+assert.equal(chunked[0].words.length,3);
+assert.equal(chunked[1].translations.en.status,'stale');
+assert.doesNotThrow(()=>validate(chunked,10));
+
+const stripped=transformCuesText([longCue],'strip_punct');
+assert.equal(stripped[0].text,'One two three four five');
+assert.equal(stripped[0].words[0].text,'One');
+assert.equal(stripped[0].words[4].text,'five');
+assert.equal(transformCuesText([{start:0,end:1,text:'hello world',words:[]} ],'upper')[0].text,'HELLO WORLD');
+assert.equal(transformCuesText([{start:0,end:1,text:'HELLO WORLD',words:[]} ],'title')[0].text,'Hello World');
+assert.equal(transformCuesText([{start:0,end:1,text:'HELLO',words:[]} ],'lower')[0].text,'hello');
+
+const smoothed=closeGapsAndFixOverlaps([{id:'c1',start:0,end:1.0,text:'A',words:[]},{id:'c2',start:1.2,end:2.5,text:'B',words:[]},{id:'c3',start:2.3,end:3.6,text:'C',words:[]}],5,0.35);
+assert.equal(smoothed[0].end,1.2,'Micro-gap <= 0.35s is closed');
+assert.ok(smoothed[1].end<=smoothed[2].start,'Overlap between cues is resolved');
+assert.doesNotThrow(()=>validate(smoothed,5));
+console.log('Viral caption helpers and visualizer regression checks passed.');
+
+const {computeLiveMusicState}=require('../static/captions.js');
+const musicCfg={mainVol:1.0,musicVol:0.8,start:1.0,offset:2.0,duration:10.0,fadeIn:2.0,fadeOut:2.0,loop:true,ducking:true};
+const beforeOffset=computeLiveMusicState(1.2,12,musicCfg,[]);
+assert.equal(beforeOffset.active,false);
+assert.equal(beforeOffset.musicVolume,0);
+assert.equal(beforeOffset.videoVolume,1);
+
+const midFadeIn=computeLiveMusicState(3.0,12,musicCfg,[]);
+assert.equal(midFadeIn.active,true);
+assert.equal(midFadeIn.targetTime,2.0);
+assert.ok(Math.abs(midFadeIn.musicVolume-0.4)<1e-6,'Fade-in envelope scales musicVolume at rel=1s');
+
+const loopWrap=computeLiveMusicState(16.0,5,{mainVol:1,musicVol:0.5,start:1,offset:0,loop:true},[]);
+assert.equal(loopWrap.active,true);
+assert.equal(loopWrap.targetTime,1.0,'Loop wraps cleanly inside avail segment [start..mp3Dur]');
+
+const duckedState=computeLiveMusicState(6.0,20,musicCfg,[{start:5.5,end:6.5,text:'Speak'}]);
+assert.equal(duckedState.ducked,true);
+assert.ok(Math.abs(duckedState.musicVolume-0.8*0.35)<1e-6,'Cue-based ducking drops musicVolume to 35%');
+
+const normState=computeLiveMusicState(5.0,20,{mainVol:2.0,musicVol:0.8,start:0,offset:0},[]);
+assert.equal(normState.videoVolume,1.0);
+assert.ok(Math.abs(normState.musicVolume-0.4)<1e-6,'Norm divisor keeps boosted mix bounded in [0,1]');
+
+const ActionCards=require('../static/action_cards.js');
+const uncaptioned=ActionCards.computeStudioCards({project:{id:'p1',revision:0,duration:8,cues:[]},zeroAi:true});
+assert.ok(uncaptioned.some((c)=>c.id==='uncaptioned-clip' && !c.secondaryAction),'zeroAi suppresses secondary auto-transcribe trigger');
+assert.ok(uncaptioned.some((c)=>c.id==='add-bg-music'),'Multi-audio card surfaces when no music track is staged');
+
+const activeStudio=ActionCards.computeStudioCards({
+    project:{
+        id:'p2',
+        revision:3,
+        duration:12,
+        cues:[
+            {id:'a',start:0,end:0.4,text:'Way too many fast words inside this subtitle cue',translations:{es:{status:'review'}}},
+            {id:'b',start:0.6,end:2.0,text:'Next phrase'}
+        ],
+        studio:{assets:{music:'music.mp3'}}
+    },
+    zeroAi:false
+});
+const activeIds=activeStudio.map((c)=>c.id);
+assert.ok(activeIds.includes('fast-cps'));
+assert.ok(activeIds.includes('micro-gaps'));
+assert.ok(activeIds.includes('pending-translations'));
+assert.ok(!activeIds.includes('add-bg-music'),'Already-mixed studio hides add-bg-music');
+
+const grabberCards=ActionCards.computeGrabberCards({recentVideos:[{full_path:'D:/DL/TikTok/clip.mp4',name:'clip.mp4',folder:'TikTok'}],zeroAi:true});
+assert.deepEqual(grabberCards.map((c)=>c.id),['caption-latest','reframe-vertical','trace-lineage']);
+
+const memStore=new Map();
+global.sessionStorage={
+    getItem:(k)=>memStore.has(k)?memStore.get(k):null,
+    setItem:(k,v)=>memStore.set(k,String(v))
+};
+ActionCards.skipCard('studio',uncaptioned[0]);
+const afterSkip=ActionCards.filterSkipped('studio',uncaptioned);
+assert.ok(!afterSkip.some((c)=>c.id===uncaptioned[0].id),'Skipped card is hidden by sessionStorage filter');
+console.log('Live MP3 preview and Proactive Action Cards checks passed.');

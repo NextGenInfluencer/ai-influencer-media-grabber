@@ -538,6 +538,53 @@ class CompositionDataTests(unittest.TestCase):
             self.assertIn("overlay=x='clip(W*0.9-w/2,0,W-w)'", fg)
             self.assertIn("between(t,1.0,3.5)", fg)
 
+    def test_multi_audio_music_track_sidechain_and_silent_primary_video(self):
+        with tempfile.TemporaryDirectory() as td:
+            folder = Path(td)
+            (folder / 'video.mp4').write_bytes(b'\x00' * 50)
+            (folder / 'bg_beat.mp3').write_bytes(b'ID3' + b'\x00' * 40)
+            assets = {
+                'audio': dict(file='video.mp4', kind='video', duration=12.0, has_audio=True),
+                'background': dict(file='video.mp4', kind='video', duration=12.0, has_audio=True),
+                'music': dict(file='bg_beat.mp3', kind='audio', duration=8.0, has_audio=True),
+            }
+            settings = comp.validate({
+                **comp.DEFAULTS,
+                'end': 12.0,
+                'music_volume': 0.45,
+                'music_start': 1.0,
+                'music_duration': 10.0,
+                'music_offset': 1.5,
+                'music_fade_in': 0.5,
+                'music_fade_out': 1.0,
+                'music_loop': True,
+                'music_ducking': True,
+            }, 12.0)
+            studio = comp.schema(assets, settings, {'font': 'Montserrat'})
+            self.assertEqual(len(studio['tracks']), 4)
+            audio_clips = studio['tracks'][1]['clips']
+            self.assertEqual([c['asset'] for c in audio_clips], ['audio', 'music'])
+            self.assertEqual(audio_clips[1]['name'], 'bg_beat.mp3')
+            self.assertAlmostEqual(audio_clips[1]['start'], 1.5)
+
+            args = comp.render_args(studio, folder, 'mixed.mp4', background_has_audio=False)
+            fg = next(args[i + 1] for i, a in enumerate(args) if a == '-filter_complex')
+            self.assertIn('sidechaincompress', fg)
+            self.assertIn('amix=inputs=2:duration=first:normalize=0[mix]', fg)
+            self.assertIn('adelay=1500:all=1', fg)
+
+            # Silent primary video + added MP3 falls back cleanly via anullsrc
+            studio_silent = comp.schema({
+                **assets,
+                'audio': dict(file='video.mp4', kind='video', duration=12.0, has_audio=False),
+            }, {**settings, 'music_ducking': False}, {'font': 'Montserrat'})
+            args_silent = comp.render_args(studio_silent, folder, 'silent_mixed.mp4')
+            fg_silent = next(args_silent[i + 1] for i, a in enumerate(args_silent) if a == '-filter_complex')
+            self.assertIn('anullsrc=', fg_silent)
+            self.assertIn('[music]', fg_silent)
+            self.assertIn('amix=inputs=2:duration=first:normalize=0[mix]', fg_silent)
+
+
 
 
 

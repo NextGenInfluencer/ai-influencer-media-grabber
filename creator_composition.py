@@ -24,7 +24,7 @@ SHAPES = {'portrait':(1080,1920), 'square':(1080,1080), 'landscape':(1920,1080)}
 IMAGES = {'.png','.jpg','.jpeg','.webp'}
 VIDEOS = {'.mp4','.mov','.mkv','.webm','.avi','.m4v'}
 AUDIO = {'.mp3','.wav','.m4a','.flac','.ogg'}
-VISUALIZER_STYLES = {'waveform', 'spectrum'}
+VISUALIZER_STYLES = {'waveform', 'spectrum', 'mirror', 'pulse'}
 VISUALIZER_POSITIONS = {'bottom', 'center', 'top'}
 RENDER_QUALITIES = {
     'draft': dict(preset='veryfast', crf='24', audio_bitrate='160k', max_side=720, fps=0),
@@ -51,7 +51,7 @@ VIDEO_FILTERS = {
     'fisheye': 'lenscorrection=cx=0.5:cy=0.5:k1=-0.22:k2=-0.22',
     'noir': 'colorbalance=rs=-0.1:gs=-0.1:bs=0.05,eq=contrast=1.4:saturation=0.5:brightness=-0.04',
 }
-CAPTION_ANIMATIONS = {'none', 'fade', 'pop', 'pop_in', 'slide_up', 'typewriter', 'zoom_in'}
+CAPTION_ANIMATIONS = {'none', 'fade', 'pop', 'pop_in', 'slide_up', 'typewriter', 'zoom_in', 'bounce', 'blur_in'}
 STICKER_ANIMATIONS = {'none', 'fade', 'pop', 'slide'}
 SEQUENCE_TRANSITIONS = {'none', 'fade', 'dissolve', 'fadeblack', 'fadewhite', 'slideleft', 'slideright', 'circlecrop', 'wipeleft', 'wiperight'}
 AUDIO_EFFECTS = {
@@ -79,6 +79,8 @@ DEFAULTS = dict(shape='portrait', color='#141526', fit='fill', x=50, y=50,
                 start=0, end=0, offset=0, volume=1, fade_in=0, fade_out=0,
                 noise_cancel=False, voice_isolation=False, audio_effect='none',
                 background_volume=0, ducking=False, loop=True, background_start=0, background_duration=0,
+                music_volume=0.35, music_start=0, music_duration=0, music_offset=0, music_loop=True,
+                music_fade_in=0, music_fade_out=0, music_ducking=True,
                 visualizer=False, visualizer_style='waveform', visualizer_position='bottom',
                 visualizer_height=20, visualizer_sensitivity=1, visualizer_color='#bba6ff',
                 sequence=[], sequence_transition='none', sequence_transition_duration=0.5)
@@ -250,10 +252,26 @@ def schema(assets, settings, style):
     else:
         bg_clips = [dict(asset='background', start=0, duration=length,
                          source_offset=s['background_start'], speed=s['background_speed'], transform=tf)]
+    audio_clips = [dict(asset='audio', start=s['offset'],
+                        duration=s['end']-s['start'], source_offset=s['start'], ducking=s['ducking'])]
+    if 'music' in assets:
+        m_offset = float(s.get('music_offset') or 0)
+        m_dur = float(s.get('music_duration') or 0)
+        if m_dur <= 0:
+            m_dur = max(0.0, round(length - m_offset, 3))
+        audio_clips.append(dict(
+            asset='music',
+            name=assets['music'].get('name') or assets['music']['file'],
+            start=m_offset,
+            duration=m_dur,
+            source_offset=float(s.get('music_start') or 0),
+            volume=float(s.get('music_volume', 0.35)),
+            loop=bool(s.get('music_loop', True)),
+            ducking=bool(s.get('music_ducking', True)),
+        ))
     tracks = [
         dict(kind='background', clips=bg_clips),
-        dict(kind='audio', clips=[dict(asset='audio', start=s['offset'],
-             duration=s['end']-s['start'], source_offset=s['start'], ducking=s['ducking'])]),
+        dict(kind='audio', clips=audio_clips),
         dict(kind='captions', cue_source='cues', style=copy.deepcopy(style)),
         dict(kind='overlays', clips=overlay_clips)
     ]
@@ -295,6 +313,8 @@ def validate(settings, source_duration):
                   start=(0,source_duration),end=(0,source_duration),offset=(0,120),volume=(0,2),
                   fade_in=(0,60),fade_out=(0,60),background_volume=(0,2),
                   background_start=(0,7200),background_duration=(0,7200),
+                  music_volume=(0,2),music_start=(0,7200),music_duration=(0,7200),
+                  music_offset=(0,1200),music_fade_in=(0,60),music_fade_out=(0,60),
                   visualizer_height=(10,40),visualizer_sensitivity=(.5,3))
     for key, (lo,hi) in bounds.items(): s[key] = finite(s[key],lo,hi)
     length = s['end']-s['start']
@@ -302,7 +322,7 @@ def validate(settings, source_duration):
         raise ValueError('Choose a song range of at least 0.1 seconds and an output up to 20 minutes.')
     if max(s['fade_in'],s['fade_out']) > length:
         raise ValueError('Audio fades must fit inside the selected song range.')
-    for key in ('loop','visualizer','ducking','vignette','noise_cancel','voice_isolation'):
+    for key in ('loop','visualizer','ducking','music_loop','music_ducking','vignette','noise_cancel','voice_isolation'):
         if type(s[key]) is not bool: raise ValueError('Invalid composition checkbox value.')
     return s
 
@@ -363,6 +383,8 @@ def render_args(studio, folder, output, background_has_audio=False, bake_fx=True
     has_broll = bool(broll and s['broll_duration'] > 0)
     sticker = assets.get('sticker')
     has_sticker = bool(include_sticker and sticker and s.get('sticker_duration', 0) > 0)
+    music = assets.get('music')
+    has_music = bool(music and float(s.get('music_volume', 0)) > 0 and float(s.get('music_offset', 0)) < duration)
 
     next_in_idx = (1 + len(sequence_assets)) if multi_clip else 2
     if has_broll and broll is not None:
@@ -382,19 +404,34 @@ def render_args(studio, folder, output, background_has_audio=False, bake_fx=True
             args += ['-loop', '1', '-framerate', str(fps), '-i', spath.name]
         else:
             args += ['-stream_loop', '-1', '-i', spath.name]
+
+    if has_music and music is not None:
+        music_idx = next_in_idx
+        next_in_idx += 1
+        mpath = local_asset(folder, music)
+        if s.get('music_loop', True):
+            args += ['-stream_loop', '-1']
+        args += ['-i', mpath.name]
+
     graph=[]
     length=s['end']-s['start']
-    af=f"[0:a]atrim=start={s['start']}:end={s['end']},asetpts=PTS-STARTPTS,volume={s['volume']}"
-    if bake_fx:
-        for a_fx in audio_fx_chain(s):
-            af+=f",{a_fx}"
-    if s['fade_in']: af+=f",afade=t=in:st=0:d={s['fade_in']}"
-    if s['fade_out']: af+=f",afade=t=out:st={length-s['fade_out']}:d={s['fade_out']}"
-    af+=f",adelay={round(s['offset']*1000)}:all=1,apad,atrim=duration={duration}[song]"
-    graph.append(af)
+    primary_has_audio = assets['audio'].get('has_audio') is not False
+    if primary_has_audio:
+        af=f"[0:a]atrim=start={s['start']}:end={s['end']},asetpts=PTS-STARTPTS,volume={s['volume']}"
+        if bake_fx:
+            for a_fx in audio_fx_chain(s):
+                af+=f",{a_fx}"
+        if s['fade_in']: af+=f",afade=t=in:st=0:d={s['fade_in']}"
+        if s['fade_out']: af+=f",afade=t=out:st={length-s['fade_out']}:d={s['fade_out']}"
+        af+=f",adelay={round(s['offset']*1000)}:all=1,apad,atrim=duration={duration}[song]"
+        graph.append(af)
+    else:
+        graph.append(f"anullsrc=r=44100:cl=stereo,atrim=duration={duration},asetpts=PTS-STARTPTS[song]")
+
     pts_expr = f"{1.0/s['background_speed']:.4f}*(PTS-STARTPTS)" if abs(s['background_speed'] - 1.0) > 1e-4 else 'PTS-STARTPTS'
     atempo_filter = f"atempo={s['background_speed']:.4f}," if abs(s['background_speed'] - 1.0) > 1e-4 else ""
-    if background_has_audio and s['background_volume'] and (multi_clip or bool(bg and bg.get('has_audio', background_has_audio))):
+    has_ba = bool(background_has_audio and s['background_volume'] and (multi_clip or bool(bg and bg.get('has_audio', background_has_audio))))
+    if has_ba:
         bg_vol = f"volume='if(between(t,{s['offset']},{duration}),{round(s['background_volume']*0.3,4)},{s['background_volume']})':eval=frame" if s['ducking'] else f"volume={s['background_volume']}"
         if multi_clip:
             for k, seg in enumerate(seq_segments):
@@ -414,11 +451,41 @@ def render_args(studio, folder, output, background_has_audio=False, bake_fx=True
             a_concat_in = ''.join(f'[aseg{k}]' for k in range(len(seq_segments)))
             graph.append(f"{a_concat_in}concat=n={len(seq_segments)}:v=0:a=1[bg_audio_raw]")
             graph.append(f"[bg_audio_raw]asetpts=PTS-STARTPTS,{bg_vol},apad,atrim=duration={duration}[ba]")
-            graph.append('[song][ba]amix=inputs=2:duration=first:normalize=0[mix]')
         else:
             graph.append(f"[1:a]{atempo_filter}asetpts=PTS-STARTPTS,{bg_vol},apad,atrim=duration={duration}[ba]")
-            graph.append('[song][ba]amix=inputs=2:duration=first:normalize=0[mix]')
-    else: graph.append('[song]anull[mix]')
+
+    if has_music and music is not None:
+        m_offset = float(s.get('music_offset') or 0)
+        m_start = float(s.get('music_start') or 0)
+        avail_dur = max(0.05, round(duration - m_offset, 3))
+        m_play_dur = min(float(s['music_duration']), avail_dur) if float(s.get('music_duration') or 0) > 0 else avail_dur
+        m_end = round(m_start + m_play_dur, 3)
+        mf = f"[{music_idx}:a]aformat=sample_rates=44100:channel_layouts=stereo,atrim=start={m_start}:end={m_end},asetpts=PTS-STARTPTS,volume={s['music_volume']}"
+        mf_in = min(m_play_dur, float(s.get('music_fade_in') or 0))
+        mf_out = min(m_play_dur, float(s.get('music_fade_out') or 0))
+        if mf_in > 0:
+            mf += f",afade=t=in:st=0:d={round(mf_in, 3)}"
+        if mf_out > 0:
+            mf += f",afade=t=out:st={max(0.0, round(m_play_dur - mf_out, 3))}:d={round(mf_out, 3)}"
+        if m_offset > 0:
+            mf += f",adelay={round(m_offset * 1000)}:all=1"
+        mf += f",apad,atrim=duration={duration},asetpts=PTS-STARTPTS[music_raw]"
+        graph.append(mf)
+        if s.get('music_ducking', True) and primary_has_audio and float(s.get('volume', 1)) > 0:
+            graph.append('[song]aformat=sample_rates=44100:channel_layouts=stereo,asetpts=PTS-STARTPTS,asplit=2[song_main][song_sc]')
+            graph.append('[music_raw][song_sc]sidechaincompress=threshold=0.03:ratio=6:attack=35:release=320[music]')
+        else:
+            graph.append('[song]aformat=sample_rates=44100:channel_layouts=stereo,asetpts=PTS-STARTPTS[song_main]')
+            graph.append('[music_raw]anull[music]')
+        if has_ba:
+            graph.append('[ba]aformat=sample_rates=44100:channel_layouts=stereo,asetpts=PTS-STARTPTS[ba_fmt]')
+            graph.append('[song_main][ba_fmt][music]amix=inputs=3:duration=first:normalize=0[mix]')
+        else:
+            graph.append('[song_main][music]amix=inputs=2:duration=first:normalize=0[mix]')
+    elif has_ba:
+        graph.append('[song][ba]amix=inputs=2:duration=first:normalize=0[mix]')
+    else:
+        graph.append('[song]anull[mix]')
     scale_crop = (
         f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}:(iw-ow)*{s['x']/100}:(ih-oh)*{s['y']/100}"
         if s['fit']=='fill' else

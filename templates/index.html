@@ -3,14 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="media-token" content="{{ api_token }}">
     <meta name="description" content="Local Media Grabber, Metadata Cleanup & Converter Suite">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎬</text></svg>">
     <title>AI Influencer Media Grabber</title>
+    <script>
+        (function () {
+            const nativeFetch = window.fetch.bind(window);
+            window.__nativeFetch = nativeFetch;
+            window.fetch = (input, options = {}) => {
+                const url = new URL(typeof input === 'string' ? input : input.url, location.href);
+                if (url.origin === location.origin) {
+                    const headers = new Headers(options.headers || (input instanceof Request ? input.headers : undefined));
+                    const meta = document.querySelector('meta[name="media-token"]');
+                    if (meta) headers.set('X-Media-Token', meta.content);
+                    options = { ...options, headers };
+                }
+                return nativeFetch(input, options);
+            };
+        })();
+    </script>
     <script src="/static/vendor/tailwind-3.4.17.js"></script>
     <link href="/static/vendor/css/fontawesome-6.4.0.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="/static/copilot.css?v=5.0">
+    <link rel="stylesheet" href="/static/app_shell.css?v=5.3.0">
+    <link rel="stylesheet" href="/static/copilot.css?v=5.3.0">
     <link rel="stylesheet" href="/static/ai_setup.css?v=5.0">
+    <script src="/static/app_shell.js?v=5.1.1" defer></script>
     <script src="/static/ai_setup.js?v=5.0" defer></script>
+    <script src="/static/action_cards.js?v=5.3.0" defer></script>
+    <script src="/static/command_center.js?v=5.3.0" defer></script>
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -187,121 +208,151 @@
         .glow-emerald { box-shadow: 0 0 20px rgba(16, 185, 129, 0.15); }
     </style>
 </head>
-<body class="flex flex-col h-screen overflow-hidden bg-[#080809]">
+<body class="flex h-screen w-screen overflow-hidden bg-[#090A0F] text-[#f5f5f7]">
 
-    <!-- Top Navigation Header -->
-    <header class="w-full bg-[#0d0f17]/90 border-b border-white/[0.08] px-6 py-2.5 flex flex-wrap gap-4 items-center justify-between z-20 shrink-0 shadow-lg backdrop-blur-2xl">
-        <div class="flex items-center space-x-3">
-            <div class="w-9 h-9 rounded-xl bg-gradient-to-b from-blue-500 to-blue-600 flex items-center justify-center shadow-[0_2px_8px_rgba(10,132,255,0.35),inset_0_1px_0_rgba(255,255,255,0.3)]">
-                <i class="fa-solid fa-bolt text-white text-sm"></i>
-            </div>
-            <div>
-                <div class="flex items-center space-x-2">
-                    <h1 class="text-sm font-semibold text-white tracking-tight">Media Grabber Pro</h1>
-                    <span class="text-[10px] font-medium bg-white/10 text-zinc-300 border border-white/10 px-2 py-0.5 rounded-full">v{{ version }}</span>
+    <!-- Slim Left Command Navigation Rail -->
+    <aside id="appNavRail" class="app-nav-rail">
+        <div class="rail-brand">
+            <div class="rail-brand-main">
+                <div class="rail-logo">
+                    <i class="fa-solid fa-bolt"></i>
                 </div>
-                <p class="text-[11px] text-zinc-400">Local Reference Engine &amp; Creative Studio</p>
+                <div class="rail-brand-text">
+                    <span class="rail-brand-title">Media Grabber</span>
+                    <span class="rail-brand-version mono-metric">v{{ version }}</span>
+                </div>
             </div>
+            <button type="button" class="rail-collapse-btn" onclick="window.toggleNavRail()" title="Collapse or expand navigation rail">
+                <i class="fa-solid fa-angles-left"></i>
+            </button>
         </div>
 
-        <!-- Center Tab Navigation Control -->
-        <div class="flex items-center space-x-1 apple-segmented-nav p-1 backdrop-blur-xl">
-            <button id="tab-downloader" onclick="switchTab('downloader')" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-white bg-white/15 shadow-[0_1px_3px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.15)] transition-all flex items-center backdrop-blur-md">
-                <i class="fa-solid fa-cloud-arrow-down mr-1.5 text-blue-400 text-xs"></i> Downloader
-            </button>
-            <button id="tab-converter" onclick="switchTab('converter')" class="px-3.5 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-white hover:bg-white/5 transition-all flex items-center">
-                <i class="fa-solid fa-sliders mr-1.5 text-zinc-400 text-xs"></i> Media Tools
-            </button>
-            <button id="tab-cleaner" onclick="switchTab('cleaner')" class="px-3.5 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-white hover:bg-white/5 transition-all flex items-center">
-                <i class="fa-solid fa-shield-halved mr-1.5 text-zinc-400 text-xs"></i> AI Cleaner
-            </button>
-            <a href="/captions" class="px-3 py-1.5 rounded-lg text-xs font-medium text-blue-400 hover:text-blue-300 hover:bg-white/5 transition-all flex items-center">
-                <i class="fa-solid fa-closed-captioning mr-1.5 text-xs"></i> Captions Studio
-            </a>
-            <a href="/video-studio" class="px-3 py-1.5 rounded-lg text-xs font-medium text-pink-400 hover:text-pink-300 hover:bg-white/5 transition-all flex items-center" title="AI Video Studio (Wan 2.1 + FLUX)">
-                <i class="fa-solid fa-clapperboard mr-1.5 text-xs"></i> AI Video Studio
-            </a>
-            <button id="tab-gallery" onclick="switchTab('gallery')" class="px-3.5 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-white hover:bg-white/5 transition-all flex items-center">
-                <i class="fa-solid fa-photo-film mr-1.5 text-zinc-400 text-xs"></i> Gallery
-            </button>
-            <button id="tab-history" onclick="switchTab('history')" class="px-3.5 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-white hover:bg-white/5 transition-all flex items-center">
-                <i class="fa-solid fa-clock-rotate-left mr-1.5 text-zinc-400 text-xs"></i> History
-            </button>
-            <!-- Secondary Tools Overflow Dropdown -->
-            <div class="relative group">
-                <button class="px-2.5 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-white hover:bg-white/5 transition-all flex items-center gap-1" title="More Tools">
-                    <i class="fa-solid fa-ellipsis"></i>
+        <nav class="rail-scroll" aria-label="Workspace Navigation">
+            <div class="rail-group">
+                <div class="rail-section-title">Core Media</div>
+                <button id="tab-downloader" type="button" onclick="switchTab('downloader')" class="rail-item active" title="Social Downloader">
+                    <i class="fa-solid fa-cloud-arrow-down text-blue-400"></i>
+                    <span class="rail-label">Downloader</span>
                 </button>
-                <div class="absolute right-0 mt-1.5 hidden group-hover:block group-focus-within:block w-44 p-1.5 rounded-xl bg-[#12131a]/95 backdrop-blur-2xl border border-white/10 shadow-2xl z-50">
-                    <button onclick="window.characterStudio&amp;&amp;window.characterStudio.open()" class="w-full text-left px-3 py-2 rounded-lg text-xs text-zinc-300 hover:text-white hover:bg-white/10 flex items-center gap-2 transition">
-                        <i class="fa-solid fa-user-astronaut text-purple-400 text-xs"></i> Characters
-                    </button>
-                    <button onclick="window.motionStudio&amp;&amp;window.motionStudio.open()" class="w-full text-left px-3 py-2 rounded-lg text-xs text-zinc-300 hover:text-white hover:bg-white/10 flex items-center gap-2 transition">
-                        <i class="fa-solid fa-wand-magic-sparkles text-pink-400 text-xs"></i> Face Swap Video
-                    </button>
-                    <a href="/video-studio" class="w-full text-left px-3 py-2 rounded-lg text-xs text-zinc-300 hover:text-white hover:bg-white/10 flex items-center gap-2 transition">
-                        <i class="fa-solid fa-clapperboard text-purple-400 text-xs"></i> AI Video Studio
-                    </a>
-                    <button onclick="openReferencePrep()" class="w-full text-left px-3 py-2 rounded-lg text-xs text-zinc-300 hover:text-white hover:bg-white/10 flex items-center gap-2 transition">
-                        <i class="fa-solid fa-film text-purple-400 text-xs"></i> Kling Prep
-                    </button>
-                    <button onclick="openCarouselStudio()" class="w-full text-left px-3 py-2 rounded-lg text-xs text-zinc-300 hover:text-white hover:bg-white/10 flex items-center gap-2 transition">
-                        <i class="fa-solid fa-images text-blue-400 text-xs"></i> Carousel Studio
-                    </button>
-                    <div class="my-1 border-t border-white/10"></div>
-                    <button onclick="window.openAISetup()" class="w-full text-left px-3 py-2 rounded-lg text-xs text-zinc-300 hover:text-white hover:bg-white/10 flex items-center gap-2 transition">
-                        <i class="fa-solid fa-wand-magic-sparkles text-[#2997ff] text-xs"></i> Set up AI…
-                    </button>
-                    <button onclick="window.openAIEngines()" class="w-full text-left px-3 py-2 rounded-lg text-xs text-zinc-300 hover:text-white hover:bg-white/10 flex items-center gap-2 transition">
-                        <i class="fa-solid fa-microchip text-[#2997ff] text-xs"></i> AI Engines
-                    </button>
-                    <button onclick="window.openAIStorage()" class="w-full text-left px-3 py-2 rounded-lg text-xs text-zinc-300 hover:text-white hover:bg-white/10 flex items-center gap-2 transition">
-                        <i class="fa-solid fa-hard-drive text-[#2997ff] text-xs"></i> Downloads &amp; Storage
-                    </button>
-                    <button onclick="openDownloadEnginesModal()" class="w-full text-left px-3 py-2 rounded-lg text-xs text-zinc-300 hover:text-white hover:bg-white/10 flex items-center gap-2 transition">
-                        <i class="fa-solid fa-arrows-rotate text-emerald-400 text-xs"></i> Update download engines
-                    </button>
-                    <button onclick="document.getElementById('shortcutsDialog').showModal()" class="w-full text-left px-3 py-2 rounded-lg text-xs text-zinc-300 hover:text-white hover:bg-white/10 flex items-center gap-2 transition">
-                        <i class="fa-solid fa-keyboard text-zinc-400 text-xs"></i> Keyboard Shortcuts
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Right System Status Control -->
-        <div class="hidden lg:flex items-center space-x-2.5 text-xs">
-            <div id="queueCountBadge" class="hidden px-2 py-1 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded-lg font-medium text-[11px]">Queue: 0</div>
-            
-            <div id="gpuStatusBadge" class="hidden px-2.5 py-1 bg-violet-500/10 text-violet-300 border border-violet-500/20 rounded-full font-medium text-[11px] items-center space-x-1.5 backdrop-blur-md" title="Hardware Acceleration Telemetry">
-                <i class="fa-solid fa-bolt text-violet-400 text-[10px]"></i>
-                <span id="gpuStatusText">GPU Active</span>
+                <button id="tab-converter" type="button" onclick="switchTab('converter')" class="rail-item" title="Trim, Resize &amp; Convert">
+                    <i class="fa-solid fa-sliders"></i>
+                    <span class="rail-label">Media Tools</span>
+                </button>
+                <button id="tab-cleaner" type="button" onclick="switchTab('cleaner')" class="rail-item" title="Metadata &amp; SynthID Cleaner">
+                    <i class="fa-solid fa-shield-halved"></i>
+                    <span class="rail-label">Metadata Cleaner</span>
+                </button>
+                <button id="tab-gallery" type="button" onclick="switchTab('gallery')" class="rail-item" title="Downloaded Media Library">
+                    <i class="fa-solid fa-photo-film"></i>
+                    <span class="rail-label">Gallery</span>
+                </button>
+                <button id="tab-history" type="button" onclick="switchTab('history')" class="rail-item" title="Download History">
+                    <i class="fa-solid fa-clock-rotate-left"></i>
+                    <span class="rail-label">History</span>
+                </button>
             </div>
 
-            <div id="aiEngineBadgeContainer"></div>
-            <div id="appUpdateBadgeContainer"></div>
-
-            <div class="flex items-center space-x-2 px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.08]">
-                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                <span class="text-[11px] font-medium text-zinc-300">Engine Active</span>
+            <div class="rail-group">
+                <div class="rail-section-title">Editors</div>
+                <a href="/captions" class="rail-item" title="Captions &amp; Timeline Studio">
+                    <i class="fa-solid fa-closed-captioning text-blue-400"></i>
+                    <span class="rail-label">Captions Studio</span>
+                </a>
+                <button type="button" onclick="openCarouselStudio()" class="rail-item" title="Carousel Studio">
+                    <i class="fa-solid fa-images text-sky-400"></i>
+                    <span class="rail-label">Carousel Studio</span>
+                </button>
+                <button type="button" onclick="openReferencePrep()" class="rail-item" title="Kling Reference Prep">
+                    <i class="fa-solid fa-film text-indigo-400"></i>
+                    <span class="rail-label">Kling Prep</span>
+                </button>
             </div>
 
-            <!-- Tasks & Console Toggle Button -->
-            <button id="toggleSidebarBtn" type="button" onclick="toggleRightSidebar()" class="px-3.5 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-zinc-200 hover:text-white text-xs font-semibold transition-all flex items-center space-x-2 cursor-pointer shadow-sm active:scale-95" title="Toggle Activity Tasks &amp; Live Console">
-                <i class="fa-solid fa-list-check text-blue-400 text-xs"></i>
-                <span>Tasks</span>
-                <span id="headerQueueBadge" class="hidden px-1.5 py-0.2 rounded-full bg-blue-500 text-[10px] font-bold text-white leading-none">0</span>
+            <div class="rail-group" data-ai-ui>
+                <div class="rail-section-title">AI Studio</div>
+                <a href="/video-studio" class="rail-item" title="AI Video Studio (Wan 2.1 + FLUX)">
+                    <i class="fa-solid fa-clapperboard text-pink-400"></i>
+                    <span class="rail-label">AI Video Studio</span>
+                </a>
+                <button type="button" onclick="window.characterStudio &amp;&amp; window.characterStudio.open()" class="rail-item" title="Characters LoRA Studio">
+                    <i class="fa-solid fa-user-astronaut text-purple-400"></i>
+                    <span class="rail-label">Characters</span>
+                </button>
+                <button type="button" onclick="window.motionStudio &amp;&amp; window.motionStudio.open()" class="rail-item" title="Face Swap Video">
+                    <i class="fa-solid fa-wand-magic-sparkles text-pink-400"></i>
+                    <span class="rail-label">Face Swap Video</span>
+                </button>
+                <button type="button" onclick="window.copilot &amp;&amp; window.copilot.toggle()" class="rail-item" title="Open or close AI Copilot (Ctrl+K)">
+                    <span class="rail-ico">✨</span>
+                    <span class="rail-label">Copilot</span>
+                    <kbd class="rail-kbd mono-metric">Ctrl+K</kbd>
+                </button>
+            </div>
+        </nav>
+
+        <div class="rail-footer">
+            <div class="vram-guard-mount" data-ai-ui></div>
+            <button type="button" onclick="window.toggleZeroAIMode()" class="rail-mode-pill" title="Toggle Zero-AI / Laptop Mode (hides AI controls cleanly, 0 MB VRAM)">
+                <i class="fa-solid fa-laptop text-emerald-400 shrink-0"></i>
+                <span class="rail-label" data-zero-ai-label>Laptop Mode: Off</span>
             </button>
-
-            <button onclick="stopAllJobs()" class="px-2.5 py-1.5 rounded-lg border border-white/10 hover:border-white/20 bg-white/[0.03] hover:bg-white/[0.07] text-zinc-400 hover:text-zinc-200 text-[11px] font-medium transition cursor-pointer" title="Stop active jobs">Stop</button>
-            <button onclick="exitApp()" class="px-2.5 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 text-[11px] font-medium transition cursor-pointer" title="Quit Application">Exit</button>
+            <div class="rail-footer-actions">
+                <button id="tab-settings" type="button" onclick="switchTab('settings')" class="rail-item" title="Settings, Laptop Mode &amp; VRAM Guard">
+                    <i class="fa-solid fa-gear"></i>
+                    <span class="rail-label">Settings</span>
+                </button>
+                <button type="button" onclick="document.getElementById('shortcutsDialog').showModal()" class="rail-item" title="Keyboard Shortcuts">
+                    <i class="fa-solid fa-keyboard"></i>
+                    <span class="rail-label">Shortcuts</span>
+                </button>
+            </div>
         </div>
-    </header>
+    </aside>
 
-    <!-- Main Scalable Workspace (Fills Screen) -->
-    <main class="flex-1 flex overflow-hidden p-4 lg:p-6 gap-6 w-full h-[calc(100vh-76px)]">
+    <!-- Right Workspace Column -->
+    <div class="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
 
-        <!-- Primary Action Center (Expands to 100% full screen when sidebar is closed) -->
-        <div id="mainContentPanel" class="flex-1 w-full min-w-0 flex flex-col h-full bg-[#10121a]/80 border border-white/10 rounded-3xl p-6 lg:p-8 shadow-2xl backdrop-blur-2xl relative overflow-hidden transition-all duration-300">
+        <!-- Single-Row Contextual Top Bar -->
+        <header class="app-topbar">
+            <div class="app-topbar-title-group">
+                <h1 id="workspaceViewTitle" class="app-topbar-title">Downloader</h1>
+                <span id="workspaceViewSubtitle" class="app-topbar-subtitle">Paste social URLs for clean local downloads &amp; creator prep</span>
+            </div>
+
+            <!-- Right System Status & Actions -->
+            <div class="flex items-center space-x-2 text-xs shrink-0">
+                <div id="queueCountBadge" class="hidden px-2 py-1 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded-lg font-medium text-[11px] mono-metric">Queue: 0</div>
+
+                <div id="gpuStatusBadge" class="hidden px-2.5 py-1 bg-violet-500/10 text-violet-300 border border-violet-500/20 rounded-full font-medium text-[11px] items-center space-x-1.5 backdrop-blur-md" title="Hardware Acceleration Telemetry">
+                    <i class="fa-solid fa-bolt text-violet-400 text-[10px]"></i>
+                    <span id="gpuStatusText">GPU Active</span>
+                </div>
+
+                <div id="aiEngineBadgeContainer" data-ai-ui></div>
+                <div id="appUpdateBadgeContainer"></div>
+
+                <div class="hidden xl:flex items-center space-x-2 px-2.5 py-1 rounded-full bg-white/[0.04] border border-white/[0.08]">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span class="text-[11px] font-medium text-zinc-300">Engine Active</span>
+                </div>
+
+                <!-- Tasks & Console Toggle Button -->
+                <button id="toggleSidebarBtn" type="button" onclick="toggleRightSidebar()" class="px-3 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-zinc-200 hover:text-white text-xs font-semibold transition-all flex items-center space-x-2 cursor-pointer shadow-sm active:scale-95" title="Toggle Activity Tasks &amp; Live Console">
+                    <i class="fa-solid fa-list-check text-blue-400 text-xs"></i>
+                    <span>Tasks</span>
+                    <span id="headerQueueBadge" class="hidden px-1.5 py-0.2 rounded-full bg-blue-500 text-[10px] font-bold text-white leading-none mono-metric">0</span>
+                </button>
+
+                <button type="button" onclick="stopAllJobs()" class="px-2.5 py-1.5 rounded-lg border border-white/10 hover:border-white/20 bg-white/[0.03] hover:bg-white/[0.07] text-zinc-400 hover:text-zinc-200 text-[11px] font-medium transition cursor-pointer" title="Stop active jobs">Stop</button>
+                <button type="button" onclick="exitApp()" class="px-2.5 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 text-[11px] font-medium transition cursor-pointer" title="Quit Application">Exit</button>
+            </div>
+        </header>
+
+        <!-- Main Scalable Workspace -->
+        <main class="flex-1 flex min-h-0 overflow-hidden p-4 lg:p-5 gap-4 w-full">
+
+            <!-- Primary Action Center -->
+            <div id="mainContentPanel" class="flex-1 w-full min-w-0 flex flex-col h-full bg-[#11131A]/95 border border-white/[0.08] rounded-2xl p-6 lg:p-7 shadow-2xl backdrop-blur-2xl relative overflow-hidden transition-all duration-300">
             
             <!-- SECTION 1: STUDIO (DOWNLOADER) -->
             <div id="section-downloader" class="flex-1 overflow-y-auto pr-2 scroll-smooth">
@@ -504,7 +555,7 @@ https://www.youtube.com/watch?v=..."></textarea>
                             </label>
 
                             <!-- Tile 5: Transcribe Audio -->
-                            <label class="group relative p-3 rounded-xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.06] hover:border-white/[0.14] cursor-pointer transition-all flex items-start space-x-2.5 select-none has-[:checked]:bg-blue-500/[0.08] has-[:checked]:border-blue-500/40">
+                            <label data-ai-ui class="group relative p-3 rounded-xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.06] hover:border-white/[0.14] cursor-pointer transition-all flex items-start space-x-2.5 select-none has-[:checked]:bg-blue-500/[0.08] has-[:checked]:border-blue-500/40">
                                 <input type="checkbox" id="transcribeAudio" class="sr-only peer">
                                 <div class="w-4 h-4 rounded-md border border-zinc-600 peer-checked:border-blue-500 peer-checked:bg-blue-500 flex items-center justify-center shrink-0 mt-0.5 transition-all text-white">
                                     <i class="fa-solid fa-check text-[9px] opacity-0 peer-checked:opacity-100 transition-opacity"></i>
@@ -516,7 +567,7 @@ https://www.youtube.com/watch?v=..."></textarea>
                             </label>
 
                             <!-- Tile 6: Burn Subtitles -->
-                            <label class="group relative p-3 rounded-xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.06] hover:border-white/[0.14] cursor-pointer transition-all flex items-start space-x-2.5 select-none has-[:checked]:bg-blue-500/[0.08] has-[:checked]:border-blue-500/40">
+                            <label data-ai-ui class="group relative p-3 rounded-xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.06] hover:border-white/[0.14] cursor-pointer transition-all flex items-start space-x-2.5 select-none has-[:checked]:bg-blue-500/[0.08] has-[:checked]:border-blue-500/40">
                                 <input type="checkbox" id="burnSubtitles" name="burn_subtitles" class="sr-only peer">
                                 <div class="w-4 h-4 rounded-md border border-zinc-600 peer-checked:border-blue-500 peer-checked:bg-blue-500 flex items-center justify-center shrink-0 mt-0.5 transition-all text-white">
                                     <i class="fa-solid fa-check text-[9px] opacity-0 peer-checked:opacity-100 transition-opacity"></i>
@@ -528,7 +579,7 @@ https://www.youtube.com/watch?v=..."></textarea>
                             </label>
 
                             <!-- Tile 7: Export Subtitles -->
-                            <label class="group relative p-3 rounded-xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.06] hover:border-white/[0.14] cursor-pointer transition-all flex items-start space-x-2.5 select-none has-[:checked]:bg-blue-500/[0.08] has-[:checked]:border-blue-500/40">
+                            <label data-ai-ui class="group relative p-3 rounded-xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.06] hover:border-white/[0.14] cursor-pointer transition-all flex items-start space-x-2.5 select-none has-[:checked]:bg-blue-500/[0.08] has-[:checked]:border-blue-500/40">
                                 <input type="checkbox" id="exportSubtitlesDownloader" class="sr-only peer">
                                 <div class="w-4 h-4 rounded-md border border-zinc-600 peer-checked:border-blue-500 peer-checked:bg-blue-500 flex items-center justify-center shrink-0 mt-0.5 transition-all text-white">
                                     <i class="fa-solid fa-check text-[9px] opacity-0 peer-checked:opacity-100 transition-opacity"></i>
@@ -540,7 +591,7 @@ https://www.youtube.com/watch?v=..."></textarea>
                             </label>
 
                             <!-- Tile 8: Scene Prompt -->
-                            <label class="group relative p-3 rounded-xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.06] hover:border-white/[0.14] cursor-pointer transition-all flex items-start space-x-2.5 select-none has-[:checked]:bg-blue-500/[0.08] has-[:checked]:border-blue-500/40">
+                            <label data-ai-ui class="group relative p-3 rounded-xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.06] hover:border-white/[0.14] cursor-pointer transition-all flex items-start space-x-2.5 select-none has-[:checked]:bg-blue-500/[0.08] has-[:checked]:border-blue-500/40">
                                 <input type="checkbox" id="autoExtractPrompt" class="sr-only peer">
                                 <div class="w-4 h-4 rounded-md border border-zinc-600 peer-checked:border-blue-500 peer-checked:bg-blue-500 flex items-center justify-center shrink-0 mt-0.5 transition-all text-white">
                                     <i class="fa-solid fa-check text-[9px] opacity-0 peer-checked:opacity-100 transition-opacity"></i>
@@ -552,7 +603,7 @@ https://www.youtube.com/watch?v=..."></textarea>
                             </label>
 
                             <!-- Tile 9: Smart SEO -->
-                            <label class="group relative p-3 rounded-xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.06] hover:border-white/[0.14] cursor-pointer transition-all flex items-start space-x-2.5 select-none has-[:checked]:bg-blue-500/[0.08] has-[:checked]:border-blue-500/40">
+                            <label data-ai-ui class="group relative p-3 rounded-xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.06] hover:border-white/[0.14] cursor-pointer transition-all flex items-start space-x-2.5 select-none has-[:checked]:bg-blue-500/[0.08] has-[:checked]:border-blue-500/40">
                                 <input type="checkbox" id="aiSummarize" class="sr-only peer">
                                 <div class="w-4 h-4 rounded-md border border-zinc-600 peer-checked:border-blue-500 peer-checked:bg-blue-500 flex items-center justify-center shrink-0 mt-0.5 transition-all text-white">
                                     <i class="fa-solid fa-check text-[9px] opacity-0 peer-checked:opacity-100 transition-opacity"></i>
@@ -565,7 +616,7 @@ https://www.youtube.com/watch?v=..."></textarea>
                         </div>
 
                         <!-- Local AI model in use (read-only; change it in AI Engines) -->
-                        <div class="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] mt-2">
+                        <div data-ai-ui class="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] mt-2">
                             <div class="flex items-center space-x-2.5">
                                 <i class="fa-solid fa-microchip text-blue-400 text-xs"></i>
                                 <div>
@@ -941,7 +992,7 @@ https://www.youtube.com/watch?v=..."></textarea>
                     </div>
 
                     <!-- Card 3: Subtitles & Local AI Intelligence (Full Width) -->
-                    <div class="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06] space-y-3 shadow-inner">
+                    <div data-ai-ui class="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06] space-y-3 shadow-inner">
                         <label class="block text-xs font-semibold text-zinc-200 tracking-tight flex items-center gap-1.5">
                             <i class="fa-solid fa-closed-captioning text-emerald-400"></i>
                             <span>Subtitles &amp; Local AI Intelligence</span>
@@ -1007,8 +1058,8 @@ https://www.youtube.com/watch?v=..."></textarea>
             <!-- SECTION 3: AI CLEANER (ANTI-AI DETECTION ENGINE) -->
             <div id="section-cleaner" class="hidden flex-1 overflow-y-auto pr-2 scroll-smooth space-y-5">
                 <div>
-                    <h2 class="text-sm font-semibold text-white tracking-tight">AI Metadata Cleanser &amp; Sanitizer</h2>
-                    <p class="text-xs text-zinc-400">Purge invisible SynthID, C2PA, EXIF, and platform metadata tracking from AI-generated media</p>
+                    <h2 class="text-sm font-semibold text-white tracking-tight">Metadata &amp; SynthID Cleaner</h2>
+                    <p class="text-xs text-zinc-400">Purge invisible SynthID, C2PA, EXIF, and platform metadata tracking from generated media</p>
                 </div>
 
                 <!-- Cleansing Summary Card -->
@@ -1079,7 +1130,7 @@ https://www.youtube.com/watch?v=..."></textarea>
                     <div class="pt-4 border-t border-white/10">
                         <button type="submit" id="cleanerSubmitBtn" class="w-full py-3.5 apple-btn-primary text-xs font-semibold rounded-xl flex items-center justify-center space-x-2 cursor-pointer shadow-lg active:scale-[0.99] transition-all">
                             <i class="fa-solid fa-broom text-base"></i>
-                            <span>Run Anti-AI Metadata Cleaner</span>
+                            <span>Run Metadata &amp; SynthID Cleaner</span>
                         </button>
                     </div>
                 </form>
@@ -1097,8 +1148,13 @@ https://www.youtube.com/watch?v=..."></textarea>
                             </button>
                             <button id="galleryTabStudio" type="button" onclick="switchGallerySection('studio')" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-2 text-zinc-400 hover:text-white cursor-pointer">
                                 <i class="fa-solid fa-clapperboard text-xs text-purple-400"></i>
-                                <span>AI Studio & Storyboards</span>
+                                <span>AI Studio &amp; Storyboards</span>
                                 <span id="galleryStudioBadge" class="px-1.5 py-0.2 rounded-md text-[10px] bg-purple-500/20 text-purple-300 font-mono">0</span>
+                            </button>
+                            <button id="galleryTabLineage" type="button" onclick="switchGallerySection('lineage')" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-2 text-zinc-400 hover:text-white cursor-pointer">
+                                <i class="fa-solid fa-diagram-project text-xs text-emerald-400"></i>
+                                <span>Media Lineage</span>
+                                <span id="galleryLineageBadge" class="px-1.5 py-0.2 rounded-md text-[10px] bg-emerald-500/20 text-emerald-300 font-mono">0</span>
                             </button>
                         </div>
                         <button id="galleryFavoritesBtn" onclick="toggleFavoritesFilter()" class="px-2.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-rose-400 text-[11px] font-medium transition flex items-center space-x-1.5 cursor-pointer shadow-sm" title="Show only liked / favorited media">
@@ -1121,7 +1177,9 @@ https://www.youtube.com/watch?v=..."></textarea>
                         </select>
                     </div>
                 </div>
+                <div id="galleryActionCards" class="proactive-cards-strip hidden"></div>
                 <div id="galleryGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 p-1"></div>
+                <div id="lineageContainer" class="hidden space-y-3 p-1"></div>
             </div>
 
             <!-- SECTION 5: HISTORY -->
@@ -1134,6 +1192,157 @@ https://www.youtube.com/watch?v=..."></textarea>
                     </div>
                 </div>
                 <div id="historyList" class="flex flex-col space-y-2 pb-4"></div>
+            </div>
+
+            <!-- SECTION 6: SPLIT-SCREEN TOOLING, AI CONFIGURATOR & LIVE JSON INSPECTOR -->
+            <div id="section-settings" class="hidden flex-1 overflow-y-auto pr-2 scroll-smooth space-y-5">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <h2 class="text-sm font-semibold text-white tracking-tight">Split-Screen Tooling &amp; AI Configurator</h2>
+                        <p class="text-xs text-zinc-400">Auto-detected binaries, Zero-AI Laptop Mode, VRAM Guard &amp; live pipeline configuration</p>
+                    </div>
+                    <span class="px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-[10.5px] font-semibold text-emerald-300 mono-metric">
+                        Zero-Wake Telemetry · 0 MB VRAM
+                    </span>
+                </div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
+                    <!-- LEFT PANE: Interactive Config Controls & Binary Matrix -->
+                    <div class="xl:col-span-7 space-y-4">
+                        <!-- Card 1: Zero-AI / Laptop Mode -->
+                        <div class="obsidian-card p-5 space-y-4">
+                            <div class="flex items-start justify-between gap-4">
+                                <div class="space-y-1">
+                                    <div class="flex items-center gap-2">
+                                        <span class="w-7 h-7 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-xs">
+                                            <i class="fa-solid fa-laptop"></i>
+                                        </span>
+                                        <h3 class="text-xs font-semibold text-white">Zero-AI / Laptop Mode</h3>
+                                    </div>
+                                    <p class="text-xs text-zinc-400 leading-relaxed max-w-xl">
+                                        Hide all AI Studio, Copilot, Whisper, and VRAM controls cleanly with zero popups or disabled clutter. Downloading, Trim &amp; 9:16 CPU face-tracking crop, Metadata Cleaner, Gallery, History, and Captions Studio continue running at full speed with 0 MB VRAM.
+                                    </p>
+                                </div>
+                                <label class="obsidian-toggle" title="Toggle Zero-AI / Laptop Mode">
+                                    <input type="checkbox" data-zero-ai-switch onchange="window.setZeroAIMode(this.checked)">
+                                    <span class="obsidian-toggle-track"></span>
+                                </label>
+                            </div>
+                            <div data-only-hide-ai class="pt-3 border-t border-white/[0.08] flex items-center justify-between gap-3">
+                                <span class="text-[11px] text-emerald-300">Laptop Mode is active — AI controls are hidden and 0 MB GPU VRAM is reserved.</span>
+                                <button type="button" onclick="window.setZeroAIMode(false)" class="px-3 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/35 text-emerald-200 text-xs font-semibold transition cursor-pointer shrink-0">
+                                    Re-enable AI UI
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Card 2: Auto-Detected Binary & Engine Matrix -->
+                        <div class="obsidian-card p-5 space-y-3">
+                            <div class="flex items-center justify-between gap-2">
+                                <h3 class="text-xs font-semibold text-white">Auto-Detected Binaries &amp; Engines</h3>
+                                <button type="button" onclick="openDownloadEnginesModal()" class="px-2.5 py-1 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-[11px] text-zinc-300 font-medium transition cursor-pointer">
+                                    Update yt-dlp / gallery-dl
+                                </button>
+                            </div>
+                            <div id="binaryDetectorGrid" class="binary-detector-grid">
+                                <div class="binary-tile"><span class="binary-tile-detail">Scanning local binaries…</span></div>
+                            </div>
+                        </div>
+
+                        <!-- Card 3: Default Downloader Pipeline Toggles -->
+                        <div class="obsidian-card p-5 space-y-3">
+                            <h3 class="text-xs font-semibold text-white">Default Grabber Pipeline Rules</h3>
+                            <p class="text-[11px] text-zinc-400">Synced live with Grabber tab tiles and reflected in the JSON inspector on the right.</p>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                                <label class="flex items-center justify-between gap-3 p-3 rounded-xl bg-white/[0.025] border border-white/[0.06] cursor-pointer">
+                                    <span class="text-xs text-zinc-200">Force H.264 MP4</span>
+                                    <label class="obsidian-toggle"><input type="checkbox" data-pipeline-switch="forceH264"><span class="obsidian-toggle-track"></span></label>
+                                </label>
+                                <label class="flex items-center justify-between gap-3 p-3 rounded-xl bg-white/[0.025] border border-white/[0.06] cursor-pointer">
+                                    <span class="text-xs text-zinc-200">Extract First Frame</span>
+                                    <label class="obsidian-toggle"><input type="checkbox" data-pipeline-switch="extractFrame" checked><span class="obsidian-toggle-track"></span></label>
+                                </label>
+                                <label class="flex items-center justify-between gap-3 p-3 rounded-xl bg-white/[0.025] border border-white/[0.06] cursor-pointer">
+                                    <span class="text-xs text-zinc-200">Clean Metadata (AI Bypass)</span>
+                                    <label class="obsidian-toggle"><input type="checkbox" data-pipeline-switch="aiBypass"><span class="obsidian-toggle-track"></span></label>
+                                </label>
+                                <label class="flex items-center justify-between gap-3 p-3 rounded-xl bg-white/[0.025] border border-white/[0.06] cursor-pointer">
+                                    <span class="text-xs text-zinc-200">Shazam Song ID</span>
+                                    <label class="obsidian-toggle"><input type="checkbox" data-pipeline-switch="identifySong" checked><span class="obsidian-toggle-track"></span></label>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Card 4: GPU & VRAM Guard (hidden when Laptop Mode is on) -->
+                        <div data-ai-ui class="obsidian-card p-5 space-y-4">
+                            <div class="flex flex-wrap items-center justify-between gap-4">
+                                <div class="space-y-1">
+                                    <div class="flex items-center gap-2">
+                                        <span class="w-7 h-7 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 text-xs">
+                                            <i class="fa-solid fa-microchip"></i>
+                                        </span>
+                                        <h3 class="text-xs font-semibold text-white">On-Demand GPU VRAM Guard</h3>
+                                    </div>
+                                    <p class="text-xs text-zinc-400">
+                                        Status polling never wakes Ollama, ComfyUI, or PyTorch. Idle GPU models automatically stay unloaded unless explicitly invoked.
+                                    </p>
+                                </div>
+                                <button id="settingsReleaseVramBtn" type="button" onclick="window.releaseGpuVram()" class="px-3.5 py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/35 text-amber-200 text-xs font-semibold transition cursor-pointer flex items-center gap-2 shrink-0">
+                                    <i class="fa-solid fa-broom text-[11px]"></i>
+                                    <span>Free All GPU VRAM Now</span>
+                                </button>
+                            </div>
+
+                            <div class="p-3 rounded-xl bg-white/[0.025] border border-white/[0.06] flex flex-wrap items-center justify-between gap-3">
+                                <span id="settingsVramStatus" class="text-xs text-zinc-300 mono-metric">Idle · 0 MB allocated by Media Grabber</span>
+                                <div class="flex items-center gap-2">
+                                    <button type="button" onclick="window.openAIEngines()" class="px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-xs text-zinc-200 font-medium transition cursor-pointer">
+                                        AI Engines
+                                    </button>
+                                    <button type="button" onclick="window.openAISetup()" class="px-3 py-1.5 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/35 text-xs text-blue-300 font-medium transition cursor-pointer">
+                                        Set up AI…
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card 5: Downloads, Storage & Shortcuts -->
+                        <div class="obsidian-card p-5 space-y-3">
+                            <h3 class="text-xs font-semibold text-white">Downloads, Storage &amp; Shortcuts</h3>
+                            <p class="text-xs text-zinc-400">Manage save locations or view keyboard shortcuts.</p>
+                            <div class="flex flex-wrap gap-2.5 pt-1">
+                                <button type="button" onclick="window.openAIStorage()" class="px-3.5 py-2 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-xs text-zinc-200 font-medium transition cursor-pointer flex items-center gap-2">
+                                    <i class="fa-solid fa-hard-drive text-blue-400"></i>
+                                    <span>Downloads &amp; Storage</span>
+                                </button>
+                                <button type="button" onclick="document.getElementById('shortcutsDialog').showModal()" class="px-3.5 py-2 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-xs text-zinc-200 font-medium transition cursor-pointer flex items-center gap-2">
+                                    <i class="fa-solid fa-keyboard text-zinc-400"></i>
+                                    <span>Keyboard Shortcuts</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- RIGHT PANE: Sticky Live Pipeline JSON Inspector -->
+                    <div class="xl:col-span-5 xl:sticky xl:top-2">
+                        <div id="pipelineConfigInspector" class="pipeline-json-card">
+                            <div class="pipeline-json-bar">
+                                <div class="flex items-center gap-2 min-w-0">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-rose-500/70"></span>
+                                    <span class="w-2.5 h-2.5 rounded-full bg-amber-400/70"></span>
+                                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-400/80"></span>
+                                    <span class="mono-metric text-[11px] font-semibold text-zinc-200 truncate ml-1">pipeline.config.json</span>
+                                </div>
+                                <div class="flex items-center gap-1.5 shrink-0">
+                                    <span id="pipelineModeBadge" class="binary-tile-status">0 MB VRAM</span>
+                                    <button id="refreshPipelineConfigBtn" type="button" class="lineage-mini-btn" title="Refresh live binary telemetry">↻ Refresh</button>
+                                    <button id="copyPipelineConfigBtn" type="button" class="lineage-mini-btn primary" title="Copy pipeline JSON to clipboard">📋 Copy JSON</button>
+                                </div>
+                            </div>
+                            <pre id="pipelineConfigJson" class="pipeline-json-pre mono-metric" tabindex="0" aria-label="Live JSON pipeline configuration">{ "loading": true }</pre>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -1171,6 +1380,7 @@ https://www.youtube.com/watch?v=..."></textarea>
 
             <!-- Queue View Container -->
             <div id="queueView" class="flex-1 flex flex-col overflow-hidden">
+                <div id="grabberActionCards" class="proactive-cards-strip hidden mb-3"></div>
                 <div id="queueContainer" class="flex-1 overflow-y-auto space-y-3 pr-1 scroll-smooth">
                     <!-- Modern Apple Pro Queue Empty State -->
                     <div id="emptyQueueNotice" class="p-6 rounded-2xl bg-white/[0.02] border border-white/[0.06] text-center space-y-4 my-auto backdrop-blur-xl">
@@ -1199,8 +1409,8 @@ https://www.youtube.com/watch?v=..."></textarea>
                             <i class="fa-regular fa-folder-open text-xs"></i>
                             <span>Folder</span>
                         </button>
-                        <span class="text-zinc-700">|</span>
-                        <a href="/video-studio" class="text-zinc-400 hover:text-pink-400 transition flex items-center space-x-1" title="Launch Autonomous AI Video Studio">
+                        <span data-ai-ui class="text-zinc-700">|</span>
+                        <a data-ai-ui href="/video-studio" class="text-zinc-400 hover:text-pink-400 transition flex items-center space-x-1" title="Launch Autonomous AI Video Studio">
                             <i class="fa-solid fa-clapperboard text-xs"></i>
                             <span>Studio</span>
                         </a>
@@ -1224,6 +1434,7 @@ https://www.youtube.com/watch?v=..."></textarea>
         </aside>
 
     </main>
+    </div>
 
     <!-- Folder/File Browser Modal (Apple macOS Acrylic Sheet Standard) -->
     <div id="browserModal" style="display:none;" class="fixed inset-0 z-[9999] bg-black/65 backdrop-blur-2xl flex items-center justify-center p-4">
@@ -1335,7 +1546,7 @@ https://www.youtube.com/watch?v=..."></textarea>
                         <i class="fa-solid fa-globe"></i>
                         <span>Visit Post</span>
                     </button>
-                    <button id="previewModalPromptBtn" class="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-emerald-500 text-zinc-200 hover:text-white border border-zinc-800 text-xs font-bold transition flex items-center space-x-1.5 shadow" title="Extract AI Prompt">
+                    <button data-ai-ui id="previewModalPromptBtn" class="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-emerald-500 text-zinc-200 hover:text-white border border-zinc-800 text-xs font-bold transition flex items-center space-x-1.5 shadow" title="Extract AI Prompt">
                         <i class="fa-solid fa-wand-magic-sparkles text-emerald-400"></i>
                         <span>AI Prompt</span>
                     </button>
@@ -1379,20 +1590,9 @@ https://www.youtube.com/watch?v=..."></textarea>
         </div>
     </div>
 
-    <meta name="media-token" content="{{ api_token }}">
     <script src="{{ url_for('static', filename='media_stream.js') }}"></script>
     <!-- Scripts -->
     <script>
-        const nativeFetch = window.fetch.bind(window);
-        window.fetch = (input, options = {}) => {
-            const url = new URL(typeof input === 'string' ? input : input.url, location.href);
-            if (url.origin === location.origin) {
-                const headers = new Headers(options.headers || (input instanceof Request ? input.headers : undefined));
-                headers.set('X-Media-Token', document.querySelector('meta[name="media-token"]').content);
-                options = {...options, headers};
-            }
-            return nativeFetch(input, options);
-        };
         // ─── Browser Modal State ───
         let _browserCurrentPath = '';
         let _browserMode = 'folder'; // 'folder' or 'file'
@@ -1564,33 +1764,53 @@ https://www.youtube.com/watch?v=..."></textarea>
             });
         }
 
+        const WORKSPACE_TAB_META = {
+            downloader: ['Downloader', 'Paste social URLs for clean local downloads & creator prep'],
+            converter: ['Media Tools', 'Trim, crop 9:16 with CPU face tracking, audio extract & export'],
+            cleaner: ['Metadata Cleaner', 'Purge invisible SynthID, C2PA & platform tracking payloads locally'],
+            gallery: ['Gallery', 'Browse, preview & organize downloaded media on disk'],
+            history: ['History', 'Recent downloads and source URL archive'],
+            settings: ['Settings', 'Zero-AI Laptop Mode, GPU VRAM Guard & Storage controls'],
+        };
+
         function switchTab(tab) {
-            ['downloader', 'converter', 'cleaner', 'gallery', 'history'].forEach(t => {
-                const isTab = t === tab;
+            const targetTab = Object.prototype.hasOwnProperty.call(WORKSPACE_TAB_META, tab) ? tab : 'downloader';
+            Object.keys(WORKSPACE_TAB_META).forEach(t => {
+                const isTab = t === targetTab;
                 const el = document.getElementById('section-' + t);
                 if (el) el.classList.toggle('hidden', !isTab);
-                
+
                 const tb = document.getElementById('tab-' + t);
-                if (tb) {
-                    if (isTab) {
-                        tb.className = 'px-5 py-2 rounded-xl text-xs font-semibold text-white bg-white/15 shadow-[0_1px_3px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.15)] transition-all flex items-center backdrop-blur-md';
-                    } else {
-                        tb.className = 'px-5 py-2 rounded-xl text-xs font-medium text-zinc-400 hover:text-white hover:bg-white/5 transition-all flex items-center';
-                    }
-                }
+                if (tb) tb.classList.toggle('active', isTab);
             });
-            
-            document.getElementById('submitBtn').style.display = tab === 'downloader' ? 'flex' : 'none';
-            
+
+            const meta = WORKSPACE_TAB_META[targetTab];
+            const titleEl = document.getElementById('workspaceViewTitle');
+            if (titleEl && meta) titleEl.textContent = meta[0];
+            const subtitleEl = document.getElementById('workspaceViewSubtitle');
+            if (subtitleEl && meta) subtitleEl.textContent = meta[1];
+
+            const dlSubmit = document.getElementById('submitBtn');
+            if (dlSubmit) dlSubmit.style.display = targetTab === 'downloader' ? 'flex' : 'none';
+
             const convSubmit = document.getElementById('convSubmitBtn');
-            if (convSubmit) convSubmit.style.display = tab === 'converter' ? 'flex' : 'none';
+            if (convSubmit) convSubmit.style.display = targetTab === 'converter' ? 'flex' : 'none';
 
             const cleanSubmit = document.getElementById('cleanerSubmitBtn');
-            if (cleanSubmit) cleanSubmit.style.display = tab === 'cleaner' ? 'flex' : 'none';
-            
-            if (tab === 'gallery') loadGallery();
-            if (tab === 'history') loadHistory();
+            if (cleanSubmit) cleanSubmit.style.display = targetTab === 'cleaner' ? 'flex' : 'none';
+
+            if (window.location.hash !== '#ai-setup' && window.location.hash !== '#' + targetTab) {
+                history.replaceState(null, '', '#' + targetTab);
+            }
+
+            if (targetTab === 'gallery') loadGallery();
+            if (targetTab === 'history') loadHistory();
+            if (targetTab === 'settings') {
+                if (window.refreshVramGuard) window.refreshVramGuard();
+                if (typeof window.refreshPipelineConfigurator === 'function') window.refreshPipelineConfigurator();
+            }
         }
+        window.switchTab = switchTab;
         
         function formatBytes(bytes, decimals = 2) {
             if (!+bytes) return '0 Bytes';
@@ -1834,12 +2054,35 @@ https://www.youtube.com/watch?v=..."></textarea>
             window.activeGallerySection = sec;
             const btnDown = document.getElementById('galleryTabDownloads');
             const btnStud = document.getElementById('galleryTabStudio');
+            const btnLin = document.getElementById('galleryTabLineage');
+            const gridEl = document.getElementById('galleryGrid');
+            const linEl = document.getElementById('lineageContainer');
             const search = document.getElementById('gallerySearch');
             const filter = document.getElementById('galleryFilter');
 
+            const inactiveCls = 'px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-2 text-zinc-400 hover:text-white cursor-pointer';
+            if (btnDown) btnDown.className = sec === 'downloads'
+                ? 'px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-2 bg-white/10 text-white shadow-sm cursor-pointer'
+                : inactiveCls;
+            if (btnStud) btnStud.className = sec === 'studio'
+                ? 'px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-2 bg-gradient-to-r from-purple-600/30 to-pink-600/30 text-white border border-purple-500/40 shadow-sm cursor-pointer'
+                : inactiveCls;
+            if (btnLin) btnLin.className = sec === 'lineage'
+                ? 'px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-2 bg-emerald-500/20 text-emerald-200 border border-emerald-500/40 shadow-sm cursor-pointer'
+                : inactiveCls;
+
+            if (sec === 'lineage') {
+                if (gridEl) gridEl.classList.add('hidden');
+                if (linEl) linEl.classList.remove('hidden');
+                if (search) search.placeholder = 'Filter lineage by filename, @creator, URL…';
+                if (typeof window.loadMediaLineage === 'function') window.loadMediaLineage();
+                return;
+            }
+
+            if (linEl) linEl.classList.add('hidden');
+            if (gridEl) gridEl.classList.remove('hidden');
+
             if (sec === 'studio') {
-                if (btnDown) btnDown.className = 'px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-2 text-zinc-400 hover:text-white cursor-pointer';
-                if (btnStud) btnStud.className = 'px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-2 bg-gradient-to-r from-purple-600/30 to-pink-600/30 text-white border border-purple-500/40 shadow-sm cursor-pointer';
                 if (search) search.placeholder = 'Search studio scenes, prompts...';
                 if (filter) {
                     filter.innerHTML = `
@@ -1851,8 +2094,6 @@ https://www.youtube.com/watch?v=..."></textarea>
                     `;
                 }
             } else {
-                if (btnDown) btnDown.className = 'px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-2 bg-white/10 text-white shadow-sm cursor-pointer';
-                if (btnStud) btnStud.className = 'px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-2 text-zinc-400 hover:text-white cursor-pointer';
                 if (search) search.placeholder = 'Search downloads...';
                 if (filter) {
                     filter.innerHTML = `
@@ -1870,8 +2111,13 @@ https://www.youtube.com/watch?v=..."></textarea>
             }
             loadGallery();
         }
+        window.switchGallerySection = switchGallerySection;
 
         async function loadGallery() {
+            if (window.activeGallerySection === 'lineage') {
+                if (typeof window.loadMediaLineage === 'function') window.loadMediaLineage();
+                return;
+            }
             const filter = document.getElementById('galleryFilter')?.value || 'All';
             const query = (document.getElementById('gallerySearch')?.value || '').toLowerCase();
             const grid = document.getElementById('galleryGrid');
@@ -2167,6 +2413,7 @@ https://www.youtube.com/watch?v=..."></textarea>
                     
                     grid.appendChild(el);
                 });
+                window.dispatchEvent(new CustomEvent('grabber:gallery-loaded', { detail: data }));
             } catch (err) {
                 console.error("Gallery loading failed:", err);
                 grid.innerHTML = '<div class="col-span-full py-8 text-center text-red-400 text-xs">Failed to load gallery items.</div>';
@@ -3103,6 +3350,13 @@ https://www.youtube.com/watch?v=..."></textarea>
                                     playBtn.onclick = () => playCompletedFile(data.file_path);
                                     actionsDiv.appendChild(playBtn);
 
+                                    // Open in Creator Studio Action
+                                    const capBtn = document.createElement('button');
+                                    capBtn.className = 'px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-[11px] font-semibold text-emerald-300 hover:text-white flex items-center space-x-1.5 transition';
+                                    capBtn.innerHTML = '<i class="fa-solid fa-closed-captioning text-emerald-400 text-[10px]"></i> <span>Studio</span>';
+                                    capBtn.onclick = () => { window.location.href = `/captions?import=${encodeURIComponent(data.file_path)}`; };
+                                    actionsDiv.appendChild(capBtn);
+
                                     // Copy Path Action
                                     const copyBtn = document.createElement('button');
                                     copyBtn.className = 'px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.08] text-[11px] font-semibold text-zinc-300 hover:text-white flex items-center space-x-1.5 transition';
@@ -3114,6 +3368,7 @@ https://www.youtube.com/watch?v=..."></textarea>
                                 }
                                 if (typeof loadGallery === 'function') loadGallery();
                                 if (typeof loadHistory === 'function') loadHistory();
+                                window.dispatchEvent(new CustomEvent('grabber:download-complete', { detail: data }));
                                 finished = true;
                                 break;
                             }
@@ -4526,8 +4781,37 @@ https://www.youtube.com/watch?v=..."></textarea>
         }
 
         // --- Client Heartbeat Keepalive ---
+        let _heartbeatRefreshing = false;
+        async function refreshMediaTokenFromIndex() {
+            if (_heartbeatRefreshing) return false;
+            _heartbeatRefreshing = true;
+            try {
+                const rawFetch = window.__nativeFetch || fetch;
+                const resp = await rawFetch('/', { cache: 'no-store' });
+                if (!resp.ok) return false;
+                const html = await resp.text();
+                const match = html.match(/<meta\s+name=["']media-token["']\s+content=["']([^"']+)["']/i);
+                if (match && match[1]) {
+                    const meta = document.querySelector('meta[name="media-token"]');
+                    if (meta) meta.setAttribute('content', match[1]);
+                    return true;
+                }
+            } catch {
+                /* ignore offline restart window */
+            } finally {
+                _heartbeatRefreshing = false;
+            }
+            return false;
+        }
+
         function sendClientHeartbeat() {
-            fetch('/api/heartbeat', { method: 'POST', keepalive: true }).catch(() => {});
+            fetch('/api/heartbeat', { method: 'POST', keepalive: true })
+                .then(async (res) => {
+                    if (res && res.status === 403 && await refreshMediaTokenFromIndex()) {
+                        return fetch('/api/heartbeat', { method: 'POST', keepalive: true });
+                    }
+                })
+                .catch(() => {});
         }
         setInterval(sendClientHeartbeat, 4000);
         sendClientHeartbeat();
@@ -4548,7 +4832,7 @@ https://www.youtube.com/watch?v=..."></textarea>
             <button type="button" onclick="this.closest('dialog').close()" class="w-7 h-7 rounded-full bg-white/[0.06] hover:bg-white/[0.12] text-zinc-400 hover:text-white" aria-label="Close">×</button>
         </div>
         <dl class="px-5 py-4 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2.5 text-xs">
-            <dt><kbd class="px-1.5 py-0.5 rounded-md bg-white/10 border border-white/15 font-mono">Ctrl+K</kbd></dt><dd>Open or close the AI Copilot</dd>
+            <dt data-ai-ui><kbd class="px-1.5 py-0.5 rounded-md bg-white/10 border border-white/15 font-mono">Ctrl+K</kbd></dt><dd data-ai-ui>Open or close the AI Copilot</dd>
             <dt><kbd class="px-1.5 py-0.5 rounded-md bg-white/10 border border-white/15 font-mono">Ctrl+Enter</kbd></dt><dd>Start the form on the current tab</dd>
             <dt><kbd class="px-1.5 py-0.5 rounded-md bg-white/10 border border-white/15 font-mono">Ctrl+V</kbd></dt><dd>Paste a link into the downloader</dd>
             <dt><kbd class="px-1.5 py-0.5 rounded-md bg-white/10 border border-white/15 font-mono">Esc</kbd></dt><dd>Close the open sheet or dialog</dd>
@@ -4698,7 +4982,7 @@ https://www.youtube.com/watch?v=..."></textarea>
     </div>
 
     <!-- AI Influencer Studio Suite Scripts -->
-    <script src="/static/copilot.js?v=5.0" defer></script>
+    <script src="/static/copilot.js?v=5.3.0" defer></script>
     <script src="/static/characters.js?v=5.0" defer></script>
     <script src="/static/motion_studio.js?v=5.0" defer></script>
 </body>

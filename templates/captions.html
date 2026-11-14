@@ -5,50 +5,69 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="media-token" content="{{ api_token }}">
 <title>Captions & Video Studio — Media Grabber</title>
-<link rel="stylesheet" href="/static/captions.css?v=v5captions1">
-<link rel="stylesheet" href="/static/copilot.css?v=5.0">
+<link rel="stylesheet" href="/static/captions.css?v=5.3.0">
+<link rel="stylesheet" href="/static/copilot.css?v=5.3.0">
 <link rel="stylesheet" href="/static/ai_setup.css?v=5.0">
+<link rel="stylesheet" href="/static/app_shell.css?v=5.3.0">
 <script src="/static/ai_setup.js?v=5.0" defer></script>
-<script src="/static/captions.js?v=v5captions1" defer></script>
-<script src="/static/copilot.js?v=5.0" defer></script>
+<script src="/static/app_shell.js?v=5.1.1" defer></script>
+<script src="/static/action_cards.js?v=5.3.0" defer></script>
+<script src="/static/captions.js?v=5.3.0" defer></script>
+<script src="/static/copilot.js?v=5.3.0" defer></script>
 </head>
 <body class="capcutStudio">
 <header class="capcutHeader">
   <div class="headerLeft">
-    <a href="/" class="backBtn">← Home</a>
+    <a href="/#downloader" class="header-home-btn" title="Back to Media Grabber">‹ Home</a>
     <div class="brandTitle">
-      <h1>Creator Video Studio</h1>
-      <small>CapCut-style local multitrack editor</small>
+      <h1>Creator Studio</h1>
     </div>
     <select id="projects" aria-label="Saved project"><option value="">Saved projects…</option></select>
-    <button id="reload" title="Reload saved project">↻ Reload</button>
-    <button id="duplicateProject" title="Duplicate project">Duplicate</button>
-    <button id="recoverEdits" title="Recover unsaved caption draft">Recover draft</button>
+    <details class="header-menu">
+      <summary title="Project &amp; Studio tools">Project ▾</summary>
+      <div class="header-menu-panel">
+        <button id="reload" type="button" class="header-menu-item" title="Reload saved project">↻ Reload saved</button>
+        <button id="duplicateProject" type="button" class="header-menu-item" title="Duplicate project">⧉ Duplicate project</button>
+        <button id="recoverEdits" type="button" class="header-menu-item" title="Recover unsaved caption draft">⟲ Recover draft</button>
+        <div class="header-menu-divider"></div>
+        <a id="aiVideoStudioBtn" data-ai-ui href="/video-studio" class="header-menu-item" title="Launch Autonomous AI Video Studio">🎬 Open in AI Studio</a>
+        <button id="shortcutsBtn" type="button" class="header-menu-item" title="View Keyboard Shortcuts">⌨ Keyboard shortcuts</button>
+      </div>
+    </details>
   </div>
   <div class="headerCenter">
-    <button id="undo" title="Undo (Ctrl+Z)">↶ Undo</button>
-    <button id="redo" title="Redo (Ctrl+Shift+Z)">↷ Redo</button>
-    <a id="aiVideoStudioBtn" href="/video-studio" title="Launch Autonomous AI Video Studio" style="text-decoration:none; display:inline-flex; align-items:center; gap:6px; padding: 5px 12px; border-radius: 8px; background: rgba(236,72,153,0.12); border: 1px solid rgba(236,72,153,0.3); color: #f472b6; font-size: 11px; font-weight: 600; cursor:pointer; transition: all 0.2s ease;">🎬 AI Video Studio</a>
-    <button id="shortcutsBtn" type="button" title="View Keyboard Shortcuts">⌨️ Shortcuts</button>
+    <div class="header-icon-group">
+      <button id="undo" type="button" title="Undo (Ctrl+Z)">↶ Undo</button>
+      <button id="redo" type="button" title="Redo (Ctrl+Shift+Z)">↷ Redo</button>
+    </div>
+    <button id="save" type="button" title="Save project">Save</button>
     <span id="saveStatus" role="status">Open a video or song to begin</span>
-    <button id="save">Save</button>
   </div>
   <div class="headerRight exports">
     <h2 class="srOnly">Finish your video</h2>
-    <label>Quality
-      <select id="renderQuality">
-        <option value="standard">Standard quality</option>
-        <option value="high">High quality</option>
-        <option value="60fps">60 fps output (frames may repeat)</option>
-        <option value="4k">4K output (upscales smaller sources)</option>
-        <option value="draft">Fast 720p Draft</option>
-      </select>
-    </label>
-    <label><input type="checkbox" id="renderCpu"> Use CPU</label>
-    <button id="renderCheck" title="Render a 5-second MP4 check at the playhead">5s Check</button>
-    <button id="srt" title="Download SRT subtitles">SRT</button>
-    <button id="stop" title="Stop this project's current task (other app jobs keep running)">Stop</button>
-    <button id="export" class="primary">Export MP4</button>
+    <div class="vram-guard-mount" data-ai-ui></div>
+    <button type="button" class="shell-copilot-btn" data-ai-ui title="Open AI Copilot (Ctrl+K)">✨ Copilot</button>
+    <details class="header-menu">
+      <summary title="Render quality, CPU option, 5s preview &amp; SRT download">Options ▾</summary>
+      <div class="header-menu-panel align-right">
+        <div class="header-menu-field">
+          <span>Render Quality</span>
+          <select id="renderQuality">
+            <option value="standard">Standard quality</option>
+            <option value="high">High quality</option>
+            <option value="60fps">60 fps output (frames may repeat)</option>
+            <option value="4k">4K output (upscales smaller sources)</option>
+            <option value="draft">Fast 720p Draft</option>
+          </select>
+        </div>
+        <label class="header-menu-item" style="cursor:pointer;"><input type="checkbox" id="renderCpu"> Force CPU encoder</label>
+        <div class="header-menu-divider"></div>
+        <button id="renderCheck" type="button" class="header-menu-item" title="Render a 5-second MP4 check at the playhead">▶ 5s Preview Check</button>
+        <button id="srt" type="button" class="header-menu-item" title="Download SRT subtitles">⬇ Download .SRT</button>
+      </div>
+    </details>
+    <button id="stop" type="button" title="Stop this project's current task (other app jobs keep running)">Stop</button>
+    <button id="export" type="button" class="primary">Export MP4</button>
   </div>
 </header>
 
@@ -74,7 +93,7 @@
         </button>
         <button type="button" class="dockTab" data-dock="lyrics">
           <span class="dockIcon">📝</span>
-          <span>Lyrics &amp; AI</span>
+          <span>Lyrics &amp; Subtitles</span>
         </button>
         <button type="button" class="dockTab" data-dock="fx">
           <span class="dockIcon">✨</span>
@@ -88,7 +107,7 @@
           <span class="dockIcon">🎞️</span>
           <span>Canvas &amp; PiP</span>
         </button>
-        <button type="button" class="dockTab" data-dock="ai-backdrop">
+        <button type="button" class="dockTab" data-dock="ai-backdrop" data-ai-ui>
           <span class="dockIcon">🎨</span>
           <span>AI Backdrop</span>
         </button>
@@ -131,7 +150,7 @@
               </div>
               <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px;">
                 <button id="seqBrowseStock" class="primary" type="button" style="padding:6px 6px;font-size:11px;justify-content:center;">🌐 Free Stock</button>
-                <button id="seqAiBackdropBtn" type="button" style="display:inline-flex;align-items:center;justify-content:center;gap:4px;background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.35);color:#c084fc;padding:6px 6px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;">🎨 AI Backdrop</button>
+                <button id="seqAiBackdropBtn" data-ai-ui type="button" style="display:inline-flex;align-items:center;justify-content:center;gap:4px;background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.35);color:#c084fc;padding:6px 6px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;">🎨 AI Backdrop</button>
                 <label class="upload" style="padding:6px 6px;font-size:11px;justify-content:center;">➕ Upload<input id="seqUploadInput" type="file" multiple accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,.mkv,.webm"></label>
               </div>
               <div style="margin-bottom:8px;">
@@ -145,8 +164,8 @@
                 <button id="seqEvenSplit" type="button" title="Set all clip durations to 0 (split song evenly)" style="padding:4px 8px;font-size:10.5px;justify-content:center;">Split evenly</button>
                 <button id="seqCycle10" type="button" title="Set each clip to 10s so clips cycle across the song" style="padding:4px 8px;font-size:10.5px;justify-content:center;">10s each</button>
               </div>
-              <div class="row" style="margin-bottom:8px;">
-                <label style="flex:1;">Transition
+              <div class="fieldGrid2 transRow" style="margin-bottom:8px;">
+                <label class="fieldStack">Transition
                   <select id="comp_sequence_transition">
                     <option value="none">Cut (Instant)</option>
                     <option value="fade">Dissolve / Crossfade</option>
@@ -159,7 +178,7 @@
                     <option value="wiperight">Wipe Right</option>
                   </select>
                 </label>
-                <label style="width:100px;">Duration (s)
+                <label class="fieldStack">Duration (s)
                   <input id="comp_sequence_transition_duration" type="number" min="0.1" max="2.0" step="0.1" value="0.5">
                 </label>
               </div>
@@ -194,7 +213,7 @@
               <div class="row">
                 <select id="songLibrary" aria-label="Background from library" style="flex:1;"><option value="">Use colour / uploaded background</option></select>
                 <button id="browseStockSong" type="button">🌐 Free Videos</button>
-                <button id="aiBackdropSongBtn" type="button" style="display:inline-flex;align-items:center;gap:4px;background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.35);color:#c084fc;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;">🎨 AI Backdrop</button>
+                <button id="aiBackdropSongBtn" data-ai-ui type="button" style="display:inline-flex;align-items:center;gap:4px;background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.35);color:#c084fc;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;">🎨 AI Backdrop</button>
               </div>
               <p id="songStockNotice" class="hint" hidden></p>
               <label><input id="songVisualizer" type="checkbox"> Add audio-reactive waveform</label>
@@ -238,8 +257,8 @@
               <button type="button" data-stock-chip="dj concert">🎤 Concert / DJ</button>
               <button type="button" data-stock-chip="sunset beach">🌊 Sunset Vibe</button>
             </div>
-            <div class="row">
-              <label>Source
+            <div class="fieldGrid2">
+              <label class="fieldStack">Source
                 <select id="stockProvider">
                   <option value="mixkit" selected>🔥 Mixkit HD Stock (Free · No Key)</option>
                   <option value="youtube">📱 YouTube Shorts / Google (Free · No Key)</option>
@@ -247,15 +266,15 @@
                   <option value="pexels">🌐 Pexels (API Key)</option>
                 </select>
               </label>
-              <label>Type
+              <label class="fieldStack">Type
                 <select id="stockKind">
                   <option value="video">Videos</option>
                   <option value="image">Photos</option>
                 </select>
               </label>
             </div>
-            <div class="row">
-              <label>Ratio
+            <div class="fieldGrid2">
+              <label class="fieldStack">Ratio
                 <select id="stockOrientation">
                   <option value="portrait">9:16 Portrait</option>
                   <option value="landscape">16:9 Landscape</option>
@@ -263,7 +282,7 @@
                   <option value="all">All</option>
                 </select>
               </label>
-              <label>Max (s)<input id="stockMaxDuration" type="number" min="0" max="600" step="5" value="60" style="width:70px;"></label>
+              <label class="fieldStack">Max (s)<input id="stockMaxDuration" type="number" min="0" max="600" step="5" value="60"></label>
             </div>
             <div class="row">
               <input id="stockQuery" type="text" maxlength="100" placeholder="Search e.g. neon city, rain, dancer, beach…" aria-label="Stock search query" style="flex:1;">
@@ -314,15 +333,15 @@
               <button id="clearLyricsDraft" type="button">Clear</button>
             </div>
             <textarea id="lyrics" rows="6" maxlength="50000" placeholder="Paste your song lyrics here (one caption line per row)…" aria-label="Lyrics"></textarea>
-            <div class="row">
-              <label>Language
-                <select id="alignLanguage">
-                  <option value="auto">Detect per section</option><option value="en-el">Greek + English</option><option value="ko-el">Korean + Greek</option><option value="en-ko">Korean + English</option><option value="en-fr">French + English</option><option value="en-fr-ko">English + French + Korean</option>
-                  {% for code, label in languages.items() %}<option value="{{ code }}">{{ label }}</option>{% endfor %}
-                </select>
-              </label>
-              <label>From (s)<input id="alignStart" type="number" min="0" step=".01" style="width:70px;"></label>
-              <label>To (s)<input id="alignEnd" type="number" min="0" step=".01" style="width:70px;"></label>
+            <label class="fieldStack">Language
+              <select id="alignLanguage">
+                <option value="auto">Detect per section</option><option value="en-el">Greek + English</option><option value="ko-el">Korean + Greek</option><option value="en-ko">Korean + English</option><option value="en-fr">French + English</option><option value="en-fr-ko">English + French + Korean</option>
+                {% for code, label in languages.items() %}<option value="{{ code }}">{{ label }}</option>{% endfor %}
+              </select>
+            </label>
+            <div class="fieldGrid2">
+              <label class="fieldStack">From (s)<input id="alignStart" type="number" min="0" step=".01"></label>
+              <label class="fieldStack">To (s)<input id="alignEnd" type="number" min="0" step=".01"></label>
             </div>
             <div class="row">
               <button id="correctLyrics" class="primary" type="button" title="Keep current line timings and replace words with your exact lyrics">Correct lyrics, keep timing</button>
@@ -336,14 +355,14 @@
           </div>
 
           <div class="subCard stackForm">
-            <details class="subCard" id="translationPanel"><summary>🌐 AI Translation Workspace</summary>
-              <div class="row" style="margin-top:4px;">
-                <label style="flex:1;">Translate into
+            <details class="subCard" id="translationPanel" data-ai-ui><summary>🌐 AI Translation Workspace</summary>
+              <div class="fieldGrid2" style="margin-top:4px;">
+                <label class="fieldStack">Translate into
                   <select id="workspace_translation_language" aria-label="Target translation language">
                     {% for code,label in languages.items() %}<option value="{{ code }}" {% if code == 'en' %}selected{% endif %}>{{ label }}</option>{% endfor %}
                   </select>
                 </label>
-                <label style="flex:1;">Display on video
+                <label class="fieldStack">Display on video
                   <select id="workspace_track_mode" aria-label="Subtitle display mode">
                     <option value="both" selected>Original + Translation (Bilingual)</option>
                     <option value="translation">Translation only</option>
@@ -363,6 +382,7 @@
               <div class="row">
                 <button id="findTranslationModels" type="button">Find installed local models</button>
                 <button id="setupTranslationModel" type="button">Set up local translator</button>
+                <button id="unloadTranslatorVramBtn" type="button" title="Unload local translation/AI models from GPU VRAM">⚡ Free AI VRAM</button>
               </div>
               <p id="translationSetupHint" class="hint">Opens AI Setup with the recommended translator for this PC: size, license and source are shown before anything downloads. Lyrics stay on your computer.</p>
               <label>Local AI model<select id="translationModel"><option value="">Auto (best for this PC)</option></select></label>
@@ -458,6 +478,8 @@
               <select id="visualizer_style">
                 <option value="spectrum">Animated bars</option>
                 <option value="waveform">Waveform Line</option>
+                <option value="mirror">Mirror Twin EQ</option>
+                <option value="pulse">Cyber Center Pulse</option>
               </select>
             </label>
             <label>Position
@@ -473,15 +495,81 @@
           </div>
         </section>
 
-        <!-- PANE 5: AUDIO FX, CLEANUP, AI NARRATOR & SONG TRIM -->
+        <!-- PANE 5: AUDIO MIXER, MP3 TRACK, AI VOICE & TRIM -->
         <section class="dockPane" data-dock-pane="audio">
           <div class="paneHeader">
-            <h2>🎙️ AI Narrator, Audio FX &amp; Trim</h2>
+            <h2>🎵 Audio Mixer, MP3 Track &amp; AI Voice</h2>
+          </div>
+
+          <div class="subCard stackForm" id="multiAudioCard">
+            <div class="musicMixerBadgeRow">
+              <h3>1. Multi-Track Audio Mixer (Add MP3 to Video)</h3>
+              <span id="activeMusicBadge" class="hint" style="margin:0;font-weight:600;color:#34d399;">Primary Audio Only</span>
+            </div>
+            <p class="hint" style="margin:0;">Layer a background MP3, song, or soundbed onto any video while keeping the video's original voice/audio intact.</p>
+            <label class="fieldStack">Add / Replace Background MP3 or Audio File
+              <input id="musicFile" type="file" accept=".mp3,.wav,.m4a,.flac,.ogg,.mp4,.mov,.mkv,.webm">
+            </label>
+            <label class="fieldStack">Or Pick Saved Audio from Gallery
+              <select id="musicLibrary"><option value="">Choose saved MP3 / song…</option></select>
+            </label>
+            <div class="liveMusicPreviewBar" id="liveMusicPreviewBar">
+              <div class="row" style="justify-content:space-between;align-items:center;gap:8px;">
+                <label style="margin:0;display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:#e4e4e7;">
+                  <input id="liveMusicPreviewToggle" type="checkbox" checked>
+                  <span>🎧 Live-sync staged MP3 on Play</span>
+                </label>
+                <span id="liveMusicPreviewBadge" class="monoBadge">Standby</span>
+              </div>
+              <div class="row" style="align-items:center;gap:8px;margin-top:6px;">
+                <button id="auditionMusicBtn" type="button" disabled style="flex:1;">▶ Audition MP3</button>
+              </div>
+              <audio id="liveMusicAudio" preload="auto" hidden></audio>
+            </div>
+            <div class="mixerFaderRow">
+              <div class="row" style="justify-content:space-between;align-items:center;">
+                <span>🎙️ Main / Video Original Audio Vol</span>
+                <span id="mixerMainVolVal" class="monoBadge">100%</span>
+              </div>
+              <input id="mixerMainVolRange" type="range" min="0" max="2" step="0.05" value="1">
+            </div>
+            <div class="mixerFaderRow">
+              <div class="row" style="justify-content:space-between;align-items:center;">
+                <span>🎵 Added MP3 / Music Track Vol</span>
+                <span id="mixerMusicVolVal" class="monoBadge">35%</span>
+              </div>
+              <div class="row" style="align-items:center;">
+                <input id="mixerMusicVolRange" type="range" min="0" max="2" step="0.05" value="0.35" style="flex:1;">
+                <input id="comp_music_volume" type="number" min="0" max="2" step="0.05" value="0.35" style="width:74px;" aria-label="Added MP3 track volume">
+              </div>
+            </div>
+            <div class="mixerFaderRow">
+              <div class="row" style="justify-content:space-between;align-items:center;">
+                <span>🎬 Sequence Clip Audio Vol</span>
+                <span id="mixerClipVolVal" class="monoBadge">0%</span>
+              </div>
+              <input id="mixerClipVolRange" type="range" min="0" max="2" step="0.05" value="0">
+            </div>
+            <div class="fieldGrid3">
+              <label class="fieldStack">MP3 Start (s)<input id="comp_music_start" type="number" min="0" step="0.1" value="0"></label>
+              <label class="fieldStack">Offset (s)<input id="comp_music_offset" type="number" min="0" max="600" step="0.1" value="0"></label>
+              <label class="fieldStack">Dur (s, 0=full)<input id="comp_music_duration" type="number" min="0" step="0.1" value="0"></label>
+            </div>
+            <div class="fieldGrid2">
+              <label class="fieldStack">MP3 Fade In (s)<input id="comp_music_fade_in" type="number" min="0" max="60" step="0.1" value="0"></label>
+              <label class="fieldStack">MP3 Fade Out (s)<input id="comp_music_fade_out" type="number" min="0" max="60" step="0.1" value="0"></label>
+            </div>
+            <label><input id="comp_music_ducking" type="checkbox" checked> Auto-duck added MP3 under video speech / primary audio</label>
+            <label><input id="comp_music_loop" type="checkbox" checked> Loop MP3 if shorter than video</label>
+            <div class="row" style="margin-top:4px;">
+              <button id="clearMusicBtn" type="button" hidden>✕ Remove MP3</button>
+              <button id="applyMusicMixBtn" class="primary" type="button" style="flex:1;">✨ Apply Multi-Track Audio Mix</button>
+            </div>
           </div>
 
           <div class="subCard stackForm" id="narratorCard">
             <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-              <h3 style="margin:0;">1. AI Narrator &amp; Voiceover Studio</h3>
+              <h3 style="margin:0;">2. AI Narrator &amp; Voiceover Studio</h3>
               <span id="narratorEngineBadge" style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:rgba(10,132,255,0.18);color:#60a5fa;border:1px solid rgba(10,132,255,0.35);">Neural TTS</span>
             </div>
             <p class="hint" style="margin:2px 0 6px;">Generate broadcast-mastered voiceover (-16 LUFS) synced to your captions, dub translated subtitles, or re-generate a single line with locked vocal color.</p>
@@ -494,14 +582,14 @@
               </select>
             </label>
 
-            <div class="row">
-              <label style="width:120px;">Language
+            <div class="fieldGrid2">
+              <label class="fieldStack">Language
                 <select id="narratorLanguage" aria-label="Voice language filter">
                   <option value="">All languages</option>
                   {% for code, label in languages.items() %}<option value="{{ code }}">{{ label }}</option>{% endfor %}
                 </select>
               </label>
-              <label style="flex:1;">Voice
+              <label class="fieldStack">Voice
                 <select id="narratorVoice" aria-label="Narrator voice"></select>
               </label>
             </div>
@@ -516,11 +604,11 @@
                 <p class="hint" style="margin:0 0 6px;color:#a7f3d0;">Kokoro-82M runs 100% offline on your GPU/CPU. Download the voice pack once (~196 MB) to unlock 24 local voices &amp; custom voice blending.</p>
                 <button id="installKokoroBtn" class="primary" type="button" style="width:100%;">⬇️ Install Local Kokoro-82M Voice Pack</button>
               </div>
-              <div class="row">
-                <label style="flex:1;">Speed (×)
+              <div class="fieldGrid2">
+                <label class="fieldStack">Speed (×)
                   <input id="narratorSpeed" type="number" min="0.5" max="2.0" step="0.05" value="1.0">
                 </label>
-                <label style="flex:1;">Blend With Voice
+                <label class="fieldStack">Blend With Voice
                   <select id="narratorBlendVoice">
                     <option value="">None (Single Voice)</option>
                   </select>
@@ -531,11 +619,11 @@
               </label>
             </div>
 
-            <div id="narratorEdgeControls" class="row">
-              <label style="flex:1;">Speed (%)
+            <div id="narratorEdgeControls" class="fieldGrid2">
+              <label class="fieldStack">Speed (%)
                 <input id="narratorRatePct" type="number" min="-40" max="50" step="5" value="0">
               </label>
-              <label style="flex:1;">Pitch (Hz)
+              <label class="fieldStack">Pitch (Hz)
                 <input id="narratorPitchHz" type="number" min="-15" max="15" step="1" value="0">
               </label>
             </div>
@@ -545,20 +633,20 @@
                 <input id="elevenlabsApiKey" type="password" maxlength="220" placeholder="Paste ElevenLabs xi-api-key…" aria-label="ElevenLabs API key" style="flex:1;">
                 <button id="saveElevenlabsKey" type="button">Save Key</button>
               </div>
-              <div class="row">
-                <label style="flex:1;">Stability
+              <div class="fieldGrid3">
+                <label class="fieldStack">Stability
                   <input id="narratorStability" type="number" min="0" max="1" step="0.05" value="0.50">
                 </label>
-                <label style="flex:1;">Similarity
+                <label class="fieldStack">Similarity
                   <input id="narratorSimilarity" type="number" min="0" max="1" step="0.05" value="0.75">
                 </label>
-                <label style="flex:1;">Style
+                <label class="fieldStack">Style
                   <input id="narratorStyle" type="number" min="0" max="1" step="0.05" value="0.15">
                 </label>
               </div>
             </div>
 
-            <label>Vocal Tone Mastering (Locked Per Project)
+            <label class="fieldStack">Vocal Tone Mastering (Locked Per Project)
               <select id="narratorTone" aria-label="Vocal tone mastering preset">
                 <option value="natural" selected>Natural Clean (Balanced -16 LUFS)</option>
                 <option value="warm_podcast">Warm Podcast Mic (Rich Low-Mid + Smooth Highs)</option>
@@ -567,15 +655,15 @@
               </select>
             </label>
 
-            <div class="row">
-              <label style="flex:1;">Speak From
+            <div class="fieldGrid2">
+              <label class="fieldStack">Speak From
                 <select id="narratorTrack" aria-label="Narration source track">
                   <option value="original" selected>Original Captions</option>
                   <option value="translation">Translated Subtitles (AI Dubbing)</option>
                   <option value="script">New Script (Create Captions + Voice)</option>
                 </select>
               </label>
-              <label style="flex:1;">Timing Sync
+              <label class="fieldStack">Timing Sync
                 <select id="narratorTimingMode" aria-label="Narration timing synchronization mode">
                   <option value="sync_captions" selected>Sync Captions to Voice</option>
                   <option value="fit_captions">Fit Voice to Captions</option>
@@ -584,19 +672,19 @@
             </div>
 
             <div id="narratorScriptWrap" hidden>
-              <label>Voiceover Script (one caption line per row)
+              <label class="fieldStack">Voiceover Script (one caption line per row)
                 <textarea id="narratorScript" rows="4" maxlength="25000" placeholder="Paste or type your script lines here…"></textarea>
               </label>
             </div>
 
-            <div class="row">
-              <label style="flex:1;">Voice Vol
+            <div class="fieldGrid3">
+              <label class="fieldStack">Voice Vol
                 <input id="narratorVolume" type="number" min="0.1" max="2.0" step="0.05" value="1.0">
               </label>
-              <label style="flex:1;">Bg Audio Vol
+              <label class="fieldStack">Bg Audio Vol
                 <input id="narratorBgVolume" type="number" min="0.0" max="2.0" step="0.05" value="0.25">
               </label>
-              <label style="flex:1;">Pause (s)
+              <label class="fieldStack">Pause (s)
                 <input id="narratorLinePause" type="number" min="0.05" max="2.0" step="0.05" value="0.20">
               </label>
             </div>
@@ -611,10 +699,10 @@
           </div>
 
           <div class="subCard stackForm style">
-            <h3>2. Voice Cleanup &amp; TikTok/CapCut Audio FX</h3>
+            <h3>3. Voice Cleanup &amp; TikTok/CapCut Audio FX</h3>
             <label><input id="noise_cancel" type="checkbox"> AI / FFT Noise Cancellation</label>
             <label><input id="voice_isolation" type="checkbox"> Voice Isolation &amp; Clarity Boost</label>
-            <label>Audio Effect
+            <label class="fieldStack">Audio Effect
               <select id="audio_effect">
                 <option value="none">None (Original Audio)</option>
                 <option value="slowed_reverb">Slowed + Reverb (TikTok)</option>
@@ -632,24 +720,24 @@
           </div>
 
           <div class="subCard stackForm">
-            <h3>3. Song Trim, Volume &amp; Fades</h3>
+            <h3>4. Primary Audio / Song Trim &amp; Fades</h3>
             <p id="compositionAssets" class="hint"></p>
-            <label>Replace song<input id="compAudio" type="file" accept=".mp3,.wav,.m4a,.flac,.ogg,.mp4,.mov,.mkv,.webm"></label>
-            <div class="row">
-              <label>Start (s)<input id="comp_start" type="number" min="0" step=".01"></label>
-              <label>End (s)<input id="comp_end" type="number" min=".1" step=".01"></label>
+            <label class="fieldStack">Replace primary audio / song<input id="compAudio" type="file" accept=".mp3,.wav,.m4a,.flac,.ogg,.mp4,.mov,.mkv,.webm"></label>
+            <div class="fieldGrid2">
+              <label class="fieldStack">Start (s)<input id="comp_start" type="number" min="0" step=".01"></label>
+              <label class="fieldStack">End (s)<input id="comp_end" type="number" min=".1" step=".01"></label>
             </div>
-            <div class="row">
-              <label>Delay (s)<input id="comp_offset" type="number" min="0" max="120" step=".01"></label>
-              <label>Song vol<input id="comp_volume" type="number" min="0" max="2" step=".05"></label>
+            <div class="fieldGrid2">
+              <label class="fieldStack">Delay (s)<input id="comp_offset" type="number" min="0" max="120" step=".01"></label>
+              <label class="fieldStack">Main audio vol<input id="comp_volume" type="number" min="0" max="2" step=".05"></label>
             </div>
-            <div class="row">
-              <label>Fade in (s)<input id="comp_fade_in" type="number" min="0" max="60" step=".1"></label>
-              <label>Fade out (s)<input id="comp_fade_out" type="number" min="0" max="60" step=".1"></label>
+            <div class="fieldGrid2">
+              <label class="fieldStack">Fade in (s)<input id="comp_fade_in" type="number" min="0" max="60" step=".1"></label>
+              <label class="fieldStack">Fade out (s)<input id="comp_fade_out" type="number" min="0" max="60" step=".1"></label>
             </div>
-            <label>Clip audio vol (0–2)<input id="comp_background_volume" type="number" min="0" max="2" step=".05"></label>
-            <label><input id="comp_ducking" type="checkbox"> Auto-duck clip audio under song</label>
-            <button id="applyAudioComp" class="primary" type="button" style="width:100%;margin-top:8px;">✨ Apply Song Trim &amp; Audio</button>
+            <label class="fieldStack">Sequence clip audio vol (0–2)<input id="comp_background_volume" type="number" min="0" max="2" step=".05"></label>
+            <label><input id="comp_ducking" type="checkbox"> Auto-duck sequence clip audio under primary track</label>
+            <button id="applyAudioComp" class="primary" type="button" style="width:100%;margin-top:8px;">✨ Apply Audio Trim &amp; Fades</button>
           </div>
         </section>
 
@@ -675,84 +763,84 @@
                 <option value="fit">Fit Whole Frame</option>
               </select>
             </label>
-            <div class="row">
-              <label>Canvas colour<input id="comp_color" type="color"></label>
-              <label><input id="compClear" type="checkbox"> Plain colour only</label>
+            <div class="fieldGrid2">
+              <label class="fieldStack">Canvas colour<input id="comp_color" type="color"></label>
+              <label style="align-self:end;padding-bottom:6px;"><input id="compClear" type="checkbox"> Plain colour only</label>
             </div>
             <div class="sequenceSection" style="margin:6px 0;">
               <div class="row" style="justify-content:space-between;margin-bottom:6px;">
                 <strong style="font-size:12px;">Clips in Sequence</strong>
                 <div class="row" style="margin:0;gap:6px;">
                   <button id="browseStockComp" class="primary" type="button">🌐 + Pixabay</button>
-                  <button id="compAiBackdropBtn" type="button" style="display:inline-flex;align-items:center;gap:4px;background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.35);color:#c084fc;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;">🎨 + AI Backdrop</button>
+                  <button id="compAiBackdropBtn" data-ai-ui type="button" style="display:inline-flex;align-items:center;gap:4px;background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.35);color:#c084fc;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;">🎨 + AI Backdrop</button>
                   <label class="upload">+ Upload<input id="compSeqUpload" type="file" multiple accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,.mkv,.webm"></label>
                 </div>
               </div>
               <div id="compSequenceList" class="sequenceList"></div>
             </div>
-            <label>Single background<input id="compBackground" type="file" accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,.mkv,.webm"></label>
-            <label>From library<select id="compLibrary"><option value="">Keep current / choose clip…</option></select></label>
+            <label class="fieldStack">Single background<input id="compBackground" type="file" accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,.mkv,.webm"></label>
+            <label class="fieldStack">From library<select id="compLibrary"><option value="">Keep current / choose clip…</option></select></label>
             <p id="compStockNotice" class="hint" hidden></p>
           </div>
 
           <div class="subCard stackForm">
             <h3>2. Camera Motion, Speed &amp; Grading</h3>
-            <div class="row">
-              <label>Focus X (%)<input id="comp_x" type="number" min="0" max="100"></label>
-              <label>Focus Y (%)<input id="comp_y" type="number" min="0" max="100"></label>
+            <div class="fieldGrid2">
+              <label class="fieldStack">Focus X (%)<input id="comp_x" type="number" min="0" max="100"></label>
+              <label class="fieldStack">Focus Y (%)<input id="comp_y" type="number" min="0" max="100"></label>
             </div>
-            <div class="row">
-              <label>Pan End X<input id="comp_keyframe_end_x" type="number" min="0" max="100"></label>
-              <label>Pan End Y<input id="comp_keyframe_end_y" type="number" min="0" max="100"></label>
+            <div class="fieldGrid2">
+              <label class="fieldStack">Pan End X<input id="comp_keyframe_end_x" type="number" min="0" max="100"></label>
+              <label class="fieldStack">Pan End Y<input id="comp_keyframe_end_y" type="number" min="0" max="100"></label>
             </div>
-            <div class="row">
-              <label>Slow zoom<input id="comp_zoom" type="number" min="0" max=".2" step=".01"></label>
-              <label>Speed (×)<input id="comp_background_speed" type="number" min=".25" max="2" step=".05"></label>
+            <div class="fieldGrid2">
+              <label class="fieldStack">Slow zoom<input id="comp_zoom" type="number" min="0" max=".2" step=".01"></label>
+              <label class="fieldStack">Speed (×)<input id="comp_background_speed" type="number" min=".25" max="2" step=".05"></label>
             </div>
-            <div class="row">
-              <label>Blur<input id="comp_blur" type="number" min="0" max="30"></label>
-              <label>Dimming<input id="comp_dim" type="number" min="0" max="1" step=".05"></label>
+            <div class="fieldGrid2">
+              <label class="fieldStack">Blur<input id="comp_blur" type="number" min="0" max="30"></label>
+              <label class="fieldStack">Dimming<input id="comp_dim" type="number" min="0" max="1" step=".05"></label>
             </div>
-            <div class="row">
-              <label>Tint<input id="comp_overlay" type="color"></label>
-              <label>Tint opacity<input id="comp_opacity" type="number" min="0" max="1" step=".05"></label>
+            <div class="fieldGrid2">
+              <label class="fieldStack">Tint<input id="comp_overlay" type="color"></label>
+              <label class="fieldStack">Tint opacity<input id="comp_opacity" type="number" min="0" max="1" step=".05"></label>
             </div>
-            <div class="row">
-              <label>Bright<input id="comp_brightness" type="number" min="-.5" max=".5" step=".05"></label>
-              <label>Contrast<input id="comp_contrast" type="number" min=".5" max="2" step=".05"></label>
-              <label>Sat<input id="comp_saturation" type="number" min="0" max="3" step=".1"></label>
+            <div class="fieldGrid3">
+              <label class="fieldStack">Bright<input id="comp_brightness" type="number" min="-.5" max=".5" step=".05"></label>
+              <label class="fieldStack">Contrast<input id="comp_contrast" type="number" min=".5" max="2" step=".05"></label>
+              <label class="fieldStack">Sat<input id="comp_saturation" type="number" min="0" max="3" step=".1"></label>
             </div>
-            <div class="row">
-              <label>Fade in (s)<input id="comp_transition_in" type="number" min="0" max="10" step=".1"></label>
-              <label>Fade out (s)<input id="comp_transition_out" type="number" min="0" max="10" step=".1"></label>
+            <div class="fieldGrid2">
+              <label class="fieldStack">Fade in (s)<input id="comp_transition_in" type="number" min="0" max="10" step=".1"></label>
+              <label class="fieldStack">Fade out (s)<input id="comp_transition_out" type="number" min="0" max="10" step=".1"></label>
             </div>
             <label><input id="comp_loop" type="checkbox"> Loop video clips</label>
-            <div class="row">
-              <label>Clip start (s)<input id="comp_background_start" type="number" min="0" step=".01"></label>
-              <label>Clip dur (s)<input id="comp_background_duration" type="number" min="0" step=".01"></label>
+            <div class="fieldGrid2">
+              <label class="fieldStack">Clip start (s)<input id="comp_background_start" type="number" min="0" step=".01"></label>
+              <label class="fieldStack">Clip dur (s)<input id="comp_background_duration" type="number" min="0" step=".01"></label>
             </div>
           </div>
 
           <div class="subCard stackForm">
             <h3>3. Intro Title Card &amp; B-Roll Overlay (PiP)</h3>
-            <label>Title text<input id="comp_title_text" type="text" maxlength="120" placeholder="Optional intro title / artist"></label>
-            <label>Title duration (s)<input id="comp_title_duration" type="number" min="0" max="15" step=".5"></label>
+            <label class="fieldStack">Title text<input id="comp_title_text" type="text" maxlength="120" placeholder="Optional intro title / artist"></label>
+            <label class="fieldStack">Title duration (s)<input id="comp_title_duration" type="number" min="0" max="15" step=".5"></label>
             <hr style="border:0;border-top:1px solid #2e3040;margin:6px 0;">
-            <label>B-Roll file<input id="compBroll" type="file" accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,.mkv,.webm"></label>
-            <label>B-Roll library<select id="compBrollLibrary"><option value="">Keep current B-roll</option></select></label>
+            <label class="fieldStack">B-Roll file<input id="compBroll" type="file" accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,.mkv,.webm"></label>
+            <label class="fieldStack">B-Roll library<select id="compBrollLibrary"><option value="">Keep current B-roll</option></select></label>
             <label><input id="compClearBroll" type="checkbox"> Remove B-roll overlay</label>
-            <div class="row">
-              <label>Start (s)<input id="comp_broll_start" type="number" min="0" step=".1"></label>
-              <label>Dur (s)<input id="comp_broll_duration" type="number" min="0" step=".1"></label>
+            <div class="fieldGrid2">
+              <label class="fieldStack">Start (s)<input id="comp_broll_start" type="number" min="0" step=".1"></label>
+              <label class="fieldStack">Dur (s)<input id="comp_broll_duration" type="number" min="0" step=".1"></label>
             </div>
-            <div class="row">
-              <label>Scale (%)<input id="comp_broll_scale" type="number" min="20" max="100" step="5"></label>
-              <label>X (%)<input id="comp_broll_x" type="number" min="0" max="100"></label>
-              <label>Y (%)<input id="comp_broll_y" type="number" min="0" max="100"></label>
+            <div class="fieldGrid3">
+              <label class="fieldStack">Scale (%)<input id="comp_broll_scale" type="number" min="20" max="100" step="5"></label>
+              <label class="fieldStack">X (%)<input id="comp_broll_x" type="number" min="0" max="100"></label>
+              <label class="fieldStack">Y (%)<input id="comp_broll_y" type="number" min="0" max="100"></label>
             </div>
-            <div class="row">
-              <label>Opacity<input id="comp_broll_opacity" type="number" min=".1" max="1" step=".05"></label>
-              <label>Fade (s)<input id="comp_broll_fade" type="number" min="0" max="5" step=".1"></label>
+            <div class="fieldGrid2">
+              <label class="fieldStack">Opacity<input id="comp_broll_opacity" type="number" min=".1" max="1" step=".05"></label>
+              <label class="fieldStack">Fade (s)<input id="comp_broll_fade" type="number" min="0" max="5" step=".1"></label>
             </div>
           </div>
 
@@ -814,21 +902,21 @@
 
           <div class="subCard stackForm">
             <h3>2. Timing &amp; Placement</h3>
-            <div class="row">
-              <label style="flex:1;">Start time (s)<input id="comp_sticker_start" type="number" min="0" max="1200" step="0.1" value="0"></label>
-              <label style="flex:1;">Duration (s)<input id="comp_sticker_duration" type="number" min="0" max="1200" step="0.1" value="3"></label>
+            <div class="fieldGrid2">
+              <label class="fieldStack">Start time (s)<input id="comp_sticker_start" type="number" min="0" max="1200" step="0.1" value="0"></label>
+              <label class="fieldStack">Duration (s)<input id="comp_sticker_duration" type="number" min="0" max="1200" step="0.1" value="3"></label>
             </div>
-            <div class="row">
-              <label style="flex:1;">Position X (%)<input id="comp_sticker_x" type="range" min="0" max="100" value="85"></label>
-              <label style="flex:1;">Position Y (%)<input id="comp_sticker_y" type="range" min="0" max="100" value="15"></label>
+            <div class="fieldGrid2">
+              <label class="fieldStack">Position X (%)<input id="comp_sticker_x" type="range" min="0" max="100" value="85"></label>
+              <label class="fieldStack">Position Y (%)<input id="comp_sticker_y" type="range" min="0" max="100" value="15"></label>
             </div>
-            <div class="row">
-              <label style="flex:1;">Size Scale (%)<input id="comp_sticker_scale" type="range" min="5" max="100" value="25"></label>
-              <label style="flex:1;">Opacity (%)<input id="comp_sticker_opacity" type="range" min="10" max="100" value="100"></label>
+            <div class="fieldGrid2">
+              <label class="fieldStack">Size Scale (%)<input id="comp_sticker_scale" type="range" min="5" max="100" value="25"></label>
+              <label class="fieldStack">Opacity (%)<input id="comp_sticker_opacity" type="range" min="10" max="100" value="100"></label>
             </div>
-            <div class="row">
-              <label style="flex:1;">Fade In/Out (s)<input id="comp_sticker_fade" type="number" min="0" max="3" step="0.1" value="0.2"></label>
-              <label style="flex:1;">Animation
+            <div class="fieldGrid2">
+              <label class="fieldStack">Fade In/Out (s)<input id="comp_sticker_fade" type="number" min="0" max="3" step="0.1" value="0.2"></label>
+              <label class="fieldStack">Animation
                 <select id="comp_sticker_anim">
                   <option value="pop">Pop / Bounce</option>
                   <option value="fade">Smooth Fade</option>
@@ -838,12 +926,12 @@
               </label>
             </div>
             <!-- AR FACE TRACKING & AUTO-SNAP -->
-            <div class="row" style="margin-top:10px;background:rgba(255,255,255,0.04);padding:8px;border-radius:8px;align-items:center;gap:8px;">
-              <button id="snapToFaceBtn" class="primary" type="button" style="flex:1;" title="Find the face in the frame at the playhead and place the sticker there (single frame — the sticker does not follow movement)">🎯 Snap to Face (this frame)</button>
-              <select id="snapTarget" style="width:130px;" aria-label="AR Face Target">
-                <option value="head">👑 Head / Crown</option>
-                <option value="eyes">🕶️ Eyes / Shades</option>
-                <option value="center">🎭 Face Center</option>
+            <div class="fieldGrid2 transRow" style="margin-top:10px;background:rgba(255,255,255,0.04);padding:8px;border-radius:8px;align-items:center;">
+              <button id="snapToFaceBtn" class="primary" type="button" title="Find the face in the frame at the playhead and place the sticker there (single frame — the sticker does not follow movement)">🎯 Snap to Face</button>
+              <select id="snapTarget" aria-label="AR Face Target">
+                <option value="head">👑 Head</option>
+                <option value="eyes">🕶️ Eyes</option>
+                <option value="center">🎭 Center</option>
               </select>
             </div>
             <p id="snapFaceStatus" class="hint" style="margin-top:4px;color:#a899e6;"></p>
@@ -934,7 +1022,15 @@
         <video id="video" playsinline preload="metadata"></video>
         <div id="stageVignette" hidden></div>
         <canvas id="stageVisualizer" hidden></canvas>
-        <div id="guides" hidden></div>
+        <div id="guides" data-safe-mode="off" hidden>
+          <div class="safeZoneTop"></div>
+          <div class="safeZoneRight"></div>
+          <div class="safeZoneBottom"></div>
+          <div class="safeZoneLabel" id="safeZoneLabel">TikTok / Reels Safe Zone</div>
+        </div>
+        <div id="snapGuideX" class="snapGuideX" hidden></div>
+        <div id="snapGuideY" class="snapGuideY" hidden></div>
+        <div id="dragCoordHud" class="dragCoordHud" hidden></div>
         <div id="stageSticker" hidden style="position:absolute;pointer-events:none;transition:transform 0.15s ease, opacity 0.15s ease;display:flex;align-items:center;justify-content:center;z-index:4;"></div>
         <div id="caption"></div>
         <div id="empty">
@@ -954,8 +1050,20 @@
           <option selected value="1">1×</option>
           <option value="1.25">1.25×</option>
         </select>
+        <div id="stageRatioGroup" class="stageRatioGroup" role="group" aria-label="Canvas aspect ratio">
+          <button type="button" class="ratioPill" data-shape-pill="portrait">9:16</button>
+          <button type="button" class="ratioPill" data-shape-pill="landscape">16:9</button>
+          <button type="button" class="ratioPill" data-shape-pill="square">1:1</button>
+        </div>
         <label><input type="checkbox" id="loop"> Loop line</label>
-        <label><input type="checkbox" id="safe"> Safe guide</label>
+        <label style="display:inline-flex;align-items:center;gap:6px;"><input type="checkbox" id="safe"> Safe guide
+          <select id="safePreset" aria-label="Safe zone overlay" title="Preview TikTok, Reels, or Shorts UI dead-zones">
+            <option value="off">HUD: Off</option>
+            <option value="tiktok">📱 TikTok / Reels HUD</option>
+            <option value="shorts">▶️ Shorts HUD</option>
+            <option value="frame">📐 10% Broadcast Safe</option>
+          </select>
+        </label>
       </div>
     </section>
 
@@ -970,12 +1078,37 @@
       <div class="inspectorBody">
         <!-- CAPTION LINES & WORD TIMING INSPECTOR -->
         <div class="inspSection" data-insp-pane="lines">
+          <div id="studioActionCards" class="proactive-cards-strip" aria-label="Smart Studio Recommendations" hidden></div>
           <div class="subCard">
             <div class="row" style="justify-content:space-between;margin-bottom:6px;">
               <h3>Caption Lines</h3>
               <div style="display:flex;gap:4px;">
-                <button type="button" onclick="const p=document.getElementById('translationPanel');if(p){p.open=true;p.scrollIntoView({behavior:'smooth'});}" style="font-size:11px;padding:4px 8px;background:rgba(124,58,237,0.2);color:#c084fc;border:1px solid rgba(167,139,250,0.3);border-radius:6px;cursor:pointer;" title="Open AI Translation Workspace">🌐 AI Translator</button>
+                <button id="openTranslatorBtn" data-ai-ui type="button" style="font-size:11px;padding:4px 8px;background:rgba(124,58,237,0.2);color:#c084fc;border:1px solid rgba(167,139,250,0.3);border-radius:6px;cursor:pointer;" title="Open AI Translation Workspace">🌐 AI Translator</button>
                 <button id="nextReview" type="button" style="font-size:11px;padding:4px 8px;">⚑ Next to review</button>
+              </div>
+            </div>
+            <div class="cueSearchRow">
+              <input id="cueSearch" type="search" placeholder="🔍 Filter caption lines…" aria-label="Filter caption lines">
+              <span id="cueCountBadge" class="monoBadge">0 lines</span>
+              <button id="toggleFindReplace" type="button" title="Find and Replace text across captions">⇄ Replace</button>
+            </div>
+            <div id="findReplaceBar" class="findReplaceBar" hidden>
+              <input id="cueFindInput" type="text" placeholder="Find…" aria-label="Find text in captions">
+              <input id="cueReplaceInput" type="text" placeholder="Replace with…" aria-label="Replacement text">
+              <button id="cueReplaceAllBtn" type="button" class="primary">Replace All</button>
+            </div>
+            <div class="viralToolsBar" aria-label="Short-form caption quick tools">
+              <div class="viralToolsGroup">
+                <button type="button" id="chunk1w" title="Split into 1–2 word high-retention micro-captions">⚡ 1–2w Viral</button>
+                <button type="button" id="chunk3w" title="Split into 2–3 word CapCut/Hormozi captions">🔥 2–3w Punchy</button>
+                <button type="button" id="chunk5w" title="Reflow into 4–5 word balanced phrases">📏 4–5w Clean</button>
+                <button type="button" id="closeGapsBtn" title="Close micro-gaps (<0.35s) and fix overlaps">🧲 Smooth Gaps</button>
+              </div>
+              <div class="viralToolsGroup">
+                <button type="button" id="caseUpperBtn" title="Convert all captions to UPPERCASE">AA</button>
+                <button type="button" id="caseTitleBtn" title="Convert all captions to Title Case">Aa</button>
+                <button type="button" id="caseLowerBtn" title="Convert all captions to lowercase">aa</button>
+                <button type="button" id="stripPunctBtn" title="Strip trailing periods and commas for clean short-form hooks">✕.,</button>
               </div>
             </div>
             <div id="cueList" aria-label="Caption lines"></div>
@@ -1011,9 +1144,9 @@
                 <label><input id="showDuplicateTranslation" type="checkbox"> Show on this line</label>
               </div>
             </div>
-            <div class="row">
-              <label>Start (s)<input id="start" type="number" min="0" step=".01"></label>
-              <label>End (s)<input id="end" type="number" min="0" step=".01"></label>
+            <div class="fieldGrid2" style="margin-top:6px;">
+              <label class="fieldStack">Start (s)<input id="start" type="number" min="0" step=".01"></label>
+              <label class="fieldStack">End (s)<input id="end" type="number" min="0" step=".01"></label>
             </div>
             <div class="toolbar" style="margin:6px 0;">
               <button id="setStart" type="button">Start=Playhead</button>
@@ -1039,20 +1172,24 @@
         <!-- TEXT STYLE & PRESETS INSPECTOR -->
         <div class="inspSection style" data-insp-pane="style">
           <div class="subCard stackForm">
-            <h3>1-Click Caption Presets</h3>
+            <h3>1-Click Futuristic Presets</h3>
             <div class="presets">
-              <button type="button" data-preset="mrbeast_bold" title="High-impact bold yellow font with thick outline and dynamic pop entrance">⚡ Beast Pop</button>
-              <button type="button" data-preset="cyberpunk_neon" title="Vibrant cyan & magenta neon with glowing outline & typewriter animation">🌆 Cyberpunk</button>
-              <button type="button" data-preset="frosted_vlog" title="Clean modern vlog subtitle with soft frosted dark pill background">☕ Frosted Vlog</button>
-              <button type="button" data-preset="sunset_glow" title="Warm coral-to-gold karaoke highlight with smooth slide-up motion">🌅 Sunset Glow</button>
-              <button type="button" data-preset="neon_karaoke">Neon Karaoke</button>
-              <button type="button" data-preset="cinematic_clean">Cinematic Clean</button>
-              <button type="button" data-preset="bold_pop">Bold Pop</button>
-              <button type="button" data-preset="minimalist_lyric">Minimalist Lyric</button>
-              <button type="button" data-preset="clean">Clean</button>
-              <button type="button" data-preset="bold">Bold</button>
-              <button type="button" data-preset="lyrics">Lyrics</button>
-              <button type="button" data-preset="karaoke">Karaoke</button>
+              <button type="button" data-preset="hormozi_box" title="High-contrast viral active-word pill with kinetic bounce"><span class="presetSample">Aa</span><span class="presetName">Hormozi Pill</span></button>
+              <button type="button" data-preset="opus_emerald" title="Emerald active word highlight box with crisp dark stroke"><span class="presetSample">Aa</span><span class="presetName">Opus Emerald</span></button>
+              <button type="button" data-preset="holo_glass" title="Frosted obsidian glass pill with focus blur-in & cyan pop"><span class="presetSample">Aa</span><span class="presetName">Holo Glass</span></button>
+              <button type="button" data-preset="cyber_mirror" title="Cyberpunk violet-cyan glow paired with Mirror Twin EQ"><span class="presetSample">Aa</span><span class="presetName">Cyber Mirror</span></button>
+              <button type="button" data-preset="mrbeast_bold" title="High-impact bold yellow font with thick outline and dynamic pop entrance"><span class="presetSample">Aa</span><span class="presetName">Beast Pop</span></button>
+              <button type="button" data-preset="cyberpunk_neon" title="Vibrant cyan & magenta neon with glowing outline & typewriter animation"><span class="presetSample">Aa</span><span class="presetName">Cyberpunk</span></button>
+              <button type="button" data-preset="frosted_vlog" title="Clean modern vlog subtitle with soft frosted dark pill background"><span class="presetSample">Aa</span><span class="presetName">Frosted Vlog</span></button>
+              <button type="button" data-preset="sunset_glow" title="Warm coral-to-gold karaoke highlight with smooth slide-up motion"><span class="presetSample">Aa</span><span class="presetName">Sunset Glow</span></button>
+              <button type="button" data-preset="neon_karaoke"><span class="presetSample">Aa</span><span class="presetName">Neon Karaoke</span></button>
+              <button type="button" data-preset="cinematic_clean"><span class="presetSample">Aa</span><span class="presetName">Cinematic Clean</span></button>
+              <button type="button" data-preset="bold_pop"><span class="presetSample">Aa</span><span class="presetName">Bold Pop</span></button>
+              <button type="button" data-preset="minimalist_lyric"><span class="presetSample">Aa</span><span class="presetName">Minimal Lyric</span></button>
+              <button type="button" data-preset="clean"><span class="presetSample">Aa</span><span class="presetName">Clean</span></button>
+              <button type="button" data-preset="bold"><span class="presetSample">Aa</span><span class="presetName">Bold</span></button>
+              <button type="button" data-preset="lyrics"><span class="presetSample">Aa</span><span class="presetName">Lyrics</span></button>
+              <button type="button" data-preset="karaoke"><span class="presetSample">Aa</span><span class="presetName">Karaoke</span></button>
             </div>
             <label>Font
               <select id="font">
@@ -1096,22 +1233,36 @@
               <p class="hint">Manual line breaks keep caption timing. Long words shrink to fit the text box without changing their timings; widen the box if they become too small. Shared layout uses the same row positions in preview and export. Use the rendered check for exact font appearance.</p>
             </details>
             <label>Size <input id="size" type="range" min="2" max="12" step=".25" value="5"></label>
-            <div class="row">
+            <div class="row colorTriple">
               <label>Text <input id="color" type="color" value="#ffffff"></label>
               <label>Highlight <input id="highlight" type="color" value="#ffdc55"></label>
+              <label>Stroke <input id="outline_color" type="color" value="#000000"></label>
             </div>
             <label>Outline <input id="outline" type="range" min="0" max="5" step=".25" value="2"></label>
+            <div class="row" style="align-items:flex-end;gap:8px;">
+              <label style="flex:1;">Drop shadow <input id="shadow" type="range" min="0" max="6" step="0.5" value="0"></label>
+              <label style="width:82px;">Shadow <input id="shadow_color" type="color" value="#000000"></label>
+            </div>
             <label>Vertical pos <input id="position" type="range" min="10" max="95" step="1" value="85"></label>
-            <label><input id="background" type="checkbox"> Boxed caption backdrop</label>
+            <div class="backdropGroup">
+              <label><input id="background" type="checkbox"> Boxed caption backdrop</label>
+              <div class="row" style="align-items:flex-end;gap:8px;">
+                <label style="width:82px;">Pill color <input id="background_color" type="color" value="#0a0c14"></label>
+                <label style="flex:1;">Pill opacity (%) <input id="background_opacity" type="range" min="15" max="100" step="1" value="78"></label>
+              </div>
+            </div>
             <label><input id="karaoke" type="checkbox"> Highlight current word</label>
             <label><input id="cumulative" type="checkbox"> Cumulative karaoke</label>
             <label><input id="word_pop" type="checkbox"> Active word pop (115%)</label>
+            <label><input id="word_box" type="checkbox"> Active-word highlight pill</label>
             <div class="row" style="align-items:flex-end;gap:8px;">
               <label style="flex:1;">Animation
                 <select id="animation">
                   <option value="none">Instant (None)</option>
                   <option value="fade">Smooth Fade</option>
                   <option value="pop">Pop Entrance</option>
+                  <option value="bounce">Kinetic Bounce</option>
+                  <option value="blur_in">Focus Blur-In</option>
                   <option value="slide_up">Slide Up</option>
                   <option value="zoom_in">Zoom In</option>
                   <option value="typewriter">Typewriter</option>
@@ -1146,16 +1297,20 @@
     </div>
     <div class="timelineTracksWrapper">
       <div class="trackLabels" aria-hidden="true">
+        <div class="trackLabel rulerLabel">⏱ Time</div>
         <div class="trackLabel">🎬 Clips</div>
-        <div class="trackLabel">🎵 Audio</div>
+        <div class="trackLabel">🔊 Wave</div>
+        <div class="trackLabel">🎵 Mix</div>
         <div class="trackLabel">💬 Lyrics</div>
       </div>
       <div id="timelineScroll">
         <div id="timeline">
+          <canvas id="timelineRuler" height="22" aria-label="Timecode ruler"></canvas>
           <div id="videoTrackLane" aria-label="Video and B-roll track"></div>
           <canvas id="waveform"></canvas>
+          <div id="audioTrackLane" aria-label="Multi-track audio mix lane"></div>
           <div id="blocks"></div>
-          <div id="playhead"></div>
+          <div id="playhead"><span id="playheadBadge" class="playheadBadge">0:00.00</span></div>
         </div>
       </div>
     </div>
@@ -1176,6 +1331,10 @@
   </div>
   <div class="shortcutsGrid">
     <div class="shortcutRow"><kbd>Space</kbd><span>Play / Pause Video</span></div>
+    <div class="shortcutRow"><kbd>[</kbd> / <kbd>]</kbd><span>Set Line Start / End to Playhead</span></div>
+    <div class="shortcutRow"><kbd>S</kbd><span>Split Caption Line at Playhead</span></div>
+    <div class="shortcutRow"><kbd>Alt</kbd> + <kbd>↑</kbd> / <kbd>↓</kbd><span>Prev / Next Caption Line</span></div>
+    <div class="shortcutRow"><kbd>G</kbd><span>Cycle Safe-Zone HUD</span></div>
     <div class="shortcutRow"><kbd>Ctrl</kbd> + <kbd>B</kbd><span>Split Clip at Playhead</span></div>
     <div class="shortcutRow"><kbd>Ctrl</kbd> + <kbd>Z</kbd><span>Undo Last Action</span></div>
     <div class="shortcutRow"><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Z</kbd><span>Redo Action</span></div>
@@ -1186,7 +1345,7 @@
     <div class="shortcutRow"><kbd>Esc</kbd><span>Close Any Dialog</span></div>
   </div>
   <div style="margin-top:16px;text-align:right;">
-    <button type="button" onclick="document.getElementById('shortcutsDialog').close()" class="primary" style="padding:6px 16px;border-radius:10px;">Got it</button>
+    <button type="button" id="shortcutsConfirm" class="primary" style="padding:6px 16px;border-radius:10px;">Got it</button>
   </div>
 </dialog>
 <dialog id="lyricReviewDialog" aria-labelledby="lyricReviewTitle" class="lyricReviewDialog">

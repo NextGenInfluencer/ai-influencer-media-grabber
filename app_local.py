@@ -717,7 +717,7 @@ def shazam_file(audio_path):
         print("Shazam error:", e)
         return None
 
-APP_VERSION = "5.0.15"
+APP_VERSION = "5.3.0"
 SERVER_START_TIME = time.time()
 
 # --- Active Job & Auto-Shutdown Watchdog State ---
@@ -1853,7 +1853,7 @@ def list_gallery():
                 "folder": folder,
                 "path": f"{folder}/{item_path}",
                 "full_path": file_path,
-                "type": "video" if ext in ['.mp4', '.mov', '.mkv', '.webm', '.avi'] else "audio" if ext == ".mp3" else "image",
+                "type": "video" if ext in ['.mp4', '.mov', '.mkv', '.webm', '.avi', '.m4v'] else "audio" if ext in ['.mp3', '.wav', '.m4a', '.flac', '.ogg'] else "image",
                 "section": section,
                 "studio_type": studio_type,
                 "scene_number": scene_num,
@@ -2651,6 +2651,222 @@ def open_desktop_window(url="http://127.0.0.1:5000"):
                 pass
     import webbrowser
     webbrowser.open(url)
+
+def _safe_read_project_json(proj_json_path):
+    try:
+        with open(proj_json_path, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+        return data if isinstance(data, dict) else None
+    except Exception:
+        return None
+
+
+@app.route('/api/lineage', methods=['GET'])
+def api_media_lineage():
+    """Return read-only connected media lineage chains (Source -> Raw -> Derived -> Studio Exports)."""
+    base_dir = DEFAULT_SAVE_DIR
+    gallery_resp = list_gallery()
+    gallery_items = gallery_resp.get_json() if hasattr(gallery_resp, "get_json") else []
+    if not isinstance(gallery_items, list):
+        gallery_items = []
+
+    caption_root = os.path.join(base_dir, "Caption Projects")
+    projects_list = []
+    if os.path.isdir(caption_root):
+        for entry in sorted(os.listdir(caption_root)):
+            proj_dir = os.path.join(caption_root, entry)
+            proj_file = os.path.join(proj_dir, "project.json")
+            if not os.path.isfile(proj_file):
+                continue
+            proj = _safe_read_project_json(proj_file)
+            if not proj or not proj.get("id"):
+                continue
+            assets = ((proj.get("studio") or {}).get("assets") or {})
+            has_music = bool(assets.get("music") or os.path.isfile(os.path.join(proj_dir, "music.mp3")))
+            export_files = [str(x) for x in (proj.get("exports") or []) if x]
+            projects_list.append({
+                "project_id": str(proj["id"]),
+                "project_name": str(proj.get("name") or entry),
+                "origin_path": str(proj.get("origin_path") or ""),
+                "cue_count": len(proj.get("cues") or []),
+                "has_music": has_music,
+                "export_files": export_files,
+                "studio_url": f"/captions?project={urllib.parse.quote(str(proj['id']))}",
+                "updated_ts": os.path.getmtime(proj_file),
+            })
+
+    derived_by_stem = {}
+    raw_items = []
+    for item in gallery_items:
+        if (item.get("section") or "downloads") == "studio":
+            continue
+        name = item.get("name") or ""
+        folder = item.get("folder") or ""
+        stem_lower = os.path.splitext(name)[0].lower()
+        is_derived = (
+            folder in ("Conversions", "AI Cleaned")
+            or any(tag in stem_lower for tag in ("_first_frame", "_subbed", "_normalized", "_clean"))
+        )
+        key = _source_stem(name)
+        if is_derived:
+            derived_by_stem.setdefault(key, []).append(item)
+        else:
+            raw_items.append(item)
+
+    matched_pids = set()
+    chains = []
+    for item in raw_items[:60]:
+        raw_path = item.get("full_path") or ""
+        stem_key = _source_stem(item.get("name") or raw_path)
+        derived = []
+        seen_paths = set()
+        for d_item in derived_by_stem.get(stem_key, []):
+            fp = os.path.normcase(d_item.get("full_path") or "")
+            if fp and fp not in seen_paths:
+                seen_paths.add(fp)
+                kind = "cover_frame" if "_first_frame" in (d_item.get("name") or "").lower() else (
+                    "cleaned" if d_item.get("folder") == "AI Cleaned" else "conversion"
+                )
+                derived.append({**d_item, "kind": kind})
+
+        # Also check adjacent _first_frame image if present on disk
+        if raw_path:
+            base_no_ext = os.path.splitext(raw_path)[0]
+            for img_ext in (".jpg", ".jpeg", ".png", ".webp"):
+                frame_path = base_no_ext + "_first_frame" + img_ext
+                norm_frame = os.path.normcase(frame_path)
+                if norm_frame not in seen_paths and os.path.isfile(frame_path):
+                    seen_paths.add(norm_frame)
+                    derived.append({
+                        "kind": "cover_frame",
+                        "name": os.path.basename(frame_path),
+                        "full_path": frame_path,
+                        "folder": item.get("folder") or "",
+                        "type": "image",
+                        "size": os.path.getsize(frame_path),
+                        "url": "/api/preview_file?path=" + urllib.parse.quote(frame_path),
+                    })
+
+        raw_norm = os.path.normcase(os.path.normpath(raw_path)) if raw_path else ""
+        linked_exports = []
+        for proj in projects_list:
+            orig_norm = os.path.normcase(os.path.normpath(proj["origin_path"])) if proj["origin_path"] else ""
+            if (orig_norm and raw_norm and orig_norm == raw_norm) or (_source_stem(proj["project_name"]) == stem_key):
+                matched_pids.add(proj["project_id"])
+                linked_exports.append({
+                    **proj,
+                    "kind": "rendered_export" if proj["export_files"] else "caption_project",
+                })
+
+        chains.append({
+            "id": f"chain_{abs(hash(raw_path or item.get('name'))):x}",
+            "source": {
+                "url": item.get("source_url") or "",
+                "uploader": item.get("uploader") or "",
+                "platform": item.get("folder") or "Local",
+            },
+            "raw": item,
+            "derived": derived,
+            "exports": linked_exports,
+        })
+
+    for proj in sorted(projects_list, key=lambda p: p["updated_ts"], reverse=True):
+        if proj["project_id"] in matched_pids:
+            continue
+        chains.append({
+            "id": f"proj_{proj['project_id']}",
+            "source": {"url": "", "uploader": "", "platform": "Creator Studio"},
+            "raw": None,
+            "derived": [],
+            "exports": [{
+                **proj,
+                "kind": "rendered_export" if proj["export_files"] else "caption_project",
+            }],
+        })
+
+    return jsonify({
+        "ok": True,
+        "summary": {
+            "total_chains": len(chains),
+            "with_source_url": sum(1 for c in chains if c["source"].get("url")),
+            "derived_count": sum(len(c["derived"]) for c in chains),
+            "studio_projects": len(projects_list),
+            "rendered_exports": sum(len(p["export_files"]) for p in projects_list),
+        },
+        "chains": chains[:60],
+    })
+
+
+@app.route('/api/pipeline/config', methods=['GET'])
+def api_pipeline_config():
+    """Return read-only live pipeline, binary, and GPU VRAM telemetry (0 MB VRAM wakeups)."""
+    import importlib.util
+    from ai_core import engines as ai_engines, gpu as ai_gpu, hardware as ai_hardware, settings as ai_settings
+
+    disk_target = DEFAULT_SAVE_DIR if os.path.exists(DEFAULT_SAVE_DIR) else os.path.expanduser("~")
+    try:
+        disk_free_gb = round(shutil.disk_usage(disk_target).free / (1024 ** 3), 2)
+    except OSError:
+        disk_free_gb = 0.0
+
+    dl_status = download_engines_status()
+    pkgs = dl_status.get("packages") or {}
+    yt_ver = str((pkgs.get("yt-dlp") or {}).get("current_version") or "")
+    gdl_ver = str((pkgs.get("gallery-dl") or {}).get("current_version") or "")
+    enc_info = hwaccel.detect_best_encoder()
+    ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+    ai_feat = get_ai_status()
+    hw_info = ai_hardware.detect()
+    eng_info = ai_engines.status()
+    gpu_leases = ai_gpu.status()
+    with _active_jobs_lock:
+        active_jobs_now = _active_jobs_count
+
+    return jsonify({
+        "ok": True,
+        "app": {
+            "name": "AI Influencer Media Grabber",
+            "version": APP_VERSION,
+            "save_dir": DEFAULT_SAVE_DIR,
+            "disk_free_gb": disk_free_gb,
+            "active_jobs": active_jobs_now,
+        },
+        "binaries": {
+            "yt_dlp": {
+                "installed": bool(yt_ver and yt_ver != "unknown"),
+                "version": "" if yt_ver == "unknown" else yt_ver,
+                "has_update": bool((pkgs.get("yt-dlp") or {}).get("has_update")),
+            },
+            "gallery_dl": {
+                "installed": bool(gdl_ver and gdl_ver != "unknown"),
+                "version": "" if gdl_ver == "unknown" else gdl_ver,
+                "has_update": bool((pkgs.get("gallery-dl") or {}).get("has_update")),
+            },
+            "ffmpeg": {
+                "installed": bool(ffmpeg_exe and os.path.exists(ffmpeg_exe)),
+                "encoder": enc_info.get("encoder") or "libx264",
+                "display_name": enc_info.get("display_name") or "CPU Software Encoder (libx264)",
+                "hardware_accelerated": bool(enc_info.get("hardware_accelerated")),
+            },
+            "whisper": {
+                "installed": bool(ai_feat.get("whisper", ai_feat.get("all_installed", False))),
+            },
+            "kokoro_tts": {
+                "installed": importlib.util.find_spec("kokoro_onnx") is not None,
+            },
+        },
+        "ai": {
+            "profile": ai_hardware.current_profile(),
+            "hardware": hw_info,
+            "engines": eng_info,
+            "vram_guard": {
+                "resident": gpu_leases,
+                "allocated_gb": round(sum(float(v.get("vram_gb") or 0) for v in gpu_leases.values()), 2),
+                "idle_timeout_sec": ai_settings.idle_release_seconds(),
+            },
+        },
+    })
+
 
 from reference_prep import register_reference_prep
 register_reference_prep(app, DEFAULT_SAVE_DIR, increment_active_job, decrement_active_job, invalidate_gallery_cache)

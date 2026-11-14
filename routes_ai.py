@@ -149,7 +149,24 @@ def remove():
 
 @bp.get('/engines')
 def get_engines():
-    return jsonify(engines=engines.status(), gpu=gpu.status())
+    eng_status = engines.status()
+    ollama_loaded = engines.ollama.loaded_models() if eng_status.get('ollama', {}).get('running') else []
+    return jsonify(engines=eng_status, gpu=gpu.status(), ollama_loaded=ollama_loaded)
+
+
+@bp.post('/gpu/release')
+def release_gpu():
+    gpu.release_all()
+    busy = [name for name, info in gpu.status().items() if info.get('active')]
+    if not busy:
+        if engines.ollama.running():
+            engines.ollama.unload_all()
+            engines.ollama.stop()
+        if engines.comfy.running():
+            engines.comfy.free()
+            engines.comfy.stop()
+    ollama_loaded = engines.ollama.loaded_models() if engines.ollama.running() else []
+    return jsonify(freed=not bool(busy), busy=busy, gpu=gpu.status(), ollama_loaded=ollama_loaded)
 
 
 @bp.post('/engines/<name>/<action>')
@@ -167,7 +184,7 @@ def control_engine(name, action):
 def _settings_payload():
     data = settings.load()
     return {'roles': data.get('roles', {}), 'profile_override': data.get('profile_override'),
-            'idle_release_seconds': data.get('idle_release_seconds'), 'accepted_licenses': data.get('accepted_licenses', []),
+            'idle_release_seconds': data.get('idle_release_seconds'), 'hide_ai_ui': data.get('hide_ai_ui') is True, 'accepted_licenses': data.get('accepted_licenses', []),
             'notices': data.get('notices', {}), 'setup_seen': data.get('setup_seen') is True,
             'cloud': cloud.status()}
 
@@ -184,6 +201,7 @@ def post_settings():
     cloud_flags = body.get('cloud', {})
     notices = body.get('notices', {})
     setup_seen = body.get('setup_seen')
+    hide_ai_ui = body.get('hide_ai_ui')
     if not isinstance(roles, dict) or not isinstance(cloud_flags, dict) or not isinstance(notices, dict):
         raise ValueError('Invalid settings.')
     for role, value in roles.items():
@@ -195,6 +213,8 @@ def post_settings():
     for name, accepted in notices.items():
         if name not in settings.NOTICES or not isinstance(accepted, bool):
             raise ValueError(f'Invalid notice: {name}.')
+    if hide_ai_ui is not None and not isinstance(hide_ai_ui, bool):
+        raise ValueError('hide_ai_ui must be true or false.')
     if setup_seen is not None and not isinstance(setup_seen, bool):
         raise ValueError('setup_seen must be true or false.')
     idle = body.get('idle_release_seconds')
@@ -208,6 +228,8 @@ def post_settings():
             data['cloud'][provider] = {'enabled': flags['enabled']}
         for name, accepted in notices.items():
             data['notices'][name] = accepted
+        if hide_ai_ui is not None:
+            data['hide_ai_ui'] = hide_ai_ui
         if setup_seen is not None:
             data['setup_seen'] = setup_seen
         if idle is not None:

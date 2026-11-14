@@ -101,14 +101,63 @@ class RoutesAITests(IsolatedAIMixin, unittest.TestCase):
         self.assertEqual(self.client.post('/api/ai/engines/comfy/stop').status_code, 200)
         self.assertEqual(self.client.post('/api/ai/engines/warp/start').status_code, 404)
 
+    def test_engines_and_gpu_release(self):
+        from ai_core import gpu
+        with patch.object(engines, 'status', return_value={
+            'ollama': {'running': False}, 'builtin': {'running': False}, 'comfy': {'running': False}
+        }), patch.object(engines.ollama, 'loaded_models') as loaded_mock:
+            data = self.client.get('/api/ai/engines').get_json()
+        self.assertEqual(data['ollama_loaded'], [])
+        loaded_mock.assert_not_called()
+
+        with patch.object(engines, 'status', return_value={
+            'ollama': {'running': True}, 'builtin': {'running': False}, 'comfy': {'running': False}
+        }), patch.object(engines.ollama, 'loaded_models', return_value=['qwen2.5:7b']):
+            data = self.client.get('/api/ai/engines').get_json()
+        self.assertEqual(data['ollama_loaded'], ['qwen2.5:7b'])
+
+        with patch.object(gpu, 'release_all') as rel_all, \
+             patch.object(gpu, 'status', return_value={}), \
+             patch.object(engines.ollama, 'running', side_effect=[True, False]), \
+             patch.object(engines.ollama, 'unload_all') as ol_unload, \
+             patch.object(engines.ollama, 'stop') as ol_stop, \
+             patch.object(engines.ollama, 'ensure_running') as ol_start, \
+             patch.object(engines.comfy, 'running', return_value=True), \
+             patch.object(engines.comfy, 'free') as cf_free, \
+             patch.object(engines.comfy, 'stop') as cf_stop:
+            rel = self.client.post('/api/ai/gpu/release')
+        self.assertEqual(rel.status_code, 200)
+        body = rel.get_json()
+        self.assertTrue(body['freed'])
+        self.assertEqual(body['busy'], [])
+        rel_all.assert_called_once()
+        ol_unload.assert_called_once()
+        ol_stop.assert_called_once()
+        ol_start.assert_not_called()
+        cf_free.assert_called_once()
+        cf_stop.assert_called_once()
+
+        with patch.object(gpu, 'release_all'), \
+             patch.object(gpu, 'status', return_value={'caption': {'active': True, 'vram_gb': 2.5}}), \
+             patch.object(engines.ollama, 'running', return_value=False), \
+             patch.object(engines.comfy, 'running', return_value=False), \
+             patch.object(engines.ollama, 'unload_all') as ol_unload_busy:
+            busy_resp = self.client.post('/api/ai/gpu/release').get_json()
+        self.assertFalse(busy_resp['freed'])
+        self.assertEqual(busy_resp['busy'], ['caption'])
+        ol_unload_busy.assert_not_called()
+
     def test_settings_validation_and_persistence(self):
         data = self.client.post('/api/ai/settings', json={'roles': {'helper': 'qwen2.5:14b'}, 'cloud': {'fal': {'enabled': True}},
-                                                          'idle_release_seconds': 120}).get_json()
+                                                          'idle_release_seconds': 120, 'hide_ai_ui': True}).get_json()
         self.assertEqual(data['roles']['helper'], 'qwen2.5:14b')
         self.assertTrue(data['cloud']['fal']['enabled'])
-        self.assertEqual(self.client.get('/api/ai/settings').get_json()['idle_release_seconds'], 120)
+        self.assertTrue(data['hide_ai_ui'])
+        fetched = self.client.get('/api/ai/settings').get_json()
+        self.assertEqual(fetched['idle_release_seconds'], 120)
+        self.assertTrue(fetched['hide_ai_ui'])
         for bad in ({'roles': {'chef': 'x'}}, {'cloud': {'fal': {'enabled': 'yes'}}}, {'idle_release_seconds': 1},
-                    {'roles': []}):
+                    {'hide_ai_ui': 'yes'}, {'roles': []}):
             with self.subTest(bad=bad):
                 self.assertEqual(self.client.post('/api/ai/settings', json=bad).status_code, 400)
 

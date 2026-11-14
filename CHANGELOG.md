@@ -1,5 +1,21 @@
 # Changelog
 
+## [v5.3.0] - 2026-11-14
+- **Obsidian Agentic Command Center Shell & Zero-AI Laptop Mode (`templates/index.html`, `static/app_shell.css`, `static/app_shell.js`):**
+  - Pinned left command rail (`Downloader`, `Media Tools`, `Metadata Cleaner`, `Gallery`, `History`, `Captions Studio`, `Carousel Studio`, `Kling Prep`, `AI Studio`, `Settings`), ambient obsidian workspace surfaces, and decluttered top telemetry badges.
+  - Added **Zero-AI / Laptop Mode** (`data-hide-ai="true"`) so laptop and non-GPU users can cleanly hide AI Studio, Copilot, Whisper, and VRAM controls while keeping downloading, cropping, Metadata Cleaner, Gallery, and Captions Studio running at 0 MB VRAM.
+- **On-Demand GPU VRAM Guard & Lazy Model Loading (`routes_ai.py`, `ai_core/llm.py`, `ai_core/settings.py`, `static/copilot.js`, `static/captions.js`, `tests/test_ai_core.py`, `tests/test_routes_ai.py`):**
+  - Added `POST /api/ai/unload` and **Free All GPU VRAM** header/settings controls (`VRAM 0 MB` live readout). Status checks never wake Ollama, ComfyUI, or PyTorch, and Copilot / Translator models load only when explicitly invoked.
+- **Futuristic Short-Form Captions, Viral Reflow & CapCut-Style Multi-Audio Studio (`assets/lyric_layout.py`, `static/anim_constants.json`, `creator_composition.py`, `captions.py`, `static/captions.css`, `static/captions.js`, `templates/captions.html`, `tests/test_creator_composition.py`, `tests/test_captions_studio.py`):**
+  - Added short-form visual styles (**Hormozi**, **Neon Cyber**, **Glass Pill**, **Minimal Luxe**), **Bounce** entrance curve, **Mirror** / **Pulse** audio visualizers, one-click **Reflow 2–3w**, **Smooth Gaps**, punctuation/casing transform tools, and responsive floating workspace drawers.
+  - Added **Multi-Track Background MP3 Mixer** (`music.mp3`) with video/music volume balance, trim (`music_start`), timeline offset (`music_offset`), max duration, looping, fade-in/fade-out envelopes, and cue-based voice auto-ducking.
+  - Added **Live Browser MP3 Preview** (`#liveMusicPreviewBar`, `<audio id="liveMusicAudio">`, `CaptionTiming.computeLiveMusicState`) with real-time stage sync during video playback, standalone **`▶ Audition MP3`**, and automatic **Baked Mix** anti-double-play protection.
+- **Phase 2: Proactive 0 MB VRAM Action Cards (`static/action_cards.js`, `static/copilot.js`, `static/copilot.css`, `static/command_center.js`, `tests/test_caption_timing.js`):**
+  - Added 100% deterministic contextual **Apply / Skip** recommendation cards across Creator Studio, Downloader/Gallery, and `#copilotDrawer` using 0 MB VRAM and respecting Zero-AI / Laptop Mode.
+- **Phase 3: Media Lineage Map & Split-Screen Tooling/AI Configurator (`app_local.py`, `captions.py`, `static/command_center.js`, `templates/index.html`, `tests/test_command_center.py`):**
+  - Added read-only `GET /api/lineage` and Gallery **🧬 Lineage Map** (`#lineageContainer`) connecting Source URL -> Raw Download -> Derived Assets -> Studio Projects & Exports (`origin_path` studio deep-linking via `/captions?import=<path>`).
+  - Added read-only `GET /api/pipeline/config` and Settings **Split-Screen Tooling & AI Configurator** with auto-detected `yt-dlp`, `gallery-dl`, `FFmpeg`, `Whisper ASR`, `Ollama LLM`, and `ComfyUI` tiles paired with a live-updating `pipeline.config.json` inspector.
+
 ## [v5.0.15] - 2026-11-06
 - Studio AI Narrator & Voiceover Studio + Copilot Integration (`narrator.py`, `captions.py`, `copilot.py`, `templates/captions.html`, `static/captions.js`, `static/copilot.js`, `tests/test_narrator.py`, `tests/test_copilot.py`):
   - **3-Engine Narrator Architecture (`narrator.py`):**

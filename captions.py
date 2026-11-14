@@ -33,8 +33,9 @@ import creator_composition as composition_model
 import narrator
 
 DEFAULT_STYLE = dict(font='Arial', size=5, color='#ffffff', highlight='#ffdc55',
-                     outline=2, position=85, background=False, karaoke=False,
-                     cumulative=False, word_pop=False,
+                     outline=2, outline_color='#000000', shadow=0, shadow_color='#000000',
+                     position=85, background=False, background_color='#0a0c14', background_opacity=78,
+                     karaoke=False, cumulative=False, word_pop=False, word_box=False,
                      layout_enabled=False, line_spacing=1.2, letter_spacing=0, box_width=88, horizontal=50, alignment='center',
                      box_padding=1.2, box_radius=.3, track_mode='original', translation_language='en',
                      translation_size=3.5, translation_color='#dddddd', translation_gap=1.5, hide_duplicate_translation=True,
@@ -103,10 +104,25 @@ ANIM = json.loads((Path(__file__).resolve().parent / 'static' / 'anim_constants.
 
 
 def entrance_scale(animation, elapsed):
-    """Pop/zoom entrance scale in percent at ``elapsed`` seconds (100 once finished)."""
+    """Pop/zoom/bounce entrance scale in percent at ``elapsed`` seconds (100 once finished)."""
     spec = ANIM[animation]
     progress = min(1.0, max(0.0, elapsed) / spec['duration'])
+    if 'peak_scale' in spec:
+        peak_at = spec['peak_at']
+        if progress <= peak_at:
+            scale = spec['from_scale'] + (spec['peak_scale'] - spec['from_scale']) * (progress / peak_at)
+        else:
+            scale = spec['peak_scale'] + (1.0 - spec['peak_scale']) * ((progress - peak_at) / (1.0 - peak_at))
+        return 100 * scale
     return 100 * (spec['from_scale'] + (1 - spec['from_scale']) * progress)
+
+
+def _contrast_hex(hexcolor):
+    """Return dark or white text color for crisp legibility over a highlight pill."""
+    r = int(hexcolor[1:3], 16)
+    g = int(hexcolor[3:5], 16)
+    b = int(hexcolor[5:7], 16)
+    return '#090a0f' if (0.299 * r + 0.587 * g + 0.114 * b) > 150 else '#ffffff'
 
 
 def fade_opacity(instant, start, end):
@@ -168,7 +184,7 @@ def validate_edit(data, duration):
                 raise ValueError('Invalid caption identifier.')
             item['id'] = cue['id']
         if cue.get('style_override'):
-            allowed={'font','size','color','highlight','outline','position','background','alignment','horizontal','box_width','line_spacing','letter_spacing','box_padding','box_radius','translation_size','translation_color','translation_gap','animation','glow'}
+            allowed={'font','size','color','highlight','outline','outline_color','shadow','shadow_color','position','background','background_color','background_opacity','word_box','alignment','horizontal','box_width','line_spacing','letter_spacing','box_padding','box_radius','translation_size','translation_color','translation_gap','animation','glow'}
             override=cue['style_override']
             if not isinstance(override,dict) or not set(override)<=allowed: raise ValueError('Invalid line style override.')
             checked=validate_edit(dict(cues=[],style=override),duration)['style']
@@ -198,10 +214,10 @@ def validate_edit(data, duration):
     if style['font'] not in FONTS:
         raise ValueError('Choose a supported font.')
     style = {k: style[k] for k in DEFAULT_STYLE}
-    for k in ('color', 'highlight', 'visualizer_color', 'translation_color'):
+    for k in ('color', 'highlight', 'visualizer_color', 'translation_color', 'outline_color', 'shadow_color', 'background_color'):
         if not re.fullmatch(r'#[0-9a-fA-F]{6}', str(style[k])):
             raise ValueError('Invalid caption color.')
-    if style['visualizer_style'] not in {'waveform', 'spectrum'} or style['visualizer_position'] not in {'bottom', 'center', 'top'}:
+    if style['visualizer_style'] not in {'waveform', 'spectrum', 'mirror', 'pulse'} or style['visualizer_position'] not in {'bottom', 'center', 'top'}:
         raise ValueError('Choose a supported visualizer style and position.')
     if style['video_filter'] not in composition_model.VIDEO_FILTERS or style['audio_effect'] not in composition_model.AUDIO_EFFECTS:
         raise ValueError('Choose a supported video filter and audio effect.')
@@ -220,7 +236,9 @@ def validate_edit(data, duration):
     style['glow'] = number(style['glow'], 0, 10)
     style['size'] = number(style['size'], 2, 12)
     style['outline'] = number(style['outline'], 0, 5)
+    style['shadow'] = number(style['shadow'], 0, 6)
     style['position'] = number(style['position'], 10, 95)
+    style['background_opacity'] = number(style['background_opacity'], 15, 100)
     style['visualizer_height'] = number(style['visualizer_height'], 10, 40)
     style['visualizer_sensitivity'] = number(style['visualizer_sensitivity'], .5, 3)
     style['film_grain'] = number(style['film_grain'], 0, 30)
@@ -230,6 +248,7 @@ def validate_edit(data, duration):
     style['karaoke'] = bool(style['karaoke'])
     style['cumulative'] = bool(style['cumulative'])
     style['word_pop'] = bool(style['word_pop'])
+    style['word_box'] = bool(style['word_box'])
     style['visualizer'] = bool(style['visualizer'])
     style['vignette'] = bool(style['vignette'])
     style['noise_cancel'] = bool(style['noise_cancel'])
@@ -342,7 +361,7 @@ def visualizer_bars(peaks, duration, time_sec, width, height, style):
     pos = style.get('visualizer_position', 'bottom')
     vis_h = float(style.get('visualizer_height', 18))
     sens = float(style.get('visualizer_sensitivity', 1.0))
-    count = 36 if mode == 'spectrum' else 48
+    count = 36 if mode == 'spectrum' else 40 if mode == 'mirror' else 32 if mode == 'pulse' else 48
 
     pts = peaks if (isinstance(peaks, list) and len(peaks) > 0) else [0.25] * 64
     n = len(pts)
@@ -355,11 +374,11 @@ def visualizer_bars(peaks, duration, time_sec, width, height, style):
     start_x = width * 0.06
     usable_w = width * 0.88
     step_x = usable_w / count
-    bar_w = max(2.0, step_x * (0.65 if mode == 'spectrum' else 0.75))
+    bar_w = max(2.0, step_x * (0.65 if mode in ('spectrum', 'mirror') else 0.58 if mode == 'pulse' else 0.75))
 
     rects = []
     for i in range(count):
-        if mode == 'spectrum':
+        if mode in ('spectrum', 'mirror'):
             idx0 = max(0, min(n - 1, rint(center)))
             idx1 = max(0, min(n - 1, rint(center + (i - count / 2.0) * 0.5)))
             idx2 = max(0, min(n - 1, rint(center + ((i % 7) - 3) * 1.5)))
@@ -371,6 +390,16 @@ def visualizer_bars(peaks, duration, time_sec, width, height, style):
             ripple = 0.72 + 0.28 * math.sin(t * (7.0 + (i % 5) * 1.3) + i * 0.65)
             raw = (0.5 * p0 + 0.3 * p1 + 0.2 * p2) * arch * ripple * sens
             level = 0.04 if p0 < 0.005 else min(1.0, max(0.04, math.sqrt(max(0.0, raw))))
+        elif mode == 'pulse':
+            dist = abs((i - (count - 1) / 2.0) / max(1.0, (count - 1) / 2.0))
+            idx0 = max(0, min(n - 1, rint(center)))
+            idx_d = max(0, min(n - 1, rint(center - dist * 4.0)))
+            p0 = float(pts[idx0]) / max_p
+            pd = float(pts[idx_d]) / max_p
+            envelope = math.pow(max(0.0, 1.0 - dist * 0.82), 1.35)
+            pulse_wave = 0.75 + 0.25 * math.cos(t * 9.5 - dist * 4.2)
+            raw = (0.6 * p0 + 0.4 * pd) * envelope * pulse_wave * sens
+            level = 0.04 if p0 < 0.005 else min(1.0, max(0.04, math.sqrt(max(0.0, raw))))
         else:
             span = max(8.0, n * 0.04)
             offset = ((i / max(1, count - 1)) - 0.5) * span
@@ -380,13 +409,25 @@ def visualizer_bars(peaks, duration, time_sec, width, height, style):
             raw = p * wave_mod * sens
             level = 0.04 if p < 0.005 else min(1.0, max(0.04, math.sqrt(max(0.0, raw))))
 
-        bh = max(2.0, level * band_h)
         x1 = rint(start_x + i * step_x)
         x2 = rint(x1 + bar_w)
-        if mode == 'waveform' or pos == 'center':
+        if mode == 'mirror':
+            mid_y = (height - band_h * 0.5 - height * 0.02) if pos == 'bottom' else (band_h * 0.5 + height * 0.02) if pos == 'top' else (height * 0.5)
+            gap = max(2.0, band_h * 0.06)
+            half_h = max(2.0, level * (band_h * 0.46))
+            uy1 = rint(mid_y - gap - half_h)
+            uy2 = max(uy1 + 1, rint(mid_y - gap))
+            ly1 = rint(mid_y + gap)
+            ly2 = max(ly1 + 1, rint(mid_y + gap + half_h * 0.75))
+            rects.append((x1, uy1, x2, uy2))
+            rects.append((x1, ly1, x2, ly2))
+            continue
+
+        bh = max(2.0, level * band_h)
+        if mode in ('waveform', 'pulse') or pos == 'center':
             mid_y = (height - band_h * 0.5 - height * 0.02) if pos == 'bottom' else (band_h * 0.5 + height * 0.02) if pos == 'top' else (height * 0.5)
             y1 = rint(mid_y - bh * 0.5)
-            y2 = rint(mid_y + bh * 0.5)
+            y2 = max(y1 + 1, rint(mid_y + bh * 0.5))
         elif pos == 'top':
             y1 = 0
             y2 = rint(bh)
@@ -434,7 +475,7 @@ def _row_background_events(cue, row, style, height):
     animation = style['animation'] if row['track']=='original' else 'none'
     if animation == 'pop_in':
         animation = 'pop'
-    duration = ANIM[animation]['duration'] if animation in ('pop','zoom_in','slide_up') else 0
+    duration = ANIM[animation]['duration'] if animation in ('pop','zoom_in','slide_up','bounce') else 0
     start, end = cue['start'], cue['end']
     boundaries = {start,end}
     if duration:
@@ -444,11 +485,14 @@ def _row_background_events(cue, row, style, height):
     if animation=='fade':
         boundaries.update(t for t in (start+ramp,end-ramp,(start+end)/2) if start<t<end)
     points=sorted(boundaries)
+    bg_hex = style.get('background_color', '#0a0c14')
+    bg_bgr = (bg_hex[5:7] + bg_hex[3:5] + bg_hex[1:3]).upper()
+    base_alpha = round(255 * (1 - float(style.get('background_opacity', 78)) / 100))
     events=[]
     for a,b in zip(points,points[1:]):
         if round(a*100)>=round(b*100):continue
         progress=min(1,(a-start)/duration) if duration else 1
-        scale=entrance_scale(animation,a-start)/100 if animation in ('pop','zoom_in') else 1
+        scale=entrance_scale(animation,a-start)/100 if animation in ('pop','zoom_in','bounce') else 1
         offset=height*ANIM['slide_up']['offset']*(1-progress) if animation=='slide_up' else 0
         x=row['x']+(left-row['x'])*scale
         y=row['y']+(top-row['y'])*scale+offset
@@ -456,10 +500,35 @@ def _row_background_events(cue, row, style, height):
         path=rounded_rect_path(x,y,w,h,r)
         def alpha(t):
             opacity=fade_opacity(t,start,end) if animation=='fade' else 1
-            return round(255-(255-56)*opacity)
-        tags=rf'\an7\pos(0,0)\c&H140C0A&\alpha&H{alpha(a):02X}&'
+            return round(255-(255-base_alpha)*opacity)
+        tags=rf'\an7\pos(0,0)\c&H{bg_bgr}&\alpha&H{alpha(a):02X}&'
         if alpha(a)!=alpha(b):tags+=rf'\t(0,{round((b-a)*1000)},\alpha&H{alpha(b):02X}&)'
         events.append(f'Dialogue: -1,{timestamp(a,True)},{timestamp(b,True)},Vis,,0,0,0,,{{{tags}\\p1}}{path}{{\\p0}}')
+    return events
+
+
+def _word_box_events(cue, row, style, height):
+    """Draw a rounded highlight pill behind the active karaoke word."""
+    events = []
+    em = row['height']
+    spec = ANIM['word_box']
+    pad_x = em * spec['pad_x']
+    pad_y = em * spec['pad_y']
+    hl_hex = style.get('highlight', '#ffdc55')
+    hl_bgr = (hl_hex[5:7] + hl_hex[3:5] + hl_hex[1:3]).upper()
+    pop_scale = ANIM['word_pop']['scale'] if style.get('word_pop') else 1.0
+    for wb in row.get('word_boxes', []):
+        if round(wb['start'] * 100) >= round(wb['end'] * 100):
+            continue
+        bw = (wb['width'] + 2 * pad_x) * pop_scale
+        bh = (em + 2 * pad_y) * pop_scale
+        cx = wb['x'] + wb['width'] / 2
+        cy = row['y'] - em / 2
+        bx = cx - bw / 2
+        by = cy - bh / 2
+        rad = min(bh / 2, bw / 2, em * spec['radius'] * pop_scale)
+        path = rounded_rect_path(round(bx, 1), round(by, 1), round(bw, 1), round(bh, 1), round(rad, 1))
+        events.append(f"Dialogue: -1,{timestamp(wb['start'], True)},{timestamp(wb['end'], True)},Vis,,0,0,0,,{{\\an7\\pos(0,0)\\c&H{hl_bgr}&\\alpha&H18&\\p1}}{path}{{\\p0}}")
     return events
 
 
@@ -467,8 +536,8 @@ def ass_text(project, skip_unapproved=False):
     """Styled ASS export. Only approved translations are rendered; with ``skip_unapproved``
     translation-only exports omit lines that have no approved translation instead of failing."""
     style={**DEFAULT_STYLE,**project.get('style',{})}
-    # Background plates use the shared layout so their rounded boxes match the preview.
-    if not style['layout_enabled'] and not style['background'] and style['track_mode']=='original' and not any(c.get('style_override') for c in project['cues']):
+    # Background plates and active-word boxes use the shared layout so boxes match the preview.
+    if not style['layout_enabled'] and not style['background'] and not style['word_box'] and style['track_mode']=='original' and not any(c.get('style_override') for c in project['cues']):
         return _legacy_ass_text(project)
     base=_legacy_ass_text({**project,'cues':[],'style':style})
     definitions=[];events=[]
@@ -481,9 +550,11 @@ def ass_text(project, skip_unapproved=False):
             name='Row'+str(len(definitions))
             if cue_style['background']:
                 events.extend(_row_background_events(cue,row,cue_style,project['height']))
+            if cue_style['word_box'] and row['track']=='original':
+                events.extend(_word_box_events(cue,row,cue_style,project['height']))
             row_style={**cue_style,'background':False,'size':row['size'],'color':row['color'],'position':row['y']/project['height']*100,
                        'horizontal':row['x']/project['width']*100,'letter_spacing':row['letter_spacing'],'visualizer':False}
-            if row['track']=='translation': row_style.update(karaoke=False,cumulative=False,word_pop=False,animation='none')
+            if row['track']=='translation': row_style.update(karaoke=False,cumulative=False,word_pop=False,word_box=False,animation='none')
             piece=_legacy_ass_text({**project,'style':row_style,'studio':{},'composition':{},
                 'cues':[{**cue,'text':row['text'],'words':row['words']}]})
             for line in piece.splitlines():
@@ -521,11 +592,15 @@ def _legacy_ass_text(project):
         return ''.join(pieces)
     font_size = height * style['size'] / 100 * font_scale(style['font'])
     outline = height * style['outline'] / 360
+    shadow_px = height * float(style.get('shadow') or 0) / 360
     border_style = 3 if style['background'] else 1
     alignment={'left':1,'center':2,'right':3}[style['alignment']]
     letter_spacing=height*style['letter_spacing']/100
     box_outline = max(outline, height * style['box_padding']/100) if style['background'] else outline
-    outline_col = '&H38140C0A' if style['background'] else '&H00000000'
+    bg_hex = style.get('background_color', '#0a0c14')
+    bg_alpha = round(255 * (1 - float(style.get('background_opacity', 78)) / 100))
+    outline_col = color(bg_hex, f'{bg_alpha:02X}').upper() if style['background'] else color(style.get('outline_color', '#000000')).upper()
+    back_col = color(style.get('shadow_color', '#000000'), '60').upper() if shadow_px > 0 else '&H80000000'
     vis_col = color(style.get('visualizer_color', '#bba6ff'), '28')
     margin = round(width*(1-style['box_width']/100)/2)
     # Glow matches the preview's text-shadow: a blurred highlight halo under sharp text.
@@ -540,7 +615,7 @@ WrapStyle: 0
 ScaledBorderAndShadow: yes
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,{style['font']},{font_size},{color(style['color'])},{color(style['color'])},{outline_col},&H80000000,0,0,0,0,100,100,{letter_spacing},0,{border_style},{box_outline},0,{alignment},{round(width*(1-style['box_width']/100)/2)},{round(width*(1-style['box_width']/100)/2)},0,1
+Style: Default,{style['font']},{font_size},{color(style['color'])},{color(style['color'])},{outline_col},{back_col},0,0,0,0,100,100,{letter_spacing},0,{border_style},{box_outline},{shadow_px:g},{alignment},{round(width*(1-style['box_width']/100)/2)},{round(width*(1-style['box_width']/100)/2)},0,1
 Style: Vis,Arial,20,{vis_col},{vis_col},&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
 Style: Glow,{style['font']},{font_size},{color(style['color'], 'FF')},{color(style['color'], 'FF')},{color(style['highlight'])},&H00000000,0,0,0,0,100,100,{letter_spacing},0,1,{glow_border},0,{alignment},{margin},{margin},0,1
 Style: Title,{style['font']},{font_size},{color(style['color'])},{color(style['color'])},&H00000000,&H80000000,0,0,0,0,100,100,{letter_spacing},0,1,{outline},0,5,0,0,0,1
@@ -598,7 +673,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text'
         anim = style.get('animation', 'none')
         if anim == 'pop_in':
             anim = 'pop'
-        use_words = bool((style.get('karaoke') or style.get('cumulative') or style.get('word_pop') or anim == 'typewriter') and cue['words'])
+        use_words = bool((style.get('karaoke') or style.get('cumulative') or style.get('word_pop') or style.get('word_box') or anim == 'typewriter') and cue['words'])
         if not use_words and anim == 'typewriter' and len(cue['text']) > 1:
             raw_text = cue['text']
             total_dur = cue['end'] - cue['start']
@@ -624,6 +699,12 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text'
             if anim == 'fade':
                 ramp = min(ANIM['fade']['duration'], (cue['end']-cue['start'])/2)
                 boundaries = sorted(set(boundaries) | {cue['start']+ramp, cue['end']-ramp})
+            elif anim == 'bounce':
+                b_spec = ANIM['bounce']
+                b_dur = b_spec['duration']
+                b_peak = cue['start'] + b_dur * b_spec['peak_at']
+                b_end = cue['start'] + b_dur
+                boundaries = sorted(set(boundaries) | {t for t in (b_peak, b_end) if cue['start'] < t < cue['end']})
             if anim == 'typewriter':
                 character_times = set(boundaries)
                 for word in cue['words']:
@@ -642,14 +723,17 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text'
                 mid = (start + end) / 2
                 separators = re.findall(r'\s+', cue['text'])
                 hl = color(style['highlight']).replace('&H00', '&H')
+                box_fg = color(_contrast_hex(style['highlight'])).replace('&H00', '&H')
                 parts = []
                 for i, w in enumerate(cue['words']):
                     if anim == 'typewriter' and w['start'] > mid:
                         continue
                     sep = escape(separators[i-1]) if i else ''
                     is_active = (i == active)
-                    is_lit = (w['start'] <= mid) if style.get('cumulative') else (is_active and bool(style.get('karaoke')))
+                    is_box_active = is_active and bool(style.get('word_box'))
+                    is_lit = is_box_active or ((w['start'] <= mid) if style.get('cumulative') else (is_active and bool(style.get('karaoke'))))
                     is_pop = is_active and bool(style.get('word_pop'))
+                    word_hl = box_fg if is_box_active else hl
                     text = w['text']
                     if anim == 'typewriter' and is_active:
                         count = max(1, min(len(text), math.ceil(len(text)*(mid-w['start'])/(max(typewriter['min_word'],w['end']-w['start'])*typewriter['word_reveal']))))
@@ -658,16 +742,22 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text'
                     pop_scale = ANIM['word_pop']['scale']
                     pop_percent = f'{pop_scale*100:g}'
                     pop_tags = rf'\fscx{pop_percent}\fscy{pop_percent}'
-                    if is_pop and anim in ('pop','zoom_in'):
+                    if is_pop and anim in ('pop','zoom_in','bounce'):
                         duration=ANIM[anim]['duration']
                         elapsed=max(0,start-cue['start'])
                         if elapsed<duration:
                             combined=pop_scale*entrance_scale(anim,elapsed)
-                            pop_tags=rf'\fscx{combined:g}\fscy{combined:g}\t(0,{round((duration-elapsed)*1000)},\fscx{pop_percent}\fscy{pop_percent})'
+                            if anim=='bounce' and elapsed < duration*ANIM['bounce']['peak_at']:
+                                peak_pct=pop_scale*ANIM['bounce']['peak_scale']*100
+                                peak_ms=round((duration*ANIM['bounce']['peak_at']-elapsed)*1000)
+                                rem_ms=round((duration-elapsed)*1000)
+                                pop_tags=rf'\fscx{combined:g}\fscy{combined:g}\t(0,{peak_ms},\fscx{peak_pct:g}\fscy{peak_pct:g})\t({peak_ms},{rem_ms},\fscx{pop_percent}\fscy{pop_percent})'
+                            else:
+                                pop_tags=rf'\fscx{combined:g}\fscy{combined:g}\t(0,{round((duration-elapsed)*1000)},\fscx{pop_percent}\fscy{pop_percent})'
                     if is_lit and is_pop:
-                        parts.append(sep + r'{\c' + hl + '&' + pop_tags + '}' + w_esc + r'{\r}')
+                        parts.append(sep + r'{\c' + word_hl + '&' + pop_tags + '}' + w_esc + r'{\r}')
                     elif is_lit:
-                        parts.append(sep + r'{\c' + hl + '&}' + w_esc + r'{\r}')
+                        parts.append(sep + r'{\c' + word_hl + '&}' + w_esc + r'{\r}')
                     elif is_pop:
                         parts.append(sep + '{' + pop_tags + '}' + w_esc + r'{\r}')
                     else:
@@ -699,8 +789,30 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text'
                 if elapsed < duration:
                     scale = entrance_scale(anim, elapsed)
                     tags.append(rf'\fscx{scale:g}\fscy{scale:g}\t(0,{round((duration-elapsed)*1000)},\fscx100\fscy100)')
+            elif anim == 'bounce':
+                spec = ANIM['bounce']
+                duration = spec['duration']
+                if elapsed < duration:
+                    s0 = entrance_scale('bounce', elapsed)
+                    peak_t = duration * spec['peak_at']
+                    rem_ms = round((duration - elapsed) * 1000)
+                    if elapsed < peak_t:
+                        peak_ms = round((peak_t - elapsed) * 1000)
+                        peak_pct = spec['peak_scale'] * 100
+                        tags.append(rf'\fscx{s0:g}\fscy{s0:g}\t(0,{peak_ms},\fscx{peak_pct:g}\fscy{peak_pct:g})\t({peak_ms},{rem_ms},\fscx100\fscy100)')
+                    else:
+                        tags.append(rf'\fscx{s0:g}\fscy{s0:g}\t(0,{rem_ms},\fscx100\fscy100)')
+            elif anim == 'blur_in':
+                spec = ANIM['blur_in']
+                duration = spec['duration']
+                if elapsed < duration:
+                    p = elapsed / duration
+                    b0 = height * spec['max_blur'] * (1 - p)
+                    a0 = round(255 * (1 - (0.25 + 0.75 * p)))
+                    rem_ms = round((duration - elapsed) * 1000)
+                    tags.append(rf'\blur{b0:.2f}\alpha&H{a0:02X}&\t(0,{rem_ms},\blur0\alpha&H00&)')
             # Word highlighting resets the style; retain the enclosing cue animation.
-            if anim in ('fade','pop','zoom_in','slide_up'):
+            if anim in ('fade','pop','zoom_in','slide_up','bounce','blur_in'):
                 body = body.replace(r'{\r}', '{\\r' + ''.join(tags) + '}')
             emit(start, end, tags, body)
     return '\n'.join(output) + '\n'
@@ -1592,7 +1704,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             for path in root.glob('*/project.json'):
                 try:
                     d = json.loads(path.read_text(encoding='utf-8'))
-                    result.append(dict(id=d['id'], name=d['name']))
+                    result.append(dict(id=d['id'], name=d['name'], origin_path=d.get('origin_path', '')))
                 except (OSError, ValueError, KeyError):
                     pass
         return jsonify(result)
@@ -1658,7 +1770,8 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
         elif source is not None:
             shutil.copy2(source, media)
         data = dict(id=pid, name=name[:200], source=media.name, state='busy', status='Preparing video',
-                    revision=0, cues=[], style=dict(DEFAULT_STYLE), width=0, height=0, duration=0, peaks=[], timing='manual', exports=[])
+                    revision=0, cues=[], style=dict(DEFAULT_STYLE), width=0, height=0, duration=0, peaks=[], timing='manual', exports=[],
+                    **({'origin_path': str(source)} if source is not None else {}))
         if song and request.form.get('visualizer') == 'true':
             data['style'].update(visualizer=True, visualizer_style='waveform')
         def prepare(d, f):
@@ -1724,10 +1837,21 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             audio_probe = 'duration_'+token+'.wav'
             success = False
             try:
-                # Bounded decode verifies the real replacement duration, not its filename or metadata.
-                ffmpeg(['-i',assets['audio']['file'],'-t','1200.1','-vn','-ac','1','-ar','1000','-c:a','pcm_s16le',audio_probe], f)
-                with wave.open(str(f/audio_probe),'rb') as audio:
-                    source_duration = audio.getnframes()/audio.getframerate()
+                if assets['audio'].get('kind') == 'video':
+                    probe_a = process.run([imageio_ffmpeg.get_ffmpeg_exe(), '-i', str(f / assets['audio']['file'])], capture_output=True)
+                    assets['audio']['has_audio'] = b'Audio:' in probe_a.stderr
+                if assets['audio'].get('has_audio') is False:
+                    cap = cv2.VideoCapture(str(f / assets['audio']['file']))
+                    try:
+                        vfps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+                        source_duration = (cap.get(cv2.CAP_PROP_FRAME_COUNT) / vfps) if vfps else 0.0
+                    finally:
+                        cap.release()
+                else:
+                    # Bounded decode verifies the real replacement duration, not its filename or metadata.
+                    ffmpeg(['-i',assets['audio']['file'],'-t','1200.1','-vn','-ac','1','-ar','1000','-c:a','pcm_s16le',audio_probe], f)
+                    with wave.open(str(f/audio_probe),'rb') as audio:
+                        source_duration = audio.getnframes()/audio.getframerate()
                 number(source_duration,.1,1200)
                 if 0 < float(settings.get('end',0))-source_duration <= .05:
                     settings['end'] = source_duration  # Legacy video frame rounding.
@@ -1735,7 +1859,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                 assets['audio']['duration'] = source_duration
                 has_audio = False
                 if clean['background_volume']:
-                    video_assets = [a for a in assets.values() if isinstance(a, dict) and a.get('kind') == 'video' and a.get('file')]
+                    video_assets = [a for k, a in assets.items() if k != 'audio' and isinstance(a, dict) and a.get('kind') == 'video' and a.get('file')]
                     for va in video_assets:
                         v_file = f / va['file']
                         if v_file.is_file():
@@ -1793,7 +1917,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
             f = folder(pid)
             added = []
             try:
-                for key, field in [('audio','audio'),('background','background'),('broll','broll'),('sticker','sticker')]:
+                for key, field in [('audio','audio'),('music','music'),('background','background'),('broll','broll'),('sticker','sticker')]:
                     upload = request.files.get(field)
                     library = request.form.get(field+'_path','') if not upload else ''
                     if not upload and not library: continue
@@ -1801,14 +1925,16 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                         raise ValueError('Choose media from your library or upload it.')
                     media_name = (upload.filename if upload and upload.filename else library) or ''
                     ext = Path(media_name).suffix.lower()
-                    supported = composition_model.AUDIO | composition_model.VIDEOS if key=='audio' else composition_model.IMAGES | composition_model.VIDEOS
+                    supported = composition_model.AUDIO | composition_model.VIDEOS if key in ('audio', 'music') else composition_model.IMAGES | composition_model.VIDEOS
                     if ext not in supported: raise ValueError('Unsupported composition media type.')
                     name = 'asset_'+uuid.uuid4().hex+ext
                     target = f/name
                     if upload: upload.save(target)
                     else: shutil.copy2(library,target)
                     added.append(target)
-                    entry: dict[str, Any] = dict(file=name,kind='audio' if key=='audio' else 'image' if ext in composition_model.IMAGES else 'video')
+                    entry: dict[str, Any] = dict(file=name,kind='audio' if key in ('audio', 'music') else 'image' if ext in composition_model.IMAGES else 'video')
+                    if key == 'music':
+                        entry['name'] = Path(media_name).name[:120]
                     if key == 'background' and request.form.get('stock_provenance'):
                         entry['provenance'] = composition_model.validate_provenance(
                             json.loads(request.form.get('stock_provenance', '{}'))
@@ -1887,6 +2013,7 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                 composition_model.validate(settings, 7200)
                 if request.form.get('clear_broll') == 'true': assets.pop('broll',None)
                 if request.form.get('clear_sticker') == 'true': assets.pop('sticker',None)
+                if request.form.get('clear_music') == 'true': assets.pop('music',None)
                 for key,asset in assets.items():
                     if not composition_model.local_asset(f,asset).is_file():
                         raise ValueError('Missing '+key+' media. Choose its original file to relink it.')
@@ -2520,11 +2647,12 @@ def register_captions(app, save_dir, job_started, job_finished, refresh_gallery,
                             studio['settings'][key] = style_cfg[key]
                         studio['settings']['visualizer'] = False  # Drawn once, by the ASS caption layer.
                         has_audio = False
-                        for asset in studio['assets'].values():
+                        for key, asset in studio['assets'].items():
                             if asset.get('kind') == 'video' and 'has_audio' not in asset:
                                 probe = process.run([imageio_ffmpeg.get_ffmpeg_exe(), '-i', str(composition_model.local_asset(f,asset))],capture_output=True)
                                 asset['has_audio'] = b'Audio:' in probe.stderr
-                            has_audio = has_audio or bool(asset.get('has_audio'))
+                            if key != 'audio':
+                                has_audio = has_audio or bool(asset.get('has_audio'))
                         size = composition_model.SHAPES[studio['settings']['shape']]
                         if quality == '4k':
                             size = tuple(x*2 for x in size)

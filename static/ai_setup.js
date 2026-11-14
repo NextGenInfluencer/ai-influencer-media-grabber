@@ -398,7 +398,11 @@
                         h('p', {class: 'ais-note', text: 'Each file is pinned to an exact version and verified (SHA-256) before use. Downloads can be cancelled and resume later.'}))) : null);
             state.refresh();
             sheet.footer(
-                firstRun ? h('button', {class: 'ais-btn', type: 'button', text: 'Use without AI', onclick: () => sheet.close()}) : null,
+                firstRun ? h('button', {class: 'ais-btn', type: 'button', text: 'Use without AI', onclick: () => {
+                    if (typeof window.setZeroAIMode === 'function') window.setZeroAIMode(true);
+                    else api('/api/ai/settings', {method: 'POST', body: {hide_ai_ui: true, setup_seen: true}}).catch(() => {});
+                    sheet.close();
+                }}) : null,
                 h('button', {class: 'ais-btn', type: 'button', text: 'Downloads & Storage', onclick: () => window.openAIStorage()}),
                 h('span', {class: 'ais-spacer'}),
                 h('button', {class: 'ais-btn', type: 'button', text: 'Close', onclick: () => sheet.close()}),
@@ -529,6 +533,18 @@
                     resolved.available ? select : h('button', {class: 'ais-btn small', type: 'button', text: 'Set up', onclick: () => window.openAISetup(resolved.setup_hint)}));
             });
             const gpu = Object.entries(engines.gpu || {});
+            const ollamaLoaded = (engines.ollama_loaded || []).filter(model => !gpu.some(([name]) => name === 'ollama' || name === model));
+            const hasLoadedVram = Boolean(gpu.length || ollamaLoaded.length);
+            const releaseVram = async () => {
+                try {
+                    await api('/api/ai/gpu/release', {method: 'POST'});
+                    toast('GPU VRAM', 'All resident AI models unloaded from VRAM.');
+                    if (typeof window.refreshVramGuard === 'function') window.refreshVramGuard();
+                } catch (error) {
+                    toast('GPU VRAM', error.message);
+                }
+                load();
+            };
             const cloudRows = Object.entries(settings.cloud || {}).map(([provider, info]) => {
                 const input = h('input', {class: 'ais-input', type: 'password', autocomplete: 'off', placeholder: info.has_key ? info.masked_key : 'Paste your API key'});
                 const enabled = h('input', {type: 'checkbox', checked: info.enabled, disabled: !info.has_key});
@@ -559,7 +575,11 @@
                 h('div', {class: 'ais-section'}, h('h3', {text: 'Engines'}), h('div', {class: 'ais-card'}, engineRows)),
                 h('div', {class: 'ais-section'}, h('h3', {text: 'Model roles'}), h('div', {class: 'ais-card'}, roleRows)),
                 h('div', {class: 'ais-section'}, h('h3', {text: 'GPU memory'}), h('div', {class: 'ais-card'},
-                    gpu.length ? gpu.map(([name, info]) => h('div', {class: 'ais-row-meta', text: `${name}: ${info.vram_gb} GB${info.active ? ' · in use' : ` · idle ${Math.round(info.idle_seconds)} s`}`}))
+                    hasLoadedVram ? h('div', {class: 'ais-row'},
+                        h('div', {class: 'ais-row-main'},
+                            gpu.map(([name, info]) => h('div', {class: 'ais-row-meta', text: `${name}: ${info.vram_gb} GB${info.active ? ' · in use' : ` · idle ${Math.round(info.idle_seconds)} s`}`})),
+                            ollamaLoaded.map(name => h('div', {class: 'ais-row-meta', text: `Ollama resident: ${name}`}))),
+                        h('button', {class: 'ais-btn small danger', type: 'button', text: 'Unload GPU VRAM', onclick: releaseVram}))
                         : h('p', {class: 'ais-note', text: 'No model is loaded on the GPU. Models are released shortly after their last use.'}))),
                 h('div', {class: 'ais-section'}, h('h3', {text: 'Optional cloud (opt-in, costs credits)'}), h('div', {class: 'ais-card'},
                     h('p', {class: 'ais-note', text: 'Never used automatically. Cloud actions send only the media you select to the provider, use your own key and bill your account; you confirm the cost each time. Keys stay in Windows Credential Manager and are never shown in full.'}),

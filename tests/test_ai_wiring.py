@@ -254,6 +254,19 @@ class SetupUIStaticTests(unittest.TestCase):
             with self.subTest(page=page):
                 present(self, "ensureNoticeAccepted('responsible_use')", read(page), page)
 
+    def test_shell_assets_laptop_mode_and_retired_copilot_pill(self):
+        for page in ('templates/index.html', 'templates/captions.html', 'templates/video_studio.html'):
+            html = read(page)
+            with self.subTest(page=page):
+                present(self, '/static/app_shell.css', html, 'html')
+                present(self, '/static/app_shell.js', html, 'html')
+        index = read('templates/index.html')
+        present(self, 'id="section-settings"', index, 'index')
+        present(self, 'data-zero-ai-switch', index, 'index')
+        copilot_js = read('static/copilot.js')
+        absent(self, "button.id = 'copilotTrigger'", copilot_js, 'copilot.js')
+        absent(self, 'document.body.append(button, drawer)', copilot_js, 'copilot.js')
+
 
 if __name__ == '__main__':
     unittest.main()
