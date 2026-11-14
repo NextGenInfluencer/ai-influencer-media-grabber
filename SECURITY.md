@@ -4,16 +4,16 @@ AI Influencer Media Grabber is a **100% open-source, local-first Windows desktop
 
 ---
 
-## 1. Verifying Your Download (`v5.0.15`)
+## 1. Verifying Your Download (`v5.3.0`)
 
-Before or after running **`AI-Influencer-Media-Grabber-v5.0.15-Setup.exe`**, you can verify its cryptographic checksum and independent antivirus scan results:
+Before or after running **`AI-Influencer-Media-Grabber-v5.3.0-Setup.exe`**, you can verify its cryptographic checksum and independent antivirus scan results:
 
 | Field | Value |
 |---|---|
-| **Installer Filename** | `AI-Influencer-Media-Grabber-v5.0.15-Setup.exe` |
-| **Exact Size** | `119,009,012` bytes (`113.5 MB`) |
-| **SHA-256 Checksum** | `5fe71dbc60879fcdaccde3f77e6518fc8ac2ca3353de2aca3c0391d975617ebf` |
-| **Checksum File** | [`SHA256SUMS-v5.0.15.txt`](https://github.com/NextGenInfluencer/ai-influencer-media-grabber/releases/download/v5.0.15/SHA256SUMS-v5.0.15.txt) |
+| **Installer Filename** | `AI-Influencer-Media-Grabber-v5.3.0-Setup.exe` |
+| **Exact Size** | `119,041,002` bytes (`113.5 MB`) |
+| **SHA-256 Checksum** | `3a1c77ce29af6eb116b527823ba8df6fc92c785eea92eb4fded5699f1b56bc4a` |
+| **Checksum File** | [`SHA256SUMS-v5.3.0.txt`](https://github.com/NextGenInfluencer/ai-influencer-media-grabber/releases/download/v5.3.0/SHA256SUMS-v5.3.0.txt) |
 | **Microsoft Defender Scan** | **0 threats found** (`MpCmdRun.exe -Scan -ScanType 3`) |
 | **Previous `v5.0.14` VirusTotal Report** | [View VirusTotal Analysis (`6dc91907...c02a6`)](https://www.virustotal.com/gui/file/6dc91907d5de1d0d90ecd4ab6c57d48cfc7b710d54a6a7093c248005d74c02a6) |
 | **Windows Privileges** | **Standard User (`PrivilegesRequired=lowest`)** — never requests Administrator (UAC) elevation |
@@ -21,11 +21,11 @@ Before or after running **`AI-Influencer-Media-Grabber-v5.0.15-Setup.exe`**, you
 ### Verify in Windows PowerShell (1 command)
 Open PowerShell in your `Downloads` folder and run:
 ```powershell
-Get-FileHash .\AI-Influencer-Media-Grabber-v5.0.15-Setup.exe -Algorithm SHA256
+Get-FileHash .\AI-Influencer-Media-Grabber-v5.3.0-Setup.exe -Algorithm SHA256
 ```
 Confirm the output matches:
 ```text
-5FE71DBC60879FCDACCDE3F77E6518FC8AC2CA3353DE2ACA3C0391D975617EBF
+3A1C77CE29AF6EB116B527823BA8DF6FC92C785EEA92EB4FDED5699F1B56BC4A
 ```
 
 ### Why does Windows SmartScreen show "Windows protected your PC"?

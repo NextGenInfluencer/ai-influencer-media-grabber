@@ -198,8 +198,8 @@ You do **not** need to install Python, Node.js, or FFmpeg manually when using th
 3. Double-click the shortcut to launch the app. All core features (Downloader, YouTube-to-MP3, Media Tools, Trimmer, Face-Tracking Crop, AI Cleaner, Kling Prep, Carousel Studio, Gallery, History, and Creator Studio video editing) work immediately out of the box.
 
 > **🛡️ Download Verification & Windows SmartScreen (`v5.3.0`)**
-> - **SHA-256 (`AI-Influencer-Media-Grabber-v5.3.0-Setup.exe`)**: `__INSTALLER_SHA256__` ([`SHA256SUMS-v5.3.0.txt`](https://github.com/NextGenInfluencer/ai-influencer-media-grabber/releases/download/v5.3.0/SHA256SUMS-v5.3.0.txt))
-> - **Defender & Security**: __DEFENDER_SCAN__
+> - **SHA-256 (`AI-Influencer-Media-Grabber-v5.3.0-Setup.exe`)**: `3a1c77ce29af6eb116b527823ba8df6fc92c785eea92eb4fded5699f1b56bc4a` ([`SHA256SUMS-v5.3.0.txt`](https://github.com/NextGenInfluencer/ai-influencer-media-grabber/releases/download/v5.3.0/SHA256SUMS-v5.3.0.txt))
+> - **Defender & Security**: **0 threats found** by Microsoft Defender Antivirus (`MpCmdRun.exe`).
 > - **No Admin Rights Needed**: The installer runs at standard user privilege (`PrivilegesRequired=lowest`) and installs into `%LOCALAPPDATA%\AI Influencer Media Grabber`. If Windows SmartScreen displays *"Windows protected your PC"* (standard for free open-source apps without a commercial EV certificate), verify the SHA-256 hash with `Get-FileHash .\AI-Influencer-Media-Grabber-v5.3.0-Setup.exe -Algorithm SHA256` and click **More info → Run anyway**. See [SECURITY.md](SECURITY.md).
 
 ---

@@ -11,9 +11,9 @@
 - **Media Lineage Map & Split-Screen Tooling/AI Configurator:** Visual **🧬 Lineage Map** in Gallery (`Source URL → Raw Media → Derived Assets → Studio Exports`) and a 2-column Settings view combining auto-detected binary status tiles (`yt-dlp`, `gallery-dl`, `FFmpeg`, `Whisper`, `Ollama`, `ComfyUI`) with a live `pipeline.config.json` inspector.
 
 **Download & verify:**
-- **Installer:** `AI-Influencer-Media-Grabber-v5.3.0-Setup.exe` (`__INSTALLER_BYTES__` bytes, standard user installer — no Admin/UAC prompt required)
-- **SHA-256 (`SHA256SUMS-v5.3.0.txt`):** `__INSTALLER_SHA256__` (`Get-FileHash .\AI-Influencer-Media-Grabber-v5.3.0-Setup.exe -Algorithm SHA256`)
-- **Security Scans:** `__DEFENDER_SCAN__`. See [`SECURITY.md`](SECURITY.md) and `CHANGELOG.md` for details.
+- **Installer:** `AI-Influencer-Media-Grabber-v5.3.0-Setup.exe` (`119,041,002` bytes, standard user installer — no Admin/UAC prompt required)
+- **SHA-256 (`SHA256SUMS-v5.3.0.txt`):** `3a1c77ce29af6eb116b527823ba8df6fc92c785eea92eb4fded5699f1b56bc4a` (`Get-FileHash .\AI-Influencer-Media-Grabber-v5.3.0-Setup.exe -Algorithm SHA256`)
+- **Security Scans:** **0 threats found** by Microsoft Defender Antivirus (`MpCmdRun.exe -Scan -ScanType 3`). See [`SECURITY.md`](SECURITY.md) and `CHANGELOG.md` for details.
 
 ## Previous release notes
 # v5.0.15 — Studio AI Narrator & Voiceover Studio, 1-Click AI Dubbing, and Copilot Voice Tools
