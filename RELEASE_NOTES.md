@@ -9,9 +9,9 @@
 - **Profile Preview Card Upgrade:** Displays video/reel counts and a dedicated **`Reels Only`** quick-mode toggle.
 
 **Download & verify:**
-- **Installer:** `AI-Influencer-Media-Grabber-v5.3.1-Setup.exe` (`__INSTALLER_BYTES__` bytes, standard user installer — no Admin/UAC prompt required)
-- **SHA-256 (`SHA256SUMS-v5.3.1.txt`):** `__INSTALLER_SHA256__` (`Get-FileHash .\AI-Influencer-Media-Grabber-v5.3.1-Setup.exe -Algorithm SHA256`)
-- **Security Scans:** `__DEFENDER_SCAN__`. See [`SECURITY.md`](SECURITY.md) and `CHANGELOG.md` for details.
+- **Installer:** `AI-Influencer-Media-Grabber-v5.3.1-Setup.exe` (`119,028,829` bytes, standard user installer — no Admin/UAC prompt required)
+- **SHA-256 (`SHA256SUMS-v5.3.1.txt`):** `871bf48d2e68b88d84c2269ad0dbfa26e9e0e347e3b93ac38f6e87305e1b1c98` (`Get-FileHash .\AI-Influencer-Media-Grabber-v5.3.1-Setup.exe -Algorithm SHA256`)
+- **Security Scans:** **0 threats found** by Microsoft Defender Antivirus (`MpCmdRun.exe -Scan -ScanType 3`). See [`SECURITY.md`](SECURITY.md) and `CHANGELOG.md` for details.
 
 ## Previous release notes
 # v5.3.0 — Agentic Media Command Center, Zero-AI Laptop Mode, Multi-Track MP3 Studio & Live Preview
