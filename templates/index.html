@@ -2696,7 +2696,13 @@ https://www.youtube.com/watch?v=..."></textarea>
                             window.currentProfileData = window.currentProfileData || {};
                             window.currentProfileData[previewId] = data;
                             window.profileDownloadModes = window.profileDownloadModes || {};
-                            window.profileDownloadModes[url] = 'all';
+                            const initialMode = data.default_mode || 'all';
+                            window.profileDownloadModes[url] = initialMode;
+                            const activeModeCls = 'px-3 py-1.5 rounded-xl bg-pink-500 text-white font-semibold text-xs shadow-md transition flex items-center space-x-1.5 cursor-pointer';
+                            const idleModeCls = 'px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-medium text-xs border border-white/10 transition flex items-center space-x-1.5 cursor-pointer';
+                            const subtitleText = data.post_count
+                                ? `Found ${data.post_count} recent items${data.reel_count ? ` (${data.reel_count} videos/reels)` : ''} available for download`
+                                : 'Batch download full profile';
 
                             actualCard.className = 'p-4 rounded-2xl bg-gradient-to-r from-pink-500/10 via-purple-500/10 to-zinc-900 border border-pink-500/30 shadow-xl transition-all flex flex-col space-y-3';
                             actualCard.innerHTML = `
@@ -2710,7 +2716,7 @@ https://www.youtube.com/watch?v=..."></textarea>
                                                 <span class="text-xs font-bold text-white truncate">@${escapeHtml(data.username || data.uploader)}</span>
                                                 <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-pink-500/20 text-pink-300 border border-pink-500/30">Instagram Profile</span>
                                             </div>
-                                            <div class="text-[10px] text-zinc-400 mt-0.5">${data.post_count ? `Found ${data.post_count} recent posts available for download` : 'Batch download full profile'}</div>
+                                            <div class="text-[10px] text-zinc-400 mt-0.5">${subtitleText}</div>
                                         </div>
                                     </div>
                                     <button onclick="document.getElementById('${previewId}').remove()" class="text-zinc-500 hover:text-zinc-300 transition p-1 cursor-pointer">
@@ -2718,17 +2724,21 @@ https://www.youtube.com/watch?v=..."></textarea>
                                     </button>
                                 </div>
                                 <div class="flex flex-wrap items-center gap-2 pt-1 border-t border-white/5">
-                                    <button type="button" id="btn-mode-all-${previewId}" onclick="setProfileDownloadMode('${previewId}', '${escapeHtml(url)}', 'all')" class="px-3 py-1.5 rounded-xl bg-pink-500 text-white font-semibold text-xs shadow-md transition flex items-center space-x-1.5 cursor-pointer">
+                                    <button type="button" id="btn-mode-all-${previewId}" onclick="setProfileDownloadMode('${previewId}', '${escapeHtml(url)}', 'all')" class="${initialMode === 'all' ? activeModeCls : idleModeCls}">
                                         <i class="fa-solid fa-cloud-arrow-down text-xs"></i>
                                         <span>Download All</span>
                                     </button>
-                                    <button type="button" id="btn-mode-photos-${previewId}" onclick="setProfileDownloadMode('${previewId}', '${escapeHtml(url)}', 'photos')" class="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-medium text-xs border border-white/10 transition flex items-center space-x-1.5 cursor-pointer">
+                                    <button type="button" id="btn-mode-photos-${previewId}" onclick="setProfileDownloadMode('${previewId}', '${escapeHtml(url)}', 'photos')" class="${initialMode === 'photos' ? activeModeCls : idleModeCls}">
                                         <i class="fa-solid fa-camera text-xs text-pink-400"></i>
                                         <span>Photos Only</span>
                                     </button>
-                                    <button type="button" id="btn-mode-videos-${previewId}" onclick="setProfileDownloadMode('${previewId}', '${escapeHtml(url)}', 'videos')" class="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-medium text-xs border border-white/10 transition flex items-center space-x-1.5 cursor-pointer">
+                                    <button type="button" id="btn-mode-videos-${previewId}" onclick="setProfileDownloadMode('${previewId}', '${escapeHtml(url)}', 'videos')" class="${initialMode === 'videos' ? activeModeCls : idleModeCls}">
                                         <i class="fa-solid fa-film text-xs text-blue-400"></i>
                                         <span>Videos / Reels</span>
+                                    </button>
+                                    <button type="button" id="btn-mode-reels-${previewId}" onclick="setProfileDownloadMode('${previewId}', '${escapeHtml(url)}', 'reels')" class="${initialMode === 'reels' ? activeModeCls : idleModeCls}">
+                                        <i class="fa-solid fa-clapperboard text-xs text-violet-400"></i>
+                                        <span>Reels Only</span>
                                     </button>
                                     ${data.posts && data.posts.length > 0 ? `
                                         <button type="button" id="btn-mode-select-${previewId}" onclick="openProfilePostPicker('${previewId}', '${escapeHtml(url)}')" class="px-3 py-1.5 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 font-semibold text-xs border border-purple-500/30 transition flex items-center space-x-1.5 cursor-pointer">
@@ -2781,7 +2791,7 @@ https://www.youtube.com/watch?v=..."></textarea>
             window.profileDownloadModes = window.profileDownloadModes || {};
             window.profileDownloadModes[url] = mode;
 
-            const modes = ['all', 'photos', 'videos'];
+            const modes = ['all', 'photos', 'videos', 'reels'];
             modes.forEach(m => {
                 const btn = document.getElementById(`btn-mode-${m}-${previewId}`);
                 if (!btn) return;
@@ -2795,7 +2805,7 @@ https://www.youtube.com/watch?v=..."></textarea>
             if (selectBtn) {
                 selectBtn.className = 'px-3 py-1.5 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 font-semibold text-xs border border-purple-500/30 transition flex items-center space-x-1.5 cursor-pointer';
             }
-            const modeNames = { all: 'All Posts', photos: 'Photos Only', videos: 'Videos / Reels Only' };
+            const modeNames = { all: 'All Posts & Reels', photos: 'Photos Only', videos: 'Videos / Reels', reels: 'Reels Only' };
             showToast('Download Mode', `Selected: ${modeNames[mode] || mode}`);
         }
 
@@ -2870,7 +2880,7 @@ https://www.youtube.com/watch?v=..."></textarea>
                 selectBtn.innerHTML = `<i class="fa-solid fa-check text-xs"></i> <span>Selected (${checked.length})</span>`;
                 selectBtn.className = 'px-3 py-1.5 rounded-xl bg-purple-600 text-white font-semibold text-xs shadow-md transition flex items-center space-x-1.5 cursor-pointer';
             }
-            ['all', 'photos', 'videos'].forEach(m => {
+            ['all', 'photos', 'videos', 'reels'].forEach(m => {
                 const btn = document.getElementById(`btn-mode-${m}-${previewId}`);
                 if (btn) btn.className = 'px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-medium text-xs border border-white/10 transition flex items-center space-x-1.5 cursor-pointer';
             });

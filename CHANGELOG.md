@@ -1,5 +1,12 @@
 # Changelog
 
+## [v5.3.1] - 2026-11-23
+- **Instagram Profile Reels & Extensionless Video Fix (`ig_gallery_dl.py`, `download_support.py`, `templates/index.html`, `tests/test_downloader_v5.py`):**
+  - Added `ig_gallery_dl.py` (`patch_gallery_dl_instagram`) to normalize missing `mp4` extensions on modern extensionless Instagram `o1/v/t2/f2/...` Reel CDN URLs, use GraphQL `user_reels()` payloads (`video_versions` / `video_dash_manifest`) directly without slow/failing per-Reel REST `/v1/media/{id}/info/` fan-out, and isolate non-login per-Reel lookup errors while still failing fast on login walls.
+  - Added `extract_instagram_profile_tab()`, `instagram_profile_urls()`, `_gallery_dl_ytdl_args()` (passing bundled `imageio_ffmpeg` `ffmpeg_location`, `merge_output_format="mp4"`, and `.mp4` filename fallback to `gallery-dl`'s `ytdl` downloader), and `_repair_extensionless_mp4s()` (`ftyp` MP4 container repair) in `download_support.py`.
+  - Updated `extract_instagram_profile()` and `instagram_profile_download()` so root profile downloads (`all` / `videos`) include both `/posts/` and `/reels/`, `/reels/` URLs target `/reels/` and pre-select **`Reels Only`**, and `--filter` safely evaluates `vars().get('video_url')` and `vars().get('type') == 'reel'`.
+  - Added **`Reels Only`** mode toggle and Reel count summary to the Instagram profile preview card in `templates/index.html`.
+
 ## [v5.3.0] - 2026-11-14
 - **Obsidian Agentic Command Center Shell & Zero-AI Laptop Mode (`templates/index.html`, `static/app_shell.css`, `static/app_shell.js`):**
   - Pinned left command rail (`Downloader`, `Media Tools`, `Metadata Cleaner`, `Gallery`, `History`, `Captions Studio`, `Carousel Studio`, `Kling Prep`, `AI Studio`, `Settings`), ambient obsidian workspace surfaces, and decluttered top telemetry badges.

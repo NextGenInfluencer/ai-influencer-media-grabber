@@ -322,6 +322,36 @@ def is_instagram_profile_url(url: str) -> bool:
     return True
 
 
+def extract_instagram_profile_tab(url: str) -> str | None:
+    """Return 'reels', 'photos', 'posts', or None for an Instagram profile URL."""
+    if not url or url.strip().startswith('@') or not host_matches(url.strip(), 'instagram.com'):
+        return None
+    parts = [p for p in urllib.parse.urlsplit(url.strip()).path.split('/') if p]
+    if len(parts) < 2 or parts[0].lower() in _RESERVED_IG_PATHS:
+        return None
+    tab = parts[1].lower()
+    if tab in {'reels', 'photos', 'posts'}:
+        return tab
+    return None
+
+
+def instagram_profile_urls(url: str, mode: str = 'all') -> list[str]:
+    """Resolve Instagram profile endpoint URLs so Reels and Posts are both covered when requested."""
+    username = extract_instagram_username(url)
+    tab = extract_instagram_profile_tab(url)
+    posts_url = f'https://www.instagram.com/{username}/posts/'
+    reels_url = f'https://www.instagram.com/{username}/reels/'
+    if mode == 'photos':
+        return [posts_url]
+    if mode == 'reels' or (tab == 'reels' and mode in {'all', 'videos'}):
+        return [reels_url]
+    if tab == 'photos' and mode == 'all':
+        return [posts_url]
+    if tab == 'posts':
+        return [posts_url]
+    return [posts_url, reels_url]
+
+
 def extract_instagram_username(url: str) -> str:
     """Extract clean username from an Instagram profile URL or handle."""
     clean = url.strip()
@@ -364,7 +394,47 @@ def _session_args(browser: str | None) -> tuple[dict, list[str]]:
 # --- gallery-dl helpers ---------------------------------------------------------------------
 
 def _gallery_dl(*args: str) -> list[str]:
-    return [sys.executable, '-m', 'gallery_dl', *args]
+    return [sys.executable, '-m', 'ig_gallery_dl', *args]
+
+
+def _gallery_dl_ytdl_args() -> list[str]:
+    """Configure gallery-dl's ytdl downloader with bundled FFmpeg and .mp4 fallback filenames."""
+    raw_opts: dict[str, Any] = {'merge_output_format': 'mp4'}
+    try:
+        import imageio_ffmpeg
+        ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+        if ffmpeg_exe:
+            raw_opts['ffmpeg_location'] = str(ffmpeg_exe)
+    except Exception:
+        pass
+    return [
+        '-o', f'downloader.ytdl.raw-options={json.dumps(raw_opts)}',
+        '-o', "extractor.instagram.filename={sidecar_media_id:?/_/}{media_id}.{extension|'mp4'}",
+    ]
+
+
+def _repair_extensionless_mp4s(folder: Path, _before: dict[str, tuple[float, int]]) -> None:
+    """Rename newly saved extensionless ISO BMFF ('ftyp') video files to .mp4."""
+    folder = Path(folder)
+    if not folder.is_dir():
+        return
+    for file in folder.rglob('*'):
+        if not file.is_file() or file.suffix != '' or file.name.startswith('.') or file.name.endswith('.part'):
+            continue
+        try:
+            with file.open('rb') as handle:
+                header = handle.read(12)
+        except OSError:
+            continue
+        if len(header) < 8 or header[4:8] != b'ftyp':
+            continue
+        candidate = file.with_suffix('.mp4')
+        if candidate.exists():
+            candidate = file.with_name(f'{_unique_stem(file.parent, file.stem)}.mp4')
+        try:
+            os.replace(file, candidate)
+        except OSError:
+            pass
 
 
 def parse_gallery_dl_listing(output: str, username: str) -> tuple[list[dict], str, list[str]]:
@@ -423,18 +493,49 @@ def parse_gallery_dl_listing(output: str, username: str) -> tuple[list[dict], st
 
 
 def extract_instagram_profile(url: str, browser=None) -> dict:
-    """List recent posts of a profile for the picker using gallery-dl (no files are downloaded)."""
+    """List recent posts and reels of a profile for the picker using gallery-dl (no files downloaded)."""
     username = extract_instagram_username(url)
+    tab = extract_instagram_profile_tab(url)
     _, session_args = _session_args(browser)
-    command = _gallery_dl('--dump-json', '--post-range', PROFILE_LISTING_RANGE, *session_args,
-                          f'https://www.instagram.com/{username}/posts/')
-    result = subprocess.run(command, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=180)
-    posts, avatar, errors = parse_gallery_dl_listing(result.stdout or '', username)
-    problems = ' '.join(errors + [result.stderr or ''])
-    if not posts and (is_login_error(problems) or (errors and not _uses_login_session(browser))):
+    if tab == 'reels':
+        listing_urls = [f'https://www.instagram.com/{username}/reels/']
+    elif tab in ('photos', 'posts'):
+        listing_urls = [f'https://www.instagram.com/{username}/posts/']
+    else:
+        listing_urls = [
+            f'https://www.instagram.com/{username}/reels/',
+            f'https://www.instagram.com/{username}/posts/',
+        ]
+
+    posts_by_id: dict[str, dict] = {}
+    avatar = ''
+    all_errors: list[str] = []
+    for target_url in listing_urls:
+        command = _gallery_dl('--dump-json', '--post-range', PROFILE_LISTING_RANGE, *session_args, target_url)
+        result = subprocess.run(command, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=180)
+        batch_posts, batch_avatar, batch_errors = parse_gallery_dl_listing(result.stdout or '', username)
+        problems = ' '.join(batch_errors + [result.stderr or ''])
+        if not posts_by_id and not batch_posts and (is_login_error(problems) or (batch_errors and not _uses_login_session(browser))):
+            raise LoginRequiredError()
+        avatar = avatar or batch_avatar
+        all_errors.extend(batch_errors)
+        for post in batch_posts:
+            pid = post.get('id') or post.get('url')
+            existing = posts_by_id.get(pid)
+            if existing is None:
+                posts_by_id[pid] = post
+            elif post.get('type') == 'video':
+                existing['type'] = 'video'
+                if '/reel/' in str(post.get('url') or ''):
+                    existing['url'] = post['url']
+
+    if not posts_by_id and (is_login_error(' '.join(all_errors)) or (all_errors and not _uses_login_session(browser))):
         raise LoginRequiredError()
-    if not posts and errors:
-        raise RuntimeError(f'Could not list @{username}: {errors[0]}')
+    if not posts_by_id and all_errors:
+        raise RuntimeError(f'Could not list @{username}: {all_errors[0]}')
+    posts = list(posts_by_id.values())
+    reel_count = sum(1 for post in posts if post.get('type') == 'video')
+    default_mode = 'reels' if tab == 'reels' else ('photos' if tab == 'photos' else 'all')
     return {
         'is_profile': True,
         'platform': 'instagram',
@@ -444,6 +545,8 @@ def extract_instagram_profile(url: str, browser=None) -> dict:
         'thumbnail': avatar or (posts[0]['thumbnail'] if posts else ''),
         'duration': 0,
         'post_count': len(posts),
+        'reel_count': reel_count,
+        'default_mode': default_mode,
         'posts': posts,
     }
 
@@ -667,7 +770,7 @@ def instagram_download(url, output_path, browser, report, custom_name=None, down
 
 def instagram_profile_download(url, output_path, browser, report, mode='all', selected_urls=None,
                                custom_name=None, download_opts=None):
-    """Download a profile: chosen posts one by one, or the whole feed (all/photos/videos) via gallery-dl."""
+    """Download a profile: chosen posts one by one, or posts & reels (all/photos/videos/reels) via gallery-dl."""
     username = extract_instagram_username(url)
     safe_uploader = safe_media_name(username).rsplit('.', 1)[0] or 'Instagram'
     target_dir = Path(output_path) / safe_uploader
@@ -677,17 +780,26 @@ def instagram_profile_download(url, output_path, browser, report, mode='all', se
     if chosen:
         return _download_selected_posts(chosen, username, output_path, browser, report, custom_name, download_opts)
 
-    _, session_args = _session_args(browser)
-    command = _gallery_dl('-D', str(target_dir), *session_args)
-    if mode == 'photos':
-        command.extend(['--filter', "extension in ('jpg', 'jpeg', 'png', 'webp', 'heic')"])
-    elif mode == 'videos':
-        command.extend(['--filter', "extension in ('mp4', 'mov', 'webm', 'm4v')"])
-    command.append(f"https://www.instagram.com/{username}/posts/")
+    tab = extract_instagram_profile_tab(url)
+    effective_mode = 'reels' if (tab == 'reels' and mode == 'all') else ('photos' if (tab == 'photos' and mode == 'all') else mode)
 
-    report({'status': f"Downloading @{username} via gallery-dl ({mode})..."})
+    _, session_args = _session_args(browser)
+    command = _gallery_dl('-D', str(target_dir), *_gallery_dl_ytdl_args(), *session_args)
+    if effective_mode == 'photos':
+        command.extend([
+            '-o', 'extractor.instagram.videos=false',
+            '--filter', "not vars().get('video_url') and vars().get('extension') in ('jpg', 'jpeg', 'png', 'webp', 'heic')",
+        ])
+    elif effective_mode in ('videos', 'reels'):
+        command.extend([
+            '--filter', "vars().get('video_url') or vars().get('type') == 'reel' or vars().get('extension') in ('mp4', 'mov', 'webm', 'm4v', 'mkv')",
+        ])
+    command.extend(instagram_profile_urls(url, mode=effective_mode))
+
+    report({'status': f"Downloading @{username} via gallery-dl ({effective_mode})..."})
     before = snapshot_media(target_dir)
     code, lines, skipped = _run_gallery_dl(command, report)
+    _repair_extensionless_mp4s(target_dir, before)
     created = new_media_files(target_dir, before)
     if not created:
         log = ' '.join(lines[-20:])

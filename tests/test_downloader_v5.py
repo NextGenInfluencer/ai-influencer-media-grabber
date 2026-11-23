@@ -558,5 +558,168 @@ class BurnInIntegration(unittest.TestCase):
             shutil.rmtree(folder, ignore_errors=True)
 
 
+class InstagramReelsProfileTests(TempDirTestCase):
+    def test_ig_gallery_dl_patches_reels_and_extensionless_videos(self):
+        import ig_gallery_dl
+        from gallery_dl.extractor.instagram import InstagramReelsExtractor
+
+        ig_gallery_dl.patch_gallery_dl_instagram()
+        ig_gallery_dl.patch_gallery_dl_instagram()  # idempotent
+
+        api_media_calls = []
+
+        def fake_user_reels(_item):
+            return [
+                {
+                    'media': {
+                        'pk': '3500000000000000001',
+                        'code': 'FastReel1',
+                        'taken_at': 1730000000,
+                        'original_width': 1080,
+                        'original_height': 1920,
+                        'image_versions2': {'candidates': [{'url': 'https://cdn/cover.jpg', 'width': 1080, 'height': 1920}]},
+                        'video_versions': [{'url': 'https://scontent.cdninstagram.com/o1/v/t2/f2/m86/AQN123?efg=x', 'width': 720, 'height': 1280}],
+                        'video_dash_manifest': '<MPD></MPD>',
+                    }
+                },
+                {'media': {'pk': '2', 'code': 'ErrReel2'}},
+                {'media': {'pk': '3', 'code': 'FallbackReel3'}},
+            ]
+
+        def fake_media(code):
+            api_media_calls.append(code)
+            if code == 'ErrReel2':
+                raise RuntimeError('400 Bad Request')
+            return [{
+                'pk': '3500000000000000003',
+                'code': 'FallbackReel3',
+                'taken_at': 1730000005,
+                'caption': None,
+                'user': {'pk': '9', 'username': 'creator', 'full_name': 'Creator'},
+                'original_width': 1080,
+                'original_height': 1920,
+                'image_versions2': {'candidates': [{'url': 'https://cdn/cover3.jpg', 'width': 1080, 'height': 1920}]},
+                'video_versions': [{'url': 'https://scontent.cdninstagram.com/v/t2/f2/clip3.mp4', 'width': 720, 'height': 1280}],
+            }]
+
+        extr = InstagramReelsExtractor.from_url('https://www.instagram.com/creator/reels/')
+        extr.initialize()
+        extr.login = lambda: None
+        extr._user = {'id': '9', 'pk': '9', 'username': 'creator', 'full_name': 'Creator'}
+        extr.api = SimpleNamespace(user_reels=fake_user_reels, media=fake_media)
+
+        msgs = list(extr.items())
+        self.assertEqual(api_media_calls, ['ErrReel2', 'FallbackReel3'])
+        url_msgs = [m for m in msgs if m[0] == 3]
+        self.assertEqual(len(url_msgs), 2)
+        self.assertEqual(url_msgs[0][2]['extension'], 'mp4')
+        self.assertEqual(url_msgs[1][2]['extension'], 'mp4')
+
+        # Login redirects in fallback media lookup must still fail fast
+        extr.api = SimpleNamespace(
+            user_reels=lambda _: [{'media': {'pk': '4', 'code': 'LoginReel4'}}],
+            media=lambda _code: (_ for _ in ()).throw(RuntimeError('HTTP redirect to login page')),
+        )
+        with self.assertRaises(RuntimeError):
+            list(extr.posts())
+
+    def test_instagram_profile_tab_and_urls(self):
+        self.assertIsNone(ds.extract_instagram_profile_tab('https://www.instagram.com/creator/'))
+        self.assertIsNone(ds.extract_instagram_profile_tab('@creator'))
+        self.assertIsNone(ds.extract_instagram_profile_tab('https://www.instagram.com/reel/ABC/'))
+        self.assertEqual(ds.extract_instagram_profile_tab('https://www.instagram.com/creator/reels/?hl=en'), 'reels')
+        self.assertEqual(ds.extract_instagram_profile_tab('https://www.instagram.com/creator/photos/'), 'photos')
+        self.assertEqual(ds.extract_instagram_profile_tab('https://www.instagram.com/creator/posts/'), 'posts')
+
+        self.assertEqual(
+            ds.instagram_profile_urls('https://www.instagram.com/creator/', 'all'),
+            ['https://www.instagram.com/creator/posts/', 'https://www.instagram.com/creator/reels/'],
+        )
+        self.assertEqual(
+            ds.instagram_profile_urls('https://www.instagram.com/creator/', 'videos'),
+            ['https://www.instagram.com/creator/posts/', 'https://www.instagram.com/creator/reels/'],
+        )
+        self.assertEqual(
+            ds.instagram_profile_urls('https://www.instagram.com/creator/', 'reels'),
+            ['https://www.instagram.com/creator/reels/'],
+        )
+        self.assertEqual(
+            ds.instagram_profile_urls('https://www.instagram.com/creator/reels/', 'all'),
+            ['https://www.instagram.com/creator/reels/'],
+        )
+        self.assertEqual(
+            ds.instagram_profile_urls('https://www.instagram.com/creator/', 'photos'),
+            ['https://www.instagram.com/creator/posts/'],
+        )
+        self.assertEqual(
+            ds.instagram_profile_urls('@creator', 'all'),
+            ['https://www.instagram.com/creator/posts/', 'https://www.instagram.com/creator/reels/'],
+        )
+
+    def test_extract_instagram_profile_merges_reels_and_posts(self):
+        reels_out = json.dumps([
+            [2, {'post_shortcode': 'REEL1', 'post_url': 'https://www.instagram.com/reel/REEL1/', 'type': 'reel', 'count': 1}],
+            [3, 'https://cdn/r1', {'post_shortcode': 'REEL1', 'display_url': 'https://cdn/r1.jpg', 'video_url': 'https://cdn/r1_t2', 'extension': ''}],
+            [2, {'post_shortcode': 'SHARED', 'post_url': 'https://www.instagram.com/reel/SHARED/', 'type': 'reel', 'count': 1}],
+            [3, 'https://cdn/sh', {'post_shortcode': 'SHARED', 'display_url': 'https://cdn/sh.jpg', 'video_url': 'https://cdn/sh_t2', 'extension': ''}],
+        ])
+        posts_out = json.dumps([
+            [2, {'post_shortcode': 'SHARED', 'post_url': 'https://www.instagram.com/p/SHARED/', 'type': 'post', 'count': 1}],
+            [3, 'https://cdn/sh.jpg', {'post_shortcode': 'SHARED', 'display_url': 'https://cdn/sh.jpg', 'extension': 'jpg'}],
+            [2, {'post_shortcode': 'PIC1', 'type': 'post', 'count': 1, 'user': {'profile_pic_url': 'https://cdn/av.jpg'}}],
+            [3, 'https://cdn/p1.jpg', {'post_shortcode': 'PIC1', 'display_url': 'https://cdn/p1.jpg', 'extension': 'jpg'}],
+        ])
+        calls = []
+
+        def fake_run(cmd, **_kwargs):
+            calls.append(cmd)
+            stdout = reels_out if cmd[-1].endswith('/reels/') else posts_out
+            return SimpleNamespace(returncode=0, stdout=stdout, stderr='')
+
+        with patch('download_support.subprocess.run', side_effect=fake_run):
+            prof = ds.extract_instagram_profile('https://www.instagram.com/creator/', browser='firefox')
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(prof['post_count'], 3)
+        self.assertEqual(prof['reel_count'], 2)
+        self.assertEqual(prof['default_mode'], 'all')
+        self.assertEqual([p['id'] for p in prof['posts']], ['REEL1', 'SHARED', 'PIC1'])
+        self.assertEqual(prof['posts'][1]['type'], 'video')
+
+        with patch('download_support.subprocess.run', side_effect=fake_run) as run_mock:
+            reels_only = ds.extract_instagram_profile('https://www.instagram.com/creator/reels/', browser='firefox')
+        self.assertEqual(run_mock.call_count, 1)
+        self.assertEqual(reels_only['default_mode'], 'reels')
+        self.assertTrue(run_mock.call_args.args[0][-1].endswith('/reels/'))
+
+    def test_instagram_profile_download_covers_reels_ytdl_and_extensionless_mp4(self):
+        target = self.tmp / 'creator'
+        commands = []
+
+        def fake_run(cmd, _report):
+            commands.append(cmd)
+            target.mkdir(parents=True, exist_ok=True)
+            (target / 'reel_no_ext').write_bytes(b'\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom')
+            return 0, ['saved'], 0
+
+        with patch('download_support._run_gallery_dl', side_effect=fake_run), \
+             patch('imageio_ffmpeg.get_ffmpeg_exe', return_value='C:/bundled/ffmpeg.exe'):
+            res_all = ds.instagram_profile_download('https://www.instagram.com/creator/', str(self.tmp), 'firefox', lambda _: None, mode='all')
+        self.assertIn('ig_gallery_dl', commands[-1])
+        self.assertEqual(commands[-1][-2:], [
+            'https://www.instagram.com/creator/posts/',
+            'https://www.instagram.com/creator/reels/',
+        ])
+        raw_opt_args = [arg for arg in commands[-1] if 'downloader.ytdl.raw-options=' in arg]
+        self.assertTrue(raw_opt_args)
+        self.assertIn('C:/bundled/ffmpeg.exe', raw_opt_args[0])
+        self.assertEqual([Path(e['filepath']).name for e in res_all['entries']], ['reel_no_ext.mp4'])
+
+        with patch('download_support._run_gallery_dl', side_effect=fake_run):
+            res_reels = ds.instagram_profile_download('https://www.instagram.com/creator/reels/', str(self.tmp), 'firefox', lambda _: None, mode='all')
+        self.assertEqual(commands[-1][-1], 'https://www.instagram.com/creator/reels/')
+        self.assertIn("vars().get('video_url')", commands[-1][commands[-1].index('--filter') + 1])
+        self.assertEqual([Path(e['filepath']).name for e in res_reels['entries']], ['reel_no_ext (1).mp4'])
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -1,3 +1,19 @@
+# v5.3.1 — Instagram Profile Reels Fix, Reels-Only Mode & Bundled FFmpeg YTDL Merger
+
+**In-app update available for v5.0.10–v5.3.0 users** (no core or AI Pack dependency changes). Users upgrading from v5.0.8 or earlier must run the full installer because v5.0.10 updated the GPU AI Pack dependency files. Your media, history, characters, caption projects, and credentials are preserved.
+
+### What's new in v5.3.1
+- **Instagram Profile Reels Fix:** Downloading an Instagram creator profile (`all` or `videos` mode) now fetches both `/posts/` and `/reels/`, while `/reels/` profile links target the Reels tab directly and default to **`Reels Only`**.
+- **Modern Extensionless Reel CDN Support (`ig_gallery_dl.py`):** Modern extensionless Instagram `o1/v/t2/f2/...` Reel CDN URLs are normalized to `.mp4`, matched reliably by **Videos / Reels** and **Reels Only** filters, and repaired cleanly if saved without a file suffix.
+- **Faster GraphQL Reel Extraction & Bundled FFmpeg Merging:** Uses GraphQL `user_reels()` stream metadata directly (avoiding rate-limited per-Reel REST calls while still failing fast on login walls) and passes the bundled `FFmpeg` binary to `gallery-dl`'s `ytdl` DASH merger.
+- **Profile Preview Card Upgrade:** Displays video/reel counts and a dedicated **`Reels Only`** quick-mode toggle.
+
+**Download & verify:**
+- **Installer:** `AI-Influencer-Media-Grabber-v5.3.1-Setup.exe` (`__INSTALLER_BYTES__` bytes, standard user installer — no Admin/UAC prompt required)
+- **SHA-256 (`SHA256SUMS-v5.3.1.txt`):** `__INSTALLER_SHA256__` (`Get-FileHash .\AI-Influencer-Media-Grabber-v5.3.1-Setup.exe -Algorithm SHA256`)
+- **Security Scans:** `__DEFENDER_SCAN__`. See [`SECURITY.md`](SECURITY.md) and `CHANGELOG.md` for details.
+
+## Previous release notes
 # v5.3.0 — Agentic Media Command Center, Zero-AI Laptop Mode, Multi-Track MP3 Studio & Live Preview
 
 **In-app update available for v5.0.10–v5.0.15 users** (no core or AI Pack dependency changes). Users upgrading from v5.0.8 or earlier must run the full installer because v5.0.10 updated the GPU AI Pack dependency files. Your media, history, characters, caption projects, and credentials are preserved.

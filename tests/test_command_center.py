@@ -29,7 +29,7 @@ class CommandCenterEndpointTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.get_json()
         self.assertTrue(data["ok"])
-        self.assertEqual(data["app"]["version"], "5.3.0")
+        self.assertEqual(data["app"]["version"], "5.3.1")
         for key in ("yt_dlp", "gallery_dl", "ffmpeg", "whisper", "kokoro_tts"):
             self.assertIn(key, data["binaries"])
         self.assertTrue(data["binaries"]["yt_dlp"]["installed"])
